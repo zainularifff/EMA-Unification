@@ -10,7 +10,7 @@
    ========================================================= */
 
 :root {
-  --app-bg: #f5f7fb;
+  --app-bg: #ecfdf5;
   --app-surface: #ffffff;
   --app-surface-soft: #f8fafc;
   --app-border: #e2e8f0;
@@ -20,16 +20,13 @@
   --app-text-soft: #334155;
   --app-muted: #64748b;
 
-  --app-primary: #2563eb;
-  --app-primary-dark: #1d4ed8;
-  --app-primary-soft: #eff6ff;
+  --app-primary: #14b8a6;
+  --app-primary-dark: #0f766e;
+  --app-primary-soft: #ccfbf1;
 
-  --app-success: #16a34a;
-  --app-warning: #d97706;
-  --app-danger: #dc2626;
-  --app-info: #0891b2;
-
-  --app-sidebar: #0f172a;
+  --app-accent: #8b5cf6;
+  --app-sidebar: #172238;
+  --app-sidebar-soft: #22304a;
 
   --app-radius-sm: 0.65rem;
   --app-radius: 1rem;
@@ -40,7 +37,7 @@
   --app-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
   --app-shadow-lg: 0 26px 70px rgba(15, 23, 42, 0.12);
 
-  --app-focus-ring: 0 0 0 4px rgba(37, 99, 235, 0.11);
+  --app-focus-ring: 0 0 0 4px rgba(20, 184, 166, 0.15);
 }
 
 /* =========================================================
@@ -222,30 +219,41 @@ small {
 
 .app-shell {
   min-height: 100vh;
-  background: var(--app-bg);
+  padding: 0.5rem;
+  background:
+    radial-gradient(circle at top center, rgba(45, 212, 191, 0.38), transparent 30rem),
+    linear-gradient(135deg, #d1fae5 0%, #ecfeff 45%, #f8fafc 100%);
 }
 
 .app-sidebar {
-  width: 280px;
-  min-height: 100vh;
+  width: 260px;
+  min-height: calc(100vh - 1rem);
   background: var(--app-sidebar);
   color: #ffffff;
+  border-radius: 1.35rem 0 0 1.35rem;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
 }
 
 .app-main {
-  min-height: 100vh;
+  min-height: calc(100vh - 1rem);
   flex: 1;
+  overflow: hidden;
+  border-radius: 0 1.35rem 1.35rem 0;
+  background: rgba(248, 250, 252, 0.96);
 }
 
 .app-navbar {
   height: 72px;
-  border-bottom: 1px solid var(--app-border);
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(14px);
+  margin: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px);
 }
 
 .app-page {
-  padding: 1.5rem;
+  height: calc(100vh - 1rem - 72px);
+  padding: 1.35rem;
+  overflow-y: auto;
 }
 
 .app-page-title {
@@ -831,6 +839,65 @@ small {
   justify-content: center;
 }
 
+.app-sidebar-logo {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #ffffff;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.42), transparent 24%),
+    linear-gradient(135deg, #5eead4 0%, #14b8a6 42%, #334155 100%);
+  box-shadow: 0 16px 34px rgba(20, 184, 166, 0.28);
+}
+
+.app-sidebar-link {
+  min-height: 44px;
+  color: rgba(255, 255, 255, 0.66) !important;
+  border-radius: 0.9rem !important;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.app-sidebar-link:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(2px);
+}
+
+.app-sidebar-link.active {
+  color: #0f172a !important;
+  background: linear-gradient(135deg, #5eead4 0%, #a7f3d0 55%, #c4b5fd 100%);
+  box-shadow:
+    0 16px 30px rgba(20, 184, 166, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+}
+
+.app-navbar-search {
+  width: min(440px, 34vw);
+}
+
+.app-navbar-search .form-control {
+  border-color: #e5e7eb;
+  background: #f8fafc;
+}
+
+.app-navbar-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* =========================================================
    Dashboard / Landing
    ========================================================= */
@@ -1031,6 +1098,185 @@ small {
   color: var(--app-muted);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+/* =========================================================
+   Hardware Inventory
+   ========================================================= */
+
+.hardware-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) minmax(160px, 0.65fr) minmax(160px, 0.65fr);
+  gap: 0.75rem;
+}
+
+.hardware-metric-card {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.hardware-metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--app-shadow);
+}
+
+.hardware-metric-value {
+  color: var(--app-text);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.hardware-metric-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+}
+
+.hardware-metric-primary {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.hardware-metric-success {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.hardware-metric-info {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.hardware-metric-warning {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.hardware-serial {
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+@media (max-width: 991.98px) {
+  .hardware-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   App Dark Mode
+   ========================================================= */
+
+.app-shell-dark {
+  background:
+    radial-gradient(circle at top center, rgba(20, 184, 166, 0.18), transparent 30rem),
+    linear-gradient(135deg, #020617 0%, #0f172a 48%, #111827 100%);
+}
+
+.app-shell-dark .app-main {
+  background: rgba(15, 23, 42, 0.96);
+}
+
+.app-shell-dark .app-navbar {
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.app-shell-dark .app-page {
+  color: #e2e8f0;
+}
+
+.app-shell-dark h1,
+.app-shell-dark h2,
+.app-shell-dark h3,
+.app-shell-dark h4,
+.app-shell-dark h5,
+.app-shell-dark h6,
+.app-shell-dark .app-page-title,
+.app-shell-dark .dashboard-hero-title,
+.app-shell-dark .dashboard-metric-value,
+.app-shell-dark .hardware-metric-value {
+  color: #f8fafc;
+}
+
+.app-shell-dark .text-muted,
+.app-shell-dark .app-page-subtitle,
+.app-shell-dark .dashboard-hero-text {
+  color: #94a3b8 !important;
+}
+
+.app-shell-dark .app-card,
+.app-shell-dark .dashboard-action-card {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.82);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.app-shell-dark .dashboard-hero {
+  background:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.14), transparent 26rem),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.86));
+}
+
+.app-shell-dark .form-control,
+.app-shell-dark .form-select {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.22);
+  background-color: rgba(15, 23, 42, 0.72);
+}
+
+.app-shell-dark .form-control::placeholder {
+  color: #64748b;
+}
+
+.app-shell-dark .btn-light {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.app-shell-dark .btn-light:hover {
+  color: #ffffff;
+  border-color: rgba(45, 212, 191, 0.4);
+  background: rgba(20, 184, 166, 0.16);
+}
+
+.app-navbar-theme-toggle {
+  min-height: 42px;
+}
+
+.app-shell-dark .table {
+  color: #e2e8f0;
+}
+
+.app-shell-dark .app-table th {
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.app-shell-dark .app-table td {
+  color: #cbd5e1;
+}
+
+.app-shell-dark .app-table tbody tr:hover {
+  background: rgba(45, 212, 191, 0.07);
+}
+
+.app-shell-dark .dashboard-activity-item {
+  border-bottom-color: rgba(148, 163, 184, 0.16);
 }
 
 /* =========================================================
