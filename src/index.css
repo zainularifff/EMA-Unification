@@ -1,0 +1,181 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================
+   GLOBAL THEME VARIABLES
+   Controlled by ThemeContext:
+   document.documentElement.dataset.theme = "light" / "dark"
+   document.body.dataset.theme = "light" / "dark"
+========================================================= */
+
+:root,
+:root[data-theme="light"],
+body[data-theme="light"],
+.light,
+.light-theme {
+  --app-bg: #eef5ff;
+  --app-bg-soft: #f6f8fc;
+  --app-surface: #ffffff;
+  --app-surface-soft: #f8fbff;
+  --app-surface-muted: #f1f6fd;
+  --app-border: #dfe8f5;
+  --app-border-soft: #eef3f8;
+
+  --app-text: #102450;
+  --app-text-strong: #112752;
+  --app-muted: #667a99;
+  --app-muted-2: #7083a5;
+  --app-muted-3: #92a0b8;
+
+  --app-primary: #2563eb;
+  --app-primary-2: #2c70eb;
+  --app-cyan: #06b6d4;
+  --app-success: #16a34a;
+  --app-warning: #d97706;
+  --app-danger: #dc2626;
+
+  --app-shadow-soft: 0 10px 24px rgba(17, 39, 82, 0.045);
+  --app-shadow-card: 0 16px 34px rgba(17, 39, 82, 0.06);
+
+  --app-footer-bg: rgba(238, 245, 255, 0.96);
+  --app-sidebar-bg: #071224;
+}
+
+:root[data-theme="dark"],
+body[data-theme="dark"],
+.dark,
+.dark-theme {
+  --app-bg: #071224;
+  --app-bg-soft: #08172d;
+  --app-surface: #0d1b31;
+  --app-surface-soft: #10213b;
+  --app-surface-muted: #132845;
+  --app-border: rgba(95, 124, 170, 0.28);
+  --app-border-soft: rgba(95, 124, 170, 0.18);
+
+  --app-text: #f4f8ff;
+  --app-text-strong: #ffffff;
+  --app-muted: #b8c7df;
+  --app-muted-2: #8fa4c4;
+  --app-muted-3: #7088ad;
+
+  --app-primary: #38bdf8;
+  --app-primary-2: #60a5fa;
+  --app-cyan: #22d3ee;
+  --app-success: #4ade80;
+  --app-warning: #fbbf24;
+  --app-danger: #fb7185;
+
+  --app-shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.22);
+  --app-shadow-card: 0 18px 38px rgba(0, 0, 0, 0.28);
+
+  --app-footer-bg: rgba(8, 18, 36, 0.96);
+  --app-sidebar-bg: #050d1b;
+}
+
+/* =========================================================
+   GLOBAL BASE
+========================================================= */
+
+:root {
+  font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+  color: var(--app-text);
+  background: var(--app-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+}
+
+html {
+  background: var(--app-bg);
+}
+
+body {
+  margin: 0;
+  font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+  background: var(--app-bg);
+  color: var(--app-text);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* =========================================================
+   GLOBAL FORM STYLE
+========================================================= */
+
+.settings-input {
+  height: 44px;
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-text);
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.settings-input::placeholder {
+  color: var(--app-muted-2);
+}
+
+.settings-input:focus {
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.14);
+}
+
+body[data-theme="dark"] .settings-input,
+.dark .settings-input,
+.dark-theme .settings-input {
+  background: var(--app-surface-soft);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+body[data-theme="dark"] .settings-input:focus,
+.dark .settings-input:focus,
+.dark-theme .settings-input:focus {
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.16);
+}
