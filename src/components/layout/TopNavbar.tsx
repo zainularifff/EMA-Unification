@@ -26,7 +26,7 @@ export function TopNavbar() {
   const { isDark, toggleTheme } = useTheme();
 
   const currentPage = pageMeta[location.pathname] || {
-    title: "EMA Baru",
+    title: "EMA System",
     subtitle: "Manage your workspace.",
   };
 
@@ -48,7 +48,7 @@ export function TopNavbar() {
 
         <button className="btn btn-light app-navbar-project d-none d-lg-inline-flex align-items-center gap-2">
           <span className="app-navbar-project-dot" />
-          EMA Baru
+          EMA System
           <ChevronDown size={16} />
         </button>
 

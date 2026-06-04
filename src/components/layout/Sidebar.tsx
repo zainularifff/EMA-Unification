@@ -77,7 +77,7 @@ export function Sidebar() {
         </div>
 
         <div>
-          <div className="app-sidebar-title">EMA Baru</div>
+          <div className="app-sidebar-title">EMA System</div>
           <div className="app-sidebar-subtitle">Asset Console</div>
         </div>
       </div>

@@ -97,7 +97,7 @@ export default function LandingPage() {
   return (
     <>
       <PageHeader
-        eyebrow="EMA Baru Workspace"
+        eyebrow="EMA System Workspace"
         title="Dashboard"
         description="A cleaner Bootstrap-based workspace for endpoint visibility, hardware inventory and system operations."
         actions={
