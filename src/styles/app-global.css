@@ -1431,3 +1431,322 @@ small {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* =========================================================
+   EMA Baru Shell - StagePilot inspired
+   ========================================================= */
+
+.app-shell {
+  min-height: 100vh;
+  padding: 0.5rem;
+  background:
+    radial-gradient(circle at top center, rgba(45, 212, 191, 0.42), transparent 30rem),
+    linear-gradient(135deg, #d1fae5 0%, #ecfeff 45%, #f8fafc 100%);
+}
+
+.app-sidebar {
+  width: 260px;
+  min-height: calc(100vh - 1rem);
+  padding: 1rem;
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(45, 212, 191, 0.08), transparent 18rem),
+    linear-gradient(180deg, #172238 0%, #111827 100%);
+  border-radius: 1.35rem 0 0 1.35rem;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+}
+
+.app-main {
+  min-height: calc(100vh - 1rem);
+  flex: 1;
+  overflow: hidden;
+  border-radius: 0 1.35rem 1.35rem 0;
+  background: rgba(248, 250, 252, 0.96);
+}
+
+.app-page {
+  height: calc(100vh - 1rem - 72px);
+  padding: 1.35rem;
+  overflow-y: auto;
+}
+
+.app-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.35rem 1.25rem;
+}
+
+.app-sidebar-logo {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #ffffff;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.42), transparent 24%),
+    linear-gradient(135deg, #5eead4 0%, #14b8a6 42%, #334155 100%);
+  box-shadow: 0 16px 34px rgba(20, 184, 166, 0.28);
+}
+
+.app-sidebar-title {
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.app-sidebar-subtitle {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.app-sidebar-nav {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.app-sidebar-link {
+  min-height: 44px;
+  padding: 0.7rem 0.85rem;
+  color: rgba(255, 255, 255, 0.66) !important;
+  border-radius: 0.95rem;
+  font-size: 0.9rem;
+  font-weight: 750;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.app-sidebar-link:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(2px);
+}
+
+.app-sidebar-link.active {
+  color: #0f172a !important;
+  background: linear-gradient(135deg, #5eead4 0%, #a7f3d0 55%, #c4b5fd 100%);
+  box-shadow:
+    0 16px 30px rgba(20, 184, 166, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+}
+
+.app-sidebar-link-disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.app-sidebar-soon {
+  padding: 0.15rem 0.45rem;
+  color: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.app-sidebar-footer {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.app-sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.app-sidebar-avatar {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #0f172a;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ccfbf1, #c4b5fd);
+}
+
+.app-sidebar-user-name {
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.app-sidebar-user-role {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.app-navbar {
+  height: 72px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(18px);
+}
+
+.app-navbar-inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-inline: 1.25rem;
+}
+
+.app-navbar-heading {
+  min-width: 190px;
+}
+
+.app-navbar-title {
+  color: var(--app-text);
+  font-size: 0.98rem;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.app-navbar-subtitle {
+  color: var(--app-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.app-navbar-search {
+  width: min(440px, 34vw);
+  margin-left: auto;
+}
+
+.app-navbar-search .form-control {
+  min-height: 42px;
+  border-color: #e5e7eb;
+  background: #f8fafc;
+}
+
+.app-navbar-project,
+.app-navbar-theme-toggle {
+  min-height: 42px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.app-navbar-project-dot {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  border-radius: 999px;
+  background: #14b8a6;
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.12);
+}
+
+.app-navbar-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-navbar-user {
+  min-height: 42px;
+}
+
+/* Dark shell */
+.app-shell-dark {
+  background:
+    radial-gradient(circle at top center, rgba(20, 184, 166, 0.18), transparent 30rem),
+    linear-gradient(135deg, #020617 0%, #0f172a 48%, #111827 100%);
+}
+
+.app-shell-dark .app-main {
+  background: rgba(15, 23, 42, 0.96);
+}
+
+.app-shell-dark .app-navbar {
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.app-shell-dark .app-navbar-title {
+  color: #f8fafc;
+}
+
+.app-shell-dark .app-navbar-subtitle {
+  color: #94a3b8;
+}
+
+.app-shell-dark .app-navbar-search .form-control {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.app-shell-dark .btn-light {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+/* Responsive shell */
+@media (max-width: 991.98px) {
+  .app-shell {
+    padding: 0;
+    flex-direction: column;
+  }
+
+  .app-sidebar {
+    width: 100%;
+    min-height: auto;
+    border-radius: 0;
+  }
+
+  .app-sidebar-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-main {
+    min-height: auto;
+    border-radius: 0;
+  }
+
+  .app-page {
+    height: auto;
+    min-height: calc(100vh - 72px);
+    padding: 1rem;
+  }
+
+  .app-navbar-heading {
+    min-width: auto;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .app-sidebar {
+    padding: 0.85rem;
+  }
+
+  .app-sidebar-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .app-navbar-inner {
+    padding-inline: 0.85rem;
+  }
+
+  .app-navbar-title {
+    font-size: 0.9rem;
+  }
+
+  .app-navbar-subtitle {
+    display: none;
+  }
+}
