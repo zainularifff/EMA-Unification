@@ -831,6 +831,207 @@ small {
   justify-content: center;
 }
 
+/* =========================================================
+   Dashboard / Landing
+   ========================================================= */
+
+.dashboard-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 28rem),
+    linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.dashboard-hero::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to right, transparent, black 28%, transparent 92%);
+}
+
+.dashboard-hero > .row {
+  position: relative;
+  z-index: 1;
+}
+
+.dashboard-hero-title {
+  max-width: 780px;
+  color: var(--app-text);
+  font-size: clamp(2rem, 1.45rem + 2vw, 3.8rem);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.06em;
+}
+
+.dashboard-hero-text {
+  max-width: 680px;
+  color: var(--app-muted);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.dashboard-hero-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 1.5rem;
+  border-radius: var(--app-radius-xl);
+  background:
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.32), transparent 20rem),
+    linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  box-shadow: 0 24px 54px rgba(37, 99, 235, 0.22);
+}
+
+.dashboard-hero-panel::before {
+  position: absolute;
+  inset: 1rem;
+  content: "";
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.35rem;
+  pointer-events: none;
+}
+
+.dashboard-hero-icon {
+  width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-health-list {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dashboard-health-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dashboard-health-list strong {
+  color: #ffffff;
+}
+
+.dashboard-metric-card {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.dashboard-metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--app-shadow);
+}
+
+.dashboard-metric-value {
+  color: var(--app-text);
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+
+.dashboard-metric-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+}
+
+.dashboard-metric-primary {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.dashboard-metric-success {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.dashboard-metric-info {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.dashboard-metric-warning {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.dashboard-action-card {
+  display: block;
+  height: 100%;
+  padding: 1.25rem;
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: #ffffff;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.dashboard-action-card:hover {
+  transform: translateY(-3px);
+  border-color: #bfdbfe;
+  box-shadow: var(--app-shadow-sm);
+}
+
+.dashboard-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--app-primary);
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.dashboard-activity-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-activity-item {
+  display: flex;
+  gap: 0.85rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.dashboard-activity-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.dashboard-activity-time {
+  margin-top: 0.35rem;
+  color: var(--app-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
 
 /* =========================================================
    9. Responsive
