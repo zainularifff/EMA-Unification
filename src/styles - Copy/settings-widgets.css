@@ -837,7 +837,11 @@
   }
 }
 
-/* Removed heavy :has() selector for smoother Settings scrolling. */
+/* Defensive: old RiskContent classes should not create the old bulky layout if cached markup remains. */
+.settings-module-root .risk-grid:has(.risk-simple-card) {
+  display: block !important;
+}
+
 /* =========================================================
    PC Aging Rule Revamp
    Global style only. No page-level Settings.css required.
@@ -1340,102 +1344,4 @@
     text-align: left !important;
     max-width: none !important;
   }
-}
-
-/* =========================================================
-   V8 Settings widget performance
-   Lighter cards, fewer heavy paint layers, smoother scroll.
-========================================================= */
-
-.settings-module-root .pc-aging-command-card,
-.settings-module-root .pc-aging-overview-card,
-.settings-module-root .pc-aging-panel,
-.settings-module-root .pricing-info-card,
-.settings-module-root .pricing-disclaimer-card,
-.settings-module-root .risk-simple-card,
-.settings-module-root .risk-rule-panel,
-.settings-module-root .risk-card,
-.settings-module-root .aging-card,
-.settings-module-root .policy-card,
-.settings-module-root .settings-helper-card,
-.settings-module-root .role-card,
-.settings-module-root .module-role-manager {
-  contain: layout paint style !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.032) !important;
-}
-
-.settings-module-root .pc-aging-overview-card::after,
-.settings-module-root .pc-aging-status-card::after,
-.settings-module-root .pricing-info-card::after,
-.settings-module-root .risk-simple-card::after {
-  display: none !important;
-  content: none !important;
-}
-
-.settings-module-root[data-section="aging"] .pc-aging-status-card,
-.settings-module-root[data-section="aging"] .pc-aging-threshold-panel,
-.settings-module-root[data-section="pricing"] .pricing-info-card.blue,
-.settings-module-root[data-section="pricing"] .pricing-info-card.green {
-  background: linear-gradient(180deg, #ffffff, #f8fbfe) !important;
-}
-
-.settings-module-root .pc-aging-panel,
-.settings-module-root .pc-aging-overview-card,
-.settings-module-root .pricing-info-card,
-.settings-module-root .pricing-disclaimer-card,
-.settings-module-root .risk-simple-card,
-.settings-module-root .risk-rule-panel {
-  content-visibility: auto;
-  contain-intrinsic-size: 120px;
-}
-
-.settings-module-root[data-section="aging"] input[type="range"],
-.settings-module-root[data-section="aging"] .aging-threshold-line,
-.settings-module-root[data-section="aging"] .threshold-number-wrap input {
-  transition: none !important;
-}
-
-/* =========================================================
-   V9 scroll paint reduction
-   Keep scrolling smooth by reducing complex paint effects on repeated cards.
-========================================================= */
-
-.settings-module-root .pc-aging-command-card,
-.settings-module-root .pc-aging-overview-card,
-.settings-module-root .pc-aging-panel,
-.settings-module-root .pricing-info-card,
-.settings-module-root .pricing-disclaimer-card,
-.settings-module-root .risk-simple-card,
-.settings-module-root .risk-rule-panel,
-.settings-module-root .policy-card,
-.settings-module-root .aging-card,
-.settings-module-root .role-card,
-.settings-module-root .settings-helper-card {
-  filter: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
-}
-
-/* Gradients are fine for static hero, but repeated scroll cards should be plain. */
-.settings-module-root .pc-aging-overview-card,
-.settings-module-root .pc-aging-panel,
-.settings-module-root .pricing-info-card,
-.settings-module-root .risk-simple-card {
-  background: #ffffff !important;
-}
-
-/* Decorative pseudo layers cost repaint during scroll. */
-.settings-module-root .pc-aging-overview-card::before,
-.settings-module-root .pc-aging-overview-card::after,
-.settings-module-root .pc-aging-panel::before,
-.settings-module-root .pc-aging-panel::after,
-.settings-module-root .pricing-info-card::before,
-.settings-module-root .pricing-info-card::after,
-.settings-module-root .risk-simple-card::before,
-.settings-module-root .risk-simple-card::after {
-  display: none !important;
-  content: none !important;
 }

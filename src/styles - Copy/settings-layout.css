@@ -946,7 +946,12 @@ body.ema-settings-lock main {
     1rem !important;
 }
 
-/* Removed heavy :has() selector for smoother Settings scrolling. */
+/* Sections with their own toolbar should not add an extra top gap */
+.settings-module-root .content-body:has(.user-access-commandbar:first-child),
+.settings-module-root .content-body:has(.audit-commandbar:first-child) {
+  padding-top: 0.82rem !important;
+}
+
 /* Tables/cards share the same visual width as toolbar controls */
 .settings-module-root .user-access-table,
 .settings-module-root .role-control-table,
@@ -1046,91 +1051,4 @@ body.ema-settings-lock main {
   .settings-module-root .score-box {
     min-width: 150px !important;
   }
-}
-
-/* =========================================================
-   V8 Settings performance shell
-   Reduce repaint/reflow cost across all Settings modules.
-========================================================= */
-
-.settings-module-root {
-  isolation: isolate !important;
-  contain: layout style !important;
-  background: linear-gradient(135deg, #eef3f8 0%, #e8eef5 52%, #dde6ef 100%) !important;
-}
-
-.settings-module-root::before,
-.settings-module-root::after,
-.settings-module-root .settings-hero::before,
-.settings-module-root .settings-hero::after {
-  display: none !important;
-  content: none !important;
-}
-
-.settings-module-root .settings-layout,
-.settings-module-root .settings-content,
-.settings-module-root .content-shell,
-.settings-module-root .content-body {
-  min-width: 0 !important;
-  contain: layout style !important;
-}
-
-.settings-module-root .content-body {
-  scroll-behavior: auto !important;
-  overscroll-behavior: contain !important;
-  -webkit-overflow-scrolling: auto !important;
-  will-change: auto !important;
-}
-
-.settings-module-root .settings-hero,
-.settings-module-root .settings-menu,
-.settings-module-root .content-shell,
-.settings-module-root .score-box,
-.settings-module-root .ema-panel-surface {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035) !important;
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,254,0.96)) !important;
-}
-
-.settings-module-root .settings-hero {
-  min-height: 6.4rem !important;
-}
-
-@media (max-width: 1100px) {
-  .settings-module-root {
-    contain: none !important;
-  }
-
-  .settings-module-root .content-body {
-    -webkit-overflow-scrolling: touch !important;
-  }
-}
-
-/* =========================================================
-   V9 scroll container tuning
-========================================================= */
-
-.settings-module-root .content-body,
-.settings-module-root .settings-menu-list,
-.settings-module-root .module-control-table,
-.settings-module-root .user-access-table,
-.settings-module-root .role-control-table,
-.settings-module-root .audit-standard-table,
-.settings-module-root .pricing-table-card {
-  scroll-behavior: auto !important;
-  will-change: auto !important;
-  transform: none !important;
-}
-
-.settings-module-root .content-body {
-  contain: layout style paint !important;
-}
-
-/* Avoid repaint-heavy fixed/sticky elements inside scrollable content. */
-.settings-module-root .module-control-row.head,
-.settings-module-root .audit-standard-row.head,
-.settings-module-root .user-row.head,
-.settings-module-root .role-control-row.head {
-  will-change: auto !important;
 }
