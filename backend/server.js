@@ -4,6 +4,13 @@
 require("dotenv").config();
 
 const express = require("express");
+
+let compression = null;
+try {
+    compression = require("compression");
+} catch (err) {
+    console.warn("Optional dependency compression is not installed. API responses will continue without gzip/brotli compression.");
+}
 const sql = require("mssql");
 const queries_EMA = require("./queries/queries_EMA");
 const queries_TSMDM = require("./queries/queries_TSMDM");
@@ -33,6 +40,12 @@ try {
 const { getMdmConfig } = require("./src/utils/mdmConfig");
 
 const app = express();
+
+if (compression) {
+    app.use(compression({
+        threshold: 1024
+    }));
+}
 
 // CORS
 const cors = require("cors");
@@ -3781,7 +3794,7 @@ async function logEmaAudit(pool, req, action, moduleName, severity = 'Info', det
         await ensureEmaAuditLogsTable(pool);
 
         const userName = getAuditRequestUser(req);
-        const detailText = stringifyAuditDetails(details);
+        const detailText = stringifyAuditDetails(sanitizeAuditDetails(details));
         const ipAddress = normalizeAuthValue(req?.headers?.['x-forwarded-for'] || req?.ip || req?.socket?.remoteAddress || '', '');
         const userAgent = normalizeAuthValue(req?.headers?.['user-agent'] || '', '');
 
@@ -3827,6 +3840,98 @@ async function logEmaAudit(pool, req, action, moduleName, severity = 'Info', det
         console.error('Audit log failed:', auditErr.message);
     }
 }
+
+
+function sanitizeAuditDetails(value, depth = 0) {
+    if (depth > 5) return '[MaxDepth]';
+    if (value === undefined || value === null) return value;
+    if (value instanceof Date) return value.toISOString();
+
+    if (Array.isArray(value)) {
+        return value.slice(0, 100).map((item) => sanitizeAuditDetails(item, depth + 1));
+    }
+
+    if (typeof value === 'object') {
+        const output = {};
+        const blockedKey = /(password|passcode|token|secret|hash|qr|otpauth|cookie|authorization|refresh)/i;
+
+        for (const [key, itemValue] of Object.entries(value)) {
+            if (blockedKey.test(key)) {
+                output[key] = '[REDACTED]';
+                continue;
+            }
+            output[key] = sanitizeAuditDetails(itemValue, depth + 1);
+        }
+
+        return output;
+    }
+
+    return value;
+}
+
+function normalizeAuditCompareValue(value) {
+    if (value === undefined) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string') return value.trim();
+    return value;
+}
+
+function buildAuditChangedFields(before = {}, after = {}, allowedFields = null) {
+    const beforeObj = before || {};
+    const afterObj = after || {};
+    const fieldSet = allowedFields && Array.isArray(allowedFields)
+        ? new Set(allowedFields)
+        : new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]);
+
+    const blockedKey = /(password|passcode|token|secret|hash|qr|otpauth|cookie|authorization|refresh)/i;
+    const changes = [];
+
+    for (const field of fieldSet) {
+        if (blockedKey.test(field)) continue;
+
+        const beforeValue = normalizeAuditCompareValue(beforeObj[field]);
+        const afterValue = normalizeAuditCompareValue(afterObj[field]);
+
+        if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+            changes.push({
+                field,
+                before: beforeValue,
+                after: afterValue
+            });
+        }
+    }
+
+    return changes;
+}
+
+function getAuditEntityId(row = {}, ...keys) {
+    for (const key of keys) {
+        if (row && row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+            return String(row[key]);
+        }
+    }
+    return '';
+}
+
+function buildPricingAuditAction(actionType, beforeRow, afterRow) {
+    const beforeExcluded = beforeRow ? Boolean(beforeRow.IsExcluded ?? beforeRow.isExcluded) : null;
+    const afterExcluded = afterRow ? Boolean(afterRow.IsExcluded ?? afterRow.isExcluded) : null;
+
+    if (actionType === 'create') {
+        return afterExcluded ? 'Created device pricing rule excluded from CAPEX' : 'Created device pricing rule';
+    }
+
+    if (actionType === 'delete') {
+        return beforeExcluded ? 'Deleted CAPEX-excluded device pricing rule' : 'Deleted device pricing rule';
+    }
+
+    if (beforeExcluded !== null && beforeExcluded !== afterExcluded) {
+        return afterExcluded ? 'Excluded device pricing from CAPEX' : 'Included device pricing in CAPEX';
+    }
+
+    return 'Updated device pricing rule';
+}
+
 
 // GENERAL
 app.get("/api/settings/general", authenticateToken, async (req, res) => {
@@ -6018,6 +6123,39 @@ app.post('/api/settings/audit-logs', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error('POST /api/settings/audit-logs error:', err);
         return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+
+// POST /api/settings/audit-logs/export-event
+// Frontend can call this after exporting CSV so export evidence is also captured.
+app.post('/api/settings/audit-logs/export-event', authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const recordCount = Number(req.body?.recordCount || req.body?.totalRecords || 0) || 0;
+        const filters = req.body?.filters || req.body?.filter || {};
+
+        await logEmaAudit(
+            pool,
+            req,
+            'Exported audit CSV',
+            'Audit Logs',
+            'Info',
+            {
+                recordCount,
+                filters,
+                exportedAt: new Date().toISOString()
+            },
+            { entityType: 'AuditExport', entityID: new Date().toISOString().slice(0, 10) }
+        );
+
+        return res.json({
+            success: true,
+            message: 'Audit export event logged.'
+        });
+    } catch (err) {
+        console.error('POST /api/settings/audit-logs/export-event error:', err);
+        return res.status(500).json({ success: false, message: err.message || 'Failed to log audit export event.' });
     }
 });
 
@@ -20348,6 +20486,20 @@ async function apBulkSavePricingHandler(req, res) {
         await transaction.commit();
         transaction = null;
 
+        await logEmaAudit(
+            pool,
+            req,
+            "Bulk updated device pricing rules",
+            "Device Pricing",
+            "Success",
+            {
+                totalRecords: rows.length,
+                source: "bulk-save",
+                sampleRows: rows.slice(0, 10).map((item) => sanitizeAuditDetails(apReadPricingPayload(item)))
+            },
+            { entityType: "DevicePricing", entityID: "bulk" }
+        );
+
         return res.json({
             success: true,
             message: "Device pricing saved successfully.",
@@ -20385,6 +20537,15 @@ app.post("/api/settings/device-pricing/row", authenticateToken, async (req, res)
         const pool = await sql.connect(dbConfig);
 
         if (row.PricingID > 0) {
+            const beforeResult = await pool.request()
+                .input("PricingID", sql.Int, row.PricingID)
+                .query(`
+                    SELECT TOP 1 *
+                    FROM AssetPricing WITH (NOLOCK)
+                    WHERE PricingID = @PricingID;
+                `);
+            const beforeRow = beforeResult.recordset?.[0] || null;
+
             const updateResult = await pool.request()
                 .input("PricingID", sql.Int, row.PricingID)
                 .input("Category", sql.NVarChar(100), row.Category)
@@ -20412,10 +20573,25 @@ app.post("/api/settings/device-pricing/row", authenticateToken, async (req, res)
                 });
             }
 
+            const data = apNormalizePricingRow(updateResult.recordset[0]);
+            await logEmaAudit(
+                pool,
+                req,
+                buildPricingAuditAction("update", beforeRow, data),
+                "Device Pricing",
+                "Success",
+                {
+                    before: beforeRow ? apNormalizePricingRow(beforeRow) : null,
+                    after: data,
+                    changes: buildAuditChangedFields(beforeRow ? apNormalizePricingRow(beforeRow) : {}, data)
+                },
+                { entityType: "DevicePricing", entityID: String(data.PricingID || row.PricingID) }
+            );
+
             return res.json({
                 success: true,
                 message: "Device pricing updated successfully.",
-                data: apNormalizePricingRow(updateResult.recordset[0])
+                data
             });
         }
 
@@ -20449,10 +20625,21 @@ app.post("/api/settings/device-pricing/row", authenticateToken, async (req, res)
                 );
             `);
 
+        const data = apNormalizePricingRow(insertResult.recordset[0]);
+        await logEmaAudit(
+            pool,
+            req,
+            buildPricingAuditAction("create", null, data),
+            "Device Pricing",
+            "Success",
+            { after: data },
+            { entityType: "DevicePricing", entityID: String(data.PricingID || "") }
+        );
+
         return res.json({
             success: true,
             message: "Device pricing added successfully.",
-            data: apNormalizePricingRow(insertResult.recordset[0])
+            data
         });
     } catch (err) {
         console.error("POST /api/settings/device-pricing/row error:", err);
@@ -20483,6 +20670,15 @@ app.put("/api/settings/device-pricing/:id", authenticateToken, async (req, res) 
 
         const pool = await sql.connect(dbConfig);
 
+        const beforeResult = await pool.request()
+            .input("PricingID", sql.Int, pricingID)
+            .query(`
+                SELECT TOP 1 *
+                FROM AssetPricing WITH (NOLOCK)
+                WHERE PricingID = @PricingID;
+            `);
+        const beforeRow = beforeResult.recordset?.[0] || null;
+
         const result = await pool.request()
             .input("PricingID", sql.Int, pricingID)
             .input("Category", sql.NVarChar(100), row.Category)
@@ -20510,10 +20706,25 @@ app.put("/api/settings/device-pricing/:id", authenticateToken, async (req, res) 
             });
         }
 
+        const data = apNormalizePricingRow(result.recordset[0]);
+        await logEmaAudit(
+            pool,
+            req,
+            buildPricingAuditAction("update", beforeRow, data),
+            "Device Pricing",
+            "Success",
+            {
+                before: beforeRow ? apNormalizePricingRow(beforeRow) : null,
+                after: data,
+                changes: buildAuditChangedFields(beforeRow ? apNormalizePricingRow(beforeRow) : {}, data)
+            },
+            { entityType: "DevicePricing", entityID: String(data.PricingID || pricingID) }
+        );
+
         return res.json({
             success: true,
             message: "Device pricing updated successfully.",
-            data: apNormalizePricingRow(result.recordset[0])
+            data
         });
     } catch (err) {
         console.error("PUT /api/settings/device-pricing/:id error:", err);
@@ -20543,13 +20754,33 @@ app.delete("/api/settings/device-pricing/:id", authenticateToken, async (req, re
             .input("PricingID", sql.Int, pricingID)
             .query(`
                 DELETE FROM AssetPricing
+                OUTPUT DELETED.*
                 WHERE PricingID = @PricingID;
             `);
+
+        if (!result.recordset || result.recordset.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Device pricing row was not found."
+            });
+        }
+
+        const data = apNormalizePricingRow(result.recordset[0]);
+        await logEmaAudit(
+            pool,
+            req,
+            buildPricingAuditAction("delete", data, null),
+            "Device Pricing",
+            "Warning",
+            { before: data },
+            { entityType: "DevicePricing", entityID: String(data.PricingID || pricingID) }
+        );
 
         return res.json({
             success: true,
             message: "Device pricing deleted successfully.",
-            affectedRows: result.rowsAffected?.[0] || 0
+            affectedRows: result.rowsAffected?.[0] || 0,
+            data
         });
     } catch (err) {
         console.error("DELETE /api/settings/device-pricing/:id error:", err);
@@ -20722,6 +20953,15 @@ app.post("/api/settings/pc-aging-rule", authenticateToken, async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
 
+        const existingResult = await pool.request()
+            .input("SettingKey", sql.NVarChar(100), PC_AGING_RULE_KEY)
+            .query(`
+                SELECT TOP 1 SettingValue
+                FROM AssetSettings WITH (NOLOCK)
+                WHERE SettingKey = @SettingKey;
+            `);
+        const previousRule = safeParsePcAgingJson(existingResult.recordset?.[0]?.SettingValue);
+
         await pool.request()
             .input("SettingKey", sql.NVarChar(100), PC_AGING_RULE_KEY)
             .input("SettingValue", sql.NVarChar(sql.MAX), settingValue)
@@ -20754,6 +20994,24 @@ app.post("/api/settings/pc-aging-rule", authenticateToken, async (req, res) => {
                     );
                 END
             `);
+
+        const agingAction = previousRule.enabled !== rule.enabled
+            ? (rule.enabled ? "Enabled PC aging rule" : "Disabled PC aging rule")
+            : "Updated PC aging rule";
+
+        await logEmaAudit(
+            pool,
+            req,
+            agingAction,
+            "PC Aging Rule",
+            "Success",
+            {
+                before: previousRule,
+                after: rule,
+                changes: buildAuditChangedFields(previousRule, rule)
+            },
+            { entityType: "PcAgingRule", entityID: PC_AGING_RULE_KEY }
+        );
 
         return res.json({
             success: true,
@@ -27544,7 +27802,18 @@ app.post('/api/settings/access-controls', authenticateToken, async (req, res) =>
                     (@PolicyKey, @PolicyName, @Description, @Scope, @Enforcement, @ReviewCycle, @Status, 0, @SortOrder, GETDATE(), 'ui');
             `);
 
-        return res.json({ success: true, message: 'Access control created.', data: result.recordset?.[0] });
+        const data = result.recordset?.[0];
+        await logEmaAudit(
+            pool,
+            req,
+            'Created access control policy',
+            'Access Control',
+            'Success',
+            { after: data },
+            { entityType: 'AccessControl', entityID: getAuditEntityId(data, 'ControlID', 'PolicyKey') }
+        );
+
+        return res.json({ success: true, message: 'Access control created.', data });
     } catch (err) {
         console.error('POST /api/settings/access-controls error:', err);
         const isDuplicate = /duplicate|unique/i.test(err.message || '');
@@ -27565,6 +27834,15 @@ app.put('/api/settings/access-controls/:id', authenticateToken, async (req, res)
 
         const policyKey = policyName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
         const pool = await sql.connect(dbConfig);
+        const beforeResult = await pool.request()
+            .input('ControlID', sql.Int, controlId)
+            .query(`
+                SELECT TOP 1 *
+                FROM dbo.EMA_AccessControls WITH (NOLOCK)
+                WHERE ControlID = @ControlID;
+            `);
+        const beforeRow = beforeResult.recordset?.[0] || null;
+
         const result = await pool.request()
             .input('ControlID', sql.Int, controlId)
             .input('PolicyKey', sql.NVarChar(100), policyKey)
@@ -27595,7 +27873,22 @@ app.put('/api/settings/access-controls/:id', authenticateToken, async (req, res)
             return res.status(404).json({ success: false, message: 'Access control not found.' });
         }
 
-        return res.json({ success: true, message: 'Access control updated.', data: result.recordset[0] });
+        const data = result.recordset[0];
+        await logEmaAudit(
+            pool,
+            req,
+            'Updated access control policy',
+            'Access Control',
+            'Success',
+            {
+                before: beforeRow,
+                after: data,
+                changes: buildAuditChangedFields(beforeRow || {}, data)
+            },
+            { entityType: 'AccessControl', entityID: getAuditEntityId(data, 'ControlID', 'PolicyKey') }
+        );
+
+        return res.json({ success: true, message: 'Access control updated.', data });
     } catch (err) {
         console.error('PUT /api/settings/access-controls/:id error:', err);
         return res.status(500).json({ success: false, message: err.message || 'Failed to update access control.' });
@@ -27622,7 +27915,18 @@ app.delete('/api/settings/access-controls/:id', authenticateToken, async (req, r
             return res.status(404).json({ success: false, message: 'Access control not found.' });
         }
 
-        return res.json({ success: true, message: 'Access control deleted.', data: result.recordset[0] });
+        const data = result.recordset[0];
+        await logEmaAudit(
+            pool,
+            req,
+            'Deleted access control policy',
+            'Access Control',
+            'Warning',
+            { before: data },
+            { entityType: 'AccessControl', entityID: getAuditEntityId(data, 'ControlID', 'PolicyKey') }
+        );
+
+        return res.json({ success: true, message: 'Access control deleted.', data });
     } catch (err) {
         console.error('DELETE /api/settings/access-controls/:id error:', err);
         return res.status(500).json({ success: false, message: err.message || 'Failed to delete access control.' });

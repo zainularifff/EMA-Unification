@@ -777,3 +777,76 @@
   -webkit-backdrop-filter: none !important;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12) !important;
 }
+
+/* =========================================================
+   Audit toolbar spacing fix
+   Keep Refresh and Export CSV separated from filters.
+========================================================= */
+
+.settings-module-root .audit-commandbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: end !important;
+  column-gap: 0.95rem !important;
+  row-gap: 0.75rem !important;
+  padding-inline: 1rem !important;
+}
+
+.settings-module-root .audit-commandbar .audit-filter-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(180px, 1fr)) !important;
+  gap: 0.75rem !important;
+  min-width: 0 !important;
+}
+
+.settings-module-root .audit-command-actions {
+  display: inline-flex !important;
+  align-items: end !important;
+  justify-content: flex-end !important;
+  gap: 0.62rem !important;
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+  min-width: max-content !important;
+}
+
+.settings-module-root .audit-command-actions .soft-btn,
+.settings-module-root .audit-command-actions .primary-btn,
+.settings-module-root .audit-export-btn {
+  height: 2.42rem !important;
+  min-height: 2.42rem !important;
+  padding-inline: 1rem !important;
+}
+
+.settings-module-root .audit-command-actions .primary-btn,
+.settings-module-root .audit-export-btn {
+  min-width: 7rem !important;
+}
+
+/* When width is tight, buttons move to the next row instead of squeezing into filters. */
+@media (max-width: 1280px) {
+  .settings-module-root .audit-commandbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root .audit-command-actions {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .settings-module-root .audit-commandbar .audit-filter-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root .audit-command-actions {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .settings-module-root .audit-command-actions .soft-btn,
+  .settings-module-root .audit-command-actions .primary-btn,
+  .settings-module-root .audit-export-btn {
+    width: 100% !important;
+  }
+}

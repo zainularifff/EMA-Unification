@@ -238,6 +238,10 @@ type AuditLogsApiResponse = {
   success?: boolean;
   message?: string;
   data?: AuditLogApiRow[];
+  totalRecords?: number;
+  totalPages?: number;
+  page?: number;
+  limit?: number;
 };
 
 type PricingRow = {
@@ -986,11 +990,16 @@ export default function Settings() {
   const auditLoadInFlightRef = useRef(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditExporting, setAuditExporting] = useState(false);
   const [auditError, setAuditError] = useState("");
   const [auditLoaded, setAuditLoaded] = useState(false);
   const [auditModuleFilter, setAuditModuleFilter] = useState("all");
   const [auditSeverityFilter, setAuditSeverityFilter] = useState("all");
   const [auditDateFilter, setAuditDateFilter] = useState<AuditDateFilter>("30d");
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotalRecords, setAuditTotalRecords] = useState(0);
+  const [auditTotalPages, setAuditTotalPages] = useState(1);
+  const auditLimit = 10;
 
   const [pcAgingRule, setPcAgingRule] = useState<PcAgingRule>(DEFAULT_PC_AGING_RULE);
   const [pcAgingLoaded, setPcAgingLoaded] = useState(false);
@@ -1020,13 +1029,27 @@ export default function Settings() {
   const accessPolicyTotalCount = accessPolicies.length;
   const accessPolicyActiveCount = accessPolicies.filter((policy) => policy.status === "Active").length;
   const auditTodayStart = new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime();
-  const auditTotalCount = auditLogs.length;
+  const auditTotalCount = auditTotalRecords || auditLogs.length;
   const auditTodayCount = auditLogs.filter((log) => getAuditTimestampMs(log) >= auditTodayStart).length;
   const roleOptionsForUsers = accessRoles.filter((role) => role.status !== "Inactive").map((role) => role.name);
   const filteredContentTerm = sectionSearch.trim().toLowerCase();
-  const auditModuleOptions = Array.from(new Set(auditLogs.map((log) => log.module).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-  const auditSeverityOptions = Array.from(new Set(auditLogs.map((log) => normalizeAuditSeverity(log.severity)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-  const filteredAuditLogs = filterAuditLogs(auditLogs, filteredContentTerm, auditModuleFilter, auditSeverityFilter, auditDateFilter);
+
+  // Server-side pagination is used for Audit Log, so do not filter the current page again on the client.
+  const auditBaseModuleOptions = [
+    "User Access Management",
+    "Role Based Control",
+    "Module Control by Role",
+    "Access Control",
+    "Device Pricing",
+    "PC Aging Rule",
+    "Audit Logs",
+    "Settings",
+    "Notification Channels",
+    "Security & Auth",
+  ];
+  const auditModuleOptions = Array.from(new Set([...auditBaseModuleOptions, ...auditLogs.map((log) => log.module).filter(Boolean)])).sort((a, b) => a.localeCompare(b));
+  const auditSeverityOptions = ["Success", "Info", "Warning", "Error"];
+  const filteredAuditLogs = auditLogs;
   const heroScoreOne = activeSection === "users" ? String(usersTotalCount) : activeSection === "roles" ? String(rolesTotalCount) : activeSection === "modules" ? String(moduleTotalCount) : activeSection === "access" ? String(accessPolicyTotalCount) : activeSection === "audit" ? String(auditTotalCount) : activeSection === "aging" ? String(pcAgingRule.monitorMaxYears) : active.scoreOne;
   const heroScoreTwo = activeSection === "users" ? String(usersLockedCount) : activeSection === "roles" ? String(rolesActiveCount) : activeSection === "modules" ? String(moduleActiveRoleCount) : activeSection === "access" ? String(accessPolicyActiveCount) : activeSection === "audit" ? String(auditTodayCount) : activeSection === "aging" ? String(pcAgingRule.agingMinYears) : active.scoreTwo;
 
@@ -1135,16 +1158,32 @@ export default function Settings() {
     }
   };
 
-  const loadAuditLogs = async () => {
+  const buildAuditQueryString = (page = auditPage, limit = auditLimit) => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("limit", String(limit));
+
+    if (filteredContentTerm) params.set("search", filteredContentTerm);
+    if (auditModuleFilter !== "all") params.set("module", auditModuleFilter);
+    if (auditSeverityFilter !== "all") params.set("severity", auditSeverityFilter);
+    if (auditDateFilter !== "all") params.set("dateRange", auditDateFilter);
+
+    return params.toString();
+  };
+
+  const loadAuditLogs = async (page = auditPage) => {
     if (auditLoadInFlightRef.current) return;
     auditLoadInFlightRef.current = true;
     setAuditLoading(true);
     setAuditError("");
 
     try {
-      const payload = await apiRequest<AuditLogsApiResponse>("/api/settings/audit-logs");
+      const payload = await apiRequest<AuditLogsApiResponse>(`/api/settings/audit-logs?${buildAuditQueryString(page)}`);
       const rows = Array.isArray(payload.data) ? payload.data : [];
       setAuditLogs(rows.map(mapAuditLogApiRow).sort((a, b) => getAuditTimestampMs(b) - getAuditTimestampMs(a)));
+      setAuditTotalRecords(Number(payload.totalRecords || rows.length || 0));
+      setAuditTotalPages(Math.max(1, Number(payload.totalPages || 1)));
+      setAuditPage(Math.max(1, Number(payload.page || page || 1)));
       setAuditLoaded(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load audit logs.";
@@ -1156,26 +1195,84 @@ export default function Settings() {
     }
   };
 
-  const exportAuditLogs = () => {
-    const rows = filteredAuditLogs;
-    if (rows.length === 0) {
-      showToast("warning", "No audit records", "There are no audit logs to export with the current filters.");
-      return;
-    }
+  const exportAuditLogs = async () => {
+    if (auditExporting) return;
 
-    const header = ["Time", "User", "Module", "Action", "Severity", "Details"];
-    const csvRows = [header, ...rows.map((row) => [formatAuditTimestamp(row.timestamp), row.user, row.module, row.action, row.severity, row.details || ""])];
-    const csv = csvRows.map((row) => row.map(csvCell).join(",")).join("\n");
-    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `ema-audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    showToast("success", "Audit exported", `${rows.length} audit log record${rows.length === 1 ? "" : "s"} exported to CSV.`);
+    setAuditExporting(true);
+
+    try {
+      const exportPageSize = 500;
+      const maxExportRecords = 50000;
+      let currentPage = 1;
+      let totalPagesToRead = 1;
+      const exportRows: AuditLog[] = [];
+
+      do {
+        const payload = await apiRequest<AuditLogsApiResponse>(`/api/settings/audit-logs?${buildAuditQueryString(currentPage, exportPageSize)}`);
+        const rows = Array.isArray(payload.data) ? payload.data : [];
+        exportRows.push(...rows.map(mapAuditLogApiRow));
+        totalPagesToRead = Math.max(1, Number(payload.totalPages || 1));
+        currentPage += 1;
+      } while (currentPage <= totalPagesToRead && exportRows.length < maxExportRecords);
+
+      const rows = exportRows
+        .slice(0, maxExportRecords)
+        .sort((a, b) => getAuditTimestampMs(b) - getAuditTimestampMs(a));
+
+      if (rows.length === 0) {
+        showToast("warning", "No audit records", "There are no audit logs to export with the current filters.");
+        return;
+      }
+
+      const header = ["Time", "User", "Module", "Action", "Severity", "Details"];
+      const csvRows = [header, ...rows.map((row) => [formatAuditTimestamp(row.timestamp), row.user, row.module, row.action, row.severity, row.details || ""])];
+      const csv = csvRows.map((row) => row.map(csvCell).join(",")).join("\n");
+      const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      const filterName = [
+        auditModuleFilter !== "all" ? auditModuleFilter : "all-modules",
+        auditSeverityFilter !== "all" ? auditSeverityFilter : "all-statuses",
+        auditDateFilter,
+      ]
+        .join("-")
+        .replace(/[^a-z0-9-]+/gi, "-")
+        .toLowerCase();
+
+      link.href = url;
+      link.download = `ema-audit-log-${filterName}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      try {
+        await apiRequest("/api/settings/audit-logs/export-event", {
+          method: "POST",
+          body: JSON.stringify({
+            recordCount: rows.length,
+            filters: {
+              search: filteredContentTerm,
+              module: auditModuleFilter,
+              severity: auditSeverityFilter,
+              dateRange: auditDateFilter,
+              exportMode: "all-filtered-records",
+              maxExportRecords,
+            },
+          }),
+        });
+      } catch (error) {
+        console.warn("Audit export event logging skipped:", error);
+      }
+
+      showToast("success", "Audit exported", `${rows.length} filtered audit log record${rows.length === 1 ? "" : "s"} exported to CSV.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to export audit logs.";
+      showToast("error", "Audit export failed", message);
+    } finally {
+      setAuditExporting(false);
+    }
   };
 
   const openAccessPolicyModal = (index: number | null = null) => {
@@ -1614,9 +1711,19 @@ export default function Settings() {
   }, [activeSection, accessPoliciesLoaded, accessPoliciesLoading]);
 
   useEffect(() => {
-    if (activeSection !== "audit" || auditLoaded || auditLoading) return;
-    void loadAuditLogs();
-  }, [activeSection, auditLoaded, auditLoading]);
+    if (activeSection !== "audit") return;
+    setAuditPage(1);
+  }, [activeSection, filteredContentTerm, auditModuleFilter, auditSeverityFilter, auditDateFilter]);
+
+  useEffect(() => {
+    if (activeSection !== "audit") return;
+
+    const timer = window.setTimeout(() => {
+      void loadAuditLogs(auditPage);
+    }, filteredContentTerm ? 250 : 0);
+
+    return () => window.clearTimeout(timer);
+  }, [activeSection, auditPage, filteredContentTerm, auditModuleFilter, auditSeverityFilter, auditDateFilter]);
 
   useEffect(() => {
     if (activeSection !== "aging" || pcAgingLoaded || pcAgingLoading) return;
@@ -1650,7 +1757,8 @@ export default function Settings() {
       setAuditModuleFilter("all");
       setAuditSeverityFilter("all");
       setAuditDateFilter("30d");
-      void loadAuditLogs();
+      setAuditPage(1);
+      void loadAuditLogs(1);
       return;
     }
 
@@ -1668,7 +1776,7 @@ export default function Settings() {
 
   const saveSection = () => {
     if (activeSection === "audit") {
-      exportAuditLogs();
+      void exportAuditLogs();
       return;
     }
 
@@ -2083,12 +2191,18 @@ export default function Settings() {
                   moduleFilter={auditModuleFilter}
                   severityFilter={auditSeverityFilter}
                   dateFilter={auditDateFilter}
+                  page={auditPage}
+                  limit={auditLimit}
+                  totalRecords={auditTotalRecords}
+                  totalPages={auditTotalPages}
                   onModuleFilterChange={setAuditModuleFilter}
                   onSeverityFilterChange={setAuditSeverityFilter}
                   onDateFilterChange={setAuditDateFilter}
-                  onReload={loadAuditLogs}
+                  onPageChange={setAuditPage}
+                  onReload={() => loadAuditLogs(auditPage)}
                   onExport={exportAuditLogs}
-                  exportDisabled={auditLoading || filteredAuditLogs.length === 0}
+                  exporting={auditExporting}
+                  exportDisabled={auditLoading || auditExporting || auditTotalRecords === 0}
                 />
               )}
               {activeSection === "pricing" && <PricingContent search={filteredContentTerm} rows={pricingRows} categoryOptions={categoryOptions} brandOptionsByCategory={brandOptionsByCategory} modelOptionsByKey={modelOptionsByKey} loading={pricingLoading} saving={pricingSaving} savingRowId={pricingRowSavingId} error={pricingError} onAdd={addPricingRow} onChange={updatePricingRow} onSaveRow={savePricingRow} onRequestDelete={requestDeletePricingRow} />}
@@ -2866,11 +2980,17 @@ function AuditContent({
   moduleFilter,
   severityFilter,
   dateFilter,
+  page,
+  limit,
+  totalRecords,
+  totalPages,
   onModuleFilterChange,
   onSeverityFilterChange,
   onDateFilterChange,
+  onPageChange,
   onReload,
   onExport,
+  exporting,
   exportDisabled,
 }: {
   logs: AuditLog[];
@@ -2882,23 +3002,25 @@ function AuditContent({
   moduleFilter: string;
   severityFilter: string;
   dateFilter: AuditDateFilter;
+  page: number;
+  limit: number;
+  totalRecords: number;
+  totalPages: number;
   onModuleFilterChange: (value: string) => void;
   onSeverityFilterChange: (value: string) => void;
   onDateFilterChange: (value: AuditDateFilter) => void;
+  onPageChange: (page: number) => void;
   onReload: () => void;
-  onExport: () => void;
+  onExport: () => void | Promise<void>;
+  exporting: boolean;
   exportDisabled: boolean;
 }) {
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const startIndex = (safePage - 1) * pageSize;
-  const pageRows = logs.slice(startIndex, startIndex + pageSize);
-
-  useEffect(() => {
-    setPage(1);
-  }, [moduleFilter, severityFilter, dateFilter, logs.length]);
+  const safeTotalPages = Math.max(1, totalPages || 1);
+  const safePage = Math.min(Math.max(1, page || 1), safeTotalPages);
+  const startIndex = (safePage - 1) * limit;
+  const pageRows = logs;
+  const shownStart = totalRecords > 0 && pageRows.length ? startIndex + 1 : 0;
+  const shownEnd = totalRecords > 0 ? Math.min(startIndex + pageRows.length, totalRecords) : 0;
 
   return (
     <div className="audit-log-panel">
@@ -2908,7 +3030,6 @@ function AuditContent({
           <span>{error}</span>
         </div>
       )}
-
 
       <div className="audit-commandbar">
         <div className="audit-filter-grid">
@@ -2946,14 +3067,19 @@ function AuditContent({
           </label>
         </div>
 
-        <button className="primary-btn audit-export-btn" type="button" onClick={onExport} disabled={exportDisabled}>
-          Export CSV
-        </button>
+        <div className="audit-command-actions">
+          <button className="soft-btn" type="button" onClick={onReload} disabled={loading}>
+            {loading ? "Loading..." : "Refresh"}
+          </button>
+          <button className="primary-btn audit-export-btn" type="button" onClick={() => void onExport()} disabled={exportDisabled || loading || exporting}>
+            {exporting ? "Exporting..." : "Export CSV"}
+          </button>
+        </div>
       </div>
 
       <div className="audit-kpi-strip">
-        <div><span>Total Logs</span><strong>{allLogs.length}</strong></div>
-        <div><span>Filtered</span><strong>{logs.length}</strong></div>
+        <div><span>Total Matching Logs</span><strong>{totalRecords}</strong></div>
+        <div><span>This Page</span><strong>{pageRows.length}</strong></div>
         <div><span>Modules</span><strong>{moduleOptions.length}</strong></div>
         <div><span>Latest</span><strong>{allLogs[0] ? formatAuditTimestamp(allLogs[0].timestamp).split(",")[0] : "-"}</strong></div>
       </div>
@@ -2989,16 +3115,16 @@ function AuditContent({
       </div>
 
       <div className="uam-pagination global-style audit-pagination">
-        <div className="uam-page-summary">Page {safePage} / {totalPages}</div>
+        <div className="uam-page-summary">Page {safePage} / {safeTotalPages}</div>
         <div className="uam-pagination-info">
-          Showing <strong>{pageRows.length ? startIndex + 1 : 0}-{startIndex + pageRows.length}</strong> of <strong>{logs.length}</strong> records
+          Showing <strong>{shownStart}-{shownEnd}</strong> of <strong>{totalRecords}</strong> matching records
         </div>
         <div className="uam-pagination-controls global-style">
-          <button className="uam-page-icon" type="button" disabled={safePage <= 1} onClick={() => setPage(1)}>«</button>
-          <button className="uam-page-icon" type="button" disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>‹</button>
+          <button className="uam-page-icon" type="button" disabled={safePage <= 1 || loading} onClick={() => onPageChange(1)}>«</button>
+          <button className="uam-page-icon" type="button" disabled={safePage <= 1 || loading} onClick={() => onPageChange(Math.max(1, safePage - 1))}>‹</button>
           <span className="uam-page-current">{safePage}</span>
-          <button className="uam-page-icon" type="button" disabled={safePage >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>›</button>
-          <button className="uam-page-icon" type="button" disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>»</button>
+          <button className="uam-page-icon" type="button" disabled={safePage >= safeTotalPages || loading} onClick={() => onPageChange(Math.min(safeTotalPages, safePage + 1))}>›</button>
+          <button className="uam-page-icon" type="button" disabled={safePage >= safeTotalPages || loading} onClick={() => onPageChange(safeTotalPages)}>»</button>
         </div>
       </div>
     </div>
