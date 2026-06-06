@@ -1,54 +1,99 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, AuthState } from '../types';
-import { getMe } from '../services/authService';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
-interface AuthContextType extends AuthState {
-  login: (token: string, user: User) => void;
+type AuthUser = {
+  id?: number;
+  username: string;
+  name?: string;
+  role?: string;
+};
+
+type AuthContextValue = {
+  token: string | null;
+  user: AuthUser | null;
+  isAuthenticated: boolean;
+  login: (token: string, user: AuthUser) => void;
   logout: () => void;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+function readStoredAuth() {
+  try {
+    const token =
+      localStorage.getItem("ema-access-token") ||
+      localStorage.getItem("accessToken") ||
+      localStorage.getItem("token");
+
+    const rawAuth = localStorage.getItem("ema-auth");
+    const parsed = rawAuth ? JSON.parse(rawAuth) : null;
+
+    return {
+      token,
+      user: parsed?.user || null,
+    };
+  } catch {
+    return {
+      token: null,
+      user: null,
+    };
+  }
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    token: localStorage.getItem('ema_token'),
-    isAuthenticated: false,
-    isLoading: true,
-  });
+  const stored = readStoredAuth();
 
-  useEffect(() => {
-    // Auto-authenticate with a default user
-    const defaultUser: User = {
-      id: '1',
-      email: 'admin@emauni.com',
-      name: 'Administrator',
-    };
-    setState({
-      user: defaultUser,
-      token: 'auto_token',
-      isAuthenticated: true,
-      isLoading: false,
-    });
-  }, []);
+  const [token, setToken] = useState<string | null>(stored.token);
+  const [user, setUser] = useState<AuthUser | null>(stored.user);
 
-  const login = (token: string, user: User) => {
-    localStorage.setItem('ema_token', token);
-    localStorage.setItem('ema_user', JSON.stringify(user));
-    setState({ user, token, isAuthenticated: true, isLoading: false });
-  };
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      token,
+      user,
+      isAuthenticated: Boolean(token),
+      login: (accessToken, loggedInUser) => {
+        setToken(accessToken);
+        setUser(loggedInUser);
 
-  const logout = () => {
-    localStorage.removeItem('ema_token');
-    localStorage.removeItem('ema_user');
-    setState({ user: null, token: null, isAuthenticated: false, isLoading: false });
-  };
+        localStorage.setItem("ema-access-token", accessToken);
+        localStorage.setItem("accessToken", accessToken);
+        localStorage.setItem("token", accessToken);
+        localStorage.setItem(
+          "ema-auth",
+          JSON.stringify({
+            token: accessToken,
+            accessToken,
+            user: loggedInUser,
+          })
+        );
+      },
+      logout: () => {
+        setToken(null);
+        setUser(null);
 
-  return <AuthContext.Provider value={{ ...state, login, logout }}>{children}</AuthContext.Provider>;
+        localStorage.removeItem("ema-access-token");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("token");
+        localStorage.removeItem("ema-auth");
+      },
+    }),
+    [token, user]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+
+  return context;
 }

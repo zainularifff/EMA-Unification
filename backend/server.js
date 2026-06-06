@@ -15,6 +15,21 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const axios = require("axios");
+
+let speakeasy = null;
+let qrcode = null;
+
+try {
+    speakeasy = require("speakeasy");
+} catch (err) {
+    console.warn("Optional dependency speakeasy is not installed. 2FA endpoints will return setup errors until it is installed.");
+}
+
+try {
+    qrcode = require("qrcode");
+} catch (err) {
+    console.warn("Optional dependency qrcode is not installed. 2FA QR generation will return setup errors until it is installed.");
+}
 const { getMdmConfig } = require("./src/utils/mdmConfig");
 
 const app = express();
@@ -60,9 +75,11 @@ const REFRESH_TOKEN_EXPIRY_DAYS = process.env.REFRESH_TOKEN_EXPIRY_DAYS;
 function generateAccessToken(user) {
     return jwt.sign(
         {
-            console_Idn: user.Console_Idn,
+            console_Idn: user.Console_Idn || 0,
             userID: user.UserID,
-            menuIndex: user.MenuIndex
+            menuIndex: user.MenuIndex || null,
+            authSource: user.AuthSource || user.authSource || "LEGACY",
+            emaUserID: user.EmaUserID || user.EMAUserID || user.emaUserID || null
         },
         ACCESS_TOKEN_SECRET,
         {
@@ -131,6 +148,359 @@ function buildPermissionsByRole(role) {
     };
 }
 
+
+function normalizeAuthValue(value, fallback = "") {
+    if (value === undefined || value === null) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function normalizeModuleKey(value) {
+    return normalizeAuthValue(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+}
+
+function isSuperAdminRoleName(value) {
+    const key = normalizeModuleKey(value);
+    return key === "super_admin" || key === "superadmin" || key === "system_administrator" || key === "system_admin" || key === "administrator_super";
+}
+
+function buildModuleAccessMap(modules = []) {
+    const access = {};
+    for (const moduleRow of modules) {
+        const key = normalizeModuleKey(moduleRow.ModuleKey || moduleRow.moduleKey || moduleRow.key || moduleRow.ModuleName || moduleRow.name);
+        if (!key) continue;
+        access[key] = {
+            view: true,
+            moduleID: moduleRow.ModuleID || moduleRow.moduleID || moduleRow.id || null,
+            moduleKey: key,
+            moduleName: moduleRow.ModuleName || moduleRow.moduleName || moduleRow.name || key,
+            routePath: moduleRow.RoutePath || moduleRow.routePath || ""
+        };
+    }
+    return access;
+}
+
+async function getEmaUserAccessContext(pool, emaUserID) {
+    if (!emaUserID) {
+        return {
+            roles: [],
+            allowedModules: [],
+            allowedRoutes: [],
+            moduleAccess: {}
+        };
+    }
+
+    const hasUserRoles = await tableExists(pool, "EMA_UserRoles");
+    const hasRoles = await tableExists(pool, "EMA_Roles");
+    const hasModules = await tableExists(pool, "EMA_Modules");
+    const hasPermissions = await tableExists(pool, "EMA_RoleModulePermissions");
+
+    if (!hasUserRoles || !hasRoles) {
+        return {
+            roles: [],
+            allowedModules: [],
+            allowedRoutes: [],
+            moduleAccess: {}
+        };
+    }
+
+    const rolesResult = await pool.request()
+        .input("UserID", sql.Int, emaUserID)
+        .query(`
+            SELECT
+                r.RoleID,
+                COALESCE(NULLIF(r.RoleName, ''), r.Name) AS RoleName,
+                r.RoleKey,
+                ISNULL(r.IsSystemRole, 0) AS IsSystemRole,
+                ISNULL(ur.IsPrimary, 0) AS IsPrimary
+            FROM dbo.EMA_UserRoles ur WITH (NOLOCK)
+            INNER JOIN dbo.EMA_Roles r WITH (NOLOCK)
+                ON r.RoleID = ur.RoleID
+            WHERE ur.UserID = @UserID
+              AND ISNULL(r.Status, 'Active') = 'Active'
+            ORDER BY ISNULL(ur.IsPrimary, 0) DESC, r.RoleName ASC;
+        `);
+
+    const roles = rolesResult.recordset || [];
+    const isSuperAdmin = roles.some(role => isSuperAdminRoleName(role.RoleKey) || isSuperAdminRoleName(role.RoleName));
+
+    if (!hasModules || !hasPermissions || roles.length === 0) {
+        const wildcardAccess = isSuperAdmin ? { "*": { view: true } } : {};
+        return {
+            roles: roles.map(role => role.RoleName).filter(Boolean),
+            roleRows: roles,
+            allowedModules: isSuperAdmin ? ["*"] : [],
+            allowedRoutes: isSuperAdmin ? ["*"] : [],
+            moduleAccess: wildcardAccess,
+            isSuperAdmin
+        };
+    }
+
+    const modulesResult = isSuperAdmin
+        ? await pool.request().query(`
+            SELECT DISTINCT
+                m.ModuleID,
+                m.ModuleKey,
+                m.ModuleName,
+                m.RoutePath
+            FROM dbo.EMA_Modules m WITH (NOLOCK)
+            WHERE ISNULL(m.IsActive, 1) = 1
+            ORDER BY m.ModuleName ASC;
+        `)
+        : await pool.request()
+            .input("UserID", sql.Int, emaUserID)
+            .query(`
+                SELECT DISTINCT
+                    m.ModuleID,
+                    m.ModuleKey,
+                    m.ModuleName,
+                    m.RoutePath
+                FROM dbo.EMA_UserRoles ur WITH (NOLOCK)
+                INNER JOIN dbo.EMA_Roles r WITH (NOLOCK)
+                    ON r.RoleID = ur.RoleID
+                   AND ISNULL(r.Status, 'Active') = 'Active'
+                INNER JOIN dbo.EMA_RoleModulePermissions p WITH (NOLOCK)
+                    ON p.RoleID = r.RoleID
+                   AND ISNULL(p.CanView, 0) = 1
+                   AND ISNULL(p.IsEnabled, 1) = 1
+                INNER JOIN dbo.EMA_Modules m WITH (NOLOCK)
+                    ON m.ModuleID = p.ModuleID
+                   AND ISNULL(m.IsActive, 1) = 1
+                WHERE ur.UserID = @UserID
+                ORDER BY m.ModuleName ASC;
+            `);
+
+    const allowedRows = modulesResult.recordset || [];
+    const moduleAccess = buildModuleAccessMap(allowedRows);
+
+    return {
+        roles: roles.map(role => role.RoleName).filter(Boolean),
+        roleRows: roles,
+        allowedModules: Object.keys(moduleAccess),
+        allowedRoutes: allowedRows.map(row => normalizeAuthValue(row.RoutePath)).filter(Boolean),
+        moduleAccess,
+        isSuperAdmin
+    };
+}
+
+async function getEmaLoginUser(pool, loginName) {
+    const login = normalizeAuthValue(loginName);
+    if (!login) return null;
+
+    const hasEmaUsers = await tableExists(pool, "EMA_Users");
+    if (!hasEmaUsers) return null;
+
+    const hasPasswordHash = await tableColumnExists(pool, "EMA_Users", "PasswordHash");
+    if (!hasPasswordHash) return null;
+
+    await ensureEmaUsers2faColumns(pool);
+
+    const result = await pool.request()
+        .input("LoginName", sql.NVarChar, login)
+        .query(`
+            SELECT TOP 1
+                UserID,
+                Username,
+                FullName,
+                Email,
+                PasswordHash,
+                RoleName,
+                Status,
+                IsActive,
+                RequireMFA,
+                TwoFactorEnabled,
+                TwoFactorSecret,
+                TwoFactorVerifiedAt,
+                TwoFactorResetAt,
+                AccountLocked,
+                Department,
+                Position,
+                AccessStartDate,
+                AccessEndDate,
+                LoginFailCount
+            FROM dbo.EMA_Users WITH (NOLOCK)
+            WHERE Username = @LoginName
+               OR Email = @LoginName
+            ORDER BY UserID DESC;
+        `);
+
+    return result.recordset?.[0] || null;
+}
+
+function buildEmaUserPayload(user, accessContext, token) {
+    const roles = accessContext.roles || [];
+    const primaryRole = roles[0] || user.RoleName || "User";
+    const isSuperAdmin = Boolean(accessContext.isSuperAdmin) ||
+        isSuperAdminRoleName(primaryRole) ||
+        roles.some((role) => isSuperAdminRoleName(role));
+
+    const baseModuleAccess = accessContext.moduleAccess || {};
+    const moduleAccess = isSuperAdmin
+        ? { "*": { view: true }, ...baseModuleAccess }
+        : baseModuleAccess;
+
+    const allowedModules = isSuperAdmin
+        ? ["*", ...Object.keys(baseModuleAccess || {})]
+        : (accessContext.allowedModules || []);
+
+    const allowedRoutes = isSuperAdmin
+        ? ["*", ...(accessContext.allowedRoutes || [])]
+        : (accessContext.allowedRoutes || []);
+
+    return {
+        token,
+        user: {
+            id: user.UserID,
+            userID: user.Username || user.Email,
+            emaUserID: user.UserID,
+            authSource: "EMA",
+            username: user.Username || "",
+            name: user.FullName || user.Username || "",
+            email: user.Email || "",
+            role: primaryRole,
+            roleName: primaryRole,
+            roles,
+            isSuperAdmin,
+            isSystemAdmin: isSuperAdmin,
+            department: user.Department || "",
+            position: user.Position || "",
+            status: user.Status || "Active",
+            isActive: user.IsActive === true || user.IsActive === 1,
+            requireMFA: user.RequireMFA === true || user.RequireMFA === 1,
+            twoFactorEnabled: user.TwoFactorEnabled === true || user.TwoFactorEnabled === 1,
+            hasTwoFactorSecret: Boolean(normalizeAuthValue(user.TwoFactorSecret)),
+            twoFactorVerifiedAt: user.TwoFactorVerifiedAt || null,
+            twoFactorResetAt: user.TwoFactorResetAt || null,
+            accountLocked: user.AccountLocked === true || user.AccountLocked === 1,
+            allowedModules,
+            allowedRoutes,
+            moduleAccess,
+            permissions: {
+                modules: moduleAccess
+            }
+        }
+    };
+}
+
+async function updateEmaLoginSuccess(pool, userID) {
+    try {
+        await pool.request()
+            .input("UserID", sql.Int, userID)
+            .query(`
+                UPDATE dbo.EMA_Users
+                SET LastLoginAt = GETDATE(),
+                    LoginFailCount = 0,
+                    UpdatedAt = GETDATE()
+                WHERE UserID = @UserID;
+            `);
+    } catch (err) {
+        console.warn("EMA login success update skipped:", err.message);
+    }
+}
+
+async function updateEmaLoginFailure(pool, userID) {
+    try {
+        await pool.request()
+            .input("UserID", sql.Int, userID)
+            .query(`
+                UPDATE dbo.EMA_Users
+                SET LoginFailCount = ISNULL(LoginFailCount, 0) + 1,
+                    UpdatedAt = GETDATE()
+                WHERE UserID = @UserID;
+            `);
+    } catch (err) {
+        console.warn("EMA login failure update skipped:", err.message);
+    }
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| AUTH MODULE - TOTP / AUTHENTICATOR 2FA HELPERS
+|--------------------------------------------------------------------------
+| Microsoft Authenticator and Google Authenticator are used as TOTP apps.
+| This is not Microsoft/Google OAuth login and does not require client IDs.
+*/
+
+function emaUserRequires2FA(user) {
+    return user?.RequireMFA === true || user?.RequireMFA === 1 || user?.TwoFactorEnabled === true || user?.TwoFactorEnabled === 1;
+}
+
+function mapEmaTwoFactorUser(user) {
+    return {
+        id: user.UserID,
+        userID: user.Username || user.Email,
+        emaUserID: user.UserID,
+        authSource: "EMA",
+        username: user.Username || "",
+        name: user.FullName || user.Username || user.Email || "",
+        email: user.Email || "",
+        role: user.RoleName || "User",
+        roleName: user.RoleName || "User",
+        status: user.Status || "Active",
+        isActive: user.IsActive === true || user.IsActive === 1,
+        requireMFA: user.RequireMFA === true || user.RequireMFA === 1,
+        twoFactorEnabled: user.TwoFactorEnabled === true || user.TwoFactorEnabled === 1,
+        hasTwoFactorSecret: Boolean(normalizeAuthValue(user.TwoFactorSecret))
+    };
+}
+
+async function ensureEmaUsers2faColumns(pool) {
+    const hasEmaUsers = await tableExists(pool, "EMA_Users");
+    if (!hasEmaUsers) return false;
+
+    await pool.request().query(`
+        IF COL_LENGTH('dbo.EMA_Users', 'RequireMFA') IS NULL
+            ALTER TABLE dbo.EMA_Users ADD RequireMFA BIT NOT NULL CONSTRAINT DF_EMA_Users_RequireMFA DEFAULT 0;
+
+        IF COL_LENGTH('dbo.EMA_Users', 'TwoFactorEnabled') IS NULL
+            ALTER TABLE dbo.EMA_Users ADD TwoFactorEnabled BIT NOT NULL CONSTRAINT DF_EMA_Users_TwoFactorEnabled DEFAULT 0;
+
+        IF COL_LENGTH('dbo.EMA_Users', 'TwoFactorSecret') IS NULL
+            ALTER TABLE dbo.EMA_Users ADD TwoFactorSecret NVARCHAR(255) NULL;
+
+        IF COL_LENGTH('dbo.EMA_Users', 'TwoFactorVerifiedAt') IS NULL
+            ALTER TABLE dbo.EMA_Users ADD TwoFactorVerifiedAt DATETIME NULL;
+
+        IF COL_LENGTH('dbo.EMA_Users', 'TwoFactorResetAt') IS NULL
+            ALTER TABLE dbo.EMA_Users ADD TwoFactorResetAt DATETIME NULL;
+    `);
+
+    return true;
+}
+
+async function issueEmaLoginPayload(pool, emaUser) {
+    const accessContext = await getEmaUserAccessContext(pool, emaUser.UserID);
+    const accessToken = generateAccessToken({
+        Console_Idn: 0,
+        UserID: emaUser.Username || emaUser.Email,
+        MenuIndex: null,
+        AuthSource: "EMA",
+        EmaUserID: emaUser.UserID
+    });
+
+    await updateEmaLoginSuccess(pool, emaUser.UserID);
+    return buildEmaUserPayload(emaUser, accessContext, accessToken);
+}
+
+function buildEma2faChallenge(user) {
+    const hasSecret = Boolean(normalizeAuthValue(user.TwoFactorSecret));
+    return {
+        success: true,
+        twoFactorRequired: true,
+        twoFactorSetupRequired: !hasSecret,
+        message: hasSecret ? "Two-factor authentication is required." : "Two-factor setup is required.",
+        data: {
+            twoFactorRequired: true,
+            twoFactorSetupRequired: !hasSecret,
+            user: mapEmaTwoFactorUser(user)
+        }
+    };
+}
+
 // POST /api/login
 app.post("/api/auth/login", async (req, res) => {
     try {
@@ -145,6 +515,50 @@ app.post("/api/auth/login", async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
 
+        // EMA v2 authentication first. This is the source used by Settings > User Access Management.
+        const emaUser = await getEmaLoginUser(pool, username);
+        if (emaUser) {
+            const isInactive = String(emaUser.Status || "Active").toLowerCase() === "inactive" || emaUser.IsActive === false || emaUser.IsActive === 0;
+            const isLocked = String(emaUser.Status || "").toLowerCase() === "locked" || emaUser.AccountLocked === true || emaUser.AccountLocked === 1;
+            const now = new Date();
+            const startDate = emaUser.AccessStartDate ? new Date(emaUser.AccessStartDate) : null;
+            const endDate = emaUser.AccessEndDate ? new Date(emaUser.AccessEndDate) : null;
+
+            if (isInactive) {
+                return res.status(403).json({ success: false, message: "User account is inactive." });
+            }
+
+            if (isLocked) {
+                return res.status(403).json({ success: false, message: "User account is locked." });
+            }
+
+            if (startDate && now < startDate) {
+                return res.status(403).json({ success: false, message: "User access has not started yet." });
+            }
+
+            if (endDate && now > endDate) {
+                return res.status(403).json({ success: false, message: "User access has expired." });
+            }
+
+            const passwordValid = await bcrypt.compare(password, emaUser.PasswordHash || "");
+            if (!passwordValid) {
+                await updateEmaLoginFailure(pool, emaUser.UserID);
+                return res.status(401).json({ success: false, message: "Invalid username or password" });
+            }
+
+            if (emaUserRequires2FA(emaUser)) {
+                return res.json(buildEma2faChallenge(emaUser));
+            }
+
+            const loginPayload = await issueEmaLoginPayload(pool, emaUser);
+
+            return res.json({
+                success: true,
+                data: loginPayload
+            });
+        }
+
+        // Legacy fallback. Keep this so the existing TS_CONSOLE / HD_Users login remains working.
         const query = `
             SELECT TOP 1
                 c.Console_Idn,
@@ -191,7 +605,7 @@ app.post("/api/auth/login", async (req, res) => {
             });
         }
 
-        const accessToken = generateAccessToken(user);
+        const accessToken = generateAccessToken({ ...user, AuthSource: "LEGACY" });
         const refreshToken = generateRefreshToken();
 
         const expiryDate = new Date();
@@ -237,6 +651,7 @@ app.post("/api/auth/login", async (req, res) => {
                     id: user.HdUserId || user.Console_Idn,
                     console_Idn: user.Console_Idn,
                     hdUserId: user.HdUserId || null,
+                    authSource: "LEGACY",
 
                     userID: user.UserID,
                     username: user.HdUsername || user.UserID,
@@ -244,12 +659,16 @@ app.post("/api/auth/login", async (req, res) => {
                     email: user.HdEmail || "",
 
                     role: role,
+                    roles: [role],
                     department: user.HdDepartment || "",
                     status: user.HdStatus || "Active",
                     isActive: user.HdStatus === "Active" || !user.HdStatus,
 
                     menuIndex: user.MenuIndex,
-                    permissions: permissions
+                    permissions: permissions,
+                    allowedModules: ["*"],
+                    allowedRoutes: ["*"],
+                    moduleAccess: { "*": { view: true } }
                 }
             }
         });
@@ -262,6 +681,219 @@ app.post("/api/auth/login", async (req, res) => {
             message: "Login failed",
             error: err.message
         });
+    }
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| AUTH MODULE - AUTHENTICATOR 2FA API
+|--------------------------------------------------------------------------
+*/
+
+app.post("/api/auth/2fa/setup", async (req, res) => {
+    try {
+        if (!speakeasy || !qrcode) {
+            return res.status(501).json({
+                success: false,
+                message: "2FA dependencies are missing. Please run: npm install speakeasy qrcode"
+            });
+        }
+
+        const userID = Number(req.body.userID || req.body.userId || req.body.emaUserID || req.body.id || 0);
+        if (!userID) {
+            return res.status(400).json({ success: false, message: "User ID is required for 2FA setup." });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        await assertEmaUsersTable(pool);
+
+        const userResult = await pool.request()
+            .input("UserID", sql.Int, userID)
+            .query(`
+                SELECT TOP 1
+                    UserID,
+                    Username,
+                    FullName,
+                    Email,
+                    RoleName,
+                    Status,
+                    IsActive,
+                    RequireMFA,
+                    TwoFactorEnabled,
+                    TwoFactorSecret
+                FROM dbo.EMA_Users WITH (NOLOCK)
+                WHERE UserID = @UserID;
+            `);
+
+        const user = userResult.recordset?.[0];
+        if (!user) return res.status(404).json({ success: false, message: "User not found." });
+
+        const accountName = normalizeAuthValue(user.Email, user.Username || `user-${user.UserID}`);
+        const generatedSecret = speakeasy.generateSecret({
+            name: `EMA System (${accountName})`,
+            issuer: "EMA System",
+            length: 20
+        });
+
+        const otpauthUrl = speakeasy.otpauthURL({
+            secret: generatedSecret.base32,
+            label: accountName,
+            issuer: "EMA System",
+            encoding: "base32"
+        });
+
+        const qrCode = await qrcode.toDataURL(otpauthUrl);
+
+        return res.json({
+            success: true,
+            setupRequired: true,
+            twoFactorSetupRequired: true,
+            secret: generatedSecret.base32,
+            otpauthUrl,
+            qrCode,
+            user: mapEmaTwoFactorUser(user),
+            data: {
+                secret: generatedSecret.base32,
+                otpauthUrl,
+                qrCode,
+                user: mapEmaTwoFactorUser(user)
+            }
+        });
+    } catch (err) {
+        console.error("POST /api/auth/2fa/setup error:", err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || "Failed to setup 2FA." });
+    }
+});
+
+app.post("/api/auth/2fa/verify", async (req, res) => {
+    try {
+        if (!speakeasy) {
+            return res.status(501).json({
+                success: false,
+                message: "2FA dependency is missing. Please run: npm install speakeasy"
+            });
+        }
+
+        const userID = Number(req.body.userID || req.body.userId || req.body.emaUserID || req.body.id || 0);
+        const code = normalizeAuthValue(req.body.code || req.body.token || req.body.otp || "").replace(/\s+/g, "");
+        const setupSecret = normalizeAuthValue(req.body.secret || "");
+        const isSetup = Boolean(req.body.setup || req.body.isSetup || setupSecret);
+
+        if (!userID || !code) {
+            return res.status(400).json({ success: false, message: "User ID and 2FA code are required." });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        await assertEmaUsersTable(pool);
+
+        const userResult = await pool.request()
+            .input("UserID", sql.Int, userID)
+            .query(`
+                SELECT TOP 1
+                    UserID,
+                    Username,
+                    FullName,
+                    Email,
+                    PasswordHash,
+                    RoleName,
+                    Status,
+                    IsActive,
+                    RequireMFA,
+                    TwoFactorEnabled,
+                    TwoFactorSecret,
+                    AccountLocked,
+                    Department,
+                    Position,
+                    AccessStartDate,
+                    AccessEndDate,
+                    LoginFailCount
+                FROM dbo.EMA_Users WITH (NOLOCK)
+                WHERE UserID = @UserID;
+            `);
+
+        const emaUser = userResult.recordset?.[0];
+        if (!emaUser) return res.status(404).json({ success: false, message: "User not found." });
+
+        const secretToVerify = isSetup ? setupSecret : normalizeAuthValue(emaUser.TwoFactorSecret);
+        if (!secretToVerify) {
+            return res.status(400).json({ success: false, message: "2FA secret is missing. Please setup authenticator first." });
+        }
+
+        const verified = speakeasy.totp.verify({
+            secret: secretToVerify,
+            encoding: "base32",
+            token: code,
+            window: 2
+        });
+
+        if (!verified) {
+            return res.status(401).json({ success: false, message: "Invalid authentication code." });
+        }
+
+        if (isSetup) {
+            await pool.request()
+                .input("UserID", sql.Int, userID)
+                .input("TwoFactorSecret", sql.NVarChar, secretToVerify)
+                .query(`
+                    UPDATE dbo.EMA_Users
+                    SET RequireMFA = 1,
+                        TwoFactorEnabled = 1,
+                        TwoFactorSecret = @TwoFactorSecret,
+                        TwoFactorVerifiedAt = GETDATE(),
+                        UpdatedAt = GETDATE()
+                    WHERE UserID = @UserID;
+                `);
+        } else {
+            await pool.request()
+                .input("UserID", sql.Int, userID)
+                .query(`
+                    UPDATE dbo.EMA_Users
+                    SET TwoFactorEnabled = 1,
+                        TwoFactorVerifiedAt = GETDATE(),
+                        UpdatedAt = GETDATE()
+                    WHERE UserID = @UserID;
+                `);
+        }
+
+        const refreshedResult = await pool.request()
+            .input("UserID", sql.Int, userID)
+            .query(`
+                SELECT TOP 1
+                    UserID,
+                    Username,
+                    FullName,
+                    Email,
+                    PasswordHash,
+                    RoleName,
+                    Status,
+                    IsActive,
+                    RequireMFA,
+                    TwoFactorEnabled,
+                    TwoFactorSecret,
+                    TwoFactorVerifiedAt,
+                    TwoFactorResetAt,
+                    AccountLocked,
+                    Department,
+                    Position,
+                    AccessStartDate,
+                    AccessEndDate,
+                    LoginFailCount
+                FROM dbo.EMA_Users WITH (NOLOCK)
+                WHERE UserID = @UserID;
+            `);
+
+        const loginPayload = await issueEmaLoginPayload(pool, refreshedResult.recordset?.[0] || emaUser);
+
+        return res.json({
+            success: true,
+            data: loginPayload,
+            token: loginPayload.token,
+            user: loginPayload.user
+        });
+    } catch (err) {
+        console.error("POST /api/auth/2fa/verify error:", err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message || "Failed to verify 2FA." });
     }
 });
 
@@ -375,6 +1007,48 @@ function authenticateToken(req, res, next) {
 app.get("/api/auth/me", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
+        await ensureEmaUsers2faColumns(pool);
+
+        if (req.user?.authSource === "EMA" || req.user?.emaUserID) {
+            const emaUserID = Number(req.user.emaUserID || 0);
+            const result = await pool.request()
+                .input("UserID", sql.Int, emaUserID)
+                .query(`
+                    SELECT TOP 1
+                        UserID,
+                        Username,
+                        FullName,
+                        Email,
+                        RoleName,
+                        Status,
+                        IsActive,
+                        RequireMFA,
+                        TwoFactorEnabled,
+                        TwoFactorSecret,
+                        TwoFactorVerifiedAt,
+                        TwoFactorResetAt,
+                        AccountLocked,
+                        Department,
+                        Position,
+                        AccessStartDate,
+                        AccessEndDate,
+                        LoginFailCount
+                    FROM dbo.EMA_Users WITH (NOLOCK)
+                    WHERE UserID = @UserID;
+                `);
+
+            if (result.recordset.length === 0) {
+                return res.status(404).json({ success: false, message: "User not found" });
+            }
+
+            const emaUser = result.recordset[0];
+            const accessContext = await getEmaUserAccessContext(pool, emaUser.UserID);
+
+            return res.json({
+                success: true,
+                data: buildEmaUserPayload(emaUser, accessContext, null).user
+            });
+        }
 
         const result = await pool.request()
             .input("Console_Idn", sql.Int, req.user.console_Idn)
@@ -416,6 +1090,7 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
                 id: user.HdUserId || user.Console_Idn,
                 console_Idn: user.Console_Idn,
                 hdUserId: user.HdUserId || null,
+                authSource: "LEGACY",
 
                 userID: user.UserID,
                 username: user.HdUsername || user.UserID,
@@ -423,12 +1098,16 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
                 email: user.HdEmail || "",
 
                 role: role,
+                roles: [role],
                 department: user.HdDepartment || "",
                 status: user.HdStatus || "Active",
                 isActive: user.HdStatus === "Active" || !user.HdStatus,
 
                 menuIndex: user.MenuIndex,
-                permissions: permissions
+                permissions: permissions,
+                allowedModules: ["*"],
+                allowedRoutes: ["*"],
+                moduleAccess: { "*": { view: true } }
             }
         });
     } catch (err) {
@@ -439,6 +1118,16 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
             error: err.message
         });
     }
+});
+
+app.post("/api/auth/logout", (req, res) => {
+    res.clearCookie("refreshToken");
+    return res.json({ success: true, message: "Logged out successfully" });
+});
+
+app.get("/api/auth/logout", (req, res) => {
+    res.clearCookie("refreshToken");
+    return res.json({ success: true, message: "Logged out successfully" });
 });
 
 async function executeQuery(pool, query, inputs = {}) {
@@ -475,6 +1164,20 @@ async function tableExists(pool, tableName) {
             SELECT 1 AS existsFlag
             FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_NAME = @tableName
+        `);
+
+    return result.recordset.length > 0;
+}
+
+async function tableColumnExists(pool, tableName, columnName) {
+    const result = await pool.request()
+        .input("tableName", sql.NVarChar, tableName)
+        .input("columnName", sql.NVarChar, columnName)
+        .query(`
+            SELECT 1 AS existsFlag
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = @tableName
+              AND COLUMN_NAME = @columnName
         `);
 
     return result.recordset.length > 0;
@@ -2957,21 +3660,171 @@ async function upsertSettingValue(pool, key, value, updatedBy) {
         `);
 }
 
-async function logEmaAudit(pool, req, action, moduleName, severity = "Info", details = "") {
+async function ensureEmaAuditLogsTable(pool) {
+    await pool.request().query(`
+        IF OBJECT_ID('dbo.EMA_AuditLogs', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_AuditLogs (
+                LogID INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                UserName NVARCHAR(200) NULL,
+                Module NVARCHAR(200) NULL,
+                Action NVARCHAR(300) NOT NULL,
+                Severity NVARCHAR(50) NOT NULL CONSTRAINT DF_EMA_AuditLogs_Severity DEFAULT 'Info',
+                Details NVARCHAR(MAX) NULL,
+                EntityType NVARCHAR(150) NULL,
+                EntityID NVARCHAR(150) NULL,
+                IpAddress NVARCHAR(100) NULL,
+                UserAgent NVARCHAR(600) NULL,
+                CreatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_AuditLogs_CreatedAt DEFAULT GETDATE()
+            );
+        END;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'UserName') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD UserName NVARCHAR(200) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'Module') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD Module NVARCHAR(200) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'Action') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD Action NVARCHAR(300) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'Severity') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD Severity NVARCHAR(50) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'Details') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD Details NVARCHAR(MAX) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'EntityType') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD EntityType NVARCHAR(150) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'EntityID') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD EntityID NVARCHAR(150) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'IpAddress') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD IpAddress NVARCHAR(100) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'UserAgent') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD UserAgent NVARCHAR(600) NULL;
+
+        IF COL_LENGTH('dbo.EMA_AuditLogs', 'CreatedAt') IS NULL
+            ALTER TABLE dbo.EMA_AuditLogs ADD CreatedAt DATETIME NULL;
+
+        UPDATE dbo.EMA_AuditLogs
+        SET Severity = 'Info'
+        WHERE Severity IS NULL OR LTRIM(RTRIM(Severity)) = '';
+
+        UPDATE dbo.EMA_AuditLogs
+        SET CreatedAt = GETDATE()
+        WHERE CreatedAt IS NULL;
+
+        UPDATE dbo.EMA_AuditLogs
+        SET Action = 'Audit event'
+        WHERE Action IS NULL OR LTRIM(RTRIM(Action)) = '';
+    `);
+
+    await pool.request().query(`
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.indexes
+            WHERE name = 'IX_EMA_AuditLogs_CreatedAt'
+              AND object_id = OBJECT_ID('dbo.EMA_AuditLogs')
+        )
+        BEGIN
+            CREATE INDEX IX_EMA_AuditLogs_CreatedAt ON dbo.EMA_AuditLogs(CreatedAt DESC);
+        END;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.indexes
+            WHERE name = 'IX_EMA_AuditLogs_Module_Severity'
+              AND object_id = OBJECT_ID('dbo.EMA_AuditLogs')
+        )
+        BEGIN
+            CREATE INDEX IX_EMA_AuditLogs_Module_Severity ON dbo.EMA_AuditLogs(Module, Severity, CreatedAt DESC);
+        END;
+    `);
+}
+
+function normalizeAuditSeverity(value) {
+    const text = String(value || 'Info').trim().toLowerCase();
+    if (['success', 'succeeded', 'ok'].includes(text)) return 'Success';
+    if (['warning', 'warn'].includes(text)) return 'Warning';
+    if (['error', 'failed', 'failure', 'danger'].includes(text)) return 'Error';
+    return 'Info';
+}
+
+function stringifyAuditDetails(details) {
+    if (details === undefined || details === null) return '';
+    if (typeof details === 'string') return details;
+
     try {
-        const userName = req.user?.userID || req.user?.username || "system";
+        return JSON.stringify(details);
+    } catch (err) {
+        return String(details);
+    }
+}
+
+function getAuditRequestUser(req) {
+    return normalizeAuthValue(
+        req?.user?.userID ||
+        req?.user?.username ||
+        req?.user?.email ||
+        req?.body?.updatedBy ||
+        req?.body?.createdBy ||
+        'system',
+        'system'
+    );
+}
+
+async function logEmaAudit(pool, req, action, moduleName, severity = 'Info', details = '', meta = {}) {
+    try {
+        await ensureEmaAuditLogsTable(pool);
+
+        const userName = getAuditRequestUser(req);
+        const detailText = stringifyAuditDetails(details);
+        const ipAddress = normalizeAuthValue(req?.headers?.['x-forwarded-for'] || req?.ip || req?.socket?.remoteAddress || '', '');
+        const userAgent = normalizeAuthValue(req?.headers?.['user-agent'] || '', '');
+
         await pool.request()
-            .input("UserName", sql.NVarChar, userName)
-            .input("Module", sql.NVarChar, moduleName)
-            .input("Action", sql.NVarChar, action)
-            .input("Severity", sql.NVarChar, severity)
-            .input("Details", sql.NVarChar(sql.MAX), typeof details === "string" ? details : JSON.stringify(details))
+            .input('UserName', sql.NVarChar(200), userName)
+            .input('Module', sql.NVarChar(200), normalizeAuthValue(moduleName, 'Settings'))
+            .input('Action', sql.NVarChar(300), normalizeAuthValue(action, 'Audit event'))
+            .input('Severity', sql.NVarChar(50), normalizeAuditSeverity(severity))
+            .input('Details', sql.NVarChar(sql.MAX), detailText)
+            .input('EntityType', sql.NVarChar(150), normalizeAuthValue(meta.entityType || meta.EntityType || '', ''))
+            .input('EntityID', sql.NVarChar(150), normalizeAuthValue(meta.entityID || meta.EntityID || meta.entityId || '', ''))
+            .input('IpAddress', sql.NVarChar(100), ipAddress)
+            .input('UserAgent', sql.NVarChar(600), userAgent)
             .query(`
-                INSERT INTO EMA_AuditLogs (UserName, Module, Action, Severity, Details)
-                VALUES (@UserName, @Module, @Action, @Severity, @Details)
+                INSERT INTO dbo.EMA_AuditLogs
+                (
+                    UserName,
+                    Module,
+                    Action,
+                    Severity,
+                    Details,
+                    EntityType,
+                    EntityID,
+                    IpAddress,
+                    UserAgent,
+                    CreatedAt
+                )
+                VALUES
+                (
+                    @UserName,
+                    @Module,
+                    @Action,
+                    @Severity,
+                    @Details,
+                    NULLIF(@EntityType, ''),
+                    NULLIF(@EntityID, ''),
+                    NULLIF(@IpAddress, ''),
+                    NULLIF(@UserAgent, ''),
+                    GETDATE()
+                );
             `);
     } catch (auditErr) {
-        console.error("Audit log failed:", auditErr.message);
+        console.error('Audit log failed:', auditErr.message);
     }
 }
 
@@ -3216,6 +4069,10 @@ function mapEmaUserResponse(row) {
         isActive: row.IsActive === true || row.IsActive === 1,
         requireMFA,
         mfa: requireMFA,
+        twoFactorEnabled: row.TwoFactorEnabled === true || row.TwoFactorEnabled === 1,
+        hasTwoFactorSecret: Boolean(normalizeAuthValue(row.TwoFactorSecret)),
+        twoFactorVerifiedAt: row.TwoFactorVerifiedAt || null,
+        twoFactorResetAt: row.TwoFactorResetAt || null,
         accountLocked,
         lockReason: row.LockReason || "",
         accessStartDate: row.AccessStartDate || null,
@@ -3236,6 +4093,8 @@ async function assertEmaUsersTable(pool) {
         error.statusCode = 500;
         throw error;
     }
+
+    await ensureEmaUsers2faColumns(pool);
 }
 
 const emaUserSelectColumns = `
@@ -3252,6 +4111,10 @@ const emaUserSelectColumns = `
     Status,
     IsActive,
     RequireMFA,
+    TwoFactorEnabled,
+    TwoFactorSecret,
+    TwoFactorVerifiedAt,
+    TwoFactorResetAt,
     AccountLocked,
     LockReason,
     AccessStartDate,
@@ -3408,7 +4271,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
                     CreatedBy
                 )
                 OUTPUT
-                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
                 VALUES
                 (
                     @LegacyUserID,
@@ -3523,7 +4386,7 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
-                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
                 WHERE UserID = @UserID
             `);
 
@@ -3570,7 +4433,7 @@ app.put("/api/settings/users/:id/status", authenticateToken, async (req, res) =>
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
-                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
                 WHERE UserID = @UserID
             `);
 
@@ -3607,7 +4470,7 @@ app.put("/api/settings/users/:id/lock", authenticateToken, async (req, res) => {
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
-                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
                 WHERE UserID = @UserID
             `);
 
@@ -3641,7 +4504,7 @@ app.put("/api/settings/users/:id/unlock", authenticateToken, async (req, res) =>
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
-                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
                 WHERE UserID = @UserID
             `);
 
@@ -3674,7 +4537,7 @@ app.put("/api/settings/users/:id/mfa", authenticateToken, async (req, res) => {
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
-                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
                 WHERE UserID = @UserID
             `);
 
@@ -3684,6 +4547,43 @@ app.put("/api/settings/users/:id/mfa", authenticateToken, async (req, res) => {
         return res.json({ success: true, data });
     } catch (err) {
         console.error("PUT /api/settings/users/:id/mfa error:", err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    }
+});
+
+
+
+app.put("/api/settings/users/:id/2fa/reset", authenticateToken, async (req, res) => {
+    try {
+        const userID = parseInt(req.params.id, 10);
+        if (!userID) return res.status(400).json({ success: false, message: "Invalid user ID." });
+
+        const pool = await sql.connect(dbConfig);
+        await assertEmaUsersTable(pool);
+
+        const result = await pool.request()
+            .input("UserID", sql.Int, userID)
+            .input("UpdatedBy", sql.NVarChar, req.user?.userID || "system")
+            .query(`
+                UPDATE EMA_Users
+                SET TwoFactorEnabled = 0,
+                    TwoFactorSecret = NULL,
+                    TwoFactorVerifiedAt = NULL,
+                    TwoFactorResetAt = GETDATE(),
+                    RequireMFA = 1,
+                    UpdatedAt = GETDATE(),
+                    UpdatedBy = @UpdatedBy
+                OUTPUT
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                WHERE UserID = @UserID
+            `);
+
+        if (result.recordset.length === 0) return res.status(404).json({ success: false, message: "User not found." });
+        const data = mapEmaUserResponse(result.recordset[0]);
+        await logEmaAudit(pool, req, "Reset EMA user 2FA", "User Access Management", "Warning", data);
+        return res.json({ success: true, data, message: "2FA reset. User must scan a new QR code at next login." });
+    } catch (err) {
+        console.error("PUT /api/settings/users/:id/2fa/reset error:", err);
         return res.status(err.statusCode || 500).json({ success: false, message: err.message });
     }
 });
@@ -3707,7 +4607,7 @@ app.put("/api/settings/users/:id/reset-password", authenticateToken, async (req,
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
-                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
+                    ${emaUserSelectColumns.replace(/\bUserID\b/g, "INSERTED.UserID").replace(/\bLegacyUserID\b/g, "INSERTED.LegacyUserID").replace(/\bUsername\b/g, "INSERTED.Username").replace(/\bFullName\b/g, "INSERTED.FullName").replace(/\bEmail\b/g, "INSERTED.Email").replace(/\bRoleName\b/g, "INSERTED.RoleName").replace(/\bAccessScope\b/g, "INSERTED.AccessScope").replace(/\bDepartment\b/g, "INSERTED.Department").replace(/\bPosition\b/g, "INSERTED.Position").replace(/\bPhoneNo\b/g, "INSERTED.PhoneNo").replace(/\bStatus\b/g, "INSERTED.Status").replace(/\bIsActive\b/g, "INSERTED.IsActive").replace(/\bRequireMFA\b/g, "INSERTED.RequireMFA").replace(/\bTwoFactorEnabled\b/g, "INSERTED.TwoFactorEnabled").replace(/\bTwoFactorSecret\b/g, "INSERTED.TwoFactorSecret").replace(/\bTwoFactorVerifiedAt\b/g, "INSERTED.TwoFactorVerifiedAt").replace(/\bTwoFactorResetAt\b/g, "INSERTED.TwoFactorResetAt").replace(/\bAccountLocked\b/g, "INSERTED.AccountLocked").replace(/\bLockReason\b/g, "INSERTED.LockReason").replace(/\bAccessStartDate\b/g, "INSERTED.AccessStartDate").replace(/\bAccessEndDate\b/g, "INSERTED.AccessEndDate").replace(/\bLastLoginAt\b/g, "INSERTED.LastLoginAt").replace(/\bPasswordChangedAt\b/g, "INSERTED.PasswordChangedAt").replace(/\bLoginFailCount\b/g, "INSERTED.LoginFailCount").replace(/\bRemarks\b/g, "INSERTED.Remarks").replace(/\bCreatedAt\b/g, "INSERTED.CreatedAt").replace(/\bUpdatedAt\b/g, "INSERTED.UpdatedAt")}
                 WHERE UserID = @UserID
             `);
 
@@ -3803,18 +4703,41 @@ app.get("/api/settings/roles", authenticateToken, async (req, res) => {
         const pool = await sql.connect(dbConfig);
         await assertEmaRolesTable(pool);
 
+        const hasRoleName = await tableColumnExists(pool, "EMA_Roles", "RoleName");
+        const hasName = await tableColumnExists(pool, "EMA_Roles", "Name");
+        if (!hasRoleName && !hasName) {
+            return res.status(500).json({ success: false, message: "EMA_Roles must have RoleName or Name column." });
+        }
+
+        const roleNameExpr = hasRoleName && hasName
+            ? "COALESCE(NULLIF(r.RoleName, ''), r.Name)"
+            : hasRoleName
+                ? "r.RoleName"
+                : "r.Name";
+        const orderRoleNameExpr = hasRoleName && hasName
+            ? "COALESCE(NULLIF(r.RoleName, ''), r.Name)"
+            : hasRoleName
+                ? "r.RoleName"
+                : "r.Name";
+        const roleKeyExpr = await tableColumnExists(pool, "EMA_Roles", "RoleKey") ? "r.RoleKey" : "LOWER(REPLACE(" + roleNameExpr + ", ' ', '_'))";
+        const approvalExpr = await tableColumnExists(pool, "EMA_Roles", "ApprovalRequired") ? "r.ApprovalRequired" : "CAST(0 AS bit)";
+        const statusExpr = await tableColumnExists(pool, "EMA_Roles", "Status") ? "r.Status" : "'Active'";
+        const isSystemRoleExpr = await tableColumnExists(pool, "EMA_Roles", "IsSystemRole") ? "r.IsSystemRole" : "CAST(0 AS bit)";
+        const createdAtExpr = await tableColumnExists(pool, "EMA_Roles", "CreatedAt") ? "r.CreatedAt" : "NULL";
+        const updatedAtExpr = await tableColumnExists(pool, "EMA_Roles", "UpdatedAt") ? "r.UpdatedAt" : "NULL";
+
         const result = await pool.request().query(`
             SELECT
                 r.RoleID AS id,
                 r.RoleID AS roleID,
-                r.RoleKey AS roleKey,
-                r.RoleName AS name,
+                ${roleKeyExpr} AS roleKey,
+                ${roleNameExpr} AS name,
                 r.Description AS description,
-                r.ApprovalRequired AS approvalRequired,
-                r.Status AS status,
-                r.IsSystemRole AS isSystemRole,
-                r.CreatedAt AS createdAt,
-                r.UpdatedAt AS updatedAt,
+                ${approvalExpr} AS approvalRequired,
+                ${statusExpr} AS status,
+                ${isSystemRoleExpr} AS isSystemRole,
+                ${createdAtExpr} AS createdAt,
+                ${updatedAtExpr} AS updatedAt,
                 ISNULL(assigned.AssignedUsers, 0) AS assignedUsers
             FROM EMA_Roles r WITH (NOLOCK)
             OUTER APPLY (
@@ -3827,8 +4750,14 @@ app.get("/api/settings/roles", authenticateToken, async (req, res) => {
                   AND ISNULL(u.Status, 'Active') <> 'Inactive'
             ) assigned
             ORDER BY
-                CASE WHEN ISNULL(r.Status, 'Active') = 'Active' THEN 0 ELSE 1 END,
-                r.RoleName ASC;
+                CASE
+                    WHEN LOWER(REPLACE(COALESCE(${roleKeyExpr}, ${orderRoleNameExpr}, ''), ' ', '_')) IN ('super_admin', 'superadmin', 'system_administrator') THEN 0
+                    WHEN LOWER(COALESCE(${orderRoleNameExpr}, '')) IN ('super admin', 'system administrator') THEN 0
+                    ELSE 1
+                END,
+                CASE WHEN ISNULL(${statusExpr}, 'Active') = 'Active' THEN 0 ELSE 1 END,
+                ISNULL(r.SortOrder, 9999),
+                ${orderRoleNameExpr} ASC;
         `);
 
         return res.json({ success: true, data: result.recordset });
@@ -3846,20 +4775,34 @@ app.get("/api/settings/roles/:id", authenticateToken, async (req, res) => {
         const pool = await sql.connect(dbConfig);
         await assertEmaRolesTable(pool);
 
+        const hasRoleName = await tableColumnExists(pool, "EMA_Roles", "RoleName");
+        const hasName = await tableColumnExists(pool, "EMA_Roles", "Name");
+        const roleNameExpr = hasRoleName && hasName
+            ? "COALESCE(NULLIF(RoleName, ''), Name)"
+            : hasRoleName
+                ? "RoleName"
+                : "Name";
+        const roleKeyExpr = await tableColumnExists(pool, "EMA_Roles", "RoleKey") ? "RoleKey" : "LOWER(REPLACE(" + roleNameExpr + ", ' ', '_'))";
+        const approvalExpr = await tableColumnExists(pool, "EMA_Roles", "ApprovalRequired") ? "ApprovalRequired" : "CAST(0 AS bit)";
+        const statusExpr = await tableColumnExists(pool, "EMA_Roles", "Status") ? "Status" : "'Active'";
+        const isSystemRoleExpr = await tableColumnExists(pool, "EMA_Roles", "IsSystemRole") ? "IsSystemRole" : "CAST(0 AS bit)";
+        const createdAtExpr = await tableColumnExists(pool, "EMA_Roles", "CreatedAt") ? "CreatedAt" : "NULL";
+        const updatedAtExpr = await tableColumnExists(pool, "EMA_Roles", "UpdatedAt") ? "UpdatedAt" : "NULL";
+
         const result = await pool.request()
             .input("RoleID", sql.Int, roleID)
             .query(`
                 SELECT
                     RoleID AS id,
                     RoleID AS roleID,
-                    RoleKey AS roleKey,
-                    RoleName AS name,
+                    ${roleKeyExpr} AS roleKey,
+                    ${roleNameExpr} AS name,
                     Description AS description,
-                    ApprovalRequired AS approvalRequired,
-                    Status AS status,
-                    IsSystemRole AS isSystemRole,
-                    CreatedAt AS createdAt,
-                    UpdatedAt AS updatedAt
+                    ${approvalExpr} AS approvalRequired,
+                    ${statusExpr} AS status,
+                    ${isSystemRoleExpr} AS isSystemRole,
+                    ${createdAtExpr} AS createdAt,
+                    ${updatedAtExpr} AS updatedAt
                 FROM EMA_Roles WITH (NOLOCK)
                 WHERE RoleID = @RoleID;
             `);
@@ -3885,13 +4828,48 @@ app.post("/api/settings/roles", authenticateToken, async (req, res) => {
         const pool = await sql.connect(dbConfig);
         await assertEmaRolesTable(pool);
 
+        const hasRoleName = await tableColumnExists(pool, "EMA_Roles", "RoleName");
+        const hasName = await tableColumnExists(pool, "EMA_Roles", "Name");
+        if (!hasRoleName && !hasName) {
+            return res.status(500).json({ success: false, message: "EMA_Roles must have RoleName or Name column." });
+        }
+
+        const duplicateWhere = [hasRoleName ? "RoleName = @RoleName" : null, hasName ? "Name = @RoleName" : null].filter(Boolean).join(" OR ");
         const duplicate = await pool.request()
             .input("RoleName", sql.NVarChar, roleName)
-            .query(`SELECT TOP 1 RoleID FROM EMA_Roles WITH (NOLOCK) WHERE RoleName = @RoleName;`);
+            .query(`SELECT TOP 1 RoleID FROM EMA_Roles WITH (NOLOCK) WHERE ${duplicateWhere};`);
 
         if (duplicate.recordset.length > 0) {
             return res.status(409).json({ success: false, message: "Role name already exists." });
         }
+
+        const hasRoleKey = await tableColumnExists(pool, "EMA_Roles", "RoleKey");
+        const hasApprovalRequired = await tableColumnExists(pool, "EMA_Roles", "ApprovalRequired");
+        const hasStatus = await tableColumnExists(pool, "EMA_Roles", "Status");
+        const hasIsSystemRole = await tableColumnExists(pool, "EMA_Roles", "IsSystemRole");
+        const hasCreatedAt = await tableColumnExists(pool, "EMA_Roles", "CreatedAt");
+        const hasCreatedBy = await tableColumnExists(pool, "EMA_Roles", "CreatedBy");
+        const hasUpdatedAt = await tableColumnExists(pool, "EMA_Roles", "UpdatedAt");
+
+        const columns = [];
+        const values = [];
+        if (hasRoleKey) { columns.push("RoleKey"); values.push("@RoleKey"); }
+        if (hasRoleName) { columns.push("RoleName"); values.push("@RoleName"); }
+        if (hasName) { columns.push("Name"); values.push("@RoleName"); }
+        columns.push("Description"); values.push("@Description");
+        if (hasApprovalRequired) { columns.push("ApprovalRequired"); values.push("@ApprovalRequired"); }
+        if (hasStatus) { columns.push("Status"); values.push("@Status"); }
+        if (hasIsSystemRole) { columns.push("IsSystemRole"); values.push("0"); }
+        if (hasCreatedAt) { columns.push("CreatedAt"); values.push("GETDATE()"); }
+        if (hasCreatedBy) { columns.push("CreatedBy"); values.push("@CreatedBy"); }
+
+        const outputNameExpr = hasRoleName ? "INSERTED.RoleName" : "INSERTED.Name";
+        const outputRoleKeyExpr = hasRoleKey ? "INSERTED.RoleKey" : "LOWER(REPLACE(" + outputNameExpr + ", ' ', '_'))";
+        const outputApprovalExpr = hasApprovalRequired ? "INSERTED.ApprovalRequired" : "CAST(0 AS bit)";
+        const outputStatusExpr = hasStatus ? "INSERTED.Status" : "'Active'";
+        const outputIsSystemRoleExpr = hasIsSystemRole ? "INSERTED.IsSystemRole" : "CAST(0 AS bit)";
+        const outputCreatedAtExpr = hasCreatedAt ? "INSERTED.CreatedAt" : "NULL";
+        const outputUpdatedAtExpr = hasUpdatedAt ? "INSERTED.UpdatedAt" : "NULL";
 
         const result = await pool.request()
             .input("RoleKey", sql.NVarChar, roleKey)
@@ -3901,22 +4879,20 @@ app.post("/api/settings/roles", authenticateToken, async (req, res) => {
             .input("Status", sql.NVarChar, status)
             .input("CreatedBy", sql.NVarChar, req.user?.userID || "system")
             .query(`
-                INSERT INTO EMA_Roles
-                    (RoleKey, RoleName, Description, ApprovalRequired, Status, IsSystemRole, CreatedAt, CreatedBy)
+                INSERT INTO EMA_Roles (${columns.join(", ")})
                 OUTPUT
                     INSERTED.RoleID AS id,
                     INSERTED.RoleID AS roleID,
-                    INSERTED.RoleKey AS roleKey,
-                    INSERTED.RoleName AS name,
+                    ${outputRoleKeyExpr} AS roleKey,
+                    ${outputNameExpr} AS name,
                     INSERTED.Description AS description,
-                    INSERTED.ApprovalRequired AS approvalRequired,
-                    INSERTED.Status AS status,
-                    INSERTED.IsSystemRole AS isSystemRole,
-                    INSERTED.CreatedAt AS createdAt,
-                    INSERTED.UpdatedAt AS updatedAt,
+                    ${outputApprovalExpr} AS approvalRequired,
+                    ${outputStatusExpr} AS status,
+                    ${outputIsSystemRoleExpr} AS isSystemRole,
+                    ${outputCreatedAtExpr} AS createdAt,
+                    ${outputUpdatedAtExpr} AS updatedAt,
                     0 AS assignedUsers
-                VALUES
-                    (@RoleKey, @RoleName, @Description, @ApprovalRequired, @Status, 0, GETDATE(), @CreatedBy);
+                VALUES (${values.join(", ")});
             `);
 
         const data = result.recordset[0];
@@ -3944,6 +4920,13 @@ app.put("/api/settings/roles/:id", authenticateToken, async (req, res) => {
         const pool = await sql.connect(dbConfig);
         await assertEmaRolesTable(pool);
 
+        const hasRoleName = await tableColumnExists(pool, "EMA_Roles", "RoleName");
+        const hasName = await tableColumnExists(pool, "EMA_Roles", "Name");
+        if (!hasRoleName && !hasName) {
+            return res.status(500).json({ success: false, message: "EMA_Roles must have RoleName or Name column." });
+        }
+
+        const duplicateWhere = [hasRoleName ? "RoleName = @RoleName" : null, hasName ? "Name = @RoleName" : null].filter(Boolean).join(" OR ");
         const duplicate = await pool.request()
             .input("RoleID", sql.Int, roleID)
             .input("RoleName", sql.NVarChar, roleName)
@@ -3951,12 +4934,38 @@ app.put("/api/settings/roles/:id", authenticateToken, async (req, res) => {
                 SELECT TOP 1 RoleID
                 FROM EMA_Roles WITH (NOLOCK)
                 WHERE RoleID <> @RoleID
-                  AND RoleName = @RoleName;
+                  AND (${duplicateWhere});
             `);
 
         if (duplicate.recordset.length > 0) {
             return res.status(409).json({ success: false, message: "Role name already exists." });
         }
+
+        const hasRoleKey = await tableColumnExists(pool, "EMA_Roles", "RoleKey");
+        const hasApprovalRequired = await tableColumnExists(pool, "EMA_Roles", "ApprovalRequired");
+        const hasStatus = await tableColumnExists(pool, "EMA_Roles", "Status");
+        const hasIsSystemRole = await tableColumnExists(pool, "EMA_Roles", "IsSystemRole");
+        const hasCreatedAt = await tableColumnExists(pool, "EMA_Roles", "CreatedAt");
+        const hasUpdatedAt = await tableColumnExists(pool, "EMA_Roles", "UpdatedAt");
+        const hasUpdatedBy = await tableColumnExists(pool, "EMA_Roles", "UpdatedBy");
+
+        const setters = [];
+        if (hasRoleKey) setters.push("RoleKey = @RoleKey");
+        if (hasRoleName) setters.push("RoleName = @RoleName");
+        if (hasName) setters.push("Name = @RoleName");
+        setters.push("Description = @Description");
+        if (hasApprovalRequired) setters.push("ApprovalRequired = @ApprovalRequired");
+        if (hasStatus) setters.push("Status = @Status");
+        if (hasUpdatedAt) setters.push("UpdatedAt = GETDATE()");
+        if (hasUpdatedBy) setters.push("UpdatedBy = @UpdatedBy");
+
+        const outputNameExpr = hasRoleName ? "INSERTED.RoleName" : "INSERTED.Name";
+        const outputRoleKeyExpr = hasRoleKey ? "INSERTED.RoleKey" : "LOWER(REPLACE(" + outputNameExpr + ", ' ', '_'))";
+        const outputApprovalExpr = hasApprovalRequired ? "INSERTED.ApprovalRequired" : "CAST(0 AS bit)";
+        const outputStatusExpr = hasStatus ? "INSERTED.Status" : "'Active'";
+        const outputIsSystemRoleExpr = hasIsSystemRole ? "INSERTED.IsSystemRole" : "CAST(0 AS bit)";
+        const outputCreatedAtExpr = hasCreatedAt ? "INSERTED.CreatedAt" : "NULL";
+        const outputUpdatedAtExpr = hasUpdatedAt ? "INSERTED.UpdatedAt" : "NULL";
 
         const result = await pool.request()
             .input("RoleID", sql.Int, roleID)
@@ -3968,25 +4977,18 @@ app.put("/api/settings/roles/:id", authenticateToken, async (req, res) => {
             .input("UpdatedBy", sql.NVarChar, req.user?.userID || "system")
             .query(`
                 UPDATE EMA_Roles
-                SET
-                    RoleKey = @RoleKey,
-                    RoleName = @RoleName,
-                    Description = @Description,
-                    ApprovalRequired = @ApprovalRequired,
-                    Status = @Status,
-                    UpdatedAt = GETDATE(),
-                    UpdatedBy = @UpdatedBy
+                SET ${setters.join(",\n                    ")}
                 OUTPUT
                     INSERTED.RoleID AS id,
                     INSERTED.RoleID AS roleID,
-                    INSERTED.RoleKey AS roleKey,
-                    INSERTED.RoleName AS name,
+                    ${outputRoleKeyExpr} AS roleKey,
+                    ${outputNameExpr} AS name,
                     INSERTED.Description AS description,
-                    INSERTED.ApprovalRequired AS approvalRequired,
-                    INSERTED.Status AS status,
-                    INSERTED.IsSystemRole AS isSystemRole,
-                    INSERTED.CreatedAt AS createdAt,
-                    INSERTED.UpdatedAt AS updatedAt
+                    ${outputApprovalExpr} AS approvalRequired,
+                    ${outputStatusExpr} AS status,
+                    ${outputIsSystemRoleExpr} AS isSystemRole,
+                    ${outputCreatedAtExpr} AS createdAt,
+                    ${outputUpdatedAtExpr} AS updatedAt
                 WHERE RoleID = @RoleID;
             `);
 
@@ -4009,6 +5011,40 @@ app.delete("/api/settings/roles/:id", authenticateToken, async (req, res) => {
         await assertEmaRolesTable(pool);
         await assertEmaUserRolesTable(pool);
 
+        const hasRoleName = await tableColumnExists(pool, "EMA_Roles", "RoleName");
+        const hasName = await tableColumnExists(pool, "EMA_Roles", "Name");
+        const hasRoleKey = await tableColumnExists(pool, "EMA_Roles", "RoleKey");
+        const hasIsSystemRole = await tableColumnExists(pool, "EMA_Roles", "IsSystemRole");
+        const roleNameSelectExpr = hasRoleName && hasName
+            ? "COALESCE(NULLIF(RoleName, ''), Name)"
+            : hasRoleName
+                ? "RoleName"
+                : hasName
+                    ? "Name"
+                    : "''";
+        const roleKeySelectExpr = hasRoleKey ? "RoleKey" : "LOWER(REPLACE(" + roleNameSelectExpr + ", ' ', '_'))";
+        const systemRoleSelectExpr = hasIsSystemRole ? "IsSystemRole" : "CAST(0 AS bit)";
+
+        const roleInfo = await pool.request()
+            .input("RoleID", sql.Int, roleID)
+            .query(`
+                SELECT TOP 1
+                    RoleID,
+                    ${roleNameSelectExpr} AS RoleName,
+                    ${roleKeySelectExpr} AS RoleKey,
+                    ${systemRoleSelectExpr} AS IsSystemRole
+                FROM EMA_Roles WITH (NOLOCK)
+                WHERE RoleID = @RoleID;
+            `);
+
+        if (roleInfo.recordset.length === 0) return res.status(404).json({ success: false, message: "Role not found." });
+
+        const roleRow = roleInfo.recordset[0];
+        const roleIdentity = String(`${roleRow.RoleKey || ""} ${roleRow.RoleName || ""}`).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        if (roleIdentity.includes("super_admin") || roleIdentity === "superadmin" || String(roleRow.RoleName || "").trim().toLowerCase() === "super admin") {
+            return res.status(403).json({ success: false, message: "Super Admin is a protected system role and cannot be deleted." });
+        }
+
         const assigned = await pool.request()
             .input("RoleID", sql.Int, roleID)
             .query(`SELECT COUNT(1) AS AssignedUsers FROM EMA_UserRoles WHERE RoleID = @RoleID;`);
@@ -4017,11 +5053,13 @@ app.delete("/api/settings/roles/:id", authenticateToken, async (req, res) => {
             return res.status(409).json({ success: false, message: "This role is assigned to users. Remove the role from users before deleting it." });
         }
 
+        const outputNameExpr = hasRoleName ? "DELETED.RoleName" : hasName ? "DELETED.Name" : "''";
+
         const result = await pool.request()
             .input("RoleID", sql.Int, roleID)
             .query(`
                 DELETE FROM EMA_Roles
-                OUTPUT DELETED.RoleID AS id, DELETED.RoleName AS name
+                OUTPUT DELETED.RoleID AS id, ${outputNameExpr} AS name
                 WHERE RoleID = @RoleID;
             `);
 
@@ -4811,60 +5849,190 @@ app.put("/api/settings/security", authenticateToken, async (req, res) => {
 });
 
 // AUDIT LOGS
-app.get("/api/settings/audit-logs", authenticateToken, async (req, res) => {
+app.get('/api/settings/audit-logs', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        const result = await pool.request().query(`
-            SELECT TOP 200
-                LogID as id,
-                CreatedAt as timestamp,
-                UserName as [user],
-                Module as module,
-                Action as action,
-                Severity as severity
-            FROM EMA_AuditLogs
-            ORDER BY CreatedAt DESC
+        await ensureEmaAuditLogsTable(pool);
+
+        const search = normalizeAuthValue(req.query.search || req.query.q || '', '');
+        const moduleFilter = normalizeAuthValue(req.query.module || req.query.moduleName || '', '');
+        const severityFilter = normalizeAuthValue(req.query.severity || req.query.status || '', '');
+        const dateRange = normalizeAuthValue(req.query.dateRange || req.query.range || '', '').toLowerCase();
+        const startDate = normalizeAuthValue(req.query.startDate || '', '');
+        const endDate = normalizeAuthValue(req.query.endDate || '', '');
+        const rawPage = parseInt(req.query.page, 10);
+        const rawLimit = parseInt(req.query.limit, 10);
+        const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+        const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 500) : 500;
+        const offset = (page - 1) * limit;
+
+        const request = pool.request()
+            .input('Offset', sql.Int, offset)
+            .input('Limit', sql.Int, limit);
+
+        const where = [];
+
+        if (search) {
+            request.input('Search', sql.NVarChar(300), `%${search}%`);
+            where.push(`(
+                UserName LIKE @Search
+                OR Module LIKE @Search
+                OR Action LIKE @Search
+                OR Severity LIKE @Search
+                OR Details LIKE @Search
+                OR EntityType LIKE @Search
+                OR EntityID LIKE @Search
+            )`);
+        }
+
+        if (moduleFilter && moduleFilter.toLowerCase() !== 'all') {
+            request.input('ModuleFilter', sql.NVarChar(200), moduleFilter);
+            where.push('Module = @ModuleFilter');
+        }
+
+        if (severityFilter && severityFilter.toLowerCase() !== 'all') {
+            request.input('SeverityFilter', sql.NVarChar(50), normalizeAuditSeverity(severityFilter));
+            where.push('Severity = @SeverityFilter');
+        }
+
+        if (startDate) {
+            request.input('StartDate', sql.DateTime, new Date(startDate));
+            where.push('CreatedAt >= @StartDate');
+        } else if (dateRange === 'today') {
+            where.push('CreatedAt >= CAST(GETDATE() AS DATE)');
+        } else if (dateRange === '7d' || dateRange === '7days') {
+            where.push('CreatedAt >= DATEADD(DAY, -7, GETDATE())');
+        } else if (dateRange === '30d' || dateRange === '30days') {
+            where.push('CreatedAt >= DATEADD(DAY, -30, GETDATE())');
+        }
+
+        if (endDate) {
+            request.input('EndDate', sql.DateTime, new Date(endDate));
+            where.push('CreatedAt < DATEADD(DAY, 1, @EndDate)');
+        }
+
+        const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+        const result = await request.query(`
+            SELECT
+                LogID AS id,
+                LogID,
+                CreatedAt AS [timestamp],
+                CreatedAt,
+                ISNULL(UserName, 'system') AS [user],
+                ISNULL(UserName, 'system') AS UserName,
+                ISNULL(Module, 'Settings') AS [module],
+                ISNULL(Module, 'Settings') AS Module,
+                ISNULL(Action, 'Audit event') AS [action],
+                ISNULL(Action, 'Audit event') AS Action,
+                ISNULL(Severity, 'Info') AS [severity],
+                ISNULL(Severity, 'Info') AS Severity,
+                ISNULL(Details, '') AS [details],
+                ISNULL(Details, '') AS Details,
+                ISNULL(EntityType, '') AS EntityType,
+                ISNULL(EntityID, '') AS EntityID,
+                ISNULL(IpAddress, '') AS IpAddress,
+                COUNT(1) OVER() AS TotalRecords
+            FROM dbo.EMA_AuditLogs WITH (NOLOCK)
+            ${whereSql}
+            ORDER BY CreatedAt DESC, LogID DESC
+            OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
         `);
-        return res.json({ success: true, data: result.recordset });
+
+        const data = result.recordset || [];
+        const totalRecords = data.length ? Number(data[0].TotalRecords || 0) : 0;
+
+        return res.json({
+            success: true,
+            data,
+            totalRecords,
+            page,
+            limit,
+            totalPages: Math.max(1, Math.ceil(totalRecords / limit))
+        });
     } catch (err) {
-        console.error("GET /api/settings/audit-logs error:", err);
+        console.error('GET /api/settings/audit-logs error:', err);
         return res.status(500).json({ success: false, message: err.message });
     }
 });
 
-app.post("/api/settings/audit-logs", authenticateToken, async (req, res) => {
+app.post('/api/settings/audit-logs', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input("UserName", sql.NVarChar, req.body.user || req.user?.userID || "system")
-            .input("Module", sql.NVarChar, req.body.module || "Settings")
-            .input("Action", sql.NVarChar, req.body.action || "Manual audit event")
-            .input("Severity", sql.NVarChar, req.body.severity || "Info")
-            .input("Details", sql.NVarChar(sql.MAX), req.body.details || "")
+        await ensureEmaAuditLogsTable(pool);
+
+        const userName = normalizeAuthValue(req.body.user || req.body.userName || req.user?.userID, 'system');
+        const moduleName = normalizeAuthValue(req.body.module || req.body.moduleName, 'Settings');
+        const action = normalizeAuthValue(req.body.action, 'Manual audit event');
+        const severity = normalizeAuditSeverity(req.body.severity || req.body.status || 'Info');
+        const details = stringifyAuditDetails(req.body.details || req.body.data || '');
+
+        const result = await pool.request()
+            .input('UserName', sql.NVarChar(200), userName)
+            .input('Module', sql.NVarChar(200), moduleName)
+            .input('Action', sql.NVarChar(300), action)
+            .input('Severity', sql.NVarChar(50), severity)
+            .input('Details', sql.NVarChar(sql.MAX), details)
+            .input('EntityType', sql.NVarChar(150), normalizeAuthValue(req.body.entityType || '', ''))
+            .input('EntityID', sql.NVarChar(150), normalizeAuthValue(req.body.entityID || req.body.entityId || '', ''))
+            .input('IpAddress', sql.NVarChar(100), normalizeAuthValue(req.headers['x-forwarded-for'] || req.ip || '', ''))
+            .input('UserAgent', sql.NVarChar(600), normalizeAuthValue(req.headers['user-agent'] || '', ''))
             .query(`
-                INSERT INTO EMA_AuditLogs (UserName, Module, Action, Severity, Details)
-                VALUES (@UserName, @Module, @Action, @Severity, @Details)
+                INSERT INTO dbo.EMA_AuditLogs
+                (
+                    UserName,
+                    Module,
+                    Action,
+                    Severity,
+                    Details,
+                    EntityType,
+                    EntityID,
+                    IpAddress,
+                    UserAgent,
+                    CreatedAt
+                )
+                OUTPUT
+                    INSERTED.LogID AS id,
+                    INSERTED.CreatedAt AS [timestamp],
+                    INSERTED.UserName AS [user],
+                    INSERTED.Module AS [module],
+                    INSERTED.Action AS [action],
+                    INSERTED.Severity AS [severity],
+                    INSERTED.Details AS [details]
+                VALUES
+                (
+                    @UserName,
+                    @Module,
+                    @Action,
+                    @Severity,
+                    @Details,
+                    NULLIF(@EntityType, ''),
+                    NULLIF(@EntityID, ''),
+                    NULLIF(@IpAddress, ''),
+                    NULLIF(@UserAgent, ''),
+                    GETDATE()
+                );
             `);
-        return res.json({ success: true });
+
+        return res.json({ success: true, data: result.recordset?.[0] || null });
     } catch (err) {
-        console.error("POST /api/settings/audit-logs error:", err);
+        console.error('POST /api/settings/audit-logs error:', err);
         return res.status(500).json({ success: false, message: err.message });
     }
 });
 
-app.delete("/api/settings/audit-logs", authenticateToken, async (req, res) => {
+app.delete('/api/settings/audit-logs', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        await pool.request().query(`DELETE FROM EMA_AuditLogs`);
-        await logEmaAudit(pool, req, "Cleared Audit Logs", "Audit Logs", "Warning", {});
+        await ensureEmaAuditLogsTable(pool);
+        await pool.request().query('DELETE FROM dbo.EMA_AuditLogs;');
+        await logEmaAudit(pool, req, 'Cleared Audit Logs', 'Audit Logs', 'Warning', {});
         return res.json({ success: true });
     } catch (err) {
-        console.error("DELETE /api/settings/audit-logs error:", err);
+        console.error('DELETE /api/settings/audit-logs error:', err);
         return res.status(500).json({ success: false, message: err.message });
     }
 });
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -14536,71 +15704,206 @@ async function sendTaskDetailResponse(req, res) {
 }
 
 async function sendTaskActionResponse(req, res) {
+    let transaction;
+
     try {
         const jobId = getTaskIdFromRequest(req);
-        const action = normalizeTaskValue(firstTaskDefined(req.body?.action, req.query?.action)).toLowerCase();
+        const action = normalizeTaskValue(firstTaskDefined(req.body?.action, req.body?.Action, req.query?.action)).toLowerCase();
+
         if (!jobId) return res.status(400).json({ success: false, message: "job_id is required" });
         if (!["stop", "cancel", "delete"].includes(action)) {
-            return res.status(400).json({ success: false, message: "Invalid action. Use stop, cancel, or delete." });
+            return res.status(400).json({ success: false, message: "Unsupported task action. Use stop, cancel, or delete." });
         }
 
         const pool = await sql.connect(dbConfig);
-        const job = await getTaskBaseRow(pool, jobId);
-        if (!job) return res.status(404).json({ success: false, message: "Task not found" });
 
-        if (action === "delete") {
-            const transaction = new sql.Transaction(pool);
-            await transaction.begin();
-            try {
-                if (await taskTableExists(pool, "TS_JOB_HISTORY")) {
-                    await new sql.Request(transaction).input("Job_Idn", sql.Int, jobId).query(`DELETE FROM TS_JOB_HISTORY WHERE Job_Idn = @Job_Idn;`);
-                }
-                if (await taskTableExists(pool, "TS_PKG_HISTORY")) {
-                    await new sql.Request(transaction).input("Job_Idn", sql.Int, jobId).query(`DELETE FROM TS_PKG_HISTORY WHERE Job_Idn = @Job_Idn;`);
-                }
-                if (await taskTableExists(pool, "TS_JOB_DEST")) {
-                    await new sql.Request(transaction).input("Job_Idn", sql.Int, jobId).query(`DELETE FROM TS_JOB_DEST WHERE Job_Idn = @Job_Idn;`);
-                }
-                const deleteJob = await new sql.Request(transaction)
-                    .input("Job_Idn", sql.Int, jobId)
-                    .query(`DELETE FROM TS_JOB WHERE Job_Idn = @Job_Idn; SELECT @@ROWCOUNT AS affectedRows;`);
-                await transaction.commit();
-                return res.json({
-                    success: true,
-                    message: "Task deleted.",
-                    data: { Job_Idn: jobId, affectedRows: deleteJob.recordset?.[0]?.affectedRows || 0 }
-                });
-            } catch (deleteErr) {
-                try { await transaction.rollback(); } catch (_) {}
-                throw deleteErr;
-            }
+        if (action === "stop" || action === "cancel") {
+            const newStatus = action === "stop" ? 2203 : 2204;
+            const result = await pool.request()
+                .input("Job_Idn", sql.Int, jobId)
+                .input("Job_Status", sql.Int, newStatus)
+                .query(`
+                    UPDATE TS_JOB
+                    SET Job_Status = @Job_Status
+                    WHERE Job_Idn = @Job_Idn;
+
+                    SELECT @@ROWCOUNT AS affectedRows;
+                `);
+
+            const affectedRows = result.recordset?.[0]?.affectedRows || 0;
+            return res.json({
+                success: affectedRows > 0,
+                message: affectedRows > 0 ? `Task ${action} updated.` : "Task not found.",
+                data: { Job_Idn: jobId, Job_Status: newStatus, statusLabel: resolveTaskStatusLabel(newStatus), affectedRows }
+            });
         }
 
-        const newStatus = action === "stop" ? 2203 : 2204;
-        const updateResult = await pool.request()
+        transaction = new sql.Transaction(pool);
+        await transaction.begin();
+
+        const deleteConsoleIdn = parseTaskInt(firstTaskDefined(
+            req.user?.console_Idn,
+            req.user?.Console_Idn,
+            req.body?.DeleteConsole_Idn,
+            req.body?.deleteConsoleIdn
+        ), 0);
+
+        const deleteRequest = new sql.Request(transaction);
+        const deleteResult = await deleteRequest
             .input("Job_Idn", sql.Int, jobId)
-            .input("Job_Status", sql.Int, newStatus)
+            .input("DeleteConsole_Idn", sql.Int, deleteConsoleIdn)
             .query(`
-                UPDATE TS_JOB
-                SET Job_Status = @Job_Status,
-                    Job_EndTime = COALESCE(Job_EndTime, GETDATE())
-                WHERE Job_Idn = @Job_Idn;
-                SELECT @@ROWCOUNT AS affectedRows;
+                DECLARE @archivedJob int = 0;
+                DECLARE @archivedDest int = 0;
+                DECLARE @deletedDest int = 0;
+                DECLARE @deletedPkgJob int = 0;
+                DECLARE @deletedJob int = 0;
+
+                IF NOT EXISTS (SELECT 1 FROM dbo.TS_JOB WHERE Job_Idn = @Job_Idn)
+                BEGIN
+                    SELECT
+                        @archivedJob AS archivedJob,
+                        @archivedDest AS archivedDest,
+                        @deletedDest AS deletedDest,
+                        @deletedPkgJob AS deletedPkgJob,
+                        @deletedJob AS deletedJob,
+                        0 AS keptHistory;
+                    RETURN;
+                END
+
+                IF OBJECT_ID(N'dbo.TS_JOB_DELHISTORY', N'U') IS NOT NULL
+                BEGIN
+                    INSERT INTO dbo.TS_JOB_DELHISTORY
+                    (
+                        Job_Idn,
+                        Console_Idn,
+                        Job_Type,
+                        Job_Command,
+                        Job_Style,
+                        Job_Status,
+                        Job_StartTime,
+                        Job_EndTime,
+                        Job_ScheduleTime,
+                        Job_Dest_Type,
+                        Job_Cmd_File,
+                        Job_Opt_File,
+                        Job_Speriod,
+                        Job_Eperiod,
+                        Job_Priority,
+                        Job_Description,
+                        DeleteConsole_Idn,
+                        DeleteTime
+                    )
+                    SELECT
+                        Job_Idn,
+                        Console_Idn,
+                        Job_Type,
+                        Job_Command,
+                        Job_Style,
+                        Job_Status,
+                        Job_StartTime,
+                        Job_EndTime,
+                        Job_ScheduleTime,
+                        Job_Dest_Type,
+                        Job_Cmd_File,
+                        Job_Opt_File,
+                        Job_Speriod,
+                        Job_Eperiod,
+                        Job_Priority,
+                        Job_Description,
+                        @DeleteConsole_Idn,
+                        GETDATE()
+                    FROM dbo.TS_JOB j
+                    WHERE j.Job_Idn = @Job_Idn
+                      AND NOT EXISTS (
+                            SELECT 1
+                            FROM dbo.TS_JOB_DELHISTORY dh
+                            WHERE dh.Job_Idn = j.Job_Idn
+                        );
+
+                    SET @archivedJob = @@ROWCOUNT;
+                END
+
+                IF OBJECT_ID(N'dbo.TS_JOB_DEST_DELHISTORY', N'U') IS NOT NULL
+                   AND OBJECT_ID(N'dbo.TS_JOB_DEST', N'U') IS NOT NULL
+                BEGIN
+                    INSERT INTO dbo.TS_JOB_DEST_DELHISTORY
+                    (
+                        Job_Idn,
+                        Object_Root_Idn,
+                        Object_Rel_Idn,
+                        Object_Server_Idn,
+                        Subnet_ID,
+                        Flag,
+                        Dest_Option1,
+                        Dest_Option2,
+                        Dest_Option3
+                    )
+                    SELECT
+                        d.Job_Idn,
+                        d.Object_Root_Idn,
+                        d.Object_Rel_Idn,
+                        d.Object_Server_Idn,
+                        d.Subnet_ID,
+                        d.Flag,
+                        d.Dest_Option1,
+                        d.Dest_Option2,
+                        d.Dest_Option3
+                    FROM dbo.TS_JOB_DEST d
+                    WHERE d.Job_Idn = @Job_Idn
+                      AND NOT EXISTS (
+                            SELECT 1
+                            FROM dbo.TS_JOB_DEST_DELHISTORY ddh
+                            WHERE ddh.Job_Idn = d.Job_Idn
+                              AND ISNULL(ddh.Object_Root_Idn, -1) = ISNULL(d.Object_Root_Idn, -1)
+                              AND ISNULL(ddh.Object_Rel_Idn, -1) = ISNULL(d.Object_Rel_Idn, -1)
+                              AND ISNULL(ddh.Object_Server_Idn, -1) = ISNULL(d.Object_Server_Idn, -1)
+                              AND ISNULL(ddh.Subnet_ID, -1) = ISNULL(d.Subnet_ID, -1)
+                        );
+
+                    SET @archivedDest = @@ROWCOUNT;
+                END
+
+                IF OBJECT_ID(N'dbo.TS_JOB_DEST', N'U') IS NOT NULL
+                BEGIN
+                    DELETE FROM dbo.TS_JOB_DEST WHERE Job_Idn = @Job_Idn;
+                    SET @deletedDest = @@ROWCOUNT;
+                END
+
+                IF OBJECT_ID(N'dbo.TS_PKGJOB', N'U') IS NOT NULL
+                BEGIN
+                    DELETE FROM dbo.TS_PKGJOB WHERE Job_Idn = @Job_Idn;
+                    SET @deletedPkgJob = @@ROWCOUNT;
+                END
+
+                DELETE FROM dbo.TS_JOB WHERE Job_Idn = @Job_Idn;
+                SET @deletedJob = @@ROWCOUNT;
+
+                SELECT
+                    @archivedJob AS archivedJob,
+                    @archivedDest AS archivedDest,
+                    @deletedDest AS deletedDest,
+                    @deletedPkgJob AS deletedPkgJob,
+                    @deletedJob AS deletedJob,
+                    1 AS keptHistory;
             `);
 
+        await transaction.commit();
+        transaction = null;
+
+        const data = deleteResult.recordset?.[0] || {};
         return res.json({
-            success: true,
-            message: action === "stop" ? "Task stopped." : "Task cancelled.",
-            data: {
-                Job_Idn: jobId,
-                Job_Status: newStatus,
-                statusLabel: resolveTaskStatusLabel(newStatus),
-                affectedRows: updateResult.recordset?.[0]?.affectedRows || 0
-            }
+            success: Number(data.deletedJob || 0) > 0,
+            message: Number(data.deletedJob || 0) > 0 ? "Task deleted." : "Task not found.",
+            data: { Job_Idn: jobId, ...data }
         });
     } catch (err) {
-        console.error("Failed to execute task action:", err);
-        return res.status(500).json({ success: false, message: "Failed to execute task action", error: err.message || String(err) });
+        if (transaction) {
+            try { await transaction.rollback(); } catch (rollbackErr) { console.error("Task delete rollback failed:", rollbackErr); }
+        }
+
+        console.error("Failed to perform task action:", err);
+        return res.status(500).json({ success: false, message: "Failed to perform task action", error: err.message || String(err) });
     }
 }
 
@@ -14608,7 +15911,7 @@ function sendTaskOptionsResponse(req, res) {
     return res.json({
         success: true,
         data: {
-            classifications: [{ code: -1, label: "All" }, ...Object.entries(TASK_JOB_TYPE_LABELS).map(([code, label]) => ({ code: Number(code), label }))],
+            classifications: [{ code: -1, label: "All" }, ...Object.entries(TASK_JOB_TYPE_LABELS).filter(([code]) => Number(code) !== 10310).map(([code, label]) => ({ code: Number(code), label }))],
             states: [{ code: -1, label: "All" }, ...Object.entries(TASK_JOB_STATUS_LABELS).map(([code, label]) => ({ code: Number(code), label }))],
             styles: Object.entries(TASK_JOB_STYLE_LABELS).map(([code, label]) => ({ code: Number(code), label })),
             commands: Object.entries(TASK_JOB_COMMAND_LABELS).map(([code, label]) => ({ code: Number(code), label }))
@@ -14626,18 +15929,22 @@ app.get("/api/task-list/:jobId/targets", authenticateToken, sendTaskTargetsRespo
 app.get("/api/task-list/:jobId/detail", authenticateToken, sendTaskDetailResponse);
 app.post("/api/task-list/:jobId/action", authenticateToken, sendTaskActionResponse);
 
-// Java-style aliases for old task_manage consumers
+// Java-compatible aliases from Api_TASK_MANAGEController.java and older React adapters.
 app.get("/api/task_manage/options.do", authenticateToken, sendTaskOptionsResponse);
 app.get("/api/task_manage/getJobList.do", authenticateToken, sendTaskListResponse);
 app.post("/api/task_manage/getJobList.do", authenticateToken, sendTaskListResponse);
 app.get("/api/task_manage/getJobStatus.do", authenticateToken, sendTaskProgressResponse);
 app.post("/api/task_manage/getJobStatus.do", authenticateToken, sendTaskProgressResponse);
+app.post("/api/task_manage/getJobProgress_Status.do", authenticateToken, sendTaskProgressResponse);
 app.get("/api/task_manage/getJobProgressDetail.do", authenticateToken, sendTaskProgressDetailsResponse);
 app.post("/api/task_manage/getJobProgressDetail.do", authenticateToken, sendTaskProgressDetailsResponse);
+app.post("/api/task_manage/getJobProgress_Detail.do", authenticateToken, sendTaskProgressDetailsResponse);
 app.get("/api/task_manage/getJobTargets.do", authenticateToken, sendTaskTargetsResponse);
 app.post("/api/task_manage/getJobTargets.do", authenticateToken, sendTaskTargetsResponse);
+app.post("/api/task_manage/getTargetList.do", authenticateToken, sendTaskTargetsResponse);
 app.get("/api/task_manage/getJobDetail.do", authenticateToken, sendTaskDetailResponse);
 app.post("/api/task_manage/getJobDetail.do", authenticateToken, sendTaskDetailResponse);
+app.post("/api/task_manage/getJob_Detail.do", authenticateToken, sendTaskDetailResponse);
 app.post("/api/task_manage/action.do", authenticateToken, sendTaskActionResponse);
 
 /*
@@ -25979,6 +27286,346 @@ app.post("/api/ai/chat", authenticateToken, async (req, res) => {
                 ? undefined
                 : err.response?.data || err.message
         });
+    }
+});
+
+
+/* =========================================================
+   SETTINGS - MODULE CONTROL BY ROLE API
+   Tables: EMA_Modules, EMA_RoleModulePermissions
+========================================================= */
+app.get('/api/settings/module-access', authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+
+        const rolesResult = await pool.request().query(`
+            SELECT
+                RoleID,
+                RoleKey,
+                RoleName,
+                Description,
+                Status,
+                ApprovalRequired,
+                IsSystemRole,
+                SortOrder,
+                CreatedAt,
+                UpdatedAt
+            FROM dbo.EMA_Roles
+            WHERE ISNULL(Status, 'Active') = 'Active'
+            ORDER BY
+                CASE
+                    WHEN LOWER(REPLACE(COALESCE(RoleKey, RoleName, ''), ' ', '_')) IN ('super_admin', 'superadmin', 'system_administrator') THEN 0
+                    WHEN LOWER(COALESCE(RoleName, '')) IN ('super admin', 'system administrator') THEN 0
+                    ELSE 1
+                END,
+                ISNULL(SortOrder, 9999),
+                RoleName
+        `);
+
+        const modulesResult = await pool.request().query(`
+            SELECT
+                ModuleID,
+                ModuleKey,
+                ModuleName,
+                Description,
+                Category,
+                ModuleGroup,
+                ParentModuleID,
+                RoutePath,
+                IsActive,
+                SortOrder,
+                CreatedAt,
+                UpdatedAt
+            FROM dbo.EMA_Modules
+            WHERE ISNULL(IsActive, 1) = 1
+            ORDER BY ISNULL(SortOrder, 0), ModuleName
+        `);
+
+        const permissionsResult = await pool.request().query(`
+            SELECT
+                p.PermissionID,
+                p.RoleID,
+                p.ModuleID,
+                p.CanView,
+                p.CreatedAt,
+                p.UpdatedAt
+            FROM dbo.EMA_RoleModulePermissions p WITH (NOLOCK)
+            INNER JOIN dbo.EMA_Roles r WITH (NOLOCK)
+                ON r.RoleID = p.RoleID
+               AND ISNULL(r.Status, 'Active') = 'Active'
+            INNER JOIN dbo.EMA_Modules m WITH (NOLOCK)
+                ON m.ModuleID = p.ModuleID
+               AND ISNULL(m.IsActive, 1) = 1
+        `);
+
+        return res.json({
+            success: true,
+            data: {
+                roles: rolesResult.recordset,
+                modules: modulesResult.recordset,
+                permissions: permissionsResult.recordset
+            }
+        });
+    } catch (err) {
+        console.error('GET /api/settings/module-access error:', err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to load module access.'
+        });
+    }
+});
+
+app.put('/api/settings/module-access', authenticateToken, async (req, res) => {
+    try {
+        const roleId = Number(req.body?.roleId ?? req.body?.RoleID);
+        const moduleId = Number(req.body?.moduleId ?? req.body?.ModuleID);
+        const canView = req.body?.canView === true || req.body?.CanView === true || Number(req.body?.canView ?? req.body?.CanView) === 1 ? 1 : 0;
+
+        if (!roleId || !moduleId) {
+            return res.status(400).json({
+                success: false,
+                message: 'RoleID and ModuleID are required.'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('RoleID', sql.Int, roleId)
+            .input('ModuleID', sql.Int, moduleId)
+            .input('CanView', sql.Bit, canView)
+            .query(`
+                IF EXISTS (
+                    SELECT 1
+                    FROM dbo.EMA_RoleModulePermissions
+                    WHERE RoleID = @RoleID
+                      AND ModuleID = @ModuleID
+                )
+                BEGIN
+                    UPDATE dbo.EMA_RoleModulePermissions
+                    SET CanView = @CanView,
+                        UpdatedAt = GETDATE()
+                    WHERE RoleID = @RoleID
+                      AND ModuleID = @ModuleID;
+                END
+                ELSE
+                BEGIN
+                    INSERT INTO dbo.EMA_RoleModulePermissions
+                        (RoleID, ModuleID, CanView, CreatedAt)
+                    VALUES
+                        (@RoleID, @ModuleID, @CanView, GETDATE());
+                END
+            `);
+
+
+        const contextResult = await pool.request()
+            .input('RoleID', sql.Int, roleId)
+            .input('ModuleID', sql.Int, moduleId)
+            .query(`
+                SELECT TOP 1
+                    COALESCE(NULLIF(r.RoleName, ''), r.Name, CONCAT('Role ', r.RoleID)) AS RoleName,
+                    COALESCE(NULLIF(m.ModuleName, ''), m.ModuleKey, CONCAT('Module ', m.ModuleID)) AS ModuleName,
+                    m.ModuleKey
+                FROM dbo.EMA_Roles r WITH (NOLOCK)
+                CROSS JOIN dbo.EMA_Modules m WITH (NOLOCK)
+                WHERE r.RoleID = @RoleID
+                  AND m.ModuleID = @ModuleID;
+            `);
+
+        const accessContext = contextResult.recordset?.[0] || {};
+        await logEmaAudit(
+            pool,
+            req,
+            canView ? 'Granted module access' : 'Revoked module access',
+            'Module Control by Role',
+            'Success',
+            {
+                roleID: roleId,
+                roleName: accessContext.RoleName || `Role ${roleId}`,
+                moduleID: moduleId,
+                moduleName: accessContext.ModuleName || `Module ${moduleId}`,
+                moduleKey: accessContext.ModuleKey || '',
+                canView: Boolean(canView)
+            },
+            { entityType: 'ModuleAccess', entityID: `${roleId}:${moduleId}` }
+        );
+
+        return res.json({
+            success: true,
+            message: 'Module access saved.',
+            data: { RoleID: roleId, ModuleID: moduleId, CanView: canView }
+        });
+    } catch (err) {
+        console.error('PUT /api/settings/module-access error:', err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to save module access.'
+        });
+    }
+});
+
+
+/* =========================================================
+   SETTINGS - ACCESS CONTROL API
+   Table: EMA_AccessControls
+========================================================= */
+app.get('/api/settings/access-controls', authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            IF OBJECT_ID('dbo.EMA_AccessControls', 'U') IS NULL
+            BEGIN
+                SELECT TOP 0
+                    CAST(NULL AS INT) AS ControlID,
+                    CAST(NULL AS NVARCHAR(100)) AS PolicyKey,
+                    CAST(NULL AS NVARCHAR(200)) AS PolicyName,
+                    CAST(NULL AS NVARCHAR(500)) AS Description,
+                    CAST(NULL AS NVARCHAR(100)) AS Scope,
+                    CAST(NULL AS NVARCHAR(100)) AS Enforcement,
+                    CAST(NULL AS NVARCHAR(100)) AS ReviewCycle,
+                    CAST(NULL AS NVARCHAR(50)) AS Status,
+                    CAST(NULL AS BIT) AS IsSystemPolicy,
+                    CAST(NULL AS INT) AS SortOrder,
+                    CAST(NULL AS DATETIME) AS CreatedAt,
+                    CAST(NULL AS DATETIME) AS UpdatedAt;
+            END
+            ELSE
+            BEGIN
+                SELECT
+                    ControlID,
+                    PolicyKey,
+                    PolicyName,
+                    Description,
+                    Scope,
+                    Enforcement,
+                    ReviewCycle,
+                    Status,
+                    IsSystemPolicy,
+                    SortOrder,
+                    CreatedAt,
+                    UpdatedAt
+                FROM dbo.EMA_AccessControls WITH (NOLOCK)
+                ORDER BY ISNULL(SortOrder, 9999), PolicyName;
+            END
+        `);
+
+        return res.json({ success: true, data: result.recordset });
+    } catch (err) {
+        console.error('GET /api/settings/access-controls error:', err);
+        return res.status(500).json({
+            success: false,
+            message: err.message || 'Failed to load access controls.'
+        });
+    }
+});
+
+app.post('/api/settings/access-controls', authenticateToken, async (req, res) => {
+    try {
+        const policyName = String(req.body?.policyName || req.body?.PolicyName || '').trim();
+        if (!policyName) {
+            return res.status(400).json({ success: false, message: 'Policy name is required.' });
+        }
+
+        const policyKey = policyName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('PolicyKey', sql.NVarChar(100), policyKey)
+            .input('PolicyName', sql.NVarChar(200), policyName)
+            .input('Description', sql.NVarChar(500), String(req.body?.description || req.body?.Description || '').trim())
+            .input('Scope', sql.NVarChar(100), String(req.body?.scope || req.body?.Scope || 'All Users').trim())
+            .input('Enforcement', sql.NVarChar(100), String(req.body?.enforcement || req.body?.Enforcement || 'Mandatory').trim())
+            .input('ReviewCycle', sql.NVarChar(100), String(req.body?.reviewCycle || req.body?.ReviewCycle || 'Quarterly').trim())
+            .input('Status', sql.NVarChar(50), String(req.body?.status || req.body?.Status || 'Active').trim() === 'Inactive' ? 'Inactive' : 'Active')
+            .input('SortOrder', sql.Int, Number(req.body?.sortOrder || req.body?.SortOrder || 0) || 0)
+            .query(`
+                INSERT INTO dbo.EMA_AccessControls
+                    (PolicyKey, PolicyName, Description, Scope, Enforcement, ReviewCycle, Status, IsSystemPolicy, SortOrder, CreatedAt, CreatedBy)
+                OUTPUT INSERTED.*
+                VALUES
+                    (@PolicyKey, @PolicyName, @Description, @Scope, @Enforcement, @ReviewCycle, @Status, 0, @SortOrder, GETDATE(), 'ui');
+            `);
+
+        return res.json({ success: true, message: 'Access control created.', data: result.recordset?.[0] });
+    } catch (err) {
+        console.error('POST /api/settings/access-controls error:', err);
+        const isDuplicate = /duplicate|unique/i.test(err.message || '');
+        return res.status(isDuplicate ? 409 : 500).json({
+            success: false,
+            message: isDuplicate ? 'Access control already exists.' : (err.message || 'Failed to create access control.')
+        });
+    }
+});
+
+app.put('/api/settings/access-controls/:id', authenticateToken, async (req, res) => {
+    try {
+        const controlId = Number(req.params.id);
+        const policyName = String(req.body?.policyName || req.body?.PolicyName || '').trim();
+        if (!controlId || !policyName) {
+            return res.status(400).json({ success: false, message: 'Control ID and policy name are required.' });
+        }
+
+        const policyKey = policyName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('ControlID', sql.Int, controlId)
+            .input('PolicyKey', sql.NVarChar(100), policyKey)
+            .input('PolicyName', sql.NVarChar(200), policyName)
+            .input('Description', sql.NVarChar(500), String(req.body?.description || req.body?.Description || '').trim())
+            .input('Scope', sql.NVarChar(100), String(req.body?.scope || req.body?.Scope || 'All Users').trim())
+            .input('Enforcement', sql.NVarChar(100), String(req.body?.enforcement || req.body?.Enforcement || 'Mandatory').trim())
+            .input('ReviewCycle', sql.NVarChar(100), String(req.body?.reviewCycle || req.body?.ReviewCycle || 'Quarterly').trim())
+            .input('Status', sql.NVarChar(50), String(req.body?.status || req.body?.Status || 'Active').trim() === 'Inactive' ? 'Inactive' : 'Active')
+            .input('SortOrder', sql.Int, Number(req.body?.sortOrder || req.body?.SortOrder || 0) || 0)
+            .query(`
+                UPDATE dbo.EMA_AccessControls
+                SET PolicyKey = @PolicyKey,
+                    PolicyName = @PolicyName,
+                    Description = @Description,
+                    Scope = @Scope,
+                    Enforcement = @Enforcement,
+                    ReviewCycle = @ReviewCycle,
+                    Status = @Status,
+                    SortOrder = @SortOrder,
+                    UpdatedAt = GETDATE(),
+                    UpdatedBy = 'ui'
+                OUTPUT INSERTED.*
+                WHERE ControlID = @ControlID;
+            `);
+
+        if (!result.recordset?.length) {
+            return res.status(404).json({ success: false, message: 'Access control not found.' });
+        }
+
+        return res.json({ success: true, message: 'Access control updated.', data: result.recordset[0] });
+    } catch (err) {
+        console.error('PUT /api/settings/access-controls/:id error:', err);
+        return res.status(500).json({ success: false, message: err.message || 'Failed to update access control.' });
+    }
+});
+
+app.delete('/api/settings/access-controls/:id', authenticateToken, async (req, res) => {
+    try {
+        const controlId = Number(req.params.id);
+        if (!controlId) {
+            return res.status(400).json({ success: false, message: 'Control ID is required.' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('ControlID', sql.Int, controlId)
+            .query(`
+                DELETE FROM dbo.EMA_AccessControls
+                OUTPUT DELETED.*
+                WHERE ControlID = @ControlID;
+            `);
+
+        if (!result.recordset?.length) {
+            return res.status(404).json({ success: false, message: 'Access control not found.' });
+        }
+
+        return res.json({ success: true, message: 'Access control deleted.', data: result.recordset[0] });
+    } catch (err) {
+        console.error('DELETE /api/settings/access-controls/:id error:', err);
+        return res.status(500).json({ success: false, message: err.message || 'Failed to delete access control.' });
     }
 });
 

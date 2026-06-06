@@ -5,135 +5,90 @@ import {
   Laptop,
   LogOut,
   Monitor,
+  Network,
   Settings,
   ShieldCheck,
   Users,
-  Wifi,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 
+import { useAuth } from "../../context/AuthContext";
+
 const navItems = [
-  {
-    label: "Dashboard",
-    path: "/landing",
-    icon: Gauge,
-    enabled: true,
-  },
-  {
-    label: "Hardware",
-    path: "/ema/hardware",
-    icon: Laptop,
-    enabled: true,
-  },
-  {
-    label: "Software",
-    path: "/ema/software",
-    icon: Monitor,
-    enabled: false,
-  },
-  {
-    label: "Network",
-    path: "/ema/network",
-    icon: Wifi,
-    enabled: false,
-  },
-  {
-    label: "Users",
-    path: "/users",
-    icon: Users,
-    enabled: false,
-  },
-  {
-    label: "Reports",
-    path: "/reports",
-    icon: BarChart3,
-    enabled: false,
-  },
-  {
-    label: "Settings",
-    path: "/settings",
-    icon: Settings,
-    enabled: false,
-  },
+  { label: "Dashboard", path: "/dashboard", icon: Gauge, enabled: true },
+  { label: "Hardware", path: "/hardware", icon: Laptop, enabled: true },
+  { label: "Software", path: "/software", icon: Monitor, enabled: false },
+  { label: "Network", path: "/network", icon: Network, enabled: false },
+  { label: "Users", path: "/users", icon: Users, enabled: false },
+  { label: "Reports", path: "/reports", icon: BarChart3, enabled: false },
+  { label: "Settings", path: "/settings", icon: Settings, enabled: false },
 ];
 
 export function Sidebar() {
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
   const handleLogout = () => {
-    localStorage.removeItem("ema-access-token");
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("token");
-    localStorage.removeItem("ema-auth");
-
+    logout();
     navigate("/login", { replace: true });
   };
 
   return (
-    <aside className="app-sidebar d-flex flex-column">
-      <div className="app-sidebar-brand">
-        <div className="app-sidebar-logo">
-          <Box size={21} />
+    <aside className="ema-sidebar">
+      <div className="ema-sidebar-brand">
+        <div className="ema-logo">
+          <Box size={23} />
         </div>
 
         <div>
-          <div className="app-sidebar-title">EMA System</div>
-          <div className="app-sidebar-subtitle">Asset Console</div>
+          <div className="ema-sidebar-title">EMA System</div>
+          <div className="ema-sidebar-subtitle">Operations Console</div>
         </div>
       </div>
 
-      <nav className="app-sidebar-nav">
+      <div className="ema-sidebar-section">Workspace</div>
+
+      <nav className="ema-nav">
         {navItems.map((item) => {
           const Icon = item.icon;
 
           if (!item.enabled) {
             return (
-              <div
-                key={item.path}
-                className="app-sidebar-link app-sidebar-link-disabled d-flex align-items-center gap-2"
-                title="Coming soon"
-              >
+              <div key={item.path} className="ema-nav-link opacity-50">
                 <Icon size={17} />
-                <span>{item.label}</span>
-                <span className="ms-auto app-sidebar-soon">Soon</span>
+                {item.label}
+                <span className="ema-nav-soon">Soon</span>
               </div>
             );
           }
 
           return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                [
-                  "app-sidebar-link d-flex align-items-center gap-2 text-decoration-none",
-                  isActive ? "active" : "",
-                ].join(" ")
-              }
-            >
+            <NavLink key={item.path} to={item.path} className="ema-nav-link">
               <Icon size={17} />
-              <span>{item.label}</span>
+              {item.label}
             </NavLink>
           );
         })}
       </nav>
 
-      <div className="app-sidebar-footer">
-        <div className="app-sidebar-user">
-          <div className="app-sidebar-avatar">
-            <ShieldCheck size={17} />
+      <div className="ema-sidebar-footer">
+        <div className="ema-user-card">
+          <div className="ema-user-avatar">
+            <ShieldCheck size={18} />
           </div>
 
           <div className="min-w-0">
-            <div className="app-sidebar-user-name">Admin User</div>
-            <div className="app-sidebar-user-role">System Manager</div>
+            <div className="fw-bold text-white lh-sm">
+              {user?.name || user?.username || "Admin User"}
+            </div>
+            <div className="small text-muted">System Manager</div>
           </div>
         </div>
 
         <button
           type="button"
           onClick={handleLogout}
-          className="btn btn-outline-light w-100 d-flex align-items-center justify-content-center gap-2"
+          className="btn btn-light w-100 d-flex align-items-center justify-content-center gap-2"
         >
           <LogOut size={17} />
           Logout

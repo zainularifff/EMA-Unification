@@ -1,29 +1,39 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
-import { AuthProvider } from "./context/AuthContext";
-import { ThemeProvider } from "./context/ThemeContext";
-import MainLayout from "./layouts/MainLayout";
+import { AppShell } from "./components/layout/AppShell";
+import { useAuth } from "./context/AuthContext";
 import Login from "./pages/auth/Login";
-import LandingPage from "./pages/landing/LandingPage";
-import HardwareInventory from "./pages/ema/Hardware/HardwareInventory";
+import Dashboard from "./pages/dashboard/Dashboard";
+import HardwareInventory from "./pages/hardware/HardwareInventory";
+
+function RequireAuth({ children }: { children: JSX.Element }) {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
+    <Routes>
+      <Route path="/login" element={<Login />} />
 
-            <Route element={<MainLayout />}>
-              <Route path="/landing" element={<LandingPage />} />
-              <Route path="/ema/hardware" element={<HardwareInventory />} />
-            </Route>
+      <Route
+        element={
+          <RequireAuth>
+            <AppShell />
+          </RequireAuth>
+        }
+      >
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/hardware" element={<HardwareInventory />} />
+      </Route>
 
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
   );
 }
