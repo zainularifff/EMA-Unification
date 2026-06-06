@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ButtonHTMLAttributes, FormEvent, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import type { ButtonHTMLAttributes, CSSProperties, FormEvent, ReactNode } from 'react';
 
 import {
   incidents as incidentsService,
@@ -543,61 +544,100 @@ type ServiceDeskSelectProps = {
 function ServiceDeskSelect({
   value,
   options,
-  placeholder = 'Select',
+  placeholder = 'Select option',
   disabled = false,
   ariaLabel,
-  className,
-  menuClassName,
+  className = '',
+  menuClassName = '',
   onChange,
   onOpen,
 }: ServiceDeskSelectProps) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const comboRef = useRef<HTMLDivElement>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+
+  const selected = options.find((option) => option.value === value);
+  const selectedLabel = selected?.label || placeholder;
+
+  const updateMenuPosition = () => {
+    const trigger = triggerRef.current;
+    if (!trigger || typeof window === 'undefined') return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 16;
+    const gap = 8;
+    const menuWidth = Math.max(rect.width, 210);
+    const optionHeight = 36;
+    const estimatedHeight = Math.min(288, Math.max(44, options.length * optionHeight + 10));
+    const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const availableAbove = rect.top - viewportPadding;
+    const openAbove = availableBelow < estimatedHeight && availableAbove > availableBelow;
+    const maxHeight = Math.max(96, Math.min(estimatedHeight, openAbove ? availableAbove : availableBelow));
+    const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - menuWidth - viewportPadding);
+    const top = openAbove
+      ? Math.max(viewportPadding, rect.top - maxHeight - gap)
+      : Math.min(rect.bottom + gap, window.innerHeight - maxHeight - viewportPadding);
+
+    setMenuStyle({
+      position: 'fixed',
+      left,
+      top,
+      width: menuWidth,
+      maxHeight,
+      zIndex: 2147483600,
+    });
+  };
 
   useEffect(() => {
     if (!open) return undefined;
 
-    function handleOutsideClick(event: MouseEvent) {
+    updateMenuPosition();
+
+    const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (comboRef.current && !comboRef.current.contains(target)) {
-        setOpen(false);
-      }
-    }
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
 
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [open]);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
 
-  const selected = options.find((option) => option.value === value);
-  const label = selected?.label || placeholder;
+    const handleResize = () => updateMenuPosition();
 
-  return (
-    <div className={cn('setting-select', open && 'is-open', className)} ref={comboRef}>
-      <button
-        type="button"
-        className={cn('setting-select-trigger', !selected && 'is-placeholder', open && 'is-open')}
-        disabled={disabled}
-        aria-label={ariaLabel || placeholder}
-        aria-expanded={open}
-        onClick={() => {
-          if (disabled) return;
-          onOpen?.();
-          setOpen((current) => !current);
-        }}
-      >
-        <span>{label}</span>
-        <ChevronDown size={16} />
-      </button>
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleResize, true);
 
-      {open && !disabled && (
-        <div className={cn('setting-select-dropdown', menuClassName)} role="listbox">
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleResize, true);
+    };
+  }, [open, value, options.length]);
+
+  const menuNode = open && !disabled && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          ref={menuRef}
+          className={cn('uam-filter-menu uam-filter-menu-portal setting-select-menu', menuClassName)}
+          style={menuStyle}
+          role="listbox"
+          aria-label={ariaLabel || placeholder}
+        >
           {options.map((option) => {
             const active = option.value === value;
+
             return (
               <button
                 key={`${option.value}-${option.label}`}
+                className={cn('uam-filter-option', active && 'selected')}
                 type="button"
-                className={cn(active && 'is-active')}
+                role="option"
+                aria-selected={active}
                 disabled={option.disabled}
                 onClick={() => {
                   if (option.disabled) return;
@@ -606,11 +646,34 @@ function ServiceDeskSelect({
                 }}
               >
                 <span>{option.label}</span>
+                {active && <span className="uam-filter-check">✓</span>}
               </button>
             );
           })}
-        </div>
-      )}
+        </div>,
+        document.body
+      )
+    : null;
+
+  return (
+    <div className={cn('uam-filter-dropdown setting-select-dropdown', open && 'open', disabled && 'disabled', className)}>
+      <button
+        ref={triggerRef}
+        className="uam-filter-trigger setting-select-trigger"
+        type="button"
+        onClick={() => {
+          if (disabled) return;
+          onOpen?.();
+          setOpen((current) => !current);
+        }}
+        disabled={disabled}
+        aria-expanded={open}
+        aria-label={ariaLabel || placeholder}
+      >
+        <span>{selectedLabel}</span>
+        <ChevronDown size={14} />
+      </button>
+      {menuNode}
     </div>
   );
 }
@@ -2689,40 +2752,22 @@ export default function ServiceDesk() {
   ];
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-
-    const html = document.documentElement;
-    const body = document.body;
-
-    const previousHtmlOverflow = html.style.overflow;
-    const previousHtmlHeight = html.style.height;
-    const previousBodyOverflow = body.style.overflow;
-    const previousBodyHeight = body.style.height;
-
-    html.classList.add('ema-layout-lock');
-    body.classList.add('ema-layout-lock');
-    body.classList.add('ema-settings-lock');
-
-    html.style.overflow = 'hidden';
-    html.style.height = '100%';
-    body.style.overflow = 'hidden';
-    body.style.height = '100%';
+    document.documentElement.classList.add('ema-settings-page-active');
+    document.body.classList.add('ema-settings-page-active');
 
     return () => {
-      html.classList.remove('ema-layout-lock');
-      body.classList.remove('ema-layout-lock');
-      body.classList.remove('ema-settings-lock');
-
-      html.style.overflow = previousHtmlOverflow;
-      html.style.height = previousHtmlHeight;
-      body.style.overflow = previousBodyOverflow;
-      body.style.height = previousBodyHeight;
+      document.documentElement.classList.remove('ema-settings-page-active');
+      document.body.classList.remove('ema-settings-page-active');
     };
   }, []);
 
+
+  const ticketTableColumns =
+    '58px minmax(125px, 0.72fr) minmax(100px, 0.58fr) minmax(170px, 0.98fr) minmax(118px, 0.62fr) minmax(260px, 1.55fr) minmax(98px, 0.58fr) minmax(145px, 0.82fr) minmax(125px, 0.7fr) minmax(115px, 0.62fr) 104px';
+
   if (isLoading) {
     return (
-      <div className="settings-module-root ema-module-root d-grid place-items-center text-center">
+      <div className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4 d-grid place-items-center text-center">
         <Loader2 className="ema-spin" size={28} />
         <strong>Loading Service Desk</strong>
         <span>Loading incident queue...</span>
@@ -2732,7 +2777,7 @@ export default function ServiceDesk() {
 
   // Service Desk uses the existing Settings layout/classes.
   return (
-    <main className="settings-module-root ema-module-root">
+    <main className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section="service-desk">
       {toast && (
         <div className={cn('settings-toast', `is-${toast.type}`)} role="status" aria-live="polite">
           <i className="settings-toast-icon">
@@ -2845,8 +2890,8 @@ export default function ServiceDesk() {
         </div>
       )}
 
-      <div className="settings-layout ema-layout">
-      <aside className="settings-menu ema-menu">
+      <div className="settings-layout d-grid gap-3">
+      <aside className="settings-menu ema-panel-surface">
         <div className="panel-head">
           <div>
             <span>SERVICE CENTER</span>
@@ -2854,7 +2899,7 @@ export default function ServiceDesk() {
             <small>Ticket queue and support operation</small>
           </div>
         </div>
-        <nav className="settings-menu-list ema-menu-list">
+        <nav className="settings-menu-list" id="serviceDeskMenu" role="tablist" aria-label="Service Desk navigation">
           {queueItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -2888,8 +2933,8 @@ export default function ServiceDesk() {
       </aside>
 
 
-      <section className="settings-content ema-content">
-        <div className="settings-hero">
+      <section className="settings-content d-grid gap-3">
+        <div className="settings-hero ema-panel-surface">
           <div>
             <span className="eyebrow">INCIDENT COMMAND CENTER</span>
             <h2>Service Desk</h2>
@@ -2906,134 +2951,113 @@ export default function ServiceDesk() {
           </div>
         </div>
 
-        <div className="content-shell ema-registry-shell">
+        <div className="content-shell ema-panel-surface roles-content-shell">
 
         {viewMode === 'list' && (
           <section className="content-panel clean">
-            <header className="content-head">
-              <div>
-                <h2>Ticket Registry</h2>
-                <p>Operational ticket queue and SLA monitoring</p>
-              </div>
-              <div className="content-actions">
-                <AppButton
-                  type="button"
-                  variant="primary"
-                  leftIcon={<Plus size={15} />}
-                  onClick={openCreateForm}
-                >
-                  Create Ticket
-                </AppButton>
-
-                <AppIconButton
-                  type="button"
-                  variant="outline-secondary"
-                  label="Refresh"
-                  icon={<RefreshCw size={16} />}
-                  loading={isRefreshing}
-                  onClick={refreshData}
-                />
-
-                <AppIconButton
-                  type="button"
-                  variant={showAdvanced ? "primary" : "outline-secondary"}
-                  label="Advanced filter"
-                  icon={<Filter size={16} />}
-                  onClick={() => {
-                    setShowAdvanced((prev) => !prev);
-                    void ensureLookupsLoaded();
-                  }}
-                />
-
-                <AppIconButton
-                  type="button"
-                  variant="outline-secondary"
-                  label="Export CSV"
-                  icon={<Download size={16} />}
-                  onClick={exportCsv}
-                />
-
-                <AppIconButton
-                  type="button"
-                  variant="outline-secondary"
-                  label="Print ticket table"
-                  icon={<Printer size={16} />}
-                  onClick={printTicketRegistry}
-                />
-              </div>
-            </header>
-
-            <div className="content-toolbar users-toolbar">
-              <label className="section-search">
-                <Search size={16} />
+            <div
+              className="user-access-commandbar"
+              style={{
+                gridTemplateColumns:
+                  'minmax(320px, 1fr) minmax(160px, 190px) minmax(160px, 190px) minmax(160px, 190px) auto auto',
+              }}
+            >
+              <label className="section-search user-search-inline">
+                <Search size={15} />
                 <input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Search request no, requester, asset, incident..."
                 />
-                {searchTerm && (
-                  <button
-                    type="button"
-                    className="mini-btn icon-only"
-                    aria-label="Clear search"
-                    onClick={() => setSearchTerm('')}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
               </label>
 
-              <div className="content-actions">
-                <ServiceDeskSelect
-                  className="setting-select"
-                  value={filterStatus}
-                  ariaLabel="Filter tickets by status"
-                  placeholder="Status: All"
-                  onChange={setFilterStatus}
-                  options={[
-                    { value: 'All', label: 'Status: All' },
-                    ...STATUS_OPTIONS.map((status) => ({ value: status, label: `Status: ${status}` })),
-                  ]}
-                />
+              <ServiceDeskSelect
+                value={filterStatus}
+                ariaLabel="Filter tickets by status"
+                placeholder="Status: All"
+                onChange={setFilterStatus}
+                options={[
+                  { value: 'All', label: 'Status: All' },
+                  ...STATUS_OPTIONS.map((status) => ({ value: status, label: `Status: ${status}` })),
+                ]}
+              />
 
-                <ServiceDeskSelect
-                  className="setting-select"
-                  value={filterPriority}
-                  ariaLabel="Filter tickets by urgency"
-                  placeholder="Urgency: All"
-                  onChange={setFilterPriority}
-                  options={[
-                    { value: 'All', label: 'Urgency: All' },
-                    ...PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: `Urgency: ${priority}` })),
-                  ]}
-                />
+              <ServiceDeskSelect
+                value={filterPriority}
+                ariaLabel="Filter tickets by urgency"
+                placeholder="Urgency: All"
+                onChange={setFilterPriority}
+                options={[
+                  { value: 'All', label: 'Urgency: All' },
+                  ...PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: `Urgency: ${priority}` })),
+                ]}
+              />
 
-                <ServiceDeskSelect
-                  className="setting-select"
-                  value={filterAssignedTo}
-                  ariaLabel="Filter tickets by assigned engineer"
-                  placeholder="Assignee: All"
-                  onOpen={() => void ensureLookupsLoaded()}
-                  onChange={setFilterAssignedTo}
-                  options={[
-                    { value: 'All', label: 'Assignee: All' },
-                    { value: '', label: 'Assignee: Unassigned' },
-                    ...engineers.map((user) => ({ value: getUserName(user), label: `Assignee: ${getUserName(user)}` })),
-                  ]}
-                />
-              </div>
+              <ServiceDeskSelect
+                value={filterAssignedTo}
+                ariaLabel="Filter tickets by assigned engineer"
+                placeholder="Assignee: All"
+                onOpen={() => void ensureLookupsLoaded()}
+                onChange={setFilterAssignedTo}
+                options={[
+                  { value: 'All', label: 'Assignee: All' },
+                  { value: '', label: 'Assignee: Unassigned' },
+                  ...engineers.map((user) => ({ value: getUserName(user), label: `Assignee: ${getUserName(user)}` })),
+                ]}
+              />
 
-              <AppButton
+              <button
                 type="button"
-                variant="outline-secondary"
-                size="sm"
                 className="soft-btn"
                 disabled={!hasActiveFilters}
-                leftIcon={<X size={14} />}
                 onClick={resetRegistryFilters}
               >
-                Reset
-              </AppButton>
+                <X size={14} />
+                <span>Reset</span>
+              </button>
+
+              <div className="uam-actions-right content-actions">
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={openCreateForm}
+                >
+                  <Plus size={15} />
+                  <span>Create Ticket</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="mini-btn icon-only"
+                  aria-label="Refresh"
+                  title="Refresh"
+                  disabled={isRefreshing}
+                  onClick={refreshData}
+                >
+                  {isRefreshing ? <Loader2 size={15} className="ema-spin" /> : <RefreshCw size={16} />}
+                </button>
+
+                <button
+                  type="button"
+                  className={cn('mini-btn icon-only', showAdvanced && 'is-active')}
+                  aria-label="Advanced filter"
+                  title="Advanced filter"
+                  onClick={() => {
+                    setShowAdvanced((prev) => !prev);
+                    void ensureLookupsLoaded();
+                  }}
+                >
+                  <Filter size={16} />
+                </button>
+
+                <button type="button" className="mini-btn icon-only" aria-label="Export CSV" title="Export CSV" onClick={exportCsv}>
+                  <Download size={16} />
+                </button>
+
+                <button type="button" className="mini-btn icon-only" aria-label="Print ticket table" title="Print ticket table" onClick={printTicketRegistry}>
+                  <Printer size={16} />
+                </button>
+              </div>
             </div>
 
             {showAdvanced && (
@@ -3107,7 +3131,7 @@ export default function ServiceDesk() {
               </div>
             )}
 
-            <div className="pricing-table-card table-responsive">
+            <div className="content-body">
               {paginatedIncidents.length === 0 ? (
                 <div className="settings-empty-state">
                   <div className="setting-icon mx-auto">
@@ -3119,9 +3143,9 @@ export default function ServiceDesk() {
                     Try All Tickets, reset filter, or create a new request.
                   </span>
                   <div className="content-actions justify-content-center">
-                    <AppButton
+                    <button
                       type="button"
-                      variant="outline-secondary"
+                      className="soft-btn"
                       onClick={() => {
                         setActiveQueue('all');
                         setFilterStatus('All');
@@ -3133,35 +3157,18 @@ export default function ServiceDesk() {
                       }}
                     >
                       Reset View
-                    </AppButton>
-                    {canCreate && (
-                      <AppButton type="button" variant="primary" leftIcon={<Plus size={14} />} onClick={openCreateForm}>
-                        New Ticket
-                      </AppButton>
-                    )}
+                    </button>
+                    <button type="button" className="primary-btn" onClick={openCreateForm}>
+                      <Plus size={14} />
+                      <span>New Ticket</span>
+                    </button>
                   </div>
                 </div>
               ) : (
-              <table className="table table-hover align-middle mb-0">
-                <colgroup>
-                  <col className="col-no" />
-                  <col className="col-req" />
-                  <col className="col-date" />
-                  <col className="col-requester" />
-                  <col className="col-asset" />
-                  <col className="col-incident" />
-                  <col className="col-priority" />
-                  <col className="col-assigned" />
-                  <col className="col-sla" />
-                  <col className="col-status" />
-                  <col className="col-actions" />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th scope="col">
-                      <span className="section-tag">No</span>
-                    </th>
-                    <th scope="col">
+                <div className="user-access-table advanced clean-table" style={{ overflowX: 'auto' }}>
+                  <div className="user-row head advanced clean-table-row" style={{ gridTemplateColumns: ticketTableColumns }}>
+                    <div className="user-cell">No</div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'id' && 'is-active')}
@@ -3170,8 +3177,8 @@ export default function ServiceDesk() {
                         <span>Req No</span>
                         <i>{sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
+                    </div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'createdAt' && 'is-active')}
@@ -3180,8 +3187,8 @@ export default function ServiceDesk() {
                         <span>Submitted</span>
                         <i>{sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
+                    </div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'customerName' && 'is-active')}
@@ -3190,11 +3197,9 @@ export default function ServiceDesk() {
                         <span>Requester</span>
                         <i>{sortConfig.key === 'customerName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
-                      <span className="section-tag">Asset</span>
-                    </th>
-                    <th scope="col">
+                    </div>
+                    <div className="user-cell">Asset</div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'title' && 'is-active')}
@@ -3203,8 +3208,8 @@ export default function ServiceDesk() {
                         <span>Incident</span>
                         <i>{sortConfig.key === 'title' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
+                    </div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'priority' && 'is-active')}
@@ -3213,8 +3218,8 @@ export default function ServiceDesk() {
                         <span>Urgency</span>
                         <i>{sortConfig.key === 'priority' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
+                    </div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'assignedTo' && 'is-active')}
@@ -3223,8 +3228,8 @@ export default function ServiceDesk() {
                         <span>Assigned</span>
                         <i>{sortConfig.key === 'assignedTo' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
+                    </div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'slaDue' && 'is-active')}
@@ -3233,8 +3238,8 @@ export default function ServiceDesk() {
                         <span>SLA</span>
                         <i>{sortConfig.key === 'slaDue' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
+                    </div>
+                    <div className="user-cell">
                       <button
                         type="button"
                         className={cn('soft-btn', sortConfig.key === 'status' && 'is-active')}
@@ -3243,112 +3248,109 @@ export default function ServiceDesk() {
                         <span>Status</span>
                         <i>{sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
-                    </th>
-                    <th scope="col">
-                      <span className="section-tag">Action</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
+                    </div>
+                    <div className="user-cell">Action</div>
+                  </div>
+
                   {paginatedIncidents.map((incident, index) => {
                     const runningNo = (currentPage - 1) * itemsPerPage + index + 1;
                     const sla = getSlaMeta(incident, now);
                     const isSelected = getId(incident) === getId(selectedIncident || {});
 
                     return (
-                      <tr
+                      <div
                         key={getId(incident)}
                         data-ticket-row="true"
-                        className={cn(isSelected && 'is-selected')}
+                        className={cn('user-row advanced clean-table-row', isSelected && 'is-selected')}
+                        style={{ gridTemplateColumns: ticketTableColumns }}
                         onClick={() => setSelectedIncidentId(getId(incident))}
                       >
-                        <td data-label="No">
-                          <span className="row-index-pill">{runningNo}</span>
-                        </td>
-                        <td data-label="Req No">
+                        <div className="user-cell row-number">
+                          <span className="row-index-pill">{String(runningNo).padStart(2, '0')}</span>
+                        </div>
+
+                        <div className="user-cell">
                           <strong>{getId(incident)}</strong>
-                        </td>
-                        <td data-label="Submitted">{normalizeDate(incident.createdAt)}</td>
-                        <td data-label="Requester">
-                          <div>
-                            <i>{initialText(incident.customerName || incident.reporterId)}</i>
+                        </div>
+
+                        <div className="user-cell">{normalizeDate(incident.createdAt)}</div>
+
+                        <div className="user-cell">
+                          <div className="user-name">
+                            <span className="user-mini-avatar">{initialText(incident.customerName || incident.reporterId)}</span>
                             <span>
                               <strong>{incident.customerName || 'N/A'}</strong>
                               <small>{incident.sector || 'No sector'}</small>
                             </span>
                           </div>
-                        </td>
-                        <td data-label="Asset">
-                          <div>
-                            <Monitor size={14} />
-                            <span>{incident.assetId || '—'}</span>
-                          </div>
-                        </td>
-                        <td data-label="Incident">
-                          <div>
-                            <strong>{incident.title || 'Untitled incident'}</strong>
-                            <small>
-                              {[incident.category, incident.subcategory, incident.incidentDetail].filter(Boolean).join(' / ') ||
-                                incident.description ||
-                                'No classification'}
-                            </small>
-                          </div>
-                        </td>
-                        <td data-label="Urgency">
+                        </div>
+
+                        <div className="user-cell">
+                          <span className="muted-cell">
+                            <Monitor size={13} />
+                            {incident.assetId || '—'}
+                          </span>
+                        </div>
+
+                        <div className="user-cell role-info-cell">
+                          <strong>{incident.title || 'Untitled incident'}</strong>
+                          <small>
+                            {[incident.category, incident.subcategory, incident.incidentDetail].filter(Boolean).join(' / ') ||
+                              incident.description ||
+                              'No classification'}
+                          </small>
+                        </div>
+
+                        <div className="user-cell">
                           <span className={cn('user-pill', priorityClass(incident.priority || 'Medium'))}>
                             {incident.priority || 'Medium'}
                           </span>
-                        </td>
-                        <td data-label="Assigned">
-                          <div>
-                            <strong>{incident.assignedTo || 'Unassigned'}</strong>
-                            <small>{incident.assignedLevel || 'No level'}</small>
-                          </div>
-                        </td>
-                        <td data-label="SLA">
-                          <div className={cn('', sla.className)}>
-                            <strong>{sla.label}</strong>
-                            <small>{sla.detail}</small>
-                          </div>
-                        </td>
-                        <td data-label="Status">
+                        </div>
+
+                        <div className="user-cell role-info-cell">
+                          <strong>{incident.assignedTo || 'Unassigned'}</strong>
+                          <small>{incident.assignedLevel || 'No level'}</small>
+                        </div>
+
+                        <div className={cn('user-cell role-info-cell', sla.className)}>
+                          <strong>{sla.label}</strong>
+                          <small>{sla.detail}</small>
+                        </div>
+
+                        <div className="user-cell">
                           <span className={cn('user-pill', statusClass(incident.status || 'Awaiting'))}>
                             {incident.status || 'Awaiting'}
                           </span>
-                        </td>
-                        <td data-label="Action" onClick={(event) => event.stopPropagation()}>
-                          <div className="row-actions user-row-action-wrap clean">
-                            {canEdit && (
-                              <AppIconButton
-                                type="button"
-                                variant="outline-secondary"
-                                className="mini-btn icon-only"
-                                label="Edit ticket"
-                                icon={<Pencil size={14} />}
-                                onClick={() => openEditForm(incident)}
-                              />
-                            )}
+                        </div>
 
-                            {canDelete && (
-                              <AppIconButton
-                                type="button"
-                                variant="outline-danger"
-                                className="mini-btn icon-only"
-                                label="Delete ticket"
-                                icon={<Trash2 size={14} />}
-                                onClick={() => deleteIncident(incident)}
-                                disabled={isDeleteLockedStatus(incident.status)}
-                                title={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed or resolved tickets' : 'Delete ticket'}
-                                aria-disabled={isDeleteLockedStatus(incident.status)}
-                              />
-                            )}
+                        <div className="user-cell" onClick={(event) => event.stopPropagation()}>
+                          <div className="row-actions user-row-action-wrap clean">
+                            <button
+                              type="button"
+                              className="mini-btn icon-only edit"
+                              title="Edit ticket"
+                              aria-label="Edit ticket"
+                              onClick={() => openEditForm(incident)}
+                            >
+                              <Pencil size={14} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="mini-btn icon-only delete"
+                              title={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed or resolved tickets' : 'Delete ticket'}
+                              aria-label={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed or resolved tickets' : 'Delete ticket'}
+                              disabled={isDeleteLockedStatus(incident.status)}
+                              onClick={() => deleteIncident(incident)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
               )}
             </div>
 
