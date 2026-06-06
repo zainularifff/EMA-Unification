@@ -29,6 +29,7 @@ const navItems: NavItem[] = [
   { label: "Network", path: "/network", icon: Network, comingSoon: true },
   { label: "Users", path: "/users", icon: Users, comingSoon: true },
   { label: "Reports", path: "/reports", icon: BarChart3, comingSoon: true },
+  { label: "Service Desk", path: "/service-desk", icon: Box },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 

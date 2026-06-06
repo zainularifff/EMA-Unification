@@ -2100,33 +2100,37 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
 });
 
 // GET /api/users
-// EMA_Users is the only runtime user source for the rebuilt UI.
 app.get('/api/users', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        await assertEmaUsersTable(pool);
+
+        const hasHdUsers = await tableExists(pool, "HD_Users");
+
+        if (!hasHdUsers) {
+            return res.json([]);
+        }
 
         const result = await pool.request().query(`
             SELECT
-                ${emaUserSelectColumns}
-            FROM EMA_Users WITH (NOLOCK)
-            ORDER BY
-                CASE WHEN Status = 'Active' THEN 0 WHEN Status = 'Review' THEN 1 WHEN Status = 'Locked' THEN 2 ELSE 3 END,
-                FullName ASC,
-                Username ASC;
+                UserID as id,
+                Username as name,
+                Username as username,
+                Email as email,
+                Role as role,
+                DatabaseAlias as department,
+                Status as status,
+                CASE WHEN Status = 'Active' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END as isActive
+            FROM HD_Users
+            ORDER BY Username
         `);
 
-        const rows = result.recordset || [];
-        const roleMap = await getEmaUserRoleNameMap(pool, rows.map((row) => row.UserID));
-        return res.json(rows.map((row) => mapEmaUserResponse({
-            ...row,
-            RoleNames: (roleMap.get(row.UserID) || splitEmaRoleNames(row.RoleName)).join(", ")
-        })));
+        return res.json(result.recordset);
     } catch (err) {
         console.error('GET /api/users error:', err);
-        return res.status(err.statusCode || 500).json({
+        return res.status(500).json({
             success: false,
-            message: err.message || 'Failed to fetch users'
+            message: 'Failed to fetch users',
+            error: err.message
         });
     }
 });
@@ -2135,95 +2139,196 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 app.get('/api/users/:id', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        await assertEmaUsersTable(pool);
+        const hasHdUsers = await tableExists(pool, "HD_Users");
 
-        const userID = parseInt(req.params.id, 10);
-        if (Number.isNaN(userID)) {
-            return res.status(400).json({ success: false, message: 'Invalid user id.' });
+        if (!hasHdUsers) {
+            return res.status(404).json({ success: false, message: 'Users table not found' });
         }
 
-        const row = await getEmaUserById(pool, userID);
-        if (!row) {
-            return res.status(404).json({ success: false, message: 'User not found.' });
+        const result = await pool.request()
+            .input('id', sql.Int, parseInt(req.params.id))
+            .query(`
+                SELECT
+                    UserID as id,
+                    Username as name,
+                    Username as username,
+                    Email as email,
+                    Role as role,
+                    DatabaseAlias as department,
+                    Status as status,
+                    CASE WHEN Status = 'Active' THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END as isActive
+                FROM HD_Users
+                WHERE UserID = @id
+            `);
+
+        if (result.recordset.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const roleMap = await getEmaUserRoleNameMap(pool, [row.UserID]);
-        return res.json(mapEmaUserResponse({
-            ...row,
-            RoleNames: (roleMap.get(row.UserID) || splitEmaRoleNames(row.RoleName)).join(", ")
-        }));
+        return res.json(result.recordset[0]);
     } catch (err) {
         console.error('GET /api/users/:id error:', err);
-        return res.status(err.statusCode || 500).json({ success: false, message: err.message || 'Failed to fetch user' });
+        return res.status(500).json({ success: false, message: 'Failed to fetch user', error: err.message });
     }
 });
 
-// User write actions are controlled by Settings > User Access Management.
+// POST /api/users
 app.post('/api/users', authenticateToken, async (req, res) => {
-    return res.status(501).json({ success: false, message: 'Use User Access Management to create users.' });
+    try {
+        const { name, username, email, role, department, status } = req.body;
+        const pool = await sql.connect(dbConfig);
+        const hasHdUsers = await tableExists(pool, "HD_Users");
+
+        if (!hasHdUsers) {
+            return res.status(404).json({ success: false, message: 'Users table not found' });
+        }
+
+        const displayName = username || name;
+
+        if (!displayName) {
+            return res.status(400).json({ success: false, message: 'Username/name is required' });
+        }
+
+        const result = await pool.request()
+            .input('Username', sql.NVarChar, displayName)
+            .input('Email', sql.NVarChar, email || '')
+            .input('Role', sql.NVarChar, role || '')
+            .input('DatabaseAlias', sql.NVarChar, department || '')
+            .input('Status', sql.NVarChar, status || 'Active')
+            .query(`
+                INSERT INTO HD_Users (Username, Email, Role, DatabaseAlias, Status)
+                OUTPUT INSERTED.UserID as id, INSERTED.Username as name, INSERTED.Email as email,
+                       INSERTED.Role as role, INSERTED.DatabaseAlias as department, INSERTED.Status as status
+                VALUES (@Username, @Email, @Role, @DatabaseAlias, @Status)
+            `);
+
+        return res.json({ success: true, data: result.recordset[0] });
+    } catch (err) {
+        console.error('POST /api/users error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to create user', error: err.message });
+    }
 });
 
+// PUT /api/users/:id
 app.put('/api/users/:id', authenticateToken, async (req, res) => {
-    return res.status(501).json({ success: false, message: 'Use User Access Management to update users.' });
+    try {
+        const { name, username, email, role, department, status, isActive } = req.body;
+        const pool = await sql.connect(dbConfig);
+        const hasHdUsers = await tableExists(pool, "HD_Users");
+
+        if (!hasHdUsers) {
+            return res.status(404).json({ success: false, message: 'Users table not found' });
+        }
+
+        const displayName = username || name;
+        const finalStatus = status || (isActive === false ? 'Inactive' : 'Active');
+
+        await pool.request()
+            .input('id', sql.Int, parseInt(req.params.id))
+            .input('Username', sql.NVarChar, displayName || '')
+            .input('Email', sql.NVarChar, email || '')
+            .input('Role', sql.NVarChar, role || '')
+            .input('DatabaseAlias', sql.NVarChar, department || '')
+            .input('Status', sql.NVarChar, finalStatus)
+            .query(`
+                UPDATE HD_Users
+                SET Username = @Username,
+                    Email = @Email,
+                    Role = @Role,
+                    DatabaseAlias = @DatabaseAlias,
+                    Status = @Status
+                WHERE UserID = @id
+            `);
+
+        return res.json({ success: true, id: parseInt(req.params.id), ...req.body });
+    } catch (err) {
+        console.error('PUT /api/users/:id error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to update user', error: err.message });
+    }
 });
 
+// DELETE /api/users/:id
 app.delete('/api/users/:id', authenticateToken, async (req, res) => {
-    return res.status(501).json({ success: false, message: 'Use User Access Management to remove users.' });
+    try {
+        const pool = await sql.connect(dbConfig);
+        const hasHdUsers = await tableExists(pool, "HD_Users");
+
+        if (!hasHdUsers) {
+            return res.status(404).json({ success: false, message: 'Users table not found' });
+        }
+
+        await pool.request()
+            .input('id', sql.Int, parseInt(req.params.id))
+            .query(`
+                UPDATE HD_Users
+                SET Status = 'Inactive'
+                WHERE UserID = @id
+            `);
+
+        return res.json({ success: true, message: 'User deactivated successfully' });
+    } catch (err) {
+        console.error('DELETE /api/users/:id error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to delete user', error: err.message });
+    }
 });
 
 // GET /api/roles
-// Role list is sourced from EMA_Roles only.
+// Role list is derived from HD_Users.Role so Incidents.tsx support-level filter can load.
 app.get('/api/roles', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        await assertEmaRolesTable(pool);
+        const hasHdUsers = await tableExists(pool, "HD_Users");
+
+        if (!hasHdUsers) {
+            return res.json([]);
+        }
 
         const result = await pool.request().query(`
             SELECT
-                RoleID AS id,
-                RoleName AS name,
-                RoleName AS role,
-                RoleKey AS roleKey,
-                Description AS description,
-                Status AS status
-            FROM EMA_Roles WITH (NOLOCK)
-            WHERE ISNULL(Status, 'Active') <> 'Inactive'
-            ORDER BY
-                CASE
-                    WHEN RoleName = 'Super Admin' THEN 0
-                    WHEN RoleName = 'Manager' THEN 1
-                    WHEN RoleName = 'L3 Support' THEN 2
-                    WHEN RoleName = 'L2 Support' THEN 3
-                    WHEN RoleName = 'L1 Support' THEN 4
-                    ELSE 9
-                END,
-                RoleName ASC;
+                ROW_NUMBER() OVER (ORDER BY Role) as id,
+                Role as name,
+                Role as role
+            FROM (
+                SELECT DISTINCT Role
+                FROM HD_Users
+                WHERE Role IS NOT NULL AND Role <> ''
+            ) r
+            ORDER BY Role
         `);
 
-        return res.json(result.recordset || []);
+        return res.json(result.recordset);
     } catch (err) {
         console.error('GET /api/roles error:', err);
-        return res.status(err.statusCode || 500).json({
+        return res.status(500).json({
             success: false,
-            message: err.message || 'Failed to fetch roles'
+            message: 'Failed to fetch roles',
+            error: err.message
         });
     }
 });
 
-// Role write actions are managed by Role Based Control.
+// Basic role write routes are intentionally guarded because roles are derived from HD_Users.
+// Keep these endpoints available so service calls return clear messages instead of 404.
 app.post('/api/roles', authenticateToken, async (req, res) => {
-    return res.status(501).json({ success: false, message: 'Use Role Based Control to create roles.' });
+    return res.status(501).json({
+        success: false,
+        message: 'Role creation is not available because roles are derived from HD_Users.Role'
+    });
 });
 
 app.put('/api/roles/:id', authenticateToken, async (req, res) => {
-    return res.status(501).json({ success: false, message: 'Use Role Based Control to update roles.' });
+    return res.status(501).json({
+        success: false,
+        message: 'Role update is not available because roles are derived from HD_Users.Role'
+    });
 });
 
 app.delete('/api/roles/:id', authenticateToken, async (req, res) => {
-    return res.status(501).json({ success: false, message: 'Use Role Based Control to remove roles.' });
+    return res.status(501).json({
+        success: false,
+        message: 'Role deletion is not available because roles are derived from HD_Users.Role'
+    });
 });
-
-
 
 // ============================================================
 // INCIDENTS API
@@ -3112,192 +3217,27 @@ app.delete('/api/user-types/:id', authenticateToken, async (req, res) => {
 });
 
 // ============================================================
-// ENGINEER AVAILABILITY API - EMA_Users ONLY
+// ENGINEER AVAILABILITY API - NO DATABASE COLUMN VERSION
 // ============================================================
-// Runtime source: EMA_Users + EMA_UserRoles + EMA_Roles.
-// Engineer leave source: EMA_EngineerAvailability.
 
-async function ensureEmaEngineerAvailabilityTable(pool) {
-    await assertEmaUsersTable(pool);
-
-    await pool.request().query(`
-        IF OBJECT_ID('dbo.EMA_EngineerAvailability', 'U') IS NULL
-        BEGIN
-            CREATE TABLE dbo.EMA_EngineerAvailability (
-                Id INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-                UserID INT NOT NULL,
-                StartDate DATE NOT NULL,
-                EndDate DATE NOT NULL,
-                Status NVARCHAR(50) NOT NULL CONSTRAINT DF_EMA_EngineerAvailability_Status DEFAULT 'On Leave',
-                Remarks NVARCHAR(MAX) NULL,
-                CreatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_EngineerAvailability_CreatedAt DEFAULT GETDATE(),
-                CreatedBy NVARCHAR(100) NULL,
-                UpdatedAt DATETIME NULL,
-                UpdatedBy NVARCHAR(100) NULL,
-                IsActive BIT NOT NULL CONSTRAINT DF_EMA_EngineerAvailability_IsActive DEFAULT 1
-            );
-
-            CREATE INDEX IX_EMA_EngineerAvailability_UserDate
-            ON dbo.EMA_EngineerAvailability (UserID, StartDate, EndDate, IsActive);
-        END
-    `);
-}
-
-function getServiceDeskSupportClause(alias = "u") {
-    return `
-        (
-            EXISTS (
-                SELECT 1
-                FROM EMA_UserRoles urx WITH (NOLOCK)
-                INNER JOIN EMA_Roles rx WITH (NOLOCK)
-                    ON rx.RoleID = urx.RoleID
-                WHERE urx.UserID = ${alias}.UserID
-                  AND ISNULL(rx.Status, 'Active') <> 'Inactive'
-                  AND rx.RoleName LIKE '%Support%'
-            )
-            OR ISNULL(${alias}.RoleName, '') LIKE '%Support%'
-        )
-    `;
-}
-
-function getServiceDeskExactSupportClause(alias = "u") {
-    return `
-        (
-            @SupportLevel = ''
-            OR EXISTS (
-                SELECT 1
-                FROM EMA_UserRoles urx WITH (NOLOCK)
-                INNER JOIN EMA_Roles rx WITH (NOLOCK)
-                    ON rx.RoleID = urx.RoleID
-                WHERE urx.UserID = ${alias}.UserID
-                  AND ISNULL(rx.Status, 'Active') <> 'Inactive'
-                  AND rx.RoleName = @SupportLevel
-            )
-            OR ISNULL(${alias}.RoleName, '') = @SupportLevel
-        )
-    `;
-}
-
-function mapEmaEngineerRow(row) {
-    const roleNames = splitEmaRoleNames(row.RoleNames || row.RoleName || row.role || "");
-    const supportLevel =
-        roleNames.find((role) => /^L[123]\s+Support$/i.test(role)) ||
-        roleNames.find((role) => /Support/i.test(role)) ||
-        row.SupportLevel ||
-        row.RoleName ||
-        "";
-
-    const isOnLeave = row.IsOnLeave === true || row.IsOnLeave === 1 || String(row.CurrentStatus || "").toLowerCase() !== "available";
-
-    return {
-        id: row.UserID,
-        userID: row.UserID,
-        name: row.FullName || row.Username || "",
-        username: row.Username || "",
-        email: row.Email || "",
-        role: supportLevel,
-        roleName: supportLevel,
-        roles: roleNames,
-        supportLevel,
-        department: row.Department || "",
-        status: row.UserStatus || "Active",
-        isActive: row.IsActive === true || row.IsActive === 1,
-        isOnLeave,
-        availabilityStatus: isOnLeave ? 0 : 1,
-        currentStatus: isOnLeave ? (row.LeaveStatus || "On Leave") : "Available",
-        leaveId: row.LeaveId || null,
-        leaveStatus: row.LeaveStatus || "",
-        leaveReason: row.Remarks || "",
-        leaveStartDate: row.StartDate || null,
-        leaveEndDate: row.EndDate || null,
-        StartDate: row.StartDate || null,
-        EndDate: row.EndDate || null
-    };
-}
-
-async function fetchServiceDeskEngineers(pool, { checkDate = null, supportLevel = "" } = {}) {
-    await ensureEmaEngineerAvailabilityTable(pool);
-    await assertEmaRolesTable(pool);
-    await assertEmaUserRolesTable(pool);
-
-    const request = pool.request()
-        .input("CheckDate", sql.Date, checkDate || new Date().toISOString().slice(0, 10))
-        .input("SupportLevel", sql.NVarChar, supportLevel || "");
-
-    const result = await request.query(`
-        SELECT
-            u.UserID,
-            u.Username,
-            u.FullName,
-            u.Email,
-            u.RoleName,
-            roleList.RoleNames,
-            u.Department,
-            u.Status AS UserStatus,
-            u.IsActive,
-            leaveRow.Id AS LeaveId,
-            FORMAT(leaveRow.StartDate, 'yyyy-MM-dd') AS StartDate,
-            FORMAT(leaveRow.EndDate, 'yyyy-MM-dd') AS EndDate,
-            leaveRow.Status AS LeaveStatus,
-            leaveRow.Remarks,
-            CASE WHEN leaveRow.Id IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END AS IsOnLeave,
-            CASE WHEN leaveRow.Id IS NULL THEN 'Available' ELSE leaveRow.Status END AS CurrentStatus
-        FROM EMA_Users u WITH (NOLOCK)
-        OUTER APPLY (
-            SELECT STUFF((
-                SELECT ', ' + r.RoleName
-                FROM EMA_UserRoles ur WITH (NOLOCK)
-                INNER JOIN EMA_Roles r WITH (NOLOCK)
-                    ON r.RoleID = ur.RoleID
-                WHERE ur.UserID = u.UserID
-                  AND ISNULL(r.Status, 'Active') <> 'Inactive'
-                ORDER BY ur.IsPrimary DESC, r.RoleName ASC
-                FOR XML PATH(''), TYPE
-            ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS RoleNames
-        ) roleList
-        OUTER APPLY (
-            SELECT TOP 1
-                ea.Id,
-                ea.StartDate,
-                ea.EndDate,
-                ea.Status,
-                ea.Remarks
-            FROM EMA_EngineerAvailability ea WITH (NOLOCK)
-            WHERE ea.UserID = u.UserID
-              AND ea.IsActive = 1
-              AND @CheckDate BETWEEN ea.StartDate AND ea.EndDate
-            ORDER BY ea.StartDate DESC
-        ) leaveRow
-        WHERE ISNULL(u.IsActive, 1) = 1
-          AND ISNULL(u.Status, 'Active') = 'Active'
-          AND ${getServiceDeskSupportClause("u")}
-          AND ${getServiceDeskExactSupportClause("u")}
-        ORDER BY
-            CASE WHEN leaveRow.Id IS NULL THEN 0 ELSE 1 END,
-            u.FullName ASC,
-            u.Username ASC;
-    `);
-
-    return (result.recordset || []).map(mapEmaEngineerRow);
-}
-
+// GET all unavailable schedules - ONLY show active/upcoming schedules (EndDate >= today)
 app.get('/api/engineer-availability', authenticateToken, async (req, res) => {
     try {
         const { engineerId, startDate, endDate, userId } = req.query;
         const pool = await sql.connect(dbConfig);
-        await ensureEmaEngineerAvailabilityTable(pool);
-
+        
+        // Get today's date for filtering
+        const today = new Date().toISOString().split('T')[0];
+        
         let query = `
-            SELECT
+            SELECT 
                 ea.Id,
-                ea.UserID AS UserId,
-                u.FullName AS EngineerName,
-                u.Username,
-                u.Email,
-                roleList.RoleNames AS EngineerRole,
-                u.Department,
-                FORMAT(ea.StartDate, 'yyyy-MM-dd') AS StartDate,
-                FORMAT(ea.EndDate, 'yyyy-MM-dd') AS EndDate,
+                ea.UserId,
+                u.Username as EngineerName,
+                u.Role as EngineerRole,
+                u.DatabaseAlias as Department,
+                FORMAT(ea.StartDate, 'yyyy-MM-dd') as StartDate,
+                FORMAT(ea.EndDate, 'yyyy-MM-dd') as EndDate,
                 ea.Status,
                 ea.Remarks,
                 ea.CreatedAt,
@@ -3305,383 +3245,385 @@ app.get('/api/engineer-availability', authenticateToken, async (req, res) => {
                 ea.UpdatedAt,
                 ea.UpdatedBy,
                 ea.IsActive
-            FROM EMA_EngineerAvailability ea WITH (NOLOCK)
-            INNER JOIN EMA_Users u WITH (NOLOCK)
-                ON u.UserID = ea.UserID
-            OUTER APPLY (
-                SELECT STUFF((
-                    SELECT ', ' + r.RoleName
-                    FROM EMA_UserRoles ur WITH (NOLOCK)
-                    INNER JOIN EMA_Roles r WITH (NOLOCK)
-                        ON r.RoleID = ur.RoleID
-                    WHERE ur.UserID = u.UserID
-                      AND ISNULL(r.Status, 'Active') <> 'Inactive'
-                    ORDER BY ur.IsPrimary DESC, r.RoleName ASC
-                    FOR XML PATH(''), TYPE
-                ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS RoleNames
-            ) roleList
+            FROM HD_EngineerAvailability ea
+            INNER JOIN HD_Users u ON ea.UserId = u.UserID
             WHERE ea.IsActive = 1
-              AND ea.EndDate >= CAST(GETDATE() AS DATE)
+                AND ea.EndDate >= CAST(GETDATE() AS DATE)  -- Only show active/upcoming schedules
         `;
-
+        
         const conditions = [];
         const request = pool.request();
-
-        const requestedUserId = userId || engineerId;
-        if (requestedUserId && requestedUserId !== 'all' && requestedUserId !== 'admin' && requestedUserId !== 'undefined') {
-            conditions.push(`ea.UserID = @UserID`);
-            request.input('UserID', sql.Int, parseInt(requestedUserId, 10));
+        
+        if (userId && userId !== 'admin' && userId !== 'undefined') {
+            conditions.push(`ea.UserId = @userId`);
+            request.input('userId', sql.Int, parseInt(userId));
         }
-
+        
+        if (engineerId && engineerId !== 'all' && engineerId !== 'undefined') {
+            conditions.push(`ea.UserId = @engineerId`);
+            request.input('engineerId', sql.Int, parseInt(engineerId));
+        }
+        
         if (startDate) {
-            conditions.push(`ea.StartDate >= @StartDate`);
-            request.input('StartDate', sql.Date, startDate);
+            conditions.push(`ea.StartDate >= @startDate`);
+            request.input('startDate', sql.Date, startDate);
         }
-
+        
         if (endDate) {
-            conditions.push(`ea.EndDate <= @EndDate`);
-            request.input('EndDate', sql.Date, endDate);
+            conditions.push(`ea.EndDate <= @endDate`);
+            request.input('endDate', sql.Date, endDate);
         }
-
+        
         if (conditions.length > 0) {
             query += ` AND ${conditions.join(' AND ')}`;
         }
-
-        query += ` ORDER BY ea.StartDate ASC, u.FullName ASC;`;
-
+        
+        query += ` ORDER BY ea.StartDate ASC`;  // Show upcoming first
+        
         const result = await request.query(query);
-        return res.json(result.recordset || []);
+        res.json(result.recordset);
     } catch (err) {
         console.error('GET /api/engineer-availability error:', err);
-        return res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
+// CREATE unavailable schedule
 app.post('/api/engineer-availability', authenticateToken, async (req, res) => {
     try {
-        const userId = parseInt(req.body.UserID ?? req.body.UserId ?? req.body.userID ?? req.body.userId, 10);
-        const { StartDate, EndDate, Remarks } = req.body;
-        const status = req.body.Status || req.body.status || 'On Leave';
-        const createdBy = req.body.CreatedBy || req.user?.userID || req.user?.username || 'system';
-
-        if (!userId || Number.isNaN(userId)) {
-            return res.status(400).json({ success: false, message: 'Engineer is required.' });
+        const { 
+            UserId, 
+            EngineerName, 
+            EngineerRole, 
+            Department,
+            StartDate, 
+            EndDate, 
+            Remarks,
+            CreatedBy 
+        } = req.body;
+        
+        console.log('Create Schedule Payload:', { UserId, EngineerName, StartDate, EndDate, Remarks });
+        
+        if (!UserId || UserId === 0) {
+            return res.status(400).json({ error: 'User ID is required' });
         }
-
+        
         if (!StartDate || !EndDate) {
-            return res.status(400).json({ success: false, message: 'Start date and end date are required.' });
+            return res.status(400).json({ error: 'Start date and end date are required' });
         }
-
+        
         const pool = await sql.connect(dbConfig);
-        await ensureEmaEngineerAvailabilityTable(pool);
-
-        const engineerResult = await pool.request()
-            .input('UserID', sql.Int, userId)
-            .query(`
-                SELECT TOP 1 UserID, Username, FullName, Email, Status, IsActive
-                FROM EMA_Users WITH (NOLOCK)
-                WHERE UserID = @UserID
-                  AND ISNULL(IsActive, 1) = 1
-                  AND ISNULL(Status, 'Active') = 'Active';
-            `);
-
-        if (engineerResult.recordset.length === 0) {
-            return res.status(404).json({ success: false, message: 'Engineer was not found in EMA users.' });
-        }
-
-        const overlap = await pool.request()
-            .input('UserID', sql.Int, userId)
+        
+        // Check for overlapping schedules
+        const checkOverlap = await pool.request()
+            .input('UserId', sql.Int, UserId)
             .input('StartDate', sql.Date, StartDate)
             .input('EndDate', sql.Date, EndDate)
             .query(`
-                SELECT COUNT(1) AS CountValue
-                FROM EMA_EngineerAvailability WITH (NOLOCK)
-                WHERE UserID = @UserID
-                  AND IsActive = 1
-                  AND StartDate <= @EndDate
-                  AND EndDate >= @StartDate;
+                SELECT COUNT(*) as count FROM HD_EngineerAvailability
+                WHERE UserId = @UserId 
+                    AND IsActive = 1
+                    AND ((StartDate <= @EndDate AND EndDate >= @StartDate))
             `);
-
-        if (Number(overlap.recordset?.[0]?.CountValue || 0) > 0) {
-            return res.status(409).json({ success: false, message: 'This engineer already has a leave schedule during the selected period.' });
+        
+        if (checkOverlap.recordset[0].count > 0) {
+            return res.status(400).json({ 
+                error: 'Overlapping schedule exists for this period' 
+            });
         }
-
+        
         const result = await pool.request()
-            .input('UserID', sql.Int, userId)
+            .input('UserId', sql.Int, UserId)
+            .input('EngineerName', sql.NVarChar, EngineerName)
+            .input('EngineerRole', sql.NVarChar, EngineerRole)
+            .input('Department', sql.NVarChar, Department || '')
             .input('StartDate', sql.Date, StartDate)
             .input('EndDate', sql.Date, EndDate)
-            .input('Status', sql.NVarChar, status)
-            .input('Remarks', sql.NVarChar(sql.MAX), Remarks || '')
-            .input('CreatedBy', sql.NVarChar, createdBy)
+            .input('Status', sql.NVarChar, 'Not Available')
+            .input('Remarks', sql.NVarChar, Remarks || '')
+            .input('CreatedBy', sql.NVarChar, CreatedBy || 'System')
             .query(`
-                INSERT INTO EMA_EngineerAvailability
-                (
-                    UserID,
-                    StartDate,
-                    EndDate,
-                    Status,
-                    Remarks,
-                    CreatedAt,
-                    CreatedBy,
-                    IsActive
+                INSERT INTO HD_EngineerAvailability (
+                    UserId, EngineerName, EngineerRole, Department,
+                    StartDate, EndDate, Status, Remarks, 
+                    CreatedAt, CreatedBy, IsActive
                 )
-                OUTPUT INSERTED.*
-                VALUES
-                (
-                    @UserID,
-                    @StartDate,
-                    @EndDate,
-                    @Status,
-                    @Remarks,
-                    GETDATE(),
-                    @CreatedBy,
-                    1
-                );
+                OUTPUT INSERTED.Id, INSERTED.UserId, 
+                       INSERTED.StartDate, INSERTED.EndDate,
+                       INSERTED.Status, INSERTED.Remarks, 
+                       INSERTED.CreatedAt
+                VALUES (
+                    @UserId, @EngineerName, @EngineerRole, @Department,
+                    @StartDate, @EndDate, @Status, @Remarks,
+                    GETDATE(), @CreatedBy, 1
+                )
             `);
-
-        await logEmaAudit(pool, req, 'Created engineer leave schedule', 'Resource Planning', 'Success', {
-            engineer: engineerResult.recordset[0],
-            schedule: result.recordset[0]
-        }, { entityType: 'EngineerAvailability', entityID: String(result.recordset[0].Id) });
-
-        return res.json({ success: true, message: 'Engineer leave schedule created.', data: result.recordset[0] });
+        
+        res.json({ 
+            success: true, 
+            message: 'Schedule created successfully',
+            data: result.recordset[0] 
+        });
     } catch (err) {
         console.error('POST /api/engineer-availability error:', err);
-        return res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
+// UPDATE unavailable schedule (Engineer field locked - only update dates and remarks)
 app.put('/api/engineer-availability/:id', authenticateToken, async (req, res) => {
     try {
-        const id = parseInt(req.params.id, 10);
-        const { StartDate, EndDate, Remarks } = req.body;
-        const status = req.body.Status || req.body.status || 'On Leave';
-        const updatedBy = req.body.UpdatedBy || req.user?.userID || req.user?.username || 'system';
-
+        const { id } = req.params;
+        const { StartDate, EndDate, Remarks, UpdatedBy } = req.body;
+        
+        console.log('Update Schedule Payload:', { id, StartDate, EndDate, Remarks });
+        
         if (!StartDate || !EndDate) {
-            return res.status(400).json({ success: false, message: 'Start date and end date are required.' });
+            return res.status(400).json({ error: 'Start date and end date are required' });
         }
-
+        
         const pool = await sql.connect(dbConfig);
-        await ensureEmaEngineerAvailabilityTable(pool);
-
+        
+        // Get the user ID for this schedule
         const scheduleResult = await pool.request()
             .input('Id', sql.Int, id)
-            .query(`
-                SELECT TOP 1 *
-                FROM EMA_EngineerAvailability WITH (NOLOCK)
-                WHERE Id = @Id
-                  AND IsActive = 1;
-            `);
-
+            .query('SELECT UserId FROM HD_EngineerAvailability WHERE Id = @Id AND IsActive = 1');
+        
         if (scheduleResult.recordset.length === 0) {
-            return res.status(404).json({ success: false, message: 'Schedule not found.' });
+            return res.status(404).json({ error: 'Schedule not found' });
         }
-
-        const userId = scheduleResult.recordset[0].UserID;
-
-        const overlap = await pool.request()
-            .input('UserID', sql.Int, userId)
+        
+        const userId = scheduleResult.recordset[0].UserId;
+        
+        // Check for overlapping schedules excluding current one
+        const checkOverlap = await pool.request()
+            .input('UserId', sql.Int, userId)
             .input('Id', sql.Int, id)
             .input('StartDate', sql.Date, StartDate)
             .input('EndDate', sql.Date, EndDate)
             .query(`
-                SELECT COUNT(1) AS CountValue
-                FROM EMA_EngineerAvailability WITH (NOLOCK)
-                WHERE UserID = @UserID
-                  AND Id <> @Id
-                  AND IsActive = 1
-                  AND StartDate <= @EndDate
-                  AND EndDate >= @StartDate;
+                SELECT COUNT(*) as count FROM HD_EngineerAvailability
+                WHERE UserId = @UserId 
+                    AND Id != @Id
+                    AND IsActive = 1
+                    AND ((StartDate <= @EndDate AND EndDate >= @StartDate))
             `);
-
-        if (Number(overlap.recordset?.[0]?.CountValue || 0) > 0) {
-            return res.status(409).json({ success: false, message: 'This engineer already has a leave schedule during the selected period.' });
+        
+        if (checkOverlap.recordset[0].count > 0) {
+            return res.status(400).json({ 
+                error: 'Overlapping schedule exists for this period' 
+            });
         }
-
-        const result = await pool.request()
+        
+        await pool.request()
             .input('Id', sql.Int, id)
             .input('StartDate', sql.Date, StartDate)
             .input('EndDate', sql.Date, EndDate)
-            .input('Status', sql.NVarChar, status)
-            .input('Remarks', sql.NVarChar(sql.MAX), Remarks || '')
-            .input('UpdatedBy', sql.NVarChar, updatedBy)
+            .input('Remarks', sql.NVarChar, Remarks || '')
+            .input('UpdatedBy', sql.NVarChar, UpdatedBy || 'System')
             .query(`
-                UPDATE EMA_EngineerAvailability
+                UPDATE HD_EngineerAvailability 
                 SET StartDate = @StartDate,
                     EndDate = @EndDate,
-                    Status = @Status,
                     Remarks = @Remarks,
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
-                OUTPUT INSERTED.*
-                WHERE Id = @Id
-                  AND IsActive = 1;
+                WHERE Id = @Id AND IsActive = 1
             `);
-
-        await logEmaAudit(pool, req, 'Updated engineer leave schedule', 'Resource Planning', 'Success', {
-            before: scheduleResult.recordset[0],
-            after: result.recordset[0]
-        }, { entityType: 'EngineerAvailability', entityID: String(id) });
-
-        return res.json({ success: true, message: 'Engineer leave schedule updated.', data: result.recordset[0] });
+        
+        res.json({ 
+            success: true, 
+            message: 'Schedule updated successfully',
+            Id: parseInt(id)
+        });
     } catch (err) {
         console.error('PUT /api/engineer-availability/:id error:', err);
-        return res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
-// Assignment dropdown endpoint. Engineers on leave are still returned.
-// Frontend shows a toast warning but still allows assignment.
+// GET available engineers for dropdown - uses real-time calculation
 app.get('/api/engineer-availability/available-engineers', authenticateToken, async (req, res) => {
     try {
-        const { date, supportLevel, level } = req.query;
+        const { date } = req.query;
+        const checkDate = date || new Date().toISOString().split('T')[0];
+        
         const pool = await sql.connect(dbConfig);
-        const rows = await fetchServiceDeskEngineers(pool, {
-            checkDate: date || new Date().toISOString().slice(0, 10),
-            supportLevel: supportLevel || level || ''
-        });
-
-        return res.json(rows);
+        
+        const result = await pool.request()
+            .input('checkDate', sql.Date, checkDate)
+            .query(`
+                SELECT 
+                    u.UserID as id,
+                    u.Username as name,
+                    u.Email as email,
+                    u.Role as role,
+                    u.DatabaseAlias as department,
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1 FROM HD_EngineerAvailability ea
+                            WHERE ea.UserId = u.UserID
+                                AND ea.IsActive = 1
+                                AND @checkDate BETWEEN ea.StartDate AND ea.EndDate
+                        ) THEN 0
+                        ELSE 1
+                    END as availabilityStatus,
+                    CASE 
+                        WHEN EXISTS (
+                            SELECT 1 FROM HD_EngineerAvailability ea
+                            WHERE ea.UserId = u.UserID
+                                AND ea.IsActive = 1
+                                AND @checkDate BETWEEN ea.StartDate AND ea.EndDate
+                        ) THEN 'Not Available'
+                        ELSE 'Available'
+                    END as currentStatus
+                FROM HD_Users u
+                WHERE u.Status = 'Active'
+                    AND (u.Role LIKE '%Support%' OR u.Role LIKE 'L%' OR u.Role LIKE '%Engineer%')
+                ORDER BY availabilityStatus DESC, u.Username
+            `);
+        
+        // Return only available engineers (availabilityStatus = 1)
+        const availableEngineers = result.recordset.filter(e => e.availabilityStatus === 1);
+        res.json(availableEngineers);
     } catch (err) {
         console.error('GET /api/engineer-availability/available-engineers error:', err);
-        return res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
+// GET all engineers list (for dropdowns and filters)
 app.get('/api/engineers', authenticateToken, async (req, res) => {
     try {
-        const { supportLevel, level } = req.query;
         const pool = await sql.connect(dbConfig);
-        const rows = await fetchServiceDeskEngineers(pool, {
-            checkDate: new Date().toISOString().slice(0, 10),
-            supportLevel: supportLevel || level || ''
-        });
-
-        return res.json(rows);
+        const result = await pool.request().query(`
+            SELECT 
+                UserID as id,
+                Username as name,
+                Email as email,
+                Role as role,
+                DatabaseAlias as department,
+                Status as status
+            FROM HD_Users
+            WHERE Status = 'Active'
+                AND (Role LIKE '%Support%' OR Role LIKE 'L%' OR Role LIKE '%Engineer%')
+            ORDER BY Username
+        `);
+        res.json(result.recordset);
     } catch (err) {
         console.error('GET /api/engineers error:', err);
-        return res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
+// GET unavailable engineers grouped by date for calendar - ONLY show active schedules
 app.get('/api/engineer-availability/unavailable-by-date', authenticateToken, async (req, res) => {
     try {
         const { year, month } = req.query;
-        const targetYear = parseInt(year, 10) || new Date().getFullYear();
-        const targetMonth = parseInt(month, 10) || new Date().getMonth() + 1;
+        const targetYear = parseInt(year) || new Date().getFullYear();
+        const targetMonth = parseInt(month) || new Date().getMonth() + 1;
+        
         const pool = await sql.connect(dbConfig);
-        await ensureEmaEngineerAvailabilityTable(pool);
-
+        
         const result = await pool.request()
-            .input('YearValue', sql.Int, targetYear)
-            .input('MonthValue', sql.Int, targetMonth)
+            .input('year', sql.Int, targetYear)
+            .input('month', sql.Int, targetMonth)
             .query(`
-                SELECT
+                SELECT 
                     ea.StartDate,
                     ea.EndDate,
-                    ea.UserID,
-                    u.FullName AS EngineerName,
-                    roleList.RoleNames AS EngineerRole,
-                    u.Department,
-                    ea.Status,
+                    ea.UserId,
+                    ea.EngineerName,
+                    ea.EngineerRole,
+                    ea.Department,
                     ea.Remarks
-                FROM EMA_EngineerAvailability ea WITH (NOLOCK)
-                INNER JOIN EMA_Users u WITH (NOLOCK)
-                    ON u.UserID = ea.UserID
-                OUTER APPLY (
-                    SELECT STUFF((
-                        SELECT ', ' + r.RoleName
-                        FROM EMA_UserRoles ur WITH (NOLOCK)
-                        INNER JOIN EMA_Roles r WITH (NOLOCK)
-                            ON r.RoleID = ur.RoleID
-                        WHERE ur.UserID = u.UserID
-                          AND ISNULL(r.Status, 'Active') <> 'Inactive'
-                        ORDER BY ur.IsPrimary DESC, r.RoleName ASC
-                        FOR XML PATH(''), TYPE
-                    ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS RoleNames
-                ) roleList
+                FROM HD_EngineerAvailability ea
                 WHERE ea.IsActive = 1
-                  AND ea.EndDate >= CAST(GETDATE() AS DATE)
-                  AND (
-                    (YEAR(ea.StartDate) = @YearValue AND MONTH(ea.StartDate) = @MonthValue)
-                    OR (YEAR(ea.EndDate) = @YearValue AND MONTH(ea.EndDate) = @MonthValue)
-                    OR (ea.StartDate <= DATEFROMPARTS(@YearValue, @MonthValue, 1)
-                        AND ea.EndDate >= EOMONTH(DATEFROMPARTS(@YearValue, @MonthValue, 1)))
-                  )
-                ORDER BY ea.StartDate ASC, u.FullName ASC;
+                    AND ea.EndDate >= CAST(GETDATE() AS DATE)  -- Only show active/upcoming schedules
+                    AND (
+                        (YEAR(ea.StartDate) = @year AND MONTH(ea.StartDate) = @month)
+                        OR (YEAR(ea.EndDate) = @year AND MONTH(ea.EndDate) = @month)
+                        OR (YEAR(ea.StartDate) < @year AND YEAR(ea.EndDate) > @year)
+                    )
+                ORDER BY ea.StartDate ASC
             `);
-
+        
+        // Group by date for calendar view - expand date ranges
         const unavailableByDate = {};
-        const today = new Date().toISOString().slice(0, 10);
-
-        for (const record of result.recordset || []) {
+        
+        result.recordset.forEach(record => {
             const startDate = new Date(record.StartDate);
             const endDate = new Date(record.EndDate);
-            const currentDate = new Date(startDate);
-
+            let currentDate = new Date(startDate);
+            
             while (currentDate <= endDate) {
-                const dateStr = currentDate.toISOString().slice(0, 10);
+                const dateStr = currentDate.toISOString().split('T')[0];
                 const currentYear = currentDate.getFullYear();
                 const currentMonth = currentDate.getMonth() + 1;
-
-                if (currentYear === targetYear && currentMonth === targetMonth && dateStr >= today) {
-                    if (!unavailableByDate[dateStr]) unavailableByDate[dateStr] = [];
-                    unavailableByDate[dateStr].push({
-                        engineerName: record.EngineerName,
-                        role: record.EngineerRole,
-                        department: record.Department,
-                        status: record.Status,
-                        remarks: record.Remarks,
-                        startDate: record.StartDate,
-                        endDate: record.EndDate
-                    });
+                
+                // Only include dates in the requested month
+                if (currentYear === targetYear && currentMonth === targetMonth) {
+                    // Only show dates that are today or in the future for calendar indicators
+                    const today = new Date().toISOString().split('T')[0];
+                    if (dateStr >= today) {
+                        if (!unavailableByDate[dateStr]) {
+                            unavailableByDate[dateStr] = [];
+                        }
+                        unavailableByDate[dateStr].push({
+                            engineerName: record.EngineerName,
+                            role: record.EngineerRole,
+                            department: record.Department,
+                            remarks: record.Remarks,
+                            startDate: record.StartDate,
+                            endDate: record.EndDate
+                        });
+                    }
                 }
-
                 currentDate.setDate(currentDate.getDate() + 1);
             }
-        }
-
-        return res.json(unavailableByDate);
+        });
+        
+        res.json(unavailableByDate);
     } catch (err) {
         console.error('GET /api/engineer-availability/unavailable-by-date error:', err);
-        return res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
+// DELETE schedule (soft delete)
 app.delete('/api/engineer-availability/:id', authenticateToken, async (req, res) => {
     try {
-        const id = parseInt(req.params.id, 10);
+        const { id } = req.params;
         const pool = await sql.connect(dbConfig);
-        await ensureEmaEngineerAvailabilityTable(pool);
-
-        const result = await pool.request()
+        
+        // Check if schedule exists
+        const scheduleResult = await pool.request()
             .input('Id', sql.Int, id)
-            .input('UpdatedBy', sql.NVarChar, req.user?.userID || req.user?.username || 'system')
-            .query(`
-                UPDATE EMA_EngineerAvailability
-                SET IsActive = 0,
-                    UpdatedAt = GETDATE(),
-                    UpdatedBy = @UpdatedBy
-                OUTPUT DELETED.*
-                WHERE Id = @Id
-                  AND IsActive = 1;
-            `);
-
-        if (!result.recordset || result.recordset.length === 0) {
-            return res.status(404).json({ success: false, message: 'Schedule not found.' });
+            .query('SELECT Id FROM HD_EngineerAvailability WHERE Id = @Id AND IsActive = 1');
+        
+        if (scheduleResult.recordset.length === 0) {
+            return res.status(404).json({ error: 'Schedule not found' });
         }
-
-        await logEmaAudit(pool, req, 'Removed engineer leave schedule', 'Resource Planning', 'Warning', {
-            before: result.recordset[0]
-        }, { entityType: 'EngineerAvailability', entityID: String(id) });
-
-        return res.json({ success: true, message: 'Engineer leave schedule removed.' });
+        
+        // Soft delete
+        await pool.request()
+            .input('Id', sql.Int, id)
+            .query(`
+                UPDATE HD_EngineerAvailability 
+                SET IsActive = 0, UpdatedAt = GETDATE()
+                WHERE Id = @Id
+            `);
+        
+        res.json({ success: true, message: 'Schedule deleted successfully' });
     } catch (err) {
         console.error('DELETE /api/engineer-availability/:id error:', err);
-        return res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
+
+
+
+
 
 
 

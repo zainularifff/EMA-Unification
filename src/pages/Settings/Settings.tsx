@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
+import "../../styles/resource-planning.css";
 
-type SectionKey = "roles" | "users" | "modules" | "access" | "audit" | "pricing" | "aging" | "risk";
+type SectionKey = "roles" | "users" | "modules" | "access" | "audit" | "pricing" | "aging" | "risk" | "resources";
 type RoleStatus = "Active" | "Review" | "Locked" | "Inactive";
 type ModalMode = "add" | "edit" | "delete";
 type ToastTone = "success" | "info" | "warning" | "error";
@@ -12,6 +13,127 @@ type SettingsToastState = {
   title: string;
   message: string;
 } | null;
+
+
+type ResourceEngineer = {
+  id?: number | string;
+  userID?: number | string;
+  UserID?: number | string;
+  userId?: number | string;
+  UserId?: number | string;
+  name?: string;
+  username?: string;
+  email?: string;
+  role?: string;
+  roleName?: string;
+  RoleName?: string;
+  roles?: string[];
+  supportLevel?: string;
+  department?: string;
+  Department?: string;
+  isOnLeave?: boolean;
+  currentStatus?: string;
+};
+
+type ResourceSchedule = {
+  Id?: number;
+  id?: number;
+  UserID?: number;
+  UserId?: number;
+  userID?: number;
+  EngineerName?: string;
+  engineerName?: string;
+  name?: string;
+  EngineerRole?: string;
+  role?: string;
+  Department?: string;
+  department?: string;
+  StartDate?: string;
+  EndDate?: string;
+  Status?: string;
+  status?: string;
+  Remarks?: string;
+  remarks?: string;
+  CreatedAt?: string | null;
+  createdAt?: string | null;
+  UpdatedAt?: string | null;
+  updatedAt?: string | null;
+  IsActive?: boolean;
+  isActive?: boolean;
+};
+
+type ResourceScheduleForm = {
+  UserID: string;
+  StartDate: string;
+  EndDate: string;
+  Status: string;
+  Remarks: string;
+};
+
+const RESOURCE_EMPTY_FORM: ResourceScheduleForm = {
+  UserID: "",
+  StartDate: "",
+  EndDate: "",
+  Status: "On Leave",
+  Remarks: "",
+};
+
+function getResourceScheduleId(row: ResourceSchedule) {
+  return Number(row.Id ?? row.id ?? 0);
+}
+
+function getResourceScheduleUserId(row: ResourceSchedule) {
+  return String(row.UserID ?? row.UserId ?? row.userID ?? "");
+}
+
+function getResourceEngineerUserId(row: ResourceEngineer) {
+  return String(row.userID ?? row.UserID ?? row.userId ?? row.UserId ?? row.id ?? "");
+}
+
+function getResourceEngineerName(row: ResourceEngineer) {
+  return String(row.name || row.username || row.email || "").trim();
+}
+
+function getResourceEngineerRole(row: ResourceEngineer) {
+  const roles = Array.isArray(row.roles) ? row.roles : [];
+  return String(row.supportLevel || row.roleName || row.RoleName || row.role || roles[0] || "Support").trim();
+}
+
+function getResourceEngineerDepartment(row: ResourceEngineer) {
+  return String(row.department || row.Department || "").trim();
+}
+
+function getResourceScheduleName(row: ResourceSchedule) {
+  return String(row.EngineerName || row.engineerName || row.name || "").trim();
+}
+
+function getResourceScheduleRole(row: ResourceSchedule) {
+  return String(row.EngineerRole || row.role || "").trim();
+}
+
+function getResourceScheduleDepartment(row: ResourceSchedule) {
+  return String(row.Department || row.department || "").trim();
+}
+
+function getResourceScheduleStatus(row: ResourceSchedule) {
+  return String(row.Status || row.status || "On Leave").trim();
+}
+
+function getResourceScheduleRemarks(row: ResourceSchedule) {
+  return String(row.Remarks || row.remarks || "").trim();
+}
+
+function isResourceSupportEngineer(row: ResourceEngineer) {
+  const roleText = [
+    row.roleName,
+    row.RoleName,
+    row.role,
+    row.supportLevel,
+    ...(Array.isArray(row.roles) ? row.roles : []),
+  ].join(" ").toLowerCase();
+
+  return roleText.includes("support");
+}
 
 
 type SectionItem = {
@@ -406,9 +528,20 @@ const sections: Record<SectionKey, SectionItem> = {
     scoreTwo: "80+",
     subtitle: "Risk rules",
   },
+  resources: {
+    key: "resources",
+    title: "Resource Planning",
+    desc: "Plan engineer leave and keep Service Desk assignment transparent by using EMA user roles only.",
+    tag: "Engineer Planning",
+    icon: "access",
+    count: 3,
+    scoreOne: "0",
+    scoreTwo: "0",
+    subtitle: "Leave schedules",
+  },
 };
 
-const sectionOrder: SectionKey[] = ["roles", "users", "modules", "access", "audit", "pricing", "aging", "risk"];
+const sectionOrder: SectionKey[] = ["roles", "users", "modules", "access", "audit", "pricing", "aging", "risk", "resources"];
 
 const defaultAccessRoles: AccessRole[] = [
   { roleKey: "system_administrator", name: "System Administrator", description: "Full configuration access including roles, settings, pricing and risk rules.", type: "Administrator", defaultAccess: "Full Access", approvalRequired: true, status: "Active", assignedUsers: 0 },
@@ -1012,6 +1145,14 @@ export default function Settings() {
   const [pricingRowSavingId, setPricingRowSavingId] = useState("");
   const [pricingError, setPricingError] = useState("");
   const [pricingDeleteTarget, setPricingDeleteTarget] = useState<PricingRow | null>(null);
+  const [resourceEngineers, setResourceEngineers] = useState<ResourceEngineer[]>([]);
+  const [resourceSchedules, setResourceSchedules] = useState<ResourceSchedule[]>([]);
+  const [resourceForm, setResourceForm] = useState<ResourceScheduleForm>(RESOURCE_EMPTY_FORM);
+  const [resourceEditingId, setResourceEditingId] = useState<number | null>(null);
+  const [resourceLoading, setResourceLoading] = useState(false);
+  const [resourceSaving, setResourceSaving] = useState(false);
+  const [resourceError, setResourceError] = useState("");
+  const [resourceLoaded, setResourceLoaded] = useState(false);
   const [userDeleteTarget, setUserDeleteTarget] = useState<{ user: UserAccess; index: number } | null>(null);
   const [settingsToast, setSettingsToast] = useState<SettingsToastState>(null);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
@@ -1050,8 +1191,8 @@ export default function Settings() {
   const auditModuleOptions = Array.from(new Set([...auditBaseModuleOptions, ...auditLogs.map((log) => log.module).filter(Boolean)])).sort((a, b) => a.localeCompare(b));
   const auditSeverityOptions = ["Success", "Info", "Warning", "Error"];
   const filteredAuditLogs = auditLogs;
-  const heroScoreOne = activeSection === "users" ? String(usersTotalCount) : activeSection === "roles" ? String(rolesTotalCount) : activeSection === "modules" ? String(moduleTotalCount) : activeSection === "access" ? String(accessPolicyTotalCount) : activeSection === "audit" ? String(auditTotalCount) : activeSection === "aging" ? String(pcAgingRule.monitorMaxYears) : active.scoreOne;
-  const heroScoreTwo = activeSection === "users" ? String(usersLockedCount) : activeSection === "roles" ? String(rolesActiveCount) : activeSection === "modules" ? String(moduleActiveRoleCount) : activeSection === "access" ? String(accessPolicyActiveCount) : activeSection === "audit" ? String(auditTodayCount) : activeSection === "aging" ? String(pcAgingRule.agingMinYears) : active.scoreTwo;
+  const heroScoreOne = activeSection === "users" ? String(usersTotalCount) : activeSection === "roles" ? String(rolesTotalCount) : activeSection === "modules" ? String(moduleTotalCount) : activeSection === "access" ? String(accessPolicyTotalCount) : activeSection === "audit" ? String(auditTotalCount) : activeSection === "aging" ? String(pcAgingRule.monitorMaxYears) : activeSection === "resources" ? String(resourceSchedules.length) : active.scoreOne;
+  const heroScoreTwo = activeSection === "users" ? String(usersLockedCount) : activeSection === "roles" ? String(rolesActiveCount) : activeSection === "modules" ? String(moduleActiveRoleCount) : activeSection === "access" ? String(accessPolicyActiveCount) : activeSection === "audit" ? String(auditTodayCount) : activeSection === "aging" ? String(pcAgingRule.agingMinYears) : activeSection === "resources" ? String(resourceEngineers.length) : active.scoreTwo;
 
   const showToast = (tone: ToastTone, title: string, message: string) => {
     const toastId = Date.now();
@@ -1686,6 +1827,115 @@ export default function Settings() {
     }
   };
 
+  const loadResourcePlanning = async () => {
+    if (resourceLoading) return;
+
+    setResourceLoading(true);
+    setResourceError("");
+
+    try {
+      const [schedulePayload, engineerPayload] = await Promise.all([
+        apiRequest<unknown>("/api/engineer-availability"),
+        apiRequest<unknown>("/api/engineers"),
+      ]);
+
+      const schedules = readArrayPayload<ResourceSchedule>(schedulePayload);
+      const engineers = readArrayPayload<ResourceEngineer>(engineerPayload).filter(isResourceSupportEngineer);
+
+      setResourceSchedules(schedules);
+      setResourceEngineers(engineers);
+      setResourceLoaded(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load resource planning.";
+      setResourceError(message);
+      showToast("error", "Resource planning failed", message);
+    } finally {
+      setResourceLoading(false);
+    }
+  };
+
+  const resetResourcePlanningForm = () => {
+    setResourceForm(RESOURCE_EMPTY_FORM);
+    setResourceEditingId(null);
+    setResourceError("");
+  };
+
+  const editResourceSchedule = (row: ResourceSchedule) => {
+    setResourceEditingId(getResourceScheduleId(row));
+    setResourceForm({
+      UserID: getResourceScheduleUserId(row),
+      StartDate: String(row.StartDate || "").slice(0, 10),
+      EndDate: String(row.EndDate || "").slice(0, 10),
+      Status: getResourceScheduleStatus(row) || "On Leave",
+      Remarks: getResourceScheduleRemarks(row),
+    });
+  };
+
+  const saveResourceSchedule = async () => {
+    if (!resourceForm.UserID) {
+      showToast("warning", "Engineer required", "Please select an engineer before saving leave schedule.");
+      return;
+    }
+
+    if (!resourceForm.StartDate || !resourceForm.EndDate) {
+      showToast("warning", "Date required", "Please choose start date and end date.");
+      return;
+    }
+
+    if (resourceForm.EndDate < resourceForm.StartDate) {
+      showToast("warning", "Invalid date range", "End date cannot be earlier than start date.");
+      return;
+    }
+
+    setResourceSaving(true);
+
+    try {
+      const path = resourceEditingId
+        ? `/api/engineer-availability/${resourceEditingId}`
+        : "/api/engineer-availability";
+
+      await apiRequest(path, {
+        method: resourceEditingId ? "PUT" : "POST",
+        body: JSON.stringify(resourceForm),
+      });
+
+      showToast("success", "Resource planning saved", resourceEditingId ? "Engineer leave schedule updated." : "Engineer leave schedule created.");
+      resetResourcePlanningForm();
+      await loadResourcePlanning();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save engineer leave schedule.";
+      showToast("error", "Save failed", message);
+    } finally {
+      setResourceSaving(false);
+    }
+  };
+
+  const deleteResourceSchedule = async (row: ResourceSchedule) => {
+    const scheduleId = getResourceScheduleId(row);
+    if (!scheduleId) return;
+
+    const engineerName = getResourceScheduleName(row) || "this engineer";
+    const confirmed = window.confirm(`Remove leave schedule for ${engineerName}?`);
+    if (!confirmed) return;
+
+    setResourceSaving(true);
+
+    try {
+      await apiRequest(`/api/engineer-availability/${scheduleId}`, {
+        method: "DELETE",
+      });
+
+      showToast("success", "Leave removed", "Engineer leave schedule removed.");
+      if (resourceEditingId === scheduleId) resetResourcePlanningForm();
+      await loadResourcePlanning();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to remove engineer leave schedule.";
+      showToast("error", "Remove failed", message);
+    } finally {
+      setResourceSaving(false);
+    }
+  };
+
   useEffect(() => {
     // Load user and role records immediately when Settings opens so sidebar badges and
     // KPI values do not show stale/static config numbers.
@@ -1730,6 +1980,11 @@ export default function Settings() {
     void loadPcAgingRule();
   }, [activeSection, pcAgingLoaded, pcAgingLoading]);
 
+  useEffect(() => {
+    if (activeSection !== "resources" || resourceLoaded || resourceLoading) return;
+    void loadResourcePlanning();
+  }, [activeSection, resourceLoaded, resourceLoading]);
+
   const addActivity = (_title: string, _desc: string) => {
     // Right-side audit snapshot panel was removed from the Settings screen.
     // Keep this no-op so existing save/user/role handlers remain stable.
@@ -1771,6 +2026,13 @@ export default function Settings() {
       setPcAgingRule(DEFAULT_PC_AGING_RULE);
       setPcAgingError("");
       showToast("info", "Aging rule reset", "Default PC aging rule is ready. Click Save Changes to store it.");
+      return;
+    }
+
+    if (activeSection === "resources") {
+      resetResourcePlanningForm();
+      void loadResourcePlanning();
+      return;
     }
   };
 
@@ -1787,6 +2049,11 @@ export default function Settings() {
 
     if (activeSection === "aging") {
       void savePcAgingRule();
+      return;
+    }
+
+    if (activeSection === "resources") {
+      void saveResourceSchedule();
       return;
     }
 
@@ -2122,13 +2389,13 @@ export default function Settings() {
               </div>
             )}
 
-            {activeSection !== "users" && activeSection !== "access" && activeSection !== "audit" && activeSection !== "aging" && (
+            {activeSection !== "users" && activeSection !== "access" && activeSection !== "audit" && activeSection !== "aging" && activeSection !== "resources" && (
               <div className={`content-toolbar ${activeSection === "users" ? "users-toolbar" : activeSection === "roles" ? "roles-toolbar" : activeSection === "modules" ? "modules-toolbar" : ""}`}>
                 <label className="section-search">
                   <SearchSvg />
                   <input
                     id="sectionSearch"
-                    placeholder={activeSection === "users" ? "Search users by name, email or role..." : activeSection === "roles" ? "Search roles by name or description..." : activeSection === "modules" ? "Search modules by name or description..." : activeSection === "audit" ? "Search audit logs by user, module or action..." : "Search current settings..."}
+                    placeholder={activeSection === "users" ? "Search users by name, email or role..." : activeSection === "roles" ? "Search roles by name or description..." : activeSection === "modules" ? "Search modules by name or description..." : activeSection === "resources" ? "Search engineer, role, date or remarks..." : activeSection === "audit" ? "Search audit logs by user, module or action..." : "Search current settings..."}
                     value={sectionSearch}
                     onChange={(event) => setSectionSearch(event.target.value)}
                   />
@@ -2144,7 +2411,7 @@ export default function Settings() {
                     <button className="soft-btn" type="button" onClick={loadModuleAccess} disabled={moduleLoading}>{moduleLoading ? "Loading..." : "Refresh"}</button>
                   </div>
                 )}
-                {activeSection !== "users" && activeSection !== "roles" && activeSection !== "modules" && activeSection !== "audit" && (
+                {activeSection !== "users" && activeSection !== "roles" && activeSection !== "modules" && activeSection !== "audit" && activeSection !== "resources" && (
                   <div className="settings-toolbar-right">
                     <SettingSelect
                       className="section-filter-select"
@@ -2219,6 +2486,24 @@ export default function Settings() {
                 />
               )}
               {activeSection === "risk" && <RiskContent search={filteredContentTerm} />}
+              {activeSection === "resources" && (
+                <ResourcePlanningContent
+                  search={filteredContentTerm}
+                  engineers={resourceEngineers}
+                  schedules={resourceSchedules}
+                  form={resourceForm}
+                  editingId={resourceEditingId}
+                  loading={resourceLoading}
+                  saving={resourceSaving}
+                  error={resourceError}
+                  onFormChange={(patch) => setResourceForm((current) => ({ ...current, ...patch }))}
+                  onSave={saveResourceSchedule}
+                  onEdit={editResourceSchedule}
+                  onDelete={deleteResourceSchedule}
+                  onReset={resetResourcePlanningForm}
+                  onReload={loadResourcePlanning}
+                />
+              )}
             </div>
           </div>
         </section>
@@ -2281,6 +2566,422 @@ export default function Settings() {
 
       <SettingsToast toast={settingsToast} onClose={() => setSettingsToast(null)} />
     </main>
+  );
+}
+
+
+function ResourcePlanningContent({
+  search,
+  engineers,
+  schedules,
+  form,
+  editingId,
+  loading,
+  saving,
+  error,
+  onFormChange,
+  onSave,
+  onEdit,
+  onDelete,
+  onReset,
+  onReload,
+}: {
+  search: string;
+  engineers: ResourceEngineer[];
+  schedules: ResourceSchedule[];
+  form: ResourceScheduleForm;
+  editingId: number | null;
+  loading: boolean;
+  saving: boolean;
+  error: string;
+  onFormChange: (patch: Partial<ResourceScheduleForm>) => void;
+  onSave: () => void;
+  onEdit: (row: ResourceSchedule) => void;
+  onDelete: (row: ResourceSchedule) => void;
+  onReset: () => void;
+  onReload: () => void;
+}) {
+  type ResourceSortKey = "created" | "engineer" | "role" | "period" | "status";
+  type ResourceSortDirection = "asc" | "desc";
+
+  const pageSize = 5;
+  const query = search.trim().toLowerCase();
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<ResourceSortKey>("created");
+  const [sortDirection, setSortDirection] = useState<ResourceSortDirection>("desc");
+
+  const supportEngineers = engineers.filter(isResourceSupportEngineer);
+  const selectedEngineer = supportEngineers.find((engineer) => getResourceEngineerUserId(engineer) === form.UserID);
+
+  const getCreatedSortValue = (row: ResourceSchedule) => {
+    const createdValue = String(row.CreatedAt ?? row.createdAt ?? row.UpdatedAt ?? row.updatedAt ?? row.StartDate ?? row.EndDate ?? "").trim();
+    const createdTime = createdValue ? new Date(createdValue).getTime() : Number.NaN;
+
+    if (Number.isFinite(createdTime)) return createdTime;
+
+    const fallbackId = getResourceScheduleId(row);
+    return Number.isFinite(fallbackId) ? fallbackId : 0;
+  };
+
+  const getPeriodSortValue = (row: ResourceSchedule) => {
+    const startValue = String(row.StartDate || "").trim();
+    const startTime = startValue ? new Date(startValue).getTime() : Number.NaN;
+    return Number.isFinite(startTime) ? startTime : 0;
+  };
+
+  const roleOptions: DropdownOption[] = [
+    { value: "all", label: "All Roles" },
+    ...Array.from(new Set(schedules.map((row) => getResourceScheduleRole(row) || "Support").filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+      .map((role) => ({ value: role, label: role })),
+  ];
+
+  const statusOptions: DropdownOption[] = [
+    { value: "all", label: "All Statuses" },
+    ...Array.from(new Set(schedules.map((row) => getResourceScheduleStatus(row) || "On Leave").filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b))
+      .map((status) => ({ value: status, label: status })),
+  ];
+
+  const filteredSchedules = schedules.filter((row) => {
+    const rowStatus = getResourceScheduleStatus(row) || "On Leave";
+    const rowRole = getResourceScheduleRole(row) || "Support";
+
+    if (statusFilter !== "all" && rowStatus !== statusFilter) return false;
+    if (roleFilter !== "all" && rowRole !== roleFilter) return false;
+
+    if (!query) return true;
+
+    return [
+      getResourceScheduleName(row),
+      rowRole,
+      getResourceScheduleDepartment(row),
+      rowStatus,
+      getResourceScheduleRemarks(row),
+      row.StartDate,
+      row.EndDate,
+      row.CreatedAt,
+      row.createdAt,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  });
+
+  const sortedSchedules = [...filteredSchedules].sort((left, right) => {
+    const direction = sortDirection === "asc" ? 1 : -1;
+
+    if (sortKey === "created") {
+      return (getCreatedSortValue(left) - getCreatedSortValue(right)) * direction;
+    }
+
+    if (sortKey === "period") {
+      return (getPeriodSortValue(left) - getPeriodSortValue(right)) * direction;
+    }
+
+    const leftValue =
+      sortKey === "engineer"
+        ? getResourceScheduleName(left)
+        : sortKey === "role"
+          ? getResourceScheduleRole(left)
+          : getResourceScheduleStatus(left);
+
+    const rightValue =
+      sortKey === "engineer"
+        ? getResourceScheduleName(right)
+        : sortKey === "role"
+          ? getResourceScheduleRole(right)
+          : getResourceScheduleStatus(right);
+
+    return leftValue.localeCompare(rightValue) * direction;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sortedSchedules.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * pageSize;
+  const paginatedSchedules = sortedSchedules.slice(pageStartIndex, pageStartIndex + pageSize);
+  const showingFrom = sortedSchedules.length === 0 ? 0 : pageStartIndex + 1;
+  const showingTo = Math.min(pageStartIndex + pageSize, sortedSchedules.length);
+  const selectedRole = selectedEngineer ? getResourceEngineerRole(selectedEngineer) : "";
+  const filterActive = statusFilter !== "all" || roleFilter !== "all";
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, statusFilter, roleFilter, sortKey, sortDirection, schedules.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const updateSort = (nextSortKey: ResourceSortKey) => {
+    if (sortKey === nextSortKey) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(nextSortKey);
+    setSortDirection(nextSortKey === "created" || nextSortKey === "period" ? "desc" : "asc");
+  };
+
+  const sortIndicator = (targetKey: ResourceSortKey) => {
+    if (sortKey !== targetKey) return "↕";
+    return sortDirection === "asc" ? "↑" : "↓";
+  };
+
+  const resetTableFilters = () => {
+    setStatusFilter("all");
+    setRoleFilter("all");
+    setSortKey("created");
+    setSortDirection("desc");
+    setCurrentPage(1);
+  };
+
+  return (
+    <div className="resource-planning-module">
+      {error && (
+        <div className="settings-inline-alert error">
+          <strong>Resource Planning API error</strong>
+          <span>{error}</span>
+        </div>
+      )}
+
+      <section className="resource-command-card">
+        <div>
+          <span className="section-tag">RESOURCE PLANNING</span>
+          <h3>Engineer Leave & Assignment Visibility</h3>
+          <p>
+            Manage engineer leave using EMA users only. Service Desk assignment will still allow selection,
+            but will warn users when an engineer is on leave.
+          </p>
+        </div>
+
+        <div className="resource-command-actions">
+          <button className="soft-btn" type="button" onClick={onReload} disabled={loading || saving}>
+            {loading ? "Loading..." : "Refresh"}
+          </button>
+          <button className="soft-btn" type="button" onClick={onReset} disabled={saving}>
+            Clear
+          </button>
+          <button className="primary-btn" type="button" onClick={onSave} disabled={saving || loading}>
+            {saving ? "Saving..." : editingId ? "Update Leave" : "Add Leave"}
+          </button>
+        </div>
+      </section>
+
+      <section className="resource-workbench">
+        <article className="resource-form-card">
+          <div className="resource-card-head">
+            <div>
+              <span className="section-tag">{editingId ? "UPDATE SCHEDULE" : "NEW SCHEDULE"}</span>
+              <h4>{editingId ? "Edit Engineer Leave" : "Add Engineer Leave"}</h4>
+              <p>Leave only creates a warning. It does not block ticket assignment.</p>
+            </div>
+          </div>
+
+          <div className="resource-form-grid">
+            <label className="form-field">
+              Engineer
+              <SettingSelect
+                value={form.UserID}
+                placeholder="Select support engineer"
+                ariaLabel="Resource planning engineer"
+                className="resource-setting-select"
+                onChange={(value) => onFormChange({ UserID: value })}
+                options={[
+                  { value: "", label: "Select support engineer" },
+                  ...supportEngineers.map((engineer) => {
+                    const userId = getResourceEngineerUserId(engineer);
+                    const engineerRole = getResourceEngineerRole(engineer);
+                    const department = getResourceEngineerDepartment(engineer);
+                    const label = `${getResourceEngineerName(engineer)} · ${engineerRole}${department ? ` · ${department}` : ""}`;
+
+                    return {
+                      value: userId,
+                      label,
+                    };
+                  }),
+                ]}
+              />
+            </label>
+
+            <label className="form-field">
+              Leave Status
+              <SettingSelect
+                value={form.Status}
+                placeholder="Select leave status"
+                ariaLabel="Resource planning leave status"
+                className="resource-setting-select"
+                onChange={(value) => onFormChange({ Status: value })}
+                options={[
+                  { value: "On Leave", label: "On Leave" },
+                  { value: "Training", label: "Training" },
+                  { value: "On Site", label: "On Site" },
+                  { value: "Unavailable", label: "Unavailable" },
+                ]}
+              />
+            </label>
+
+            <label className="form-field">
+              Start Date
+              <input
+                className="setting-input"
+                type="date"
+                value={form.StartDate}
+                onChange={(event) => onFormChange({ StartDate: event.target.value })}
+              />
+            </label>
+
+            <label className="form-field">
+              End Date
+              <input
+                className="setting-input"
+                type="date"
+                value={form.EndDate}
+                onChange={(event) => onFormChange({ EndDate: event.target.value })}
+              />
+            </label>
+
+            <label className="form-field resource-wide">
+              Remarks
+              <textarea
+                className="setting-input resource-textarea"
+                value={form.Remarks}
+                onChange={(event) => onFormChange({ Remarks: event.target.value })}
+                placeholder="Example: Annual leave / site visit / training day"
+              />
+            </label>
+          </div>
+
+          {selectedEngineer && (
+            <div className="resource-selected-engineer">
+              <strong>{getResourceEngineerName(selectedEngineer)}</strong>
+              <span>{selectedRole || "Support"}{getResourceEngineerDepartment(selectedEngineer) ? ` · ${getResourceEngineerDepartment(selectedEngineer)}` : ""}</span>
+            </div>
+          )}
+        </article>
+
+        <article className="resource-table-card">
+          <div className="resource-card-head resource-table-head">
+            <div>
+              <span className="section-tag">SCHEDULES</span>
+              <h4>Active & Upcoming Leave</h4>
+              <p>Latest leave schedules are shown first. Click a table title to sort.</p>
+            </div>
+
+            <div className="resource-table-filters">
+              <SettingSelect
+                value={statusFilter}
+                placeholder="All Statuses"
+                ariaLabel="Filter leave status"
+                className="resource-filter-select"
+                onChange={setStatusFilter}
+                options={statusOptions}
+              />
+              <SettingSelect
+                value={roleFilter}
+                placeholder="All Roles"
+                ariaLabel="Filter support role"
+                className="resource-filter-select"
+                onChange={setRoleFilter}
+                options={roleOptions}
+              />
+              {filterActive && (
+                <button className="soft-btn" type="button" onClick={resetTableFilters}>
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="resource-table-wrap">
+            <table className="resource-table">
+              <thead>
+                <tr>
+                  <th>
+                    <button className="resource-sort-button" type="button" onClick={() => updateSort("engineer")}>
+                      Engineer <span>{sortIndicator("engineer")}</span>
+                    </button>
+                  </th>
+                  <th>
+                    <button className="resource-sort-button" type="button" onClick={() => updateSort("role")}>
+                      Role <span>{sortIndicator("role")}</span>
+                    </button>
+                  </th>
+                  <th>
+                    <button className="resource-sort-button" type="button" onClick={() => updateSort("period")}>
+                      Period <span>{sortIndicator("period")}</span>
+                    </button>
+                  </th>
+                  <th>
+                    <button className="resource-sort-button" type="button" onClick={() => updateSort("status")}>
+                      Status <span>{sortIndicator("status")}</span>
+                    </button>
+                  </th>
+                  <th>Remarks</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && (
+                  <tr>
+                    <td colSpan={6}>Loading resource planning...</td>
+                  </tr>
+                )}
+
+                {!loading && sortedSchedules.length === 0 && (
+                  <tr>
+                    <td colSpan={6}>No engineer leave schedule found.</td>
+                  </tr>
+                )}
+
+                {!loading && paginatedSchedules.map((row) => {
+                  const scheduleId = getResourceScheduleId(row);
+
+                  return (
+                    <tr key={scheduleId || `${getResourceScheduleName(row)}-${row.StartDate}-${row.EndDate}`}>
+                      <td>
+                        <strong>{getResourceScheduleName(row) || "Unknown engineer"}</strong>
+                        <small>{getResourceScheduleDepartment(row) || "No department"}</small>
+                      </td>
+                      <td>{getResourceScheduleRole(row) || "Support"}</td>
+                      <td>
+                        <strong>{String(row.StartDate || "").slice(0, 10)}</strong>
+                        <small>to {String(row.EndDate || "").slice(0, 10)}</small>
+                      </td>
+                      <td><span className="resource-status-pill">{getResourceScheduleStatus(row)}</span></td>
+                      <td>{getResourceScheduleRemarks(row) || "-"}</td>
+                      <td>
+                        <div className="resource-row-actions">
+                          <button className="soft-btn" type="button" onClick={() => onEdit(row)}>Edit</button>
+                          <button className="danger-btn" type="button" onClick={() => onDelete(row)}>Delete</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {!loading && sortedSchedules.length > 0 && (
+            <div className="uam-pagination global-style resource-pagination">
+              <div className="uam-page-summary">Page {safeCurrentPage} / {totalPages}</div>
+              <div className="uam-pagination-info">Showing {showingFrom}-{showingTo} of {sortedSchedules.length} leave records</div>
+              <div className="uam-pagination-controls global-style" aria-label="Resource planning pagination">
+                <button className="uam-page-icon" type="button" onClick={() => setCurrentPage(1)} disabled={safeCurrentPage === 1} aria-label="First page">«</button>
+                <button className="uam-page-icon" type="button" onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1} aria-label="Previous page">‹</button>
+                <span className="uam-page-current">{safeCurrentPage}</span>
+                <button className="uam-page-icon" type="button" onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage === totalPages} aria-label="Next page">›</button>
+                <button className="uam-page-icon" type="button" onClick={() => setCurrentPage(totalPages)} disabled={safeCurrentPage === totalPages} aria-label="Last page">»</button>
+              </div>
+            </div>
+          )}
+        </article>
+      </section>
+    </div>
   );
 }
 

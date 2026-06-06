@@ -5,6 +5,8 @@ import Login from "./pages/auth/Login";
 import Dashboard from "./pages/dashboard/Dashboard";
 import HardwareInventory from "./pages/hardware/HardwareInventory";
 import Settings from "./pages/Settings/Settings";
+import ServiceDesk from "./pages/service-desk/ServiceDesk";
+
 
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -23,6 +25,7 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/hardware" element={<HardwareInventory />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/service-desk" element={<ServiceDesk />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
