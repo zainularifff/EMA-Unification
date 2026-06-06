@@ -858,3 +858,111 @@ body.ema-settings-lock main {
 .settings-module-root .content-head.audit-export-only-head {
   display: none !important;
 }
+
+/* =========================================================
+   V5 clean line removal
+   Make all Settings sections match the cleaner Role Based Control visual.
+========================================================= */
+
+.settings-module-root::before,
+.settings-module-root .settings-hero::before {
+  display: none !important;
+  content: none !important;
+}
+
+.settings-module-root .settings-hero,
+.settings-module-root .content-shell,
+.settings-module-root .settings-menu {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,254,0.96)) !important;
+}
+
+.settings-module-root .content-toolbar,
+.settings-module-root .user-access-commandbar,
+.settings-module-root .audit-commandbar,
+.settings-module-root .content-head {
+  border-bottom: 0 !important;
+  background: transparent !important;
+}
+
+.settings-module-root .content-shell {
+  padding-top: 0 !important;
+}
+
+.settings-module-root .content-body {
+  padding-top: 0.85rem !important;
+}
+
+/* Remove unnecessary visual seams around section cards. */
+.settings-module-root .policy-card,
+.settings-module-root .pricing-card,
+.settings-module-root .risk-card,
+.settings-module-root .aging-card,
+.settings-module-root .role-card,
+.settings-module-root .settings-helper-card,
+.settings-module-root .pricing-info-card,
+.settings-module-root .pricing-disclaimer-card {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+/* Cleaner table look: keep row readability, remove heavy grid/divider feeling. */
+.settings-module-root .user-access-table,
+.settings-module-root .role-control-table,
+.settings-module-root .audit-standard-table,
+.settings-module-root .pricing-table-card,
+.settings-module-root .module-control-table {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+.settings-module-root .user-row,
+.settings-module-root .role-control-row,
+.settings-module-root .audit-row,
+.settings-module-root .pricing-row,
+.settings-module-root .module-control-row {
+  border-bottom-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+.settings-module-root .user-row.head,
+.settings-module-root .role-control-row.head,
+.settings-module-root .audit-row.head,
+.settings-module-root .pricing-head-row,
+.settings-module-root .module-control-row.head {
+  background: rgba(241, 245, 251, 0.72) !important;
+}
+
+/* =========================================================
+   V6 standard content spacing
+   Keeps every Settings module aligned to the same inner card edge.
+========================================================= */
+
+.settings-module-root {
+  --settings-content-x: 1rem;
+}
+
+.settings-module-root .content-body {
+  padding:
+    0.82rem
+    var(--settings-content-x)
+    1rem !important;
+}
+
+/* Sections with their own toolbar should not add an extra top gap */
+.settings-module-root .content-body:has(.user-access-commandbar:first-child),
+.settings-module-root .content-body:has(.audit-commandbar:first-child) {
+  padding-top: 0.82rem !important;
+}
+
+/* Tables/cards share the same visual width as toolbar controls */
+.settings-module-root .user-access-table,
+.settings-module-root .role-control-table,
+.settings-module-root .audit-standard-table,
+.settings-module-root .pricing-table-card,
+.settings-module-root .module-control-table,
+.settings-module-root .role-standard-table {
+  width: 100% !important;
+}
+
+/* Hero-to-content gap stays consistent */
+.settings-module-root .settings-content {
+  gap: 0.85rem !important;
+}

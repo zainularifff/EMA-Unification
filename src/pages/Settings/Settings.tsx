@@ -1982,7 +1982,7 @@ export default function Settings() {
           </div>
 
           <div className={`content-shell ema-panel-surface ${activeSection === "users" ? "users-content-shell" : activeSection === "roles" ? "roles-content-shell" : activeSection === "modules" ? "modules-content-shell" : activeSection === "access" ? "access-content-shell" : activeSection === "audit" ? "audit-content-shell" : ""}`}>
-            {activeSection !== "users" && activeSection !== "roles" && activeSection !== "modules" && activeSection !== "access" && activeSection !== "audit" && activeSection !== "pricing" && activeSection !== "aging" && (
+            {false && (
               <div className={`content-head ${activeSection === "audit" ? "audit-export-only-head" : ""}`}>
                 {activeSection !== "audit" && (
                   <div>
@@ -3389,8 +3389,55 @@ function AgingActionRow({ status, condition, action, tone }: { status: string; c
 
 function RiskContent({ search }: { search: string }) {
   const rows = risks.filter((risk) => !search || risk.join(" ").toLowerCase().includes(search));
-  return <div className="risk-grid">{rows.map((risk) => <article className="risk-card" key={risk[0]} style={{ "--risk-color": risk[4] } as CSSProperties}><div className="risk-top"><div><h4>{risk[0]} Risk</h4><p>{risk[1]}</p></div><span className="risk-level-pill" style={{ color: risk[4], background: `color-mix(in srgb, ${risk[4]} 12%, white)`, border: `1px solid color-mix(in srgb, ${risk[4]} 25%, white)` }}>{risk[2]}</span></div><div className="risk-score-line"><span>Score Range</span><div className="risk-track"><i style={{ "--w": risk[3] } as CSSProperties} /></div><b>{risk[2]}</b></div><div className="form-grid" style={{ marginTop: 12 }}><FormSelect label="Action" options={["Monitor", "Review", "Escalate", "Block"]} /><FormSelect label="Owner" options={["IT Ops", "Security", "Management"]} /><FormSelect label="SLA" options={["7 days", "3 days", "24 hours"]} /></div></article>)}<article className="risk-card" style={{ "--risk-color": "#7c3aed" } as CSSProperties}><div className="risk-top"><div><h4>Risk Identifier Rules</h4><p>Configure which signals should trigger endpoint risk scoring.</p></div><button className="soft-btn" type="button">Add Rule</button></div><div className="config-summary"><SummaryRow label="Unsupported OS" value="+30 score" /><SummaryRow label="Stale Sync > 30 days" value="+20 score" /><SummaryRow label="Locked Device" value="+25 score" /><SummaryRow label="Duplicate IP" value="+15 score" /><SummaryRow label="Aging > 5 years" value="+15 score" /></div></article></div>;
+
+  return (
+    <div className="risk-simple-layout">
+      <div className="risk-simple-grid">
+        {rows.map((risk) => (
+          <article className="risk-simple-card" key={risk[0]} style={{ "--risk-color": risk[4] } as CSSProperties}>
+            <div className="risk-simple-head">
+              <span className="risk-color-dot" />
+              <div>
+                <h4>{risk[0]} Risk</h4>
+                <p>{risk[1]}</p>
+              </div>
+              <span className="risk-level-pill">{risk[2]}</span>
+            </div>
+
+            <div className="risk-mini-meter">
+              <i style={{ "--w": risk[3] } as CSSProperties} />
+            </div>
+
+            <div className="risk-simple-controls">
+              <FormSelect label="Action" options={["Monitor", "Review", "Escalate", "Block"]} />
+              <FormSelect label="Owner" options={["IT Ops", "Security", "Management"]} />
+              <FormSelect label="SLA" options={["7 days", "3 days", "24 hours"]} />
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <article className="risk-rule-panel">
+        <div className="risk-rule-head">
+          <div>
+            <h4>Risk Scoring Signals</h4>
+            <p>Signals used to calculate endpoint risk score.</p>
+          </div>
+          <button className="soft-btn" type="button">Add Rule</button>
+        </div>
+
+        <div className="risk-rule-list">
+          <SummaryRow label="Unsupported OS" value="+30" />
+          <SummaryRow label="Stale Sync > 30 days" value="+20" />
+          <SummaryRow label="Locked Device" value="+25" />
+          <SummaryRow label="Duplicate IP" value="+15" />
+          <SummaryRow label="Aging > 5 years" value="+15" />
+        </div>
+      </article>
+    </div>
+  );
 }
+
 
 function UserDeleteModal({ target, onClose, onConfirm }: { target: { user: UserAccess; index: number } | null; onClose: () => void; onConfirm: () => void }) {
   if (!target) return null;

@@ -478,3 +478,195 @@
     justify-self: start !important;
   }
 }
+
+/* =========================================================
+   V5 toolbar no seams
+========================================================= */
+
+.settings-module-root .content-toolbar,
+.settings-module-root .user-access-commandbar,
+.settings-module-root .audit-commandbar {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+.settings-module-root .content-toolbar {
+  padding-bottom: 0.72rem !important;
+}
+
+.settings-module-root .audit-commandbar {
+  padding-bottom: 0.78rem !important;
+}
+
+.settings-module-root .section-search,
+.settings-module-root .uam-filter-trigger,
+.settings-module-root .setting-select-trigger {
+  box-shadow: none !important;
+}
+
+/* =========================================================
+   V6 standard toolbar alignment
+   Standardise search/filter/action rows so they align with the table/card below.
+========================================================= */
+
+.settings-module-root {
+  --settings-content-x: 1rem;
+  --settings-toolbar-top: 0.82rem;
+  --settings-toolbar-bottom: 0.72rem;
+  --settings-toolbar-gap: 0.64rem;
+}
+
+/* All toolbar types share the same left/right padding and vertical rhythm */
+.settings-module-root .content-toolbar,
+.settings-module-root .user-access-commandbar,
+.settings-module-root .audit-commandbar {
+  width: 100% !important;
+  margin: 0 !important;
+  padding:
+    var(--settings-toolbar-top)
+    var(--settings-content-x)
+    var(--settings-toolbar-bottom) !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  align-items: center !important;
+  gap: var(--settings-toolbar-gap) !important;
+}
+
+/* User Access should line up like Role Based Control:
+   search + filters + actions in one row, with the same outer edge as the table below. */
+.settings-module-root .user-access-commandbar {
+  grid-template-columns:
+    minmax(420px, 1fr)
+    minmax(170px, 190px)
+    minmax(170px, 190px)
+    auto
+    auto !important;
+}
+
+.settings-module-root .user-access-commandbar .user-search-inline {
+  grid-column: 1 !important;
+}
+
+.settings-module-root .user-access-commandbar .uam-filter-grid.clean.compact {
+  display: contents !important;
+}
+
+.settings-module-root .user-access-commandbar .uam-filter-dropdown {
+  min-width: 0 !important;
+}
+
+.settings-module-root .user-access-commandbar .uam-actions-right {
+  display: contents !important;
+}
+
+.settings-module-root .user-access-commandbar .uam-actions-right .soft-btn {
+  grid-column: 4 !important;
+}
+
+.settings-module-root .user-access-commandbar .uam-actions-right .primary-btn {
+  grid-column: 5 !important;
+}
+
+/* Role/search-only sections use the same edge and gap */
+.settings-module-root .content-toolbar {
+  grid-template-columns: minmax(420px, 1fr) auto !important;
+}
+
+.settings-module-root .content-toolbar.roles-toolbar,
+.settings-module-root .content-toolbar.modules-toolbar,
+.settings-module-root .content-toolbar.access-toolbar {
+  grid-template-columns: minmax(420px, 1fr) auto !important;
+}
+
+/* Pricing/Aging right side uses the same control width rhythm */
+.settings-module-root .settings-toolbar-right {
+  display: inline-grid !important;
+  grid-template-columns: minmax(170px, 190px) auto !important;
+  align-items: center !important;
+  gap: var(--settings-toolbar-gap) !important;
+  justify-content: end !important;
+}
+
+/* Audit uses the same edge and compact alignment */
+.settings-module-root .audit-commandbar {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: end !important;
+}
+
+.settings-module-root .audit-commandbar .audit-filter-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(180px, 1fr)) !important;
+  gap: var(--settings-toolbar-gap) !important;
+  padding: 0 !important;
+}
+
+.settings-module-root .audit-export-btn {
+  height: 2.42rem !important;
+  min-height: 2.42rem !important;
+  align-self: end !important;
+}
+
+/* Controls have a single standard height */
+.settings-module-root .section-search,
+.settings-module-root .uam-filter-trigger,
+.settings-module-root .setting-select-trigger,
+.settings-module-root .content-toolbar .soft-btn,
+.settings-module-root .content-toolbar .primary-btn,
+.settings-module-root .user-access-commandbar .soft-btn,
+.settings-module-root .user-access-commandbar .primary-btn {
+  height: 2.42rem !important;
+  min-height: 2.42rem !important;
+  max-height: 2.42rem !important;
+}
+
+/* Same edge for tables/cards immediately after the toolbar */
+.settings-module-root .user-access-commandbar + .user-access-table,
+.settings-module-root .user-access-commandbar ~ .user-access-table,
+.settings-module-root .content-toolbar + .user-access-table,
+.settings-module-root .content-toolbar + .role-standard-table,
+.settings-module-root .content-toolbar + .role-control-table,
+.settings-module-root .content-toolbar + .module-control-table,
+.settings-module-root .content-toolbar + .pricing-table-card,
+.settings-module-root .content-toolbar + .audit-standard-table {
+  margin-top: 0 !important;
+}
+
+/* Remove the extra "floating" gap before content sections */
+.settings-module-root .content-body > .user-access-commandbar:first-child,
+.settings-module-root .content-body > .audit-commandbar:first-child {
+  margin-top: calc(var(--settings-toolbar-top) * -1) !important;
+}
+
+/* Mobile/tablet fallback */
+@media (max-width: 1280px) {
+  .settings-module-root .user-access-commandbar,
+  .settings-module-root .content-toolbar,
+  .settings-module-root .content-toolbar.roles-toolbar,
+  .settings-module-root .content-toolbar.modules-toolbar,
+  .settings-module-root .content-toolbar.access-toolbar,
+  .settings-module-root .audit-commandbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root .user-access-commandbar .user-search-inline,
+  .settings-module-root .user-access-commandbar .uam-actions-right .soft-btn,
+  .settings-module-root .user-access-commandbar .uam-actions-right .primary-btn {
+    grid-column: auto !important;
+  }
+
+  .settings-module-root .user-access-commandbar .uam-filter-grid.clean.compact,
+  .settings-module-root .user-access-commandbar .uam-actions-right {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root .settings-toolbar-right {
+    grid-template-columns: 1fr !important;
+    justify-content: stretch !important;
+  }
+
+  .settings-module-root .audit-commandbar .audit-filter-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
