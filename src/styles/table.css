@@ -524,3 +524,124 @@
   align-items: center !important;
   gap: 0.42rem !important;
 }
+
+/* =========================================================
+   V7 responsive horizontal table scroll
+   Grid tables need explicit min-width rows and overflow containers.
+========================================================= */
+
+.settings-module-root .user-access-table,
+.settings-module-root .role-control-table,
+.settings-module-root .role-standard-table,
+.settings-module-root .access-standard-table,
+.settings-module-root .audit-standard-table,
+.settings-module-root .pricing-table-card,
+.settings-module-root .module-control-table {
+  min-width: 0 !important;
+}
+
+/* Desktop/tablet horizontal support */
+@media (max-width: 1280px) {
+  .settings-module-root .user-access-table,
+  .settings-module-root .role-control-table,
+  .settings-module-root .role-standard-table,
+  .settings-module-root .access-standard-table,
+  .settings-module-root .audit-standard-table,
+  .settings-module-root .pricing-table-card,
+  .settings-module-root .module-control-table {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scrollbar-gutter: stable both-edges;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-module-root .user-access-table::-webkit-scrollbar,
+  .settings-module-root .role-control-table::-webkit-scrollbar,
+  .settings-module-root .role-standard-table::-webkit-scrollbar,
+  .settings-module-root .access-standard-table::-webkit-scrollbar,
+  .settings-module-root .audit-standard-table::-webkit-scrollbar,
+  .settings-module-root .pricing-table-card::-webkit-scrollbar,
+  .settings-module-root .module-control-table::-webkit-scrollbar {
+    height: 9px !important;
+  }
+
+  .settings-module-root .user-access-table::-webkit-scrollbar-thumb,
+  .settings-module-root .role-control-table::-webkit-scrollbar-thumb,
+  .settings-module-root .role-standard-table::-webkit-scrollbar-thumb,
+  .settings-module-root .access-standard-table::-webkit-scrollbar-thumb,
+  .settings-module-root .audit-standard-table::-webkit-scrollbar-thumb,
+  .settings-module-root .pricing-table-card::-webkit-scrollbar-thumb,
+  .settings-module-root .module-control-table::-webkit-scrollbar-thumb {
+    border-radius: 999px !important;
+    background: rgba(100, 116, 139, 0.34) !important;
+  }
+
+  .settings-module-root .user-row.advanced.clean-table-row {
+    width: max-content !important;
+    min-width: 1020px !important;
+  }
+
+  .settings-module-root .role-standard-table .role-standard-row,
+  .settings-module-root .role-control-row {
+    width: max-content !important;
+    min-width: 860px !important;
+  }
+
+  .settings-module-root .access-standard-table .role-control-row,
+  .settings-module-root .access-control-panel .role-control-row {
+    width: max-content !important;
+    min-width: 980px !important;
+  }
+
+  .settings-module-root .audit-standard-table .audit-standard-row,
+  .settings-module-root .audit-row {
+    width: max-content !important;
+    min-width: 1080px !important;
+  }
+
+  .settings-module-root .pricing-table-card .pricing-row,
+  .settings-module-root .pricing-modern-table .pricing-row {
+    width: max-content !important;
+    min-width: 1040px !important;
+  }
+
+  .settings-module-root .module-control-table .module-control-row {
+    width: max-content !important;
+    min-width: calc(378px + (var(--module-role-count, 1) * 150px)) !important;
+  }
+
+  .settings-module-root .module-control-group-row.compact {
+    width: max-content !important;
+    min-width: calc(378px + (var(--module-role-count, 1) * 150px)) !important;
+  }
+}
+
+/* Mobile: keep cards readable and let user swipe the table left/right */
+@media (max-width: 760px) {
+  .settings-module-root .user-row.advanced.clean-table-row {
+    min-width: 940px !important;
+  }
+
+  .settings-module-root .role-standard-table .role-standard-row,
+  .settings-module-root .role-control-row {
+    min-width: 820px !important;
+  }
+
+  .settings-module-root .access-standard-table .role-control-row,
+  .settings-module-root .access-control-panel .role-control-row {
+    min-width: 920px !important;
+  }
+
+  .settings-module-root .audit-standard-table .audit-standard-row,
+  .settings-module-root .audit-row {
+    min-width: 980px !important;
+  }
+
+  .settings-module-root .pricing-table-card .pricing-row,
+  .settings-module-root .pricing-modern-table .pricing-row {
+    min-width: 960px !important;
+  }
+}

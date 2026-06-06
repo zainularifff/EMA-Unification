@@ -670,3 +670,61 @@
     grid-template-columns: 1fr !important;
   }
 }
+
+/* =========================================================
+   V7 responsive toolbar wrap
+   Toolbars should wrap cleanly on smaller screens.
+========================================================= */
+
+@media (max-width: 1100px) {
+  .settings-module-root .content-toolbar,
+  .settings-module-root .user-access-commandbar,
+  .settings-module-root .audit-commandbar {
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+
+  .settings-module-root .user-access-commandbar .uam-filter-grid.clean.compact {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.6rem !important;
+  }
+
+  .settings-module-root .user-access-commandbar .uam-actions-right {
+    display: flex !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+    gap: 0.55rem !important;
+  }
+
+  .settings-module-root .settings-toolbar-right {
+    grid-template-columns: 1fr !important;
+    justify-content: stretch !important;
+  }
+
+  .settings-module-root .settings-primary-actions {
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+  }
+
+  .settings-module-root .audit-commandbar .audit-filter-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-module-root .user-access-commandbar .uam-filter-grid.clean.compact {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root .soft-btn,
+  .settings-module-root .primary-btn,
+  .settings-module-root .danger-btn {
+    width: 100% !important;
+  }
+
+  .settings-module-root .settings-primary-actions,
+  .settings-module-root .user-access-commandbar .uam-actions-right {
+    width: 100% !important;
+  }
+}

@@ -2979,9 +2979,6 @@ function AuditContent({
 
       <div className="uam-pagination global-style audit-pagination">
         <div className="uam-page-summary">Page {safePage} / {totalPages}</div>
-        <div className="uam-pagination-info">
-          Showing <strong>{pageRows.length ? startIndex + 1 : 0}-{startIndex + pageRows.length}</strong> of <strong>{logs.length}</strong> records
-        </div>
         <div className="uam-pagination-controls global-style">
           <button className="uam-page-icon" type="button" disabled={safePage <= 1} onClick={() => setPage(1)}>«</button>
           <button className="uam-page-icon" type="button" disabled={safePage <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>‹</button>

@@ -966,3 +966,89 @@ body.ema-settings-lock main {
 .settings-module-root .settings-content {
   gap: 0.85rem !important;
 }
+
+/* =========================================================
+   V7 responsive settings shell
+   Small screens should be able to scroll naturally.
+========================================================= */
+
+.settings-module-root,
+.settings-module-root .settings-layout,
+.settings-module-root .settings-content,
+.settings-module-root .content-shell,
+.settings-module-root .content-body {
+  min-width: 0 !important;
+}
+
+@media (max-width: 1100px) {
+  html.ema-settings-lock,
+  body.ema-settings-lock,
+  html.ema-settings-lock body,
+  body.ema-settings-lock #root {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: auto !important;
+  }
+
+  .settings-module-root {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+    padding: 0.75rem !important;
+  }
+
+  .settings-module-root .settings-layout {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root .settings-menu,
+  .settings-module-root .settings-content,
+  .settings-module-root .content-shell {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .settings-module-root .content-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-inline: 0.75rem !important;
+  }
+
+  .settings-module-root .settings-menu-list {
+    display: flex !important;
+    gap: 0.55rem !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding-bottom: 0.75rem !important;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-module-root .setting-btn {
+    min-width: 220px !important;
+    scroll-snap-align: start;
+  }
+
+  .settings-module-root .settings-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root .settings-score,
+  .settings-module-root .settings-score.users-hero-score {
+    display: flex !important;
+    overflow-x: auto !important;
+    gap: 0.65rem !important;
+    padding-bottom: 0.2rem !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-module-root .score-box {
+    min-width: 150px !important;
+  }
+}
