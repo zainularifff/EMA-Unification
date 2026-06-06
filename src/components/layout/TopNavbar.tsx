@@ -1,7 +1,8 @@
-import { Bell, Moon, Search, Sun, UserCircle, Zap } from "lucide-react";
+import { Bell, Moon, Search, Sparkles, Sun, UserCircle } from "lucide-react";
 import { useLocation } from "react-router-dom";
 
 import { useTheme } from "../../context/ThemeContext";
+import EmaAssistWidget from "../AIAssist/EmaAssistWidget";
 
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   "/dashboard": {
@@ -12,7 +13,15 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     title: "Hardware Inventory",
     subtitle: "Track assets, ownership and lifecycle status.",
   },
+  "/settings": {
+    title: "Settings",
+    subtitle: "Control access, rules and system configuration.",
+  },
 };
+
+function openEmaAssistant() {
+  window.dispatchEvent(new CustomEvent("ema-ai-assist-open"));
+}
 
 export function TopNavbar() {
   const location = useLocation();
@@ -24,34 +33,44 @@ export function TopNavbar() {
   };
 
   return (
-    <header className="ema-topbar">
-      <div className="ema-topbar-title">
-        <h1>{current.title}</h1>
-        <p>{current.subtitle}</p>
-      </div>
+    <>
+      <header className="ema-topbar">
+        <div className="ema-topbar-title">
+          <h1>{current.title}</h1>
+          <p>{current.subtitle}</p>
+        </div>
 
-      <div className="ema-global-search">
-        <Search size={17} />
-        <input placeholder="Search assets, users, devices..." />
-      </div>
+        <div className="ema-global-search">
+          <Search size={17} />
+          <input placeholder="Search assets, users, devices..." />
+        </div>
 
-      <button type="button" className="ema-icon-btn" onClick={toggleTheme}>
-        {isDark ? <Sun size={17} /> : <Moon size={17} />}
-      </button>
+        <button type="button" className="ema-icon-btn" onClick={toggleTheme}>
+          {isDark ? <Sun size={17} /> : <Moon size={17} />}
+        </button>
 
-      <button type="button" className="ema-icon-btn">
-        <Bell size={17} />
-      </button>
+        <button type="button" className="ema-icon-btn" aria-label="Notifications">
+          <Bell size={17} />
+        </button>
 
-      <button type="button" className="btn btn-primary d-flex align-items-center gap-2">
-        <Zap size={17} />
-        Quick Action
-      </button>
+        <button
+          type="button"
+          className="btn btn-primary d-flex align-items-center gap-2 ema-ai-topbar-btn"
+          onClick={openEmaAssistant}
+        >
+          <Sparkles size={17} />
+          AI Assistant
+        </button>
 
-      <button type="button" className="btn btn-light d-flex align-items-center gap-2">
-        <UserCircle size={18} />
-        Admin
-      </button>
-    </header>
+        <button type="button" className="btn btn-light d-flex align-items-center gap-2">
+          <UserCircle size={18} />
+          Admin
+        </button>
+      </header>
+
+      <EmaAssistWidget showFloatingLauncher={false} />
+    </>
   );
 }
+
+export default TopNavbar;
