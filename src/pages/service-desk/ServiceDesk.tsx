@@ -37,7 +37,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-
+import "../../styles/service-desk.css";
 
 type AppUser = {
   id?: string | number;
@@ -245,7 +245,6 @@ function readJsonStorage(key: string) {
   return safeJsonParse(raw);
 }
 
-
 const STATUS_OPTIONS = [
   'Awaiting',
   'In Progress',
@@ -262,9 +261,6 @@ const DEVICE_TYPES = ['Desktop', 'Laptop', 'Tablet', 'Mobile', 'Server', 'Networ
 
 const MALAYSIA_TIME_ZONE = 'Asia/Kuala_Lumpur';
 const MALAYSIA_UTC_OFFSET = '+08:00';
-
-
-
 
 const urgencyToSlaPriority: Record<string, string> = {
   Critical: 'P1',
@@ -303,7 +299,6 @@ const emptyForm = () => ({
   additionalMemo: '',
   remarks: '',
 });
-
 
 const emptyAdvancedFilters = (): AdvancedFilters => ({
   reqNo: '',
@@ -346,12 +341,9 @@ function getStoredUser(): AppUser {
   };
 }
 
-
-
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(' ');
 }
-
 
 type AppButtonVariant =
   | "primary"
@@ -505,9 +497,20 @@ function AppPagination({
   };
 
   return (
-    <div className={cn("uam-pagination global-style", className)}>
+    <div
+      className={cn("uam-pagination global-style", className)}
+      style={{
+        display: "grid",
+        gridTemplateColumns: "auto minmax(0, 1fr) auto",
+        alignItems: "center",
+        columnGap: "1rem",
+        width: "calc(100% - 1.5rem)",
+        margin: "0.9rem 0.75rem 0",
+        padding: "0",
+      }}
+    >
       <div className="uam-page-summary">Page {safeCurrentPage} / {safeTotalPages}</div>
-      <div className="uam-pagination-info">
+      <div className="uam-pagination-info" style={{ textAlign: "center" }}>
         Showing <strong>{firstItem}-{lastItem}</strong> of <strong>{safeTotalItems}</strong> records
       </div>
       <div className="uam-pagination-controls global-style">
@@ -520,8 +523,6 @@ function AppPagination({
     </div>
   );
 }
-
-
 
 type ServiceDeskSelectOption = {
   value: string;
@@ -805,7 +806,6 @@ function getChildren(row: any, key: 'subcategories' | 'details') {
   if (Array.isArray(row.items)) return row.items;
   return [];
 }
-
 
 function parseApiDate(value: any) {
   if (!value) return null;
@@ -1253,7 +1253,6 @@ export default function ServiceDesk() {
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
-
 
   useEffect(() => {
     if (!selectedIncidentId) return undefined;
@@ -2162,7 +2161,6 @@ export default function ServiceDesk() {
     });
   }
 
-
   function printTicket(incident: any) {
     if (!incident) return;
 
@@ -2389,7 +2387,6 @@ export default function ServiceDesk() {
     printWindow.document.write(printHtml);
     printWindow.document.close();
   }
-
 
   function printTicketRegistry() {
     const safe = (value: any) =>
@@ -2704,8 +2701,6 @@ export default function ServiceDesk() {
     printWindow.document.close();
   }
 
-
-
   const hasAdvancedFilter =
     Object.entries(advancedFilters).some(([key, value]) =>
       key === 'slaStatus' ? value !== 'All' : Boolean(String(value || '').trim())
@@ -2761,9 +2756,9 @@ export default function ServiceDesk() {
     };
   }, []);
 
-
   const ticketTableColumns =
-    '58px minmax(125px, 0.72fr) minmax(100px, 0.58fr) minmax(170px, 0.98fr) minmax(118px, 0.62fr) minmax(260px, 1.55fr) minmax(98px, 0.58fr) minmax(145px, 0.82fr) minmax(125px, 0.7fr) minmax(115px, 0.62fr) 104px';
+    '52px minmax(112px, .86fr) 106px minmax(132px, 1fr) minmax(96px, .72fr) minmax(220px, 1.55fr) 102px minmax(118px, .92fr) 104px 108px 104px';
+  const ticketTableMinWidth = '100%';
 
   if (isLoading) {
     return (
@@ -2778,6 +2773,273 @@ export default function ServiceDesk() {
   // Service Desk uses the existing Settings layout/classes.
   return (
     <main className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section="service-desk">
+      <style>{`
+        main[data-section="service-desk"] .service-desk-hero {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) minmax(620px, 820px) !important;
+          align-items: center !important;
+          gap: 1rem !important;
+          min-height: 7.25rem !important;
+          max-height: 7.25rem !important;
+          overflow: hidden !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-kpi-row {
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(135px, 1fr)) !important;
+          gap: .62rem !important;
+          width: 100% !important;
+          max-width: 820px !important;
+          justify-self: end !important;
+          align-items: stretch !important;
+          overflow: hidden !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-kpi-card {
+          min-width: 0 !important;
+          min-height: 4.65rem !important;
+          max-height: 4.65rem !important;
+          padding: .68rem .76rem !important;
+          overflow: hidden !important;
+          display: grid !important;
+          align-content: center !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-kpi-card span,
+        main[data-section="service-desk"] .service-desk-kpi-card small {
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-kpi-card strong {
+          line-height: 1 !important;
+          margin-top: .16rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-kpi-force-row,
+        main[data-section="service-desk"] .settings-score.service-desk-kpi-force-row,
+        main[data-section="service-desk"] .users-hero-score.service-desk-kpi-force-row {
+          display: flex !important;
+          flex-direction: row !important;
+          flex-wrap: nowrap !important;
+          align-items: stretch !important;
+          justify-content: flex-end !important;
+          gap: .62rem !important;
+          width: max-content !important;
+          max-width: none !important;
+          min-width: 0 !important;
+          justify-self: end !important;
+          overflow: visible !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-kpi-force-row > .service-desk-kpi-card,
+        main[data-section="service-desk"] .service-desk-kpi-force-row > .score-box {
+          flex: 0 0 150px !important;
+          width: 150px !important;
+          min-width: 150px !important;
+          max-width: 150px !important;
+          min-height: 4.55rem !important;
+          max-height: 4.55rem !important;
+          padding: .66rem .72rem !important;
+          overflow: hidden !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-hero {
+          grid-template-columns: minmax(0, 1fr) max-content !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-commandbar {
+          display: grid !important;
+          grid-template-columns: minmax(260px, 1fr) 150px 150px 150px max-content !important;
+          align-items: center !important;
+          gap: .55rem !important;
+          overflow: visible !important;
+          padding: .95rem 1rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-commandbar .section-search {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-filter-select {
+          width: 150px !important;
+          min-width: 0 !important;
+          max-width: 150px !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-filter-select .setting-select-trigger,
+        main[data-section="service-desk"] .service-desk-filter-select .uam-filter-trigger {
+          width: 100% !important;
+          min-width: 0 !important;
+          height: 2.38rem !important;
+          min-height: 2.38rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-command-actions {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          gap: .42rem !important;
+          flex-wrap: nowrap !important;
+          min-width: max-content !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-command-actions .primary-btn,
+        main[data-section="service-desk"] .service-desk-reset-btn {
+          height: 2.38rem !important;
+          min-height: 2.38rem !important;
+          padding-inline: .82rem !important;
+          white-space: nowrap !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-command-actions .mini-btn,
+        main[data-section="service-desk"] .service-desk-command-actions .icon-only {
+          width: 2.38rem !important;
+          min-width: 2.38rem !important;
+          height: 2.38rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap {
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow-x: hidden !important;
+          overflow-y: hidden !important;
+          scrollbar-gutter: auto !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .user-row {
+          width: 100% !important;
+          min-width: 100% !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .user-cell {
+          min-width: 0 !important;
+          overflow: hidden !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .user-row.head {
+          min-height: 3.05rem !important;
+          align-items: center !important;
+          overflow: visible !important;
+          position: relative !important;
+          z-index: 2 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .user-row.head .user-cell {
+          overflow: visible !important;
+          display: flex !important;
+          align-items: center !important;
+          min-width: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .user-row.head .soft-btn {
+          width: auto !important;
+          min-width: max-content !important;
+          max-width: 100% !important;
+          height: 2rem !important;
+          min-height: 2rem !important;
+          padding: 0 .62rem !important;
+          border-radius: .72rem !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: .24rem !important;
+          overflow: visible !important;
+          white-space: nowrap !important;
+          line-height: 1 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .user-row .user-cell:last-child {
+          overflow: visible !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .row-actions.user-row-action-wrap.clean {
+          display: inline-flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: center !important;
+          flex-wrap: nowrap !important;
+          gap: .38rem !important;
+          width: auto !important;
+          min-width: max-content !important;
+          overflow: visible !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-wrap .row-actions.user-row-action-wrap.clean .mini-btn {
+          width: 2.08rem !important;
+          min-width: 2.08rem !important;
+          height: 2.08rem !important;
+          min-height: 2.08rem !important;
+          margin: 0 !important;
+          flex: 0 0 2.08rem !important;
+        }
+
+        main[data-section="service-desk"] .uam-pagination.global-style {
+          width: calc(100% - 1.5rem) !important;
+          margin: .9rem .75rem 0 !important;
+          padding: 0 !important;
+          display: grid !important;
+          grid-template-columns: auto minmax(0, 1fr) auto !important;
+          align-items: center !important;
+          column-gap: 1rem !important;
+        }
+
+        main[data-section="service-desk"] .uam-pagination-info {
+          text-align: center !important;
+        }
+
+        @media (max-width: 1480px) {
+          main[data-section="service-desk"] .service-desk-hero {
+            grid-template-columns: minmax(0, 1fr) minmax(560px, 680px) !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-kpi-row {
+            grid-template-columns: repeat(4, minmax(125px, 1fr)) !important;
+            max-width: 680px !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-commandbar {
+            grid-template-columns: minmax(240px, 1fr) 140px 140px 140px max-content !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-filter-select {
+            width: 140px !important;
+            max-width: 140px !important;
+          }
+        }
+
+        @media (max-width: 1280px) {
+          main[data-section="service-desk"] .service-desk-hero {
+            grid-template-columns: 1fr !important;
+            max-height: none !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-kpi-row {
+            max-width: none !important;
+            justify-self: stretch !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-commandbar {
+            grid-template-columns: 1fr 1fr !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-filter-select {
+            width: 100% !important;
+            max-width: none !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-command-actions {
+            justify-self: start !important;
+          }
+        }
+      `}</style>
+
       {toast && (
         <div className={cn('settings-toast', `is-${toast.type}`)} role="status" aria-live="polite">
           <i className="settings-toast-icon">
@@ -2867,7 +3129,7 @@ export default function ServiceDesk() {
               </label>
             )}
 
-            <footer className="content-actions">
+            <footer className="content-actions service-desk-row-actions">
               <AppButton
                 type="button"
                 variant="outline-secondary"
@@ -2932,17 +3194,52 @@ export default function ServiceDesk() {
         </nav>
       </aside>
 
-
       <section className="settings-content d-grid gap-3">
-        <div className="settings-hero ema-panel-surface">
+        <div
+          className="settings-hero ema-panel-surface service-desk-hero"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(620px, 820px)',
+            alignItems: 'center',
+            gap: '1rem',
+            minHeight: '7.25rem',
+            maxHeight: '7.25rem',
+            overflow: 'hidden',
+          }}
+        >
           <div>
             <span className="eyebrow">INCIDENT COMMAND CENTER</span>
             <h2>Service Desk</h2>
             <p>Manage tickets, assignments, SLA risk and support activity.</p>
           </div>
-          <div className="settings-score ema-kpi-strip ema-kpi-strip-compact">
+          <div
+            className="settings-score users-hero-score service-desk-kpi-row service-desk-kpi-force-row"
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              flexWrap: 'nowrap',
+              gap: '.62rem',
+              width: 'max-content',
+              maxWidth: 'none',
+              justifySelf: 'end',
+              alignItems: 'stretch',
+              overflow: 'visible',
+            }}
+          >
             {kpis.slice(0, 4).map((kpi) => (
-              <div className="score-box ema-kpi-card is-compact" key={kpi.label}>
+              <div
+                  className="score-box ema-kpi-card is-compact service-desk-kpi-card" data-service-desk-kpi="true"
+                  key={kpi.label}
+                  style={{
+                    flex: '0 0 150px',
+                    width: 150,
+                    minWidth: 150,
+                    maxWidth: 150,
+                    minHeight: '4.55rem',
+                    maxHeight: '4.55rem',
+                    overflow: 'hidden',
+                  }}
+                >
                 <span>{kpi.label}</span>
                 <strong>{kpi.value}</strong>
                 <small>{kpi.note}</small>
@@ -2956,10 +3253,13 @@ export default function ServiceDesk() {
         {viewMode === 'list' && (
           <section className="content-panel clean">
             <div
-              className="user-access-commandbar"
+              className="content-toolbar users-toolbar service-desk-commandbar"
               style={{
-                gridTemplateColumns:
-                  'minmax(320px, 1fr) minmax(160px, 190px) minmax(160px, 190px) minmax(160px, 190px) auto auto',
+                display: 'grid',
+                gridTemplateColumns: 'minmax(260px, 1fr) 150px 150px 150px max-content',
+                alignItems: 'center',
+                gap: '.55rem',
+                overflow: 'visible',
               }}
             >
               <label className="section-search user-search-inline">
@@ -2972,6 +3272,8 @@ export default function ServiceDesk() {
               </label>
 
               <ServiceDeskSelect
+                className="service-desk-filter-select"
+                style={{ width: 150, maxWidth: 150, minWidth: 0 }}
                 value={filterStatus}
                 ariaLabel="Filter tickets by status"
                 placeholder="Status: All"
@@ -2983,6 +3285,8 @@ export default function ServiceDesk() {
               />
 
               <ServiceDeskSelect
+                className="service-desk-filter-select"
+                style={{ width: 150, maxWidth: 150, minWidth: 0 }}
                 value={filterPriority}
                 ariaLabel="Filter tickets by urgency"
                 placeholder="Urgency: All"
@@ -2994,6 +3298,8 @@ export default function ServiceDesk() {
               />
 
               <ServiceDeskSelect
+                className="service-desk-filter-select"
+                style={{ width: 150, maxWidth: 150, minWidth: 0 }}
                 value={filterAssignedTo}
                 ariaLabel="Filter tickets by assigned engineer"
                 placeholder="Assignee: All"
@@ -3006,22 +3312,21 @@ export default function ServiceDesk() {
                 ]}
               />
 
-              <button
-                type="button"
-                className="soft-btn"
-                disabled={!hasActiveFilters}
-                onClick={resetRegistryFilters}
+              <div
+                className="content-actions service-desk-command-actions"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'nowrap', gap: '0.42rem', minWidth: 'max-content' }}
               >
-                <X size={14} />
-                <span>Reset</span>
-              </button>
-
-              <div className="uam-actions-right content-actions">
                 <button
                   type="button"
-                  className="primary-btn"
-                  onClick={openCreateForm}
+                  className="soft-btn service-desk-reset-btn"
+                  disabled={!hasActiveFilters}
+                  onClick={resetRegistryFilters}
                 >
+                  <X size={14} />
+                  <span>Reset</span>
+                </button>
+
+                <button type="button" className="primary-btn" onClick={openCreateForm}>
                   <Plus size={15} />
                   <span>Create Ticket</span>
                 </button>
@@ -3034,12 +3339,12 @@ export default function ServiceDesk() {
                   disabled={isRefreshing}
                   onClick={refreshData}
                 >
-                  {isRefreshing ? <Loader2 size={15} className="ema-spin" /> : <RefreshCw size={16} />}
+                  {isRefreshing ? <Loader2 size={15} className="ema-spin" /> : <RefreshCw size={15} />}
                 </button>
 
                 <button
                   type="button"
-                  className={cn('mini-btn icon-only', showAdvanced && 'is-active')}
+                  className={cn('mini-btn icon-only', showAdvanced && 'edit')}
                   aria-label="Advanced filter"
                   title="Advanced filter"
                   onClick={() => {
@@ -3047,15 +3352,15 @@ export default function ServiceDesk() {
                     void ensureLookupsLoaded();
                   }}
                 >
-                  <Filter size={16} />
+                  <Filter size={15} />
                 </button>
 
                 <button type="button" className="mini-btn icon-only" aria-label="Export CSV" title="Export CSV" onClick={exportCsv}>
-                  <Download size={16} />
+                  <Download size={15} />
                 </button>
 
                 <button type="button" className="mini-btn icon-only" aria-label="Print ticket table" title="Print ticket table" onClick={printTicketRegistry}>
-                  <Printer size={16} />
+                  <Printer size={15} />
                 </button>
               </div>
             </div>
@@ -3165,8 +3470,8 @@ export default function ServiceDesk() {
                   </div>
                 </div>
               ) : (
-                <div className="user-access-table advanced clean-table" style={{ overflowX: 'auto' }}>
-                  <div className="user-row head advanced clean-table-row" style={{ gridTemplateColumns: ticketTableColumns }}>
+                <div className="user-access-table advanced clean-table service-desk-table-wrap" style={{ overflowX: 'hidden', overflowY: 'hidden', maxWidth: '100%', width: '100%' }}>
+                  <div className="user-row head advanced clean-table-row" style={{ gridTemplateColumns: ticketTableColumns, minWidth: ticketTableMinWidth, width: '100%', alignItems: 'center' }}>
                     <div className="user-cell">No</div>
                     <div className="user-cell">
                       <button
@@ -3262,7 +3567,7 @@ export default function ServiceDesk() {
                         key={getId(incident)}
                         data-ticket-row="true"
                         className={cn('user-row advanced clean-table-row', isSelected && 'is-selected')}
-                        style={{ gridTemplateColumns: ticketTableColumns }}
+                        style={{ gridTemplateColumns: ticketTableColumns, minWidth: ticketTableMinWidth, width: '100%' }}
                         onClick={() => setSelectedIncidentId(getId(incident))}
                       >
                         <div className="user-cell row-number">
@@ -3324,7 +3629,7 @@ export default function ServiceDesk() {
                         </div>
 
                         <div className="user-cell" onClick={(event) => event.stopPropagation()}>
-                          <div className="row-actions user-row-action-wrap clean">
+                          <div className="row-actions user-row-action-wrap clean" style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'nowrap', gap: '.38rem', minWidth: 'max-content' }}>
                             <button
                               type="button"
                               className="mini-btn icon-only edit"
@@ -3373,7 +3678,7 @@ export default function ServiceDesk() {
                 <h2>Knowledge Base</h2>
                 <p>Manage and reference previous incident resolutions</p>
               </div>
-              <div className="content-actions">
+              <div className="content-actions service-desk-row-actions">
                 {canCreate && (
                   <button
                     type="button"
@@ -3540,7 +3845,7 @@ export default function ServiceDesk() {
               </section>
             </div>
 
-            <footer className="content-actions">
+            <footer className="content-actions service-desk-row-actions">
               <AppButton
                 type="button"
                 variant="outline-secondary"
@@ -3622,7 +3927,7 @@ export default function ServiceDesk() {
               <p>{selectedIncident.additionalMemo || selectedIncident.remarks || 'Service desk queue ready.'}</p>
             </div>
 
-            <div className="content-actions">
+            <div className="content-actions service-desk-row-actions">
               {canEdit && (
                 <button
                   type="button"
@@ -4141,7 +4446,7 @@ export default function ServiceDesk() {
               </section>
             </div>
 
-            <footer className="content-actions">
+            <footer className="content-actions service-desk-row-actions">
               <AppButton
                 type="button"
                 variant="outline-secondary"
@@ -4211,7 +4516,7 @@ export default function ServiceDesk() {
               </section>
             </div>
 
-            <footer className="content-actions">
+            <footer className="content-actions service-desk-row-actions">
               <AppButton
                 type="button"
                 variant="outline-secondary"
