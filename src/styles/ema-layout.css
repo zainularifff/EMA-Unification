@@ -7929,3 +7929,226 @@ main[data-section="service-desk"] .service-desk-required-mark {
     max-height: 58vh !important;
   }
 }
+
+/* =========================================================
+   V30 Task List Detail Modal - Large Target Batch Display
+   - replace tall endpoint cards with compact searchable rows
+   - keep the right panel readable when target count is high
+   - truncate long device IDs instead of stretching the modal
+========================================================= */
+.task-target-density-card {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.task-target-density-card .task-target-side-head {
+  padding-bottom: 0.72rem !important;
+}
+
+.task-target-side-toolbar {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.48rem !important;
+  padding: 0.68rem 0.78rem !important;
+  border-top: 1px solid var(--ema-control-line-soft) !important;
+  border-bottom: 1px solid var(--ema-control-line-soft) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%) !important;
+}
+
+.task-target-side-search {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  height: 2.3rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  padding: 0 0.72rem !important;
+  border: 1px solid var(--ema-control-line) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: var(--ema-control-muted) !important;
+}
+
+.task-target-side-search input {
+  width: 100% !important;
+  min-width: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: var(--ema-control-text-strong) !important;
+  font-size: 0.76rem !important;
+  font-weight: 750 !important;
+}
+
+.task-target-side-search input::placeholder {
+  color: var(--ema-control-muted) !important;
+  opacity: 0.78 !important;
+}
+
+.task-target-clear-btn {
+  flex: 0 0 auto !important;
+  height: 2.25rem !important;
+  border: 1px solid var(--ema-control-line) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: var(--ema-control-muted) !important;
+  padding: 0 0.78rem !important;
+  font-size: 0.72rem !important;
+  font-weight: 850 !important;
+}
+
+.task-target-clear-btn:hover {
+  color: var(--ema-control-primary) !important;
+  border-color: color-mix(in srgb, var(--ema-control-primary) 34%, var(--ema-control-line)) !important;
+}
+
+.task-target-density-card .task-target-compact-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  background: #ffffff !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  min-height: 0 !important;
+  scrollbar-gutter: stable !important;
+}
+
+.task-target-compact-row {
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: 2.35rem minmax(0, 1fr) !important;
+  gap: 0.72rem !important;
+  padding: 0.72rem 0.78rem !important;
+  border-bottom: 1px solid var(--ema-control-line-soft) !important;
+  background: #ffffff !important;
+}
+
+.task-target-compact-row:hover {
+  background: color-mix(in srgb, var(--ema-control-primary) 4%, #ffffff) !important;
+}
+
+.task-target-compact-index {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  border-radius: 0.78rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: 1px solid rgba(37, 99, 235, 0.22) !important;
+  background: color-mix(in srgb, var(--ema-control-primary) 8%, #ffffff) !important;
+  color: var(--ema-control-primary) !important;
+  font-size: 0.7rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.03em !important;
+}
+
+.task-target-compact-main {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.46rem !important;
+}
+
+.task-target-compact-titleline {
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.55rem !important;
+}
+
+.task-target-compact-titleline strong {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  color: var(--ema-control-text-strong) !important;
+  font-size: 0.82rem !important;
+  font-weight: 900 !important;
+}
+
+.task-target-compact-titleline .task-status-pill {
+  flex: 0 0 auto !important;
+  max-width: 8.2rem !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.task-target-compact-meta {
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.38rem 0.62rem !important;
+}
+
+.task-target-compact-meta span {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.1rem !important;
+  overflow: hidden !important;
+  color: var(--ema-control-text-strong) !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.task-target-compact-meta b,
+.task-target-device-line b {
+  display: block !important;
+  color: var(--ema-control-muted) !important;
+  font-size: 0.6rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.045em !important;
+  text-transform: uppercase !important;
+}
+
+.task-target-device-line {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.16rem !important;
+}
+
+.task-target-device-line code {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  border: 1px solid var(--ema-control-line-soft) !important;
+  border-radius: 0.58rem !important;
+  background: #f8fbff !important;
+  color: var(--ema-control-text-strong) !important;
+  padding: 0.28rem 0.42rem !important;
+  font-size: 0.68rem !important;
+  font-weight: 850 !important;
+}
+
+.task-target-density-card .task-target-side-foot {
+  display: flex !important;
+  justify-content: space-between !important;
+  padding: 0.58rem 0.78rem !important;
+}
+
+@media (max-width: 1180px) {
+  .task-target-density-card .task-target-compact-list {
+    max-height: 26rem !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .task-target-compact-meta {
+    grid-template-columns: 1fr !important;
+  }
+
+  .task-target-side-toolbar {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  .task-target-clear-btn {
+    width: 100% !important;
+  }
+}

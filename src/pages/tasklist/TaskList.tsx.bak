@@ -1444,82 +1444,51 @@ function TaskTargetList({
 
   const totalRows = displayRows.length;
   const emptyMessage = "No target endpoint returned for this task.";
-  const [targetSearch, setTargetSearch] = useState("");
-
-  const filteredTargetRows = useMemo(() => {
-    const query = targetSearch.trim().toLowerCase();
-    if (!query) return displayRows;
-
-    return displayRows.filter((row) =>
-      [row.name, row.department, row.ipAddress, row.type, row.status, row.lastActivity, row.deviceId]
-        .some((value) => String(value || "").toLowerCase().includes(query))
-    );
-  }, [displayRows, targetSearch]);
 
   if (sidePanel) {
-    const visibleRows = filteredTargetRows;
-
     return (
-      <section className="task-card task-target-card task-target-side-card task-target-density-card">
-        <div className="task-panel-head task-panel-head-between task-target-side-head">
+      <section className="task-card task-target-card task-target-side-card">
+        <div className="task-panel-head task-panel-head-between">
           <div className="task-panel-title">
             <div className="task-panel-icon"><UserRound size={19} /></div>
             <div>
               <h3>Target Endpoint List</h3>
-              <p>Compact endpoint registry for large target batches.</p>
+              <p>Assigned targets and individual endpoint status.</p>
             </div>
           </div>
-          <span className="task-badge-outline">{totalRows} target{totalRows === 1 ? "" : "s"}</span>
+          <span className="task-badge-outline">Targets {targets.length}</span>
         </div>
 
-        <div className="task-target-side-toolbar" aria-label="Target endpoint filters">
-          <div className="task-target-side-search">
-            <Search size={15} />
-            <input
-              type="search"
-              value={targetSearch}
-              onChange={(event) => setTargetSearch(event.target.value)}
-              placeholder="Search target, IP, status, device ID..."
-              aria-label="Search target endpoints"
-            />
-          </div>
-          {targetSearch ? (
-            <button type="button" onClick={() => setTargetSearch("")} className="task-target-clear-btn">Clear</button>
-          ) : null}
-        </div>
-
-        <div className="task-target-side-body task-target-compact-list" role="list" aria-label="Target endpoint compact list">
+        <div className="task-target-side-body">
           {isBusy ? (
             <div className="task-empty-state compact"><Loader2 size={20} className="task-spin" /> Loading target status...</div>
-          ) : task && visibleRows.length ? visibleRows.map((row, index) => (
-            <article className="task-target-compact-row" key={row.key} role="listitem">
-              <div className="task-target-compact-index">{String(index + 1).padStart(2, "0")}</div>
-              <div className="task-target-compact-main">
-                <div className="task-target-compact-titleline">
-                  <strong title={row.name}>{row.name}</strong>
-                  <span className={`task-status-pill ${getStateClass(row.status)}`}>{row.status}</span>
-                </div>
-                <div className="task-target-compact-meta">
-                  <span title={row.department}><b>Dept</b>{row.department}</span>
-                  <span title={row.ipAddress}><b>IP</b>{row.ipAddress}</span>
-                  <span title={row.type}><b>Type</b>{row.type}</span>
-                  <span title={row.lastActivity}><b>{hasExecutionRows ? "Changed" : "Connected"}</b>{row.lastActivity}</span>
-                </div>
-                <div className="task-target-device-line" title={row.deviceId}>
-                  <b>Device ID</b>
-                  <code>{row.deviceId}</code>
-                </div>
+          ) : task && displayRows.length ? displayRows.map((row, index) => (
+            <article className="task-target-side-item" key={row.key}>
+              <div className="task-target-side-top">
+                <span className="task-target-index">{String(index + 1).padStart(2, "0")}</span>
+                <span className={`task-status-pill ${getStateClass(row.status)}`}>{row.status}</span>
+              </div>
+              <strong className="task-target-name">{row.name}</strong>
+              <div className="task-target-side-meta">
+                <span>Department</span>
+                <b>{row.department}</b>
+                <span>IP Address</span>
+                <b>{row.ipAddress}</b>
+                <span>Type</span>
+                <b>{row.type}</b>
+                <span>{hasExecutionRows ? "Last Changed" : "Last Connection"}</span>
+                <b>{row.lastActivity}</b>
+                <span>Device ID</span>
+                <b>{row.deviceId}</b>
               </div>
             </article>
           )) : (
-            <div className="task-empty-state compact">{targetSearch ? "No target matches your search." : emptyMessage}</div>
+            <div className="task-empty-state compact">{emptyMessage}</div>
           )}
         </div>
 
         <div className="task-combined-table-foot task-target-side-foot">
-          <span>
-            Showing {visibleRows.length} of {totalRows} endpoint row{totalRows === 1 ? "" : "s"}.
-          </span>
+          <span>Showing {totalRows} endpoint row{totalRows === 1 ? "" : "s"}.</span>
         </div>
       </section>
     );
