@@ -25,7 +25,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: Gauge },
   { label: "Hardware", path: "/hardware", icon: Laptop },
-  { label: "Software", path: "/software", icon: Monitor, comingSoon: true },
+  { label: "Software", path: "/software", icon: Monitor},
   { label: "Network", path: "/network", icon: Network, comingSoon: true },
   { label: "Users", path: "/users", icon: Users, comingSoon: true },
   { label: "Task List", path: "/tasklist", icon: Settings },

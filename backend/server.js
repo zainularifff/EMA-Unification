@@ -4249,6 +4249,21 @@ function mapEmaUserResponse(row) {
     };
 }
 
+async function ensureEmaUsersPasswordColumns(pool) {
+    const hasEmaUsers = await tableExists(pool, "EMA_Users");
+    if (!hasEmaUsers) return false;
+
+    await pool.request().query(`
+        IF COL_LENGTH('dbo.EMA_Users', 'PasswordHash') IS NULL
+            ALTER TABLE dbo.EMA_Users ADD PasswordHash NVARCHAR(255) NULL;
+
+        IF COL_LENGTH('dbo.EMA_Users', 'PasswordChangedAt') IS NULL
+            ALTER TABLE dbo.EMA_Users ADD PasswordChangedAt DATETIME NULL;
+    `);
+
+    return true;
+}
+
 async function assertEmaUsersTable(pool) {
     const exists = await tableExists(pool, "EMA_Users");
     if (!exists) {
@@ -4257,6 +4272,7 @@ async function assertEmaUsersTable(pool) {
         throw error;
     }
 
+    await ensureEmaUsersPasswordColumns(pool);
     await ensureEmaUsers2faColumns(pool);
 }
 
@@ -4367,10 +4383,17 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
         const accountLocked = parseEmaBit(req.body.accountLocked, false);
         const status = accountLocked ? "Locked" : normalizeEmaUserStatus(req.body.status);
         const roleNames = getRequestedEmaRoles(req.body);
+        const passwordText = String(req.body.password || req.body.newPassword || "").trim();
 
         if (!fullName && !username) {
             return res.status(400).json({ success: false, message: "Full name or username is required." });
         }
+
+        if (!passwordText || passwordText.length < 8) {
+            return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
+        }
+
+        const passwordHash = await bcrypt.hash(passwordText, 10);
 
         const pool = await sql.connect(dbConfig);
         await assertEmaUsersTable(pool);
@@ -4408,6 +4431,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
             .input("AccessEndDate", sql.DateTime, normalizeEmaDate(req.body.accessEndDate))
             .input("LoginFailCount", sql.Int, parseInt(req.body.loginFailCount, 10) || 0)
             .input("Remarks", sql.NVarChar, req.body.remarks || "")
+            .input("PasswordHash", sql.NVarChar(255), passwordHash)
             .input("CreatedBy", sql.NVarChar, req.user?.userID || "system")
             .query(`
                 INSERT INTO EMA_Users
@@ -4430,6 +4454,8 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
                     AccessEndDate,
                     LoginFailCount,
                     Remarks,
+                    PasswordHash,
+                    PasswordChangedAt,
                     CreatedAt,
                     CreatedBy
                 )
@@ -4455,6 +4481,8 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
                     @AccessEndDate,
                     @LoginFailCount,
                     @Remarks,
+                    @PasswordHash,
+                    GETDATE(),
                     GETDATE(),
                     @CreatedBy
                 )
@@ -4484,6 +4512,13 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
         const accountLocked = parseEmaBit(req.body.accountLocked, false);
         const status = accountLocked ? "Locked" : normalizeEmaUserStatus(req.body.status);
         const roleNames = getRequestedEmaRoles(req.body);
+        const passwordText = String(req.body.password || req.body.newPassword || "").trim();
+
+        if (passwordText && passwordText.length < 8) {
+            return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
+        }
+
+        const passwordHash = passwordText ? await bcrypt.hash(passwordText, 10) : null;
 
         const pool = await sql.connect(dbConfig);
         await assertEmaUsersTable(pool);
@@ -4506,7 +4541,13 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
             return res.status(409).json({ success: false, message: "Username or email already exists." });
         }
 
-        const result = await pool.request()
+        const passwordUpdateClause = passwordHash
+            ? `,
+                    PasswordHash = @PasswordHash,
+                    PasswordChangedAt = GETDATE()`
+            : "";
+
+        const updateUserRequest = pool.request()
             .input("UserID", sql.Int, userID)
             .input("Username", sql.NVarChar, username)
             .input("FullName", sql.NVarChar, fullName || username)
@@ -4525,8 +4566,13 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
             .input("AccessEndDate", sql.DateTime, normalizeEmaDate(req.body.accessEndDate))
             .input("LoginFailCount", sql.Int, parseInt(req.body.loginFailCount, 10) || 0)
             .input("Remarks", sql.NVarChar, req.body.remarks || "")
-            .input("UpdatedBy", sql.NVarChar, req.user?.userID || "system")
-            .query(`
+            .input("UpdatedBy", sql.NVarChar, req.user?.userID || "system");
+
+        if (passwordHash) {
+            updateUserRequest.input("PasswordHash", sql.NVarChar(255), passwordHash);
+        }
+
+        const result = await updateUserRequest.query(`
                 UPDATE EMA_Users
                 SET
                     Username = @Username,
@@ -4545,7 +4591,7 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
                     AccessStartDate = @AccessStartDate,
                     AccessEndDate = @AccessEndDate,
                     LoginFailCount = @LoginFailCount,
-                    Remarks = @Remarks,
+                    Remarks = @Remarks${passwordUpdateClause},
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
@@ -4756,15 +4802,23 @@ app.put("/api/settings/users/:id/reset-password", authenticateToken, async (req,
         const userID = parseInt(req.params.id, 10);
         if (!userID) return res.status(400).json({ success: false, message: "Invalid user ID." });
 
+        const passwordText = String(req.body.password || req.body.newPassword || "").trim();
+        if (!passwordText || passwordText.length < 8) {
+            return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
+        }
+
+        const passwordHash = await bcrypt.hash(passwordText, 10);
+
         const pool = await sql.connect(dbConfig);
         await assertEmaUsersTable(pool);
 
         const result = await pool.request()
             .input("UserID", sql.Int, userID)
+            .input("PasswordHash", sql.NVarChar(255), passwordHash)
             .input("UpdatedBy", sql.NVarChar, req.user?.userID || "system")
             .query(`
                 UPDATE EMA_Users
-                SET PasswordHash = NULL,
+                SET PasswordHash = @PasswordHash,
                     PasswordChangedAt = GETDATE(),
                     LoginFailCount = 0,
                     UpdatedAt = GETDATE(),
@@ -4777,7 +4831,7 @@ app.put("/api/settings/users/:id/reset-password", authenticateToken, async (req,
         if (result.recordset.length === 0) return res.status(404).json({ success: false, message: "User not found." });
         const data = mapEmaUserResponse(result.recordset[0]);
         await logEmaAudit(pool, req, "Reset EMA user password", "User Access Management", "Warning", { id: userID });
-        return res.json({ success: true, message: "Password reset marker saved.", data });
+        return res.json({ success: true, message: "Password has been reset successfully.", data });
     } catch (err) {
         console.error("PUT /api/settings/users/:id/reset-password error:", err);
         return res.status(err.statusCode || 500).json({ success: false, message: err.message });

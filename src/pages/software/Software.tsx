@@ -1,0 +1,1339 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowUpDown,
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
+  Database,
+  Download,
+  FileText,
+  FolderOpen,
+  HardDrive,
+  Layers,
+  MonitorSmartphone,
+  Package,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  X,
+} from "lucide-react";
+
+type ApiSoftwareRecord = {
+  SoftwareID?: number | string | null;
+  SoftwareName?: string | null;
+  CategoryName?: string | null;
+  Publisher?: string | null;
+  Version?: string | null;
+  Username?: string | null;
+  LastUpdated?: string | null;
+  AssetID?: string | null;
+  AssetTag?: string | null;
+  MachineType?: string | null;
+  OS?: string | null;
+  ComputerName?: string | null;
+  IP?: string | null;
+  Department?: string | null;
+  AgentStatus?: string | number | null;
+  Description?: string | null;
+  VisibilityStatus?: string | number | null;
+  Object_Agent?: string | null;
+  Object_DeviceID?: string | null;
+  RawSoftwareID?: string | number | null;
+  RawSoftwareName?: string | number | null;
+};
+
+type DepartmentNode = {
+  Object_Rel_Idn: number;
+  Object_Rel_Name?: string;
+  Object_Full_Name?: string;
+  Object_PR_Idn?: number;
+  children?: DepartmentNode[];
+};
+
+type AssetItem = Record<string, unknown> & {
+  _Idn?: number;
+  id?: number;
+  MDM_Asset_Idn?: number;
+  Object_Root_Idn?: number;
+  Object_Agent?: string;
+  objectAgent?: string;
+  ComputerName?: string;
+  DeviceName?: string;
+  AssetName?: string;
+  Object_DeviceID?: string;
+  DeviceID?: string;
+  PlatformType?: string;
+  ConnectionStatus?: string;
+  IP?: string;
+};
+
+type TreeNode = {
+  id: string;
+  label: string;
+  type: "org" | "branch" | "dept" | "device" | "category" | "sub";
+  children?: TreeNode[];
+  relationId?: number;
+  assetId?: number;
+  objectAgent?: string;
+  objectDeviceId?: string;
+  platformType?: string;
+  connectionStatus?: string;
+  ip?: string;
+  devicesLoaded?: boolean;
+  devicesLoading?: boolean;
+};
+
+type SoftwareRecord = {
+  id: string;
+  softwareName: string;
+  category: string;
+  publisher: string;
+  description: string;
+  version: string;
+  username: string;
+  lastUpdated: string;
+  assetId: string;
+  assetTag: string;
+  deviceName: string;
+  machineType: string;
+  os: string;
+  ip: string;
+  department: string;
+  agentStatus: string;
+  objectAgent: string;
+  objectDeviceId: string;
+  raw: ApiSoftwareRecord;
+};
+
+type TableKey = "registry" | "installedSoftware" | "licenseStatus" | "fileExtensionExe" | "fileExtensionDll" | "fileExtensionIni";
+type SelectionMode = "registry" | "folder" | "device" | "statistic";
+type SidebarTab = "organization" | "statistic" | "filters";
+type SortKey = "softwareName" | "category" | "publisher" | "version" | "deviceName" | "machineType" | "ip" | "lastUpdated";
+type SortDirection = "asc" | "desc";
+type ActiveView = "all" | "unique" | "installed" | "categories" | "unclassified";
+
+type SelectedContext = {
+  mode: SelectionMode;
+  tableKey: TableKey;
+  label: string;
+  relationId?: number;
+  assetId?: number;
+  objectAgent?: string;
+  objectDeviceId?: string;
+};
+
+type ToastState = {
+  type: "success" | "error" | "info";
+  title: string;
+  message: string;
+} | null;
+
+type ApiRowsPayload = unknown[] | { data?: unknown[] | Record<string, unknown>; success?: boolean; totalRecords?: number };
+
+const API_BASE_CANDIDATES = Array.from(
+  new Set(
+    [
+      (import.meta.env.VITE_API_BASE_URL as string | undefined),
+      (import.meta.env.VITE_API_URL as string | undefined),
+      "",
+      typeof window !== "undefined" && window.location.hostname
+        ? `${window.location.protocol}//${window.location.hostname}:3001`
+        : "http://localhost:3001",
+      "http://localhost:3001",
+      "http://127.0.0.1:3001",
+      "http://localhost:3000",
+    ]
+      .filter((value): value is string => Boolean(value !== undefined && value !== null))
+      .map((value) => String(value).replace(/\/$/, ""))
+  )
+);
+
+const PAGE_SIZE = 10;
+const EMPTY_VALUE = "-";
+
+const tableColumns: Record<TableKey, string[]> = {
+  registry: ["Software Name", "Category", "Publisher / Description", "Version", "Device", "Type", "IP Address", "Last Updated"],
+  installedSoftware: ["Original Software Name", "License Limit", "Used", "Classification", "Custom Info", "Software Name", "Expiry Date"],
+  licenseStatus: ["Application Package", "Manufacturer", "Authorization", "Used", "Search Date", "Classification", "Detail"],
+  fileExtensionExe: ["File Name", "Original File Name", "Version", "Product Name", "Manufacturer", "User Name", "Department", "Directory", "Search Date"],
+  fileExtensionDll: ["File Name", "Original File Name", "Version", "Product Name", "Manufacturer", "User Name", "Department", "Directory", "Search Date"],
+  fileExtensionIni: ["File Name", "Original File Name", "Version", "Product Name", "Manufacturer", "User Name", "Department", "Directory", "Search Date"],
+};
+
+const statisticTree: TreeNode[] = [
+  { id: "stat-installed", label: "Installed Software", type: "category", children: [] },
+  { id: "stat-package", label: "Application Package", type: "category", children: [{ id: "stat-license", label: "License Status", type: "sub" }] },
+  {
+    id: "stat-extension",
+    label: "File Extension",
+    type: "category",
+    children: [
+      { id: "stat-exe", label: "EXE", type: "sub" },
+      { id: "stat-dll", label: "DLL", type: "sub" },
+      { id: "stat-ini", label: "INI", type: "sub" },
+    ],
+  },
+];
+
+const fallbackDeviceTree: TreeNode[] = [
+  {
+    id: "org-root",
+    label: "Organisation",
+    type: "org",
+    children: [],
+    relationId: -1,
+  },
+];
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function buildApiUrl(baseUrl: string, path: string) {
+  if (!baseUrl) return path;
+  return `${baseUrl}${path}`;
+}
+
+function isHtmlPayload(text: string, contentType: string) {
+  const trimmed = text.trim().toLowerCase();
+  return contentType.toLowerCase().includes("text/html") || trimmed.startsWith("<!doctype") || trimmed.startsWith("<html");
+}
+
+function safeString(value: unknown, fallback = EMPTY_VALUE) {
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function cleanCategory(value: unknown) {
+  const text = safeString(value, "Unclassified");
+  if (text === EMPTY_VALUE) return "Unclassified";
+  if (text.toLowerCase() === "uncategorized") return "Unclassified";
+  return text;
+}
+
+function isEmptyDisplay(value: string) {
+  return !value || value === EMPTY_VALUE || value.toLowerCase() === "unassigned";
+}
+
+function isGuidLike(value: unknown) {
+  const text = safeString(value, "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text);
+}
+
+function isNumericOnly(value: unknown) {
+  const text = safeString(value, "").trim();
+  return /^\d+$/.test(text);
+}
+
+function chooseSoftwareName(record: ApiSoftwareRecord, index: number) {
+  const candidates = [record.RawSoftwareID, record.SoftwareID, record.SoftwareName, record.RawSoftwareName];
+
+  for (const candidate of candidates) {
+    const text = safeString(candidate, "");
+    if (!text) continue;
+    if (isGuidLike(text)) continue;
+    if (isNumericOnly(text)) continue;
+    return text;
+  }
+
+  const fallback = safeString(record.SoftwareName || record.RawSoftwareName || record.SoftwareID, "");
+  return fallback || `Software Record ${index + 1}`;
+}
+
+function formatDateTime(value: unknown) {
+  const raw = safeString(value, "");
+  if (!raw || raw === EMPTY_VALUE) return EMPTY_VALUE;
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return date.toLocaleString("en-MY", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function normalizeForCompare(value: string) {
+  return value === EMPTY_VALUE ? "" : value.toLowerCase();
+}
+
+function getStoredToken() {
+  const directKeys = ["ema-access-token", "accessToken", "token", "jwtToken", "bearerToken"];
+
+  for (const key of directKeys) {
+    const value = localStorage.getItem(key);
+    if (value && value.trim()) return value.trim();
+  }
+
+  const objectKeys = ["ema-auth", "auth", "user", "ema-user"];
+
+  for (const key of objectKeys) {
+    const value = localStorage.getItem(key);
+    if (!value) continue;
+
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      const token =
+        parsed.accessToken ||
+        parsed.token ||
+        parsed.jwtToken ||
+        parsed.bearerToken ||
+        (parsed.data as Record<string, unknown> | undefined)?.accessToken ||
+        (parsed.data as Record<string, unknown> | undefined)?.token;
+
+      if (typeof token === "string" && token.trim()) return token.trim();
+    } catch {
+      // ignore malformed localStorage values
+    }
+  }
+
+  return "";
+}
+
+async function readJsonResponse<T>(response: Response, url: string): Promise<T> {
+  const text = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+
+  if (isHtmlPayload(text, contentType)) {
+    throw new Error(`API returned HTML instead of JSON from ${url}.`);
+  }
+
+  let payload: unknown = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`API returned invalid JSON from ${url}.`);
+  }
+
+  if (!response.ok) {
+    const apiPayload = payload as { message?: string; error?: string } | null;
+    throw new Error(apiPayload?.message || apiPayload?.error || `API request failed with status ${response.status} at ${url}.`);
+  }
+
+  return payload as T;
+}
+
+async function apiGet<T>(path: string): Promise<T> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Access token missing. Please login again.");
+
+  let lastError: Error | null = null;
+  for (const baseUrl of API_BASE_CANDIDATES) {
+    const url = buildApiUrl(baseUrl, path);
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      return await readJsonResponse<T>(response, url);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError || new Error(`Unable to load API path ${path}.`);
+}
+
+async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Access token missing. Please login again.");
+
+  let lastError: Error | null = null;
+  for (const baseUrl of API_BASE_CANDIDATES) {
+    const url = buildApiUrl(baseUrl, path);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      return await readJsonResponse<T>(response, url);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError || new Error(`Unable to post API path ${path}.`);
+}
+
+function unwrapRows(payload: ApiRowsPayload): Record<string, unknown>[] {
+  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+  if (!payload || typeof payload !== "object") return [];
+
+  const data = (payload as { data?: unknown[] | Record<string, unknown> }).data;
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object") {
+    const firstArray = Object.values(data).find(Array.isArray);
+    if (Array.isArray(firstArray)) return firstArray as Record<string, unknown>[];
+    return [data as Record<string, unknown>];
+  }
+
+  return [];
+}
+
+function normalizeSoftwareRecord(record: ApiSoftwareRecord, index: number): SoftwareRecord {
+  const softwareName = chooseSoftwareName(record, index);
+  const assetTag = safeString(record.AssetTag || record.Object_DeviceID || record.AssetID);
+  const deviceName = safeString(record.ComputerName || record.Object_DeviceID || record.AssetTag || record.AssetID);
+  const description = safeString(record.Description, "");
+  const publisher = safeString(record.Publisher || record.Description);
+
+  return {
+    id: `${safeString(record.SoftwareID || record.RawSoftwareID, `software-${index}`)}-${assetTag}-${index}`,
+    softwareName,
+    category: cleanCategory(record.CategoryName),
+    publisher,
+    description,
+    version: safeString(record.Version),
+    username: safeString(record.Username),
+    lastUpdated: safeString(record.LastUpdated),
+    assetId: safeString(record.AssetID),
+    assetTag,
+    deviceName,
+    machineType: safeString(record.MachineType, "Unknown"),
+    os: safeString(record.OS || record.MachineType),
+    ip: safeString(record.IP),
+    department: safeString(record.Department),
+    agentStatus: safeString(record.AgentStatus),
+    objectAgent: safeString(record.Object_Agent, "MDM"),
+    objectDeviceId: safeString(record.Object_DeviceID || record.AssetTag),
+    raw: record,
+  };
+}
+
+function pickValue(row: Record<string, unknown>, aliases: string[], fallbackIndex = -1) {
+  for (const alias of aliases) {
+    if (row[alias] !== undefined && row[alias] !== null && String(row[alias]).trim() !== "") {
+      return row[alias];
+    }
+  }
+
+  if (fallbackIndex >= 0) {
+    const values = Object.values(row);
+    if (values[fallbackIndex] !== undefined && values[fallbackIndex] !== null) return values[fallbackIndex];
+  }
+
+  return EMPTY_VALUE;
+}
+
+function formatCell(value: unknown) {
+  if (value === null || value === undefined || value === "") return EMPTY_VALUE;
+  if (value instanceof Date) return formatDateTime(value.toISOString());
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+const columnAliases: Record<Exclude<TableKey, "registry">, string[][]> = {
+  installedSoftware: [
+    ["Original Software Name", "OriginalSoftwareName", "SWUNI_Alias", "SWUNI_Name", "Name", "SoftwareName", "RawSoftwareName", "Id"],
+    ["License Limit", "LicenseLimit", "License_Limit", "Limit", "License", "SWUNI_License"],
+    ["Used", "UsedCount", "InUse", "Usage", "SWUNI_Used", "TotalUsed", "Total"],
+    ["Classification", "CategoryName", "Category", "SW_Category", "SW_CATEGORY"],
+    ["Custom Info", "CustomInfo", "Custom_Info", "Description", "Remark", "Remarks"],
+    ["Software Name", "SoftwareName", "SWName", "SWUNI_Name", "SWUNI_Alias", "Name"],
+    ["Expiry Date", "ExpiryDate", "ExpiredDate", "ExpireDate", "LicenseExpiry", "LicenseExpiredDate"],
+  ],
+  licenseStatus: [
+    ["Application Package", "ApplicationPackage", "SW_Pkg_Name", "SWPkgName", "PackageName", "Pkg_Name", "Name"],
+    ["Manufacturer", "Mfr", "Vendor", "Publisher"],
+    ["Authorization", "License_Type_Text", "LicenseType", "AuthorizationStatus", "Status"],
+    ["Used", "UsedCount", "IsUsed", "Usage", "TotalUsed", "Total"],
+    ["Search Date", "SearchDate", "Search_Date", "LastUpdated"],
+    ["Classification", "CategoryName", "Category", "SW_Category"],
+    ["Detail", "Description", "Remark", "Remarks", "Info"],
+  ],
+  fileExtensionExe: [],
+  fileExtensionDll: [],
+  fileExtensionIni: [],
+};
+
+const fileAliases = [
+  ["File Name", "FileName", "Filename", "File_Name", "SW_File_Name", "ProcessName", "Name"],
+  ["Original File Name", "OriginalFileName", "Original_File_Name", "OriginalName"],
+  ["Version", "FileVersion", "SW_Version"],
+  ["Product Name", "ProductName", "Product_Name", "SW_Product_Name"],
+  ["Manufacturer", "CompanyName", "Company", "Publisher", "Vendor"],
+  ["User Name", "UserName", "Username", "Object_Client_Name", "LoginUser"],
+  ["Department", "Object_Full_Name", "DepartmentName"],
+  ["Directory", "Path", "FilePath", "File_Path", "Folder"],
+  ["Search Date", "SearchDate", "Search_Date", "LastUpdated"],
+];
+
+columnAliases.fileExtensionExe = fileAliases;
+columnAliases.fileExtensionDll = fileAliases;
+columnAliases.fileExtensionIni = fileAliases;
+
+function rowsToTableRows(tableKey: Exclude<TableKey, "registry">, rows: Record<string, unknown>[]) {
+  return rows.map((row) => columnAliases[tableKey].map((aliases, index) => formatCell(pickValue(row, aliases, index))));
+}
+
+function tableKeyFromStatistic(id: string): Exclude<TableKey, "registry"> | null {
+  const map: Record<string, Exclude<TableKey, "registry">> = {
+    "stat-installed": "installedSoftware",
+    "stat-license": "licenseStatus",
+    "stat-exe": "fileExtensionExe",
+    "stat-dll": "fileExtensionDll",
+    "stat-ini": "fileExtensionIni",
+  };
+  return map[id] || null;
+}
+
+function getExtensionFromTableKey(tableKey: TableKey) {
+  if (tableKey === "fileExtensionDll") return "DLL";
+  if (tableKey === "fileExtensionIni") return "INI";
+  return "EXE";
+}
+
+function getDepartmentName(department: DepartmentNode) {
+  return department.Object_Rel_Name || department.Object_Full_Name || `Department ${department.Object_Rel_Idn}`;
+}
+
+function mapDepartmentsToTree(departments: DepartmentNode[], depth = 0): TreeNode[] {
+  return departments.map((department) => ({
+    id: `dept-${department.Object_Rel_Idn}`,
+    label: getDepartmentName(department),
+    type: depth <= 0 ? "branch" : "dept",
+    relationId: department.Object_Rel_Idn,
+    children: mapDepartmentsToTree(department.children || [], depth + 1),
+    devicesLoaded: false,
+    devicesLoading: false,
+  }));
+}
+
+function buildDeviceTreeFromDepartments(departments: DepartmentNode[]): TreeNode[] {
+  return [{ id: "org-root", label: "Organisation", type: "org", relationId: -1, children: mapDepartmentsToTree(departments) }];
+}
+
+function mapAssetToDeviceNode(asset: AssetItem, relationId?: number): TreeNode {
+  const assetId = Number(asset._Idn ?? asset.MDM_Asset_Idn ?? asset.Object_Root_Idn ?? asset.id ?? 0);
+  const objectAgent = safeString(asset.Object_Agent || asset.objectAgent, "EM");
+  const label = safeString(asset.ComputerName || asset.DeviceName || asset.AssetName || asset.Object_DeviceID || asset.DeviceID || asset.IP, `Device ${assetId}`);
+
+  return {
+    id: `device-${objectAgent}-${assetId}`,
+    label,
+    type: "device",
+    assetId,
+    objectAgent,
+    objectDeviceId: safeString(asset.Object_DeviceID || asset.DeviceID, ""),
+    platformType: safeString(asset.PlatformType, ""),
+    connectionStatus: safeString(asset.ConnectionStatus, ""),
+    ip: safeString(asset.IP, ""),
+    relationId,
+  };
+}
+
+function updateTreeNode(nodes: TreeNode[], nodeId: string, updater: (node: TreeNode) => TreeNode): TreeNode[] {
+  return nodes.map((node) => {
+    if (node.id === nodeId) return updater(node);
+    if (node.children?.length) return { ...node, children: updateTreeNode(node.children, nodeId, updater) };
+    return node;
+  });
+}
+
+function uniqueValues(records: SoftwareRecord[], key: keyof SoftwareRecord) {
+  return Array.from(
+    new Set(
+      records
+        .map((record) => String(record[key] || "").trim())
+        .filter((value) => value && value !== EMPTY_VALUE && value.toLowerCase() !== "unassigned")
+    )
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+function countBy(records: SoftwareRecord[], key: keyof SoftwareRecord) {
+  const map = new Map<string, number>();
+  records.forEach((record) => {
+    const raw = String(record[key] || "").trim();
+    const value = raw && raw !== EMPTY_VALUE && raw.toLowerCase() !== "unassigned" ? raw : "Unknown";
+    map.set(value, (map.get(value) || 0) + 1);
+  });
+  return Array.from(map.entries()).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function dedupeBy(records: SoftwareRecord[], getKey: (record: SoftwareRecord) => string) {
+  const seen = new Set<string>();
+  const result: SoftwareRecord[] = [];
+  for (const record of records) {
+    const key = getKey(record).trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(record);
+  }
+  return result;
+}
+
+function parseNumber(value: unknown) {
+  const parsed = parseInt(String(value || "0").replace(/[^0-9-]/g, ""), 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function exportRegistryToCsv(records: SoftwareRecord[]) {
+  const headers = ["Software Name", "Category", "Publisher / Description", "Version", "Device", "Device ID", "Device Type", "OS", "IP Address", "Last Updated"];
+  const rows = records.map((record) => [record.softwareName, record.category, record.publisher, record.version, record.deviceName, record.assetTag, record.machineType, record.os, record.ip, formatDateTime(record.lastUpdated)]);
+  downloadCsv("software-inventory", [headers, ...rows]);
+}
+
+function exportRowsToCsv(label: string, columns: string[], rows: string[][]) {
+  downloadCsv(label, [columns, ...rows]);
+}
+
+function downloadCsv(label: string, rows: Array<Array<string | number>>) {
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export default function SoftwareInventory() {
+  const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
+  const [categoriesFromApi, setCategoriesFromApi] = useState<string[]>([]);
+  const [tableRows, setTableRows] = useState<Record<Exclude<TableKey, "registry">, string[][]>>({
+    installedSoftware: [],
+    licenseStatus: [],
+    fileExtensionExe: [],
+    fileExtensionDll: [],
+    fileExtensionIni: [],
+  });
+  const [deviceTree, setDeviceTree] = useState<TreeNode[]>(fallbackDeviceTree);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["org-root", "stat-package", "stat-extension"]));
+  const [currentRelationId, setCurrentRelationId] = useState(-1);
+  const [selectedFolder, setSelectedFolder] = useState<{ id: number; label: string } | null>({ id: -1, label: "Organisation" });
+  const [selectedDevice, setSelectedDevice] = useState<TreeNode | null>(null);
+  const [selected, setSelected] = useState<SelectedContext>({ mode: "registry", tableKey: "registry", label: "Software Registry", relationId: -1 });
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("organization");
+  const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [tableError, setTableError] = useState("");
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [treeError, setTreeError] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [osFilter, setOsFilter] = useState("all");
+  const [activeView, setActiveView] = useState<ActiveView>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("softwareName");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [tableSort, setTableSort] = useState<{ index: number; direction: SortDirection } | null>(null);
+  const [page, setPage] = useState(1);
+  const [toast, setToast] = useState<ToastState>(null);
+  const [openSelect, setOpenSelect] = useState<"category" | "type" | "os" | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [showInsightsModal, setShowInsightsModal] = useState(false);
+
+  const showToast = (nextToast: ToastState) => {
+    setToast(nextToast);
+    if (nextToast) {
+      window.setTimeout(() => {
+        setToast((current) => (current === nextToast ? null : current));
+      }, 2600);
+    }
+  };
+
+  const loadSoftwareInventory = async () => {
+    setLoading(true);
+    setApiError("");
+    try {
+      const [softwareResponse, categoriesResponse] = await Promise.all([
+        apiGet<ApiSoftwareRecord[] | { data?: ApiSoftwareRecord[] }>("/api/software"),
+        apiGet<string[] | { data?: string[] }>("/api/software/categories"),
+      ]);
+
+      const softwarePayload = Array.isArray(softwareResponse) ? softwareResponse : Array.isArray(softwareResponse.data) ? softwareResponse.data : [];
+      const categoryPayload = Array.isArray(categoriesResponse) ? categoriesResponse : Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [];
+
+      setSoftwareRecords(softwarePayload.map(normalizeSoftwareRecord));
+      setCategoriesFromApi(categoryPayload.map((item) => cleanCategory(item)).filter(Boolean));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load software inventory.";
+      setApiError(message);
+      setSoftwareRecords([]);
+      setCategoriesFromApi([]);
+      showToast({ type: "error", title: "Software API failed", message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDepartmentTree = async () => {
+    setTreeLoading(true);
+    setTreeError("");
+    try {
+      const response = await apiGet<DepartmentNode[] | { data?: DepartmentNode[] }>("/api/departments");
+      const departments = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : [];
+      setDeviceTree(buildDeviceTreeFromDepartments(departments));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load organization hierarchy.";
+      setTreeError(message);
+      setDeviceTree(fallbackDeviceTree);
+    } finally {
+      setTreeLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadSoftwareInventory();
+    void loadDepartmentTree();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.add("ema-settings-page-active");
+    document.body.classList.add("ema-settings-page-active");
+
+    return () => {
+      document.documentElement.classList.remove("ema-settings-page-active");
+      document.body.classList.remove("ema-settings-page-active");
+    };
+  }, []);
+
+  const categoryOptions = useMemo(() => {
+    const fromRecords = uniqueValues(softwareRecords, "category");
+    return Array.from(new Set([...categoriesFromApi, ...fromRecords])).filter((value) => value && value !== EMPTY_VALUE).sort((a, b) => a.localeCompare(b));
+  }, [softwareRecords, categoriesFromApi]);
+
+  const typeOptions = useMemo(() => uniqueValues(softwareRecords, "machineType"), [softwareRecords]);
+  const osOptions = useMemo(() => uniqueValues(softwareRecords, "os"), [softwareRecords]);
+
+  const baseFilteredRecords = useMemo(() => {
+    const lowerSearch = searchTerm.trim().toLowerCase();
+    return softwareRecords.filter((record) => {
+      const searchable = [record.softwareName, record.category, record.publisher, record.description, record.version, record.assetTag, record.deviceName, record.machineType, record.os, record.username, record.ip, record.department].join(" ").toLowerCase();
+      return (!lowerSearch || searchable.includes(lowerSearch)) &&
+        (categoryFilter === "all" || record.category === categoryFilter) &&
+        (typeFilter === "all" || record.machineType === typeFilter) &&
+        (osFilter === "all" || record.os === osFilter);
+    });
+  }, [softwareRecords, searchTerm, categoryFilter, typeFilter, osFilter]);
+
+  const filteredRecords = useMemo(() => {
+    let rows = [...baseFilteredRecords];
+    if (activeView === "unique") rows = dedupeBy(rows, (record) => record.softwareName);
+    if (activeView === "installed") rows = rows.filter((record) => !isEmptyDisplay(record.deviceName));
+    if (activeView === "unclassified") rows = rows.filter((record) => record.category.toLowerCase() === "unclassified");
+    rows.sort((a, b) => {
+      const first = normalizeForCompare(String(a[sortKey] || ""));
+      const second = normalizeForCompare(String(b[sortKey] || ""));
+      if (first < second) return sortDirection === "asc" ? -1 : 1;
+      if (first > second) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [baseFilteredRecords, activeView, sortKey, sortDirection]);
+
+  const currentTableRows = selected.tableKey === "registry" ? [] : tableRows[selected.tableKey];
+  const filteredTableRows = useMemo(() => {
+    if (selected.tableKey === "registry") return [];
+    const lowerSearch = searchTerm.trim().toLowerCase();
+    let rows = tableRows[selected.tableKey].filter((row) => !lowerSearch || row.join(" ").toLowerCase().includes(lowerSearch));
+    if (tableSort) {
+      rows = [...rows].sort((a, b) => {
+        const first = normalizeForCompare(a[tableSort.index] || "");
+        const second = normalizeForCompare(b[tableSort.index] || "");
+        if (first < second) return tableSort.direction === "asc" ? -1 : 1;
+        if (first > second) return tableSort.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return rows;
+  }, [selected.tableKey, tableRows, searchTerm, tableSort]);
+
+  const activeRowsCount = selected.tableKey === "registry" ? filteredRecords.length : filteredTableRows.length;
+  const totalPages = Math.max(1, Math.ceil(activeRowsCount / PAGE_SIZE));
+  const pageRegistryRecords = selected.tableKey === "registry" ? filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : [];
+  const pageTableRows = selected.tableKey !== "registry" ? filteredTableRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : [];
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, categoryFilter, typeFilter, osFilter, activeView, selected.tableKey]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const summary = useMemo(() => {
+    const uniqueSoftware = new Set(softwareRecords.map((record) => record.softwareName).filter(Boolean)).size;
+    const uniqueDevices = new Set(softwareRecords.map((record) => record.assetTag || record.objectDeviceId || record.deviceName).filter(Boolean)).size;
+    const unclassified = softwareRecords.filter((record) => record.category.toLowerCase() === "unclassified").length;
+    return { totalRecords: softwareRecords.length, uniqueSoftware, uniqueDevices, categories: categoryOptions.length, unclassified };
+  }, [softwareRecords, categoryOptions.length]);
+
+  const classificationCoverage = summary.totalRecords ? Math.round(((summary.totalRecords - summary.unclassified) / summary.totalRecords) * 100) : 0;
+  const categoryCounts = useMemo(() => countBy(softwareRecords, "category"), [softwareRecords]);
+  const typeCounts = useMemo(() => countBy(softwareRecords, "machineType"), [softwareRecords]);
+  const topSoftware = useMemo(() => countBy(softwareRecords, "softwareName").slice(0, 8), [softwareRecords]);
+
+  const installedStats = useMemo(() => {
+    const rows = tableRows.installedSoftware;
+    const totalUsed = rows.reduce((sum, row) => sum + parseNumber(row[2]), 0);
+    const expiringSoon = rows.filter((row) => {
+      const expiry = row[6];
+      if (!expiry || expiry === EMPTY_VALUE) return false;
+      const date = new Date(expiry);
+      if (Number.isNaN(date.getTime())) return false;
+      const days = Math.ceil((date.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+      return days > 0 && days <= 90;
+    }).length;
+    return { totalSoftware: rows.length, totalUsed, expiringSoon };
+  }, [tableRows.installedSoftware]);
+
+  const licenseStats = useMemo(() => {
+    const rows = tableRows.licenseStatus;
+    return {
+      authorized: rows.filter((row) => row[2]?.toLowerCase() === "authorized").length,
+      limited: rows.filter((row) => row[2]?.toLowerCase() === "limited").length,
+      unauthorized: rows.filter((row) => row[2]?.toLowerCase() === "unauthorized").length,
+      totalUsed: rows.reduce((sum, row) => sum + parseNumber(row[3]), 0),
+    };
+  }, [tableRows.licenseStatus]);
+
+  const loadDepartmentDevices = async (node: TreeNode) => {
+    if ((node.type !== "dept" && node.type !== "branch" && node.type !== "org") || !node.relationId || node.devicesLoaded || node.devicesLoading) return;
+    if (node.relationId === -1) return;
+
+    setDeviceTree((prev) => updateTreeNode(prev, node.id, (target) => ({ ...target, devicesLoading: true })));
+    try {
+      const response = await apiGet<AssetItem[] | { data?: AssetItem[] }>(`/api/assets/${node.relationId}`);
+      const assets = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : [];
+      const deviceChildren = assets.map((asset) => mapAssetToDeviceNode(asset, node.relationId));
+
+      setDeviceTree((prev) => updateTreeNode(prev, node.id, (target) => {
+        const departmentChildren = (target.children || []).filter((child) => child.type !== "device");
+        return { ...target, children: [...departmentChildren, ...deviceChildren], devicesLoaded: true, devicesLoading: false };
+      }));
+    } catch (error) {
+      setDeviceTree((prev) => updateTreeNode(prev, node.id, (target) => ({ ...target, devicesLoaded: false, devicesLoading: false })));
+      showToast({ type: "error", title: "Device hierarchy failed", message: error instanceof Error ? error.message : "Failed to load devices." });
+    }
+  };
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const loadRowsForTable = async (tableKey: Exclude<TableKey, "registry">, relationID = currentRelationId) => {
+    setTableLoading(true);
+    setTableError("");
+    try {
+      let path = `/api/software/relation/${relationID}/installed?mode=summary1`;
+      if (tableKey === "licenseStatus") path = `/api/software/relation/${relationID}/packages?mode=stat1`;
+      if (tableKey === "fileExtensionExe" || tableKey === "fileExtensionDll" || tableKey === "fileExtensionIni") {
+        path = `/api/software/relation/${relationID}/files?mode=list&extension=${getExtensionFromTableKey(tableKey)}`;
+      }
+      const payload = await apiGet<ApiRowsPayload>(path);
+      const rows = rowsToTableRows(tableKey, unwrapRows(payload));
+      setTableRows((prev) => ({ ...prev, [tableKey]: rows }));
+      return rows;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load selected software records from API.";
+      setTableError(message);
+      setTableRows((prev) => ({ ...prev, [tableKey]: [] }));
+      showToast({ type: "error", title: "View failed", message });
+      return [];
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  const loadRowsForDevice = async (node: TreeNode) => {
+    if (!node.assetId) return;
+    setTableLoading(true);
+    setTableError("");
+    try {
+      const agent = (node.objectAgent || "EM").toUpperCase();
+      const path = agent === "MDM" && node.objectDeviceId
+        ? `/api/software/mdm/${encodeURIComponent(node.objectDeviceId)}`
+        : `/api/software/client/${node.assetId}`;
+      const payload = await apiGet<ApiRowsPayload>(path);
+      const rows = rowsToTableRows("installedSoftware", unwrapRows(payload));
+      setTableRows((prev) => ({ ...prev, installedSoftware: rows }));
+      setSelected({ mode: "device", tableKey: "installedSoftware", label: node.label, relationId: node.relationId, assetId: node.assetId, objectAgent: node.objectAgent, objectDeviceId: node.objectDeviceId });
+      setSelectedDevice(node);
+      setSidebarTab("organization");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load installed software for selected device.";
+      setTableError(message);
+      setTableRows((prev) => ({ ...prev, installedSoftware: [] }));
+      showToast({ type: "error", title: "Device software failed", message });
+    } finally {
+      setTableLoading(false);
+    }
+  };
+
+  const handleFolderClick = async (node: TreeNode, canExpand: boolean) => {
+    setSidebarTab("organization");
+    setSelectedDevice(null);
+    if (node.relationId !== undefined) {
+      setCurrentRelationId(node.relationId);
+      setSelectedFolder({ id: node.relationId, label: node.label });
+      setSelected({ mode: "folder", tableKey: "installedSoftware", label: node.label, relationId: node.relationId });
+      void loadRowsForTable("installedSoftware", node.relationId);
+    }
+    if (canExpand) toggleGroup(node.id);
+    if ((node.type === "dept" || node.type === "branch") && !node.devicesLoaded) {
+      await loadDepartmentDevices(node);
+      setExpandedGroups((prev) => new Set([...prev, node.id]));
+    }
+  };
+
+  const selectStatistic = async (node: TreeNode) => {
+    const nextTableKey = tableKeyFromStatistic(node.id);
+    if (!nextTableKey) {
+      toggleGroup(node.id);
+      return;
+    }
+
+    setSidebarTab("statistic");
+    setSelectedDevice(null);
+    setSelected({ mode: "statistic", tableKey: nextTableKey, label: node.label, relationId: currentRelationId });
+    setTableSort(null);
+    await loadRowsForTable(nextTableKey, currentRelationId);
+  };
+
+  const handleSoftwareScan = async (scanMode: "all" | "folder" | "device") => {
+    if (scanMode === "folder" && !selectedFolder) {
+      showToast({ type: "error", title: "Select a folder first", message: "Choose a folder or organisation before scanning." });
+      return;
+    }
+    if (scanMode === "device" && !selectedDevice) {
+      showToast({ type: "error", title: "Select a device first", message: "Click one device in the organisation tree before scanning." });
+      return;
+    }
+
+    setScanLoading(true);
+    try {
+      const body: Record<string, unknown> = { scanMode, Job_Style: 1, Job_Description: `Software inventory scan - ${scanMode}` };
+      if (scanMode === "folder" && selectedFolder) body.Object_Rel_Idn = selectedFolder.id;
+      if (scanMode === "device" && selectedDevice) {
+        body.Object_Root_Idn = selectedDevice.assetId;
+        body.Object_DeviceID = selectedDevice.objectDeviceId;
+      }
+      const response = await apiPost<{ data?: { Job_Idn?: number; targetCount?: number }; message?: string }>("/api/software-inventory/scan", body);
+      const jobId = response.data?.Job_Idn || "-";
+      const targetCount = response.data?.targetCount ?? "-";
+      showToast({ type: "success", title: "Software scan job created", message: `Job ${jobId} created for ${targetCount} target(s).` });
+    } catch (error) {
+      showToast({ type: "error", title: "Scan job failed", message: error instanceof Error ? error.message : "Failed to create software scan job." });
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setCategoryFilter("all");
+    setTypeFilter("all");
+    setOsFilter("all");
+    setActiveView("all");
+    setSortKey("softwareName");
+    setSortDirection("asc");
+    setTableSort(null);
+    setPage(1);
+  };
+
+  const resetToRegistry = () => {
+    setSelected({ mode: "registry", tableKey: "registry", label: "Software Registry", relationId: currentRelationId });
+    setSelectedDevice(null);
+    resetFilters();
+  };
+
+  const activateView = (view: ActiveView) => {
+    setSelected({ mode: "registry", tableKey: "registry", label: "Software Registry", relationId: currentRelationId });
+    setActiveView(view);
+    setPage(1);
+    if (view === "all") {
+      resetFilters();
+      return;
+    }
+    if (view === "unique") setSortKey("softwareName");
+    if (view === "installed") setSortKey("deviceName");
+    if (view === "categories") setSortKey("category");
+    if (view === "unclassified") {
+      setCategoryFilter("Unclassified");
+      setSortKey("softwareName");
+    }
+  };
+
+  const handleRegistrySort = (key: SortKey) => {
+    if (sortKey === key) setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
+  const handleTableSort = (index: number) => {
+    setTableSort((current) => current?.index === index ? { index, direction: current.direction === "asc" ? "desc" : "asc" } : { index, direction: "asc" });
+  };
+
+  const setCategoryScope = (category: string) => {
+    setSelected({ mode: "registry", tableKey: "registry", label: "Software Registry", relationId: currentRelationId });
+    setCategoryFilter(category);
+    setActiveView(category === "Unclassified" ? "unclassified" : "all");
+    setPage(1);
+  };
+
+  const setTypeScope = (type: string) => {
+    setSelected({ mode: "registry", tableKey: "registry", label: "Software Registry", relationId: currentRelationId });
+    setTypeFilter(type);
+    setActiveView("all");
+    setPage(1);
+  };
+
+  const refreshCurrentView = async () => {
+    if (selected.tableKey === "registry") {
+      await loadSoftwareInventory();
+      return;
+    }
+    if (selected.mode === "device" && selectedDevice) {
+      await loadRowsForDevice(selectedDevice);
+      return;
+    }
+    await loadRowsForTable(selected.tableKey, selected.relationId ?? currentRelationId);
+  };
+
+  const exportCurrentView = () => {
+    if (selected.tableKey === "registry") exportRegistryToCsv(filteredRecords);
+    else exportRowsToCsv(selected.label, tableColumns[selected.tableKey], filteredTableRows);
+  };
+
+  const FilterSelect = ({ selectKey, label, value, options, allLabel, onChange }: { selectKey: "category" | "type" | "os"; label: string; value: string; options: string[]; allLabel: string; onChange: (nextValue: string) => void }) => {
+    const isOpen = openSelect === selectKey;
+    const displayValue = value === "all" ? allLabel : value;
+    return (
+      <div className="software-filter-group">
+        <label>{label}</label>
+        <div className={cx("ema-select-combo software-select-combo", isOpen && "is-open")}>
+          <button type="button" className={cx("ema-select-trigger software-select-trigger", isOpen && "is-open")} onClick={() => setOpenSelect(isOpen ? null : selectKey)}>
+            <span>{displayValue}</span>
+            <ChevronDown size={15} />
+          </button>
+          {isOpen && (
+            <div className="ema-select-menu software-select-menu">
+              <button type="button" className={value === "all" ? "is-active" : ""} onClick={() => { onChange("all"); setOpenSelect(null); }}>{allLabel}</button>
+              {options.map((option) => (
+                <button type="button" key={option} className={value === option ? "is-active" : ""} onClick={() => { onChange(option); setOpenSelect(null); }}>{option}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const SortButton = ({ label, columnKey }: { label: string; columnKey: SortKey }) => (
+    <button type="button" className="ema-th-sort software-sort-btn" onClick={() => handleRegistrySort(columnKey)}>
+      <span>{label}</span>
+      <ArrowUpDown size={12} className={cx("software-sort-icon", sortKey === columnKey && "is-active")} />
+    </button>
+  );
+
+  const TableSortButton = ({ label, index }: { label: string; index: number }) => (
+    <button type="button" className="ema-th-sort software-sort-btn" onClick={() => handleTableSort(index)}>
+      <span>{label}</span>
+      <ArrowUpDown size={12} className={cx("software-sort-icon", tableSort?.index === index && "is-active")} />
+    </button>
+  );
+
+  const renderTree = (nodes: TreeNode[], depth = 0, mode: "organization" | "statistic" = "organization") => (
+    <div className={cx("software-tree-level", depth > 0 && "is-nested")}>
+      {nodes.map((node) => {
+        const hasChildren = Boolean(node.children?.length);
+        const isExpanded = expandedGroups.has(node.id);
+        const isActive = mode === "organization"
+          ? (selected.mode === "device" && selected.assetId === node.assetId) || (selected.mode === "folder" && selected.relationId === node.relationId && node.type !== "device")
+          : selected.tableKey === tableKeyFromStatistic(node.id);
+        const isDevice = node.type === "device";
+        const canLazyLoadDevices = mode === "organization"
+          && !isDevice
+          && node.relationId !== undefined
+          && node.relationId !== -1
+          && node.devicesLoaded !== true;
+        const isExpandable = hasChildren || canLazyLoadDevices;
+        return (
+          <div key={node.id}>
+            <button
+              type="button"
+              className={cx("software-tree-row", isActive && "is-active", isDevice && "is-device", isExpandable && "is-expandable")}
+              style={{ paddingLeft: 10 + depth * 12 }}
+              onClick={() => {
+                if (mode === "statistic") {
+                  void selectStatistic(node);
+                  return;
+                }
+                if (isDevice) void loadRowsForDevice(node);
+                else void handleFolderClick(node, isExpandable);
+              }}
+            >
+              <span className="software-tree-chevron">
+                {isExpandable ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : isDevice ? <MonitorSmartphone size={13} /> : <FolderOpen size={13} />}
+              </span>
+              <span className="software-tree-label">{node.label}</span>
+              {node.devicesLoading && <RefreshCw size={12} className="spin" />}
+            </button>
+            {hasChildren && isExpanded && renderTree(node.children || [], depth + 1, mode)}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const filtersActive = searchTerm || categoryFilter !== "all" || typeFilter !== "all" || osFilter !== "all" || activeView !== "all";
+  const canResetCurrentView = Boolean(filtersActive) || selected.tableKey !== "registry";
+  const visibleStart = activeRowsCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const visibleEnd = Math.min(page * PAGE_SIZE, activeRowsCount);
+  const tableTitle = selected.tableKey === "registry" ? "Software Registry" : selected.label;
+  const tableSubtitle = selected.tableKey === "registry"
+    ? "Synchronized installed software inventory"
+    : selected.mode === "device"
+      ? `Device: ${selected.label}`
+      : `Scope: ${selectedFolder?.label || "Organisation"}`;
+
+  return (
+    <main className="settings-module-root ema-settings-pro software-inventory-module container-fluid p-3 p-xl-4" data-section="software-inventory">
+      {toast && (
+        <div className={cx("ema-toast", toast.type === "error" ? "is-error" : toast.type === "info" ? "is-info" : "is-success", "software-toast")}>
+          <div className="ema-toast-icon software-toast-icon">{toast.type === "error" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}</div>
+          <div><strong>{toast.title}</strong><span>{toast.message}</span></div>
+          <button type="button" onClick={() => setToast(null)}><X size={15} /></button>
+        </div>
+      )}
+
+      <div className="settings-layout software-settings-layout d-grid gap-3">
+        <aside className="settings-menu ema-panel-surface software-left-panel">
+          <div className="panel-head software-panel-head">
+            <span>SOFTWARE CENTER</span>
+            <strong>Inventory Control</strong>
+            <small>Software list, statistics and scan scope</small>
+          </div>
+
+          <div className="software-sidebar-tabs">
+            <button type="button" className={sidebarTab === "organization" ? "is-active" : ""} onClick={() => setSidebarTab("organization")}>Organization</button>
+            <button type="button" className={sidebarTab === "statistic" ? "is-active" : ""} onClick={() => setSidebarTab("statistic")}>Statistic</button>
+            <button type="button" className={sidebarTab === "filters" ? "is-active" : ""} onClick={() => setSidebarTab("filters")}>Filters</button>
+          </div>
+
+          <div className="ema-search-field software-left-search">
+            <Search size={15} />
+            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software..." />
+            {searchTerm && <button type="button" onClick={() => setSearchTerm("")}><X size={14} /></button>}
+          </div>
+
+          {sidebarTab === "organization" && (
+            <div className="software-scope-block software-tree-block">
+              <div className="software-scope-title"><FolderOpen size={15} /><span>Organization</span></div>
+              {treeLoading && <div className="software-empty-mini">Loading organization...</div>}
+              {treeError && <div className="software-empty-mini is-error">{treeError}</div>}
+              {renderTree(deviceTree, 0, "organization")}
+            </div>
+          )}
+
+          {sidebarTab === "statistic" && (
+            <div className="software-scope-block software-tree-block">
+              <div className="software-scope-title"><Database size={15} /><span>Statistics</span></div>
+              {renderTree(statisticTree, 0, "statistic")}
+            </div>
+          )}
+
+          {sidebarTab === "filters" && (
+            <>
+              <div className="software-scope-block">
+                <div className="software-scope-title"><Layers size={15} /><span>Categories</span></div>
+                <button type="button" className={cx("software-scope-row", categoryFilter === "all" && activeView !== "unclassified" && "is-active")} onClick={() => { setCategoryFilter("all"); setActiveView("all"); setPage(1); }}><span>All Categories</span><strong>{softwareRecords.length}</strong></button>
+                <div className="software-scope-list">
+                  {categoryCounts.slice(0, 12).map((item) => (
+                    <button type="button" key={item.label} className={cx("software-scope-row", categoryFilter === item.label && "is-active")} onClick={() => setCategoryScope(item.label)}><span>{item.label}</span><strong>{item.count}</strong></button>
+                  ))}
+                  {!categoryCounts.length && <div className="software-empty-mini">No category data.</div>}
+                </div>
+              </div>
+              <div className="software-scope-block">
+                <div className="software-scope-title"><HardDrive size={15} /><span>Device Types</span></div>
+                <button type="button" className={cx("software-scope-row", typeFilter === "all" && "is-active")} onClick={() => setTypeScope("all")}><span>All Device Types</span><strong>{softwareRecords.length}</strong></button>
+                <div className="software-scope-list compact">
+                  {typeCounts.slice(0, 10).map((item) => (
+                    <button type="button" key={item.label} className={cx("software-scope-row", typeFilter === item.label && "is-active")} onClick={() => setTypeScope(item.label)}><span>{item.label}</span><strong>{item.count}</strong></button>
+                  ))}
+                  {!typeCounts.length && <div className="software-empty-mini">No device type data.</div>}
+                </div>
+              </div>
+            </>
+          )}
+        </aside>
+
+        <section className="settings-content software-center-panel d-grid gap-3">
+          <section className="settings-hero ema-panel-surface software-hero">
+            <div>
+              <span className="eyebrow">SOFTWARE INVENTORY</span>
+              <h2>Software Command Center</h2>
+              <p>Manage installed software records, package statistics, file extension evidence and scan jobs from one locked workspace.</p>
+            </div>
+            <div className="settings-score software-kpi-grid">
+            <button type="button" className={cx("score-box software-kpi-card is-blue", activeView === "all" && !filtersActive && selected.tableKey === "registry" && "is-active")} onClick={() => activateView("all")}>
+              <div className="ema-kpi-content"><div className="ema-kpi-icon"><Package size={18} /></div><span className="ema-kpi-label">Total Records</span><strong className="ema-kpi-value">{summary.totalRecords}</strong><small className="ema-kpi-note">{selected.tableKey === "registry" ? `${filteredRecords.length} shown` : "registry records"}</small></div>
+            </button>
+            <button type="button" className={cx("score-box software-kpi-card is-green", activeView === "unique" && selected.tableKey === "registry" && "is-active")} onClick={() => activateView("unique")}>
+              <div className="ema-kpi-content"><div className="ema-kpi-icon"><BarChart3 size={18} /></div><span className="ema-kpi-label">Unique Software</span><strong className="ema-kpi-value">{summary.uniqueSoftware}</strong><small className="ema-kpi-note">unique names</small></div>
+            </button>
+            <button type="button" className={cx("score-box software-kpi-card is-orange", activeView === "installed" && selected.tableKey === "registry" && "is-active")} onClick={() => activateView("installed")}>
+              <div className="ema-kpi-content"><div className="ema-kpi-icon"><MonitorSmartphone size={18} /></div><span className="ema-kpi-label">Installed Devices</span><strong className="ema-kpi-value">{summary.uniqueDevices}</strong><small className="ema-kpi-note">linked devices</small></div>
+            </button>
+            <button type="button" className={cx("score-box software-kpi-card is-purple", activeView === "categories" && selected.tableKey === "registry" && "is-active")} onClick={() => activateView("categories")}>
+              <div className="ema-kpi-content"><div className="ema-kpi-icon"><Layers size={18} /></div><span className="ema-kpi-label">Categories</span><strong className="ema-kpi-value">{summary.categories}</strong><small className="ema-kpi-note">class types</small></div>
+            </button>
+            <button type="button" className={cx("score-box software-kpi-card is-red", activeView === "unclassified" && selected.tableKey === "registry" && "is-active")} onClick={() => activateView("unclassified")}>
+              <div className="ema-kpi-content"><div className="ema-kpi-icon"><AlertTriangle size={18} /></div><span className="ema-kpi-label">Unclassified</span><strong className="ema-kpi-value">{summary.unclassified}</strong><small className="ema-kpi-note">no category</small></div>
+            </button>
+          </div>
+          </section>
+
+          <section className="content-shell ema-panel-surface software-registry-card software-registry-card--full">
+            <div className="software-registry-head">
+              <div><h3>{tableTitle}</h3><p>{tableSubtitle}</p></div>
+              <div className="software-registry-tools">
+                <div className="ema-search-field software-search-box"><Search size={15} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software records..." />{searchTerm && <button type="button" onClick={() => setSearchTerm("")}><X size={14} /></button>}</div>
+                <button type="button" className="ema-secondary-btn software-insights-toggle" onClick={() => setShowInsightsModal(true)}><FileText size={15} />Insights <span>{classificationCoverage}%</span></button>
+                <button type="button" className="ema-secondary-btn software-statistics-toggle" onClick={() => setSidebarTab("statistic")}><Database size={15} />Statistics</button>
+                <button type="button" className="ema-secondary-btn software-scan-btn" onClick={() => void handleSoftwareScan("device")} disabled={!selectedDevice || scanLoading}><MonitorSmartphone size={15} className={scanLoading ? "spin" : ""} />Scan Device</button>
+                <button type="button" className="ema-secondary-btn software-scan-btn" onClick={() => void handleSoftwareScan("folder")} disabled={!selectedFolder || scanLoading}><FolderOpen size={15} className={scanLoading ? "spin" : ""} />Scan Folder</button>
+                <button type="button" className="ema-secondary-btn software-scan-btn" onClick={() => void handleSoftwareScan("all")} disabled={scanLoading}><RefreshCw size={15} className={scanLoading ? "spin" : ""} />Scan All</button>
+                <button type="button" className="ema-icon-button" onClick={() => void refreshCurrentView()} title="Refresh"><RefreshCw size={15} /></button>
+              </div>
+            </div>
+
+            {selected.tableKey === "registry" && (
+              <div className="software-filter-row">
+                <FilterSelect selectKey="category" label="Category" value={categoryFilter} options={categoryOptions} allLabel="All category" onChange={(value) => { setCategoryFilter(value); setActiveView(value === "Unclassified" ? "unclassified" : "all"); }} />
+                <FilterSelect selectKey="type" label="Device Type" value={typeFilter} options={typeOptions} allLabel="All type" onChange={setTypeFilter} />
+                <FilterSelect selectKey="os" label="Operating System" value={osFilter} options={osOptions} allLabel="All OS" onChange={setOsFilter} />
+                <button type="button" className="ema-ghost-btn software-reset-btn" onClick={resetFilters} disabled={!filtersActive}><X size={14} />Reset</button>
+                <button type="button" className="ema-primary-btn software-export-btn" onClick={exportCurrentView}><Download size={15} />Export</button>
+              </div>
+            )}
+
+            {selected.tableKey !== "registry" && (
+              <div className="software-stat-summary-row">
+                {selected.tableKey === "installedSoftware" && (
+                  <>
+                    <div><span>Software Titles</span><strong>{installedStats.totalSoftware}</strong><small>installed registry</small></div>
+                    <div><span>License Used</span><strong>{installedStats.totalUsed}</strong><small>current usage</small></div>
+                    <div><span>Expiring Soon</span><strong>{installedStats.expiringSoon}</strong><small>within 90 days</small></div>
+                  </>
+                )}
+                {selected.tableKey === "licenseStatus" && (
+                  <>
+                    <div><span>Authorized</span><strong>{licenseStats.authorized}</strong><small>valid packages</small></div>
+                    <div><span>Limited</span><strong>{licenseStats.limited}</strong><small>limited seats</small></div>
+                    <div><span>Unauthorized</span><strong>{licenseStats.unauthorized}</strong><small>needs review</small></div>
+                  </>
+                )}
+                {(selected.tableKey === "fileExtensionExe" || selected.tableKey === "fileExtensionDll" || selected.tableKey === "fileExtensionIni") && (
+                  <>
+                    <div><span>Extension</span><strong>{getExtensionFromTableKey(selected.tableKey)}</strong><small>file inventory</small></div>
+                    <div><span>Files</span><strong>{currentTableRows.length}</strong><small>loaded records</small></div>
+                    <div><span>Scope</span><strong>{selectedFolder?.label || "All"}</strong><small>selected folder</small></div>
+                  </>
+                )}
+                <button type="button" className="ema-ghost-btn software-reset-btn software-stat-reset-btn" onClick={resetToRegistry} disabled={!canResetCurrentView}><X size={14} />Reset</button>
+                <button type="button" className="ema-primary-btn software-export-btn" onClick={exportCurrentView}><Download size={15} />Export</button>
+              </div>
+            )}
+
+            <div className="software-table-status-row"><strong>Showing {visibleStart}-{visibleEnd} of {activeRowsCount} software records</strong><span>View: {selected.label}</span></div>
+
+            {apiError && selected.tableKey === "registry" && <div className="software-error-banner"><AlertTriangle size={16} /><div><strong>Software API failed</strong><span>{apiError}</span></div></div>}
+            {tableError && selected.tableKey !== "registry" && <div className="software-error-banner"><AlertTriangle size={16} /><div><strong>View failed</strong><span>{tableError}</span></div></div>}
+            {(loading || tableLoading) && <div className="software-loading-banner"><RefreshCw size={16} className="spin" />Loading software inventory...</div>}
+
+            <div className="ema-table-wrap software-table-wrap">
+              <table className="ema-table software-table">
+                {selected.tableKey === "registry" ? (
+                  <>
+                    <colgroup><col className="col-no" /><col className="col-software" /><col className="col-category" /><col className="col-publisher" /><col className="col-version" /><col className="col-device" /><col className="col-type" /><col className="col-ip" /><col className="col-updated" /></colgroup>
+                    <thead><tr><th>#</th><th><SortButton label="Software Name" columnKey="softwareName" /></th><th><SortButton label="Category" columnKey="category" /></th><th><SortButton label="Publisher / Description" columnKey="publisher" /></th><th><SortButton label="Version" columnKey="version" /></th><th><SortButton label="Device" columnKey="deviceName" /></th><th><SortButton label="Type" columnKey="machineType" /></th><th><SortButton label="IP Address" columnKey="ip" /></th><th><SortButton label="Last Updated" columnKey="lastUpdated" /></th></tr></thead>
+                    <tbody>
+                      {pageRegistryRecords.map((record, index) => (
+                        <tr key={record.id}>
+                          <td><span className="ema-row-no software-row-no">{(page - 1) * PAGE_SIZE + index + 1}</span></td>
+                          <td><div className="software-name-cell"><span className="software-status-dot" /><div><strong>{record.softwareName}</strong><small>{record.assetTag}</small></div></div></td>
+                          <td><span className="software-chip">{record.category}</span></td>
+                          <td>{record.publisher}</td><td className="software-mono">{record.version}</td><td>{record.deviceName}</td><td>{record.machineType}</td><td>{record.ip}</td><td>{formatDateTime(record.lastUpdated)}</td>
+                        </tr>
+                      ))}
+                      {!pageRegistryRecords.length && !loading && <tr><td colSpan={9}><div className="software-empty-state"><Package size={24} /><strong>No software records found</strong><span>No records match the current filter/search.</span></div></td></tr>}
+                    </tbody>
+                  </>
+                ) : (
+                  <>
+                    <thead><tr>{tableColumns[selected.tableKey].map((column, index) => <th key={column}><TableSortButton label={column} index={index} /></th>)}</tr></thead>
+                    <tbody>
+                      {pageTableRows.map((row, rowIndex) => <tr key={`${selected.tableKey}-${rowIndex}`}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>)}
+                      {!pageTableRows.length && !tableLoading && <tr><td colSpan={tableColumns[selected.tableKey].length}><div className="software-empty-state"><Database size={24} /><strong>No software records loaded</strong><span>Choose a folder, device or statistic view to load data.</span></div></td></tr>}
+                    </tbody>
+                  </>
+                )}
+              </table>
+            </div>
+
+            <div className="software-page-pagination" aria-label="Software pagination">
+              <div className="software-page-pill">Page {page} of {totalPages}</div>
+              <div className="software-page-nav">
+                <button type="button" onClick={() => setPage(1)} disabled={page <= 1} aria-label="First page">&laquo;</button>
+                <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} aria-label="Previous page">&lsaquo;</button>
+                <strong>{page}</strong>
+                <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} aria-label="Next page">&rsaquo;</button>
+                <button type="button" onClick={() => setPage(totalPages)} disabled={page >= totalPages} aria-label="Last page">&raquo;</button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </div>
+
+      {showInsightsModal && (
+        <div className="software-insights-modal-overlay" role="dialog" aria-modal="true" onClick={() => setShowInsightsModal(false)}>
+          <section className="software-insights-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="software-insights-modal-hero">
+              <div className="software-insights-modal-title"><div className="software-insights-modal-icon"><FileText size={22} /></div><div><span>Software Insights</span><h2>Inventory Overview</h2><p>Computed from current inventory data without shrinking the registry table.</p></div></div>
+              <button type="button" className="ema-icon-button software-insights-modal-close" onClick={() => setShowInsightsModal(false)} aria-label="Close software insights"><X size={18} /></button>
+            </div>
+            <div className="software-insights-modal-body">
+              <div className="software-insights-summary-grid">
+                <button type="button" className="software-insights-metric-card is-blue" onClick={() => { activateView("all"); setShowInsightsModal(false); }}><span>Inventory Health</span><strong>{summary.totalRecords}</strong><small>{filteredRecords.length} visible records</small></button>
+                <button type="button" className="software-insights-metric-card is-green" onClick={() => { activateView("categories"); setShowInsightsModal(false); }}><span>Classified Coverage</span><strong>{classificationCoverage}%</strong><div className="software-insight-progress" aria-hidden="true"><i style={{ width: `${classificationCoverage}%` }} /></div><small>{summary.categories} class types</small></button>
+                <button type="button" className="software-insights-metric-card is-red" onClick={() => { activateView("unclassified"); setShowInsightsModal(false); }}><span>Needs Attention</span><strong>{summary.unclassified}</strong><small>records without category</small></button>
+              </div>
+              <div className="software-insights-modal-content-grid">
+                <div className="software-insights-modal-panel is-featured"><div className="software-insights-section-head"><Package size={15} /><div><strong>Top Software</strong><small>Highest installed software names</small></div></div><div className="software-insights-list">{topSoftware.map((item) => <button type="button" key={item.label} className="software-insights-list-row" onClick={() => { setSearchTerm(item.label); setSelected({ mode: "registry", tableKey: "registry", label: "Software Registry" }); setShowInsightsModal(false); }}><span>{item.label}</span><strong>{item.count}</strong></button>)}{!topSoftware.length && <div className="software-insight-empty">No software data yet.</div>}</div></div>
+                <div className="software-insights-modal-panel"><div className="software-insights-section-head"><HardDrive size={15} /><div><strong>Device Mix</strong><small>Records grouped by device type</small></div></div><div className="software-insights-list">{typeCounts.slice(0, 6).map((item) => <button type="button" key={item.label} className="software-insights-list-row" onClick={() => { setTypeScope(item.label); setShowInsightsModal(false); }}><span>{item.label}</span><strong>{item.count}</strong></button>)}{!typeCounts.length && <div className="software-insight-empty">No device data yet.</div>}</div></div>
+                <div className="software-insights-modal-panel"><div className="software-insights-section-head"><Layers size={15} /><div><strong>Categories</strong><small>Quick category drilldown</small></div></div><div className="software-insights-list">{categoryCounts.slice(0, 6).map((item) => <button type="button" key={item.label} className="software-insights-list-row" onClick={() => { setCategoryScope(item.label); setShowInsightsModal(false); }}><span>{item.label}</span><strong>{item.count}</strong></button>)}{!categoryCounts.length && <div className="software-insight-empty">No category data yet.</div>}</div></div>
+              </div>
+            </div>
+            <div className="software-insights-modal-actions"><button type="button" className="ema-secondary-btn" onClick={() => { resetFilters(); setShowInsightsModal(false); }}><X size={14} />Reset Filters</button><button type="button" className="ema-secondary-btn software-scan-btn" onClick={() => void handleSoftwareScan("all")} disabled={scanLoading}><RefreshCw size={15} className={scanLoading ? "spin" : ""} />Scan All</button></div>
+          </section>
+        </div>
+      )}
+
+      <div className="software-footer">EMA UNIFIED SYSTEM — SOFTWARE INVENTORY</div>
+    </main>
+  );
+}
