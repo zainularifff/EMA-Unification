@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import Login from "./pages/auth/Login";
 import Dashboard from "./pages/dashboard/Dashboard";
-import HardwareInventory from "./pages/hardware/HardwareInventory";
+import Hardware from "./pages/hardware/Hardware";
 import Settings from "./pages/settings/Settings";
 import ServiceDesk from "./pages/service-desk/ServiceDesk";
 import TaskList from "./pages/tasklist/TaskList";
@@ -25,7 +25,7 @@ export default function App() {
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/hardware" element={<HardwareInventory />} />
+        <Route path="/hardware" element={<Hardware />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/service-desk" element={<ServiceDesk />} />
         <Route path="/tasklist" element={<TaskList />} />

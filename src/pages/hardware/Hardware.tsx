@@ -1,5 +1,4 @@
 import { Fragment, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
 import {
   AlertCircle,
   CheckCircle,
@@ -26,7 +25,7 @@ import {
   Unlock,
   X,
 } from "lucide-react";
-import "../../components/styles/layout-contract-guard.css";
+
 
 type StatusType = "Online" | "Locked" | "Stale Sync" | "Offline";
 type KpiFilter = "all" | "recent" | "stale" | "locked" | "running";
@@ -380,7 +379,7 @@ type DepartmentPath = {
   groupPath: string;
 };
 
-const PAGE_SIZE = 10; // locked to 10 rows per page
+const PAGE_SIZE = 10;
 function resolveApiBaseUrl() {
   const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
   if (envUrl) return envUrl.replace(/\/$/, "");
@@ -1794,7 +1793,6 @@ function FolderTree({
 }
 
 export default function HardwareInventory() {
-  const location = useLocation();
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>(initialTreeData);
   const [apiDevices, setApiDevices] = useState<Device[]>([]);
   const [inventoryLoading, setInventoryLoading] = useState(false);
@@ -1940,42 +1938,6 @@ export default function HardwareInventory() {
   useEffect(() => {
     void loadHardwareInventory();
   }, [loadHardwareInventory]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const query = params.get("q") || params.get("search") || params.get("keyword") || "";
-
-    setSearchDevices(query);
-    setPage(1);
-
-    if (query.trim()) {
-      setSelectedFolderKey("organization");
-      setNote(`Global search applied: ${query.trim()}.`);
-    }
-  }, [location.search]);
-
-  useEffect(() => {
-    const handleGlobalSearch = (event: Event) => {
-      const customEvent = event as CustomEvent<{ query?: string; path?: string }>;
-      const targetPath = customEvent.detail?.path || "/hardware";
-
-      if (targetPath !== "/hardware") return;
-
-      const query = String(customEvent.detail?.query || "");
-      setSearchDevices(query);
-      setPage(1);
-
-      if (query.trim()) {
-        setSelectedFolderKey("organization");
-        setNote(`Global search applied: ${query.trim()}.`);
-      } else {
-        setNote("Hardware search cleared.");
-      }
-    };
-
-    window.addEventListener("ema-global-search", handleGlobalSearch as EventListener);
-    return () => window.removeEventListener("ema-global-search", handleGlobalSearch as EventListener);
-  }, []);
 
   const allTreeNodes = useMemo(() => flattenTree(treeNodes), [treeNodes]);
   const descendantMap = useMemo(() => {
