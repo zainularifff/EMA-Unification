@@ -668,9 +668,6 @@ function AppPagination({
       }}
     >
       <div className="uam-page-summary">Page {safeCurrentPage} / {safeTotalPages}</div>
-      <div className="uam-pagination-info" style={{ textAlign: "center" }}>
-        Showing <strong>{firstItem}-{lastItem}</strong> of <strong>{safeTotalItems}</strong> records
-      </div>
       <div className="uam-pagination-controls global-style">
         <button className="uam-page-icon" type="button" disabled={safeCurrentPage <= 1} onClick={() => goToPage(1)}>«</button>
         <button className="uam-page-icon" type="button" disabled={safeCurrentPage <= 1} onClick={() => goToPage(safeCurrentPage - 1)}>‹</button>
@@ -3804,21 +3801,6 @@ export default function ServiceDesk() {
                     Try All Tickets, reset filter, or create a new request.
                   </span>
                   <div className="content-actions justify-content-center">
-                    <button
-                      type="button"
-                      className="soft-btn"
-                      onClick={() => {
-                        setActiveQueue('all');
-                        setFilterStatus('All');
-                        setFilterPriority('All');
-                        setFilterAssignedTo('All');
-                        setSearchTerm('');
-                        setAdvancedFilters(emptyAdvancedFilters());
-                        setShowAdvanced(false);
-                      }}
-                    >
-                      Reset View
-                    </button>
                     <button type="button" className="primary-btn" onClick={openCreateForm}>
                       <Plus size={14} />
                       <span>New Ticket</span>

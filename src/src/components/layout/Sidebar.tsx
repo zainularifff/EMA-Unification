@@ -29,8 +29,8 @@ const navItems: NavItem[] = [
   { label: "Network", path: "/network", icon: Network, comingSoon: true },
   { label: "Users", path: "/users", icon: Users, comingSoon: true },
   { label: "Reports", path: "/reports", icon: BarChart3, comingSoon: true },
-  { label: "Task List", path: "/tasklist", icon: Settings },
   { label: "Service Desk", path: "/service-desk", icon: Box },
+  { label: "Task List", path: "/tasklist", icon: Settings },
   { label: "Settings", path: "/settings", icon: Settings },
 ];
 
