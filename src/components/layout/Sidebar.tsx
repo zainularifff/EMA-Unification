@@ -28,8 +28,8 @@ const navItems: NavItem[] = [
   { label: "Software", path: "/software", icon: Monitor, comingSoon: true },
   { label: "Network", path: "/network", icon: Network, comingSoon: true },
   { label: "Users", path: "/users", icon: Users, comingSoon: true },
-  { label: "Reports", path: "/reports", icon: BarChart3, comingSoon: true },
   { label: "Task List", path: "/tasklist", icon: Settings },
+  { label: "Report", path: "/report", icon: BarChart3},
   { label: "Service Desk", path: "/service-desk", icon: Box },
   { label: "Settings", path: "/settings", icon: Settings },
 ];

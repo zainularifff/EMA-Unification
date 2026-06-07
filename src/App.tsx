@@ -4,9 +4,10 @@ import { AppShell } from "./components/layout/AppShell";
 import Login from "./pages/auth/Login";
 import Dashboard from "./pages/dashboard/Dashboard";
 import HardwareInventory from "./pages/hardware/HardwareInventory";
-import Settings from "./pages/Settings/Settings";
+import Settings from "./pages/settings/Settings";
 import ServiceDesk from "./pages/service-desk/ServiceDesk";
 import TaskList from "./pages/tasklist/TaskList";
+import Report from "./pages/report/Report";
 
 
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/service-desk" element={<ServiceDesk />} />
         <Route path="/tasklist" element={<TaskList />} />
+        <Route path="/report" element={<Report />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

@@ -1,0 +1,3116 @@
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import "../../styles/ema-layout.css";
+
+type ReportType = "Summary" | "Detail" | "Audit" | "Compliance" | "Risk" | string;
+
+type ReportTemplate = {
+  id: string;
+  title: string;
+  description: string;
+  type: ReportType;
+  source: string;
+  outputs: string[];
+  category?: string;
+  categoryDesc?: string;
+  icon?: keyof typeof icons;
+};
+
+type ReportCategory = {
+  name: string;
+  desc: string;
+  icon: keyof typeof icons;
+  items: ReportTemplate[];
+};
+
+type ReportSection = {
+  type: "kpi" | "bar" | "donut" | "risk" | "table" | string;
+  title: string;
+  rows: any[];
+  columns?: string[];
+};
+
+type ReportPayload = {
+  success: boolean;
+  mode: string;
+  generatedAt: string;
+  report: ReportTemplate;
+  filters: ReportFilters;
+  metrics: Record<string, number | string>;
+  narrative: {
+    title: string;
+    period: string;
+    scope: string;
+    executiveSummary: string;
+    keyFindings: string[];
+    managementConclusion: string;
+    recommendations: string[];
+  };
+  sections: ReportSection[];
+  recommendations: { priority: string; action: string }[];
+  dataSources: { name: string; table: string; rows: number }[];
+  exportData: Record<string, any[]>;
+};
+
+type ReportFilters = {
+  dateRange: string;
+  startDate?: string;
+  endDate?: string;
+  relationID: number;
+  deviceGroup: string;
+  status: string;
+  outputFormat: string;
+  includeChart: boolean;
+  includeSummary: boolean;
+  includeTable: boolean;
+  includeRecommendation: boolean;
+};
+
+type ReportOptionItem = {
+  value: string;
+  label: string;
+};
+
+type ReportOptions = {
+  sites: { id: number; name: string }[];
+  groups: ReportOptionItem[];
+  statuses: ReportOptionItem[];
+  dateRanges: ReportOptionItem[];
+  outputFormats: ReportOptionItem[];
+};
+
+type ScheduleDraft = {
+  frequency: string;
+  delivery: string;
+  outputFormat: string;
+  time: string;
+  dayOfWeek: string;
+  dayOfMonth: string;
+};
+
+type HistoryItem = {
+  title: string;
+  format: string;
+  time: string;
+  payload?: ReportPayload;
+};
+
+const icons = {
+  chart:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M5 20V10m7 10V4m7 16v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  device:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v10H4V5Zm6 14h4m-7 0h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  asset:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="m12 3 8 4-8 4-8-4 8-4Zm-8 9 8 4 8-4M4 17l8 4 8-4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  shield:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  software:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M7 7h10v10H7V7Zm-3 3H2m2 4H2m20-4h-2m2 4h-2M10 4V2m4 2V2m-4 20v-2m4 2v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  geo:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-4.6 7-11a7 7 0 1 0-14 0c0 6.4 7 11 7 11Z" stroke="currentColor" stroke-width="2"/><path d="M12 10.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" stroke="currentColor" stroke-width="2"/></svg>',
+  remote:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M6 5h12v9H6V5Zm4 14h4m-7 0h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="m17 9 3-3m0 0v3m0-3h-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  ticket:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M5 6h14v10H8l-3 3V6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+  data:
+    '<svg viewBox="0 0 24 24" fill="none"><path d="M12 5c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3Zm-8 3v8c0 1.7 3.6 3 8 3s8-1.3 8-3V8M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" stroke="currentColor" stroke-width="1.9"/></svg>'
+} as Record<string, string>;
+
+const colors = {
+  Summary: "#2563eb",
+  Detail: "#10b981",
+  Audit: "#7c3aed",
+  Compliance: "#f59e0b",
+  Risk: "#f43f5e"
+} as Record<string, string>;
+
+const emptyFilters: ReportFilters = {
+  dateRange: "current-month",
+  relationID: 0,
+  deviceGroup: "all",
+  status: "all",
+  outputFormat: "PDF",
+  includeChart: true,
+  includeSummary: true,
+  includeTable: true,
+  includeRecommendation: true
+};
+
+const fallbackOptions: ReportOptions = {
+  sites: [],
+  groups: [
+    { value: "all", label: "All Groups" },
+    { value: "em", label: "EM Devices" },
+    { value: "mdm", label: "MDM Devices" }
+  ],
+  statuses: [
+    { value: "all", label: "All Status" },
+    { value: "online", label: "Online" },
+    { value: "offline", label: "Offline" },
+    { value: "stale", label: "Stale Sync" },
+    { value: "locked", label: "Locked" }
+  ],
+  dateRanges: [
+    { value: "current-month", label: "Current Month" },
+    { value: "last-7-days", label: "Last 7 Days" },
+    { value: "last-30-days", label: "Last 30 Days" },
+    { value: "quarter-to-date", label: "Quarter to Date" },
+    { value: "year-to-date", label: "Year to Date" },
+    { value: "custom", label: "Custom Range" }
+  ],
+  outputFormats: [
+    { value: "PDF", label: "PDF" },
+    { value: "Excel", label: "Excel / CSV" },
+    { value: "PowerPoint", label: "PowerPoint" }
+  ]
+};
+
+const FRONTEND_REPORT_CATALOG: ReportCategory[] = [
+  {
+    name: "Executive & Management",
+    desc: "Management and executive reporting for endpoint operations, risk, SLA and action visibility.",
+    icon: "chart",
+    items: [
+      { id: "executive-summary", title: "Executive Summary Report", description: "Overall management view for endpoint, risk, support and compliance.", type: "Summary", source: "Assets + Service Desk + Software + Jobs + Geolocation", outputs: ["PDF", "PowerPoint"] },
+      { id: "ema-operations-overview", title: "EMA Operations Overview", description: "High-level operational performance and endpoint health overview.", type: "Summary", source: "Device Registry + Task List", outputs: ["PDF"] },
+      { id: "risk-attention-summary", title: "Risk & Attention Summary", description: "Major risk items requiring management attention.", type: "Risk", source: "Device Status + Service Desk SLA + Data Quality", outputs: ["PDF"] },
+      { id: "monthly-management-dashboard", title: "Monthly Management Dashboard Report", description: "Monthly KPI snapshot based on dashboard and operational data.", type: "Summary", source: "Management Dashboard + Report Aggregation", outputs: ["PDF", "PowerPoint"] },
+      { id: "action-queue-summary", title: "Action Queue Summary", description: "Open operational items requiring follow-up.", type: "Summary", source: "Risk Queue + Service Desk + Stale Devices", outputs: ["PDF", "Excel"] }
+    ]
+  },
+  {
+    name: "Endpoint Operations",
+    desc: "Reports for endpoint health, stale sync, locked devices and registry detail.",
+    icon: "device",
+    items: [
+      { id: "endpoint-health-summary", title: "Endpoint Health Summary", description: "Active, inactive, stale sync, offline and locked endpoint status.", type: "Summary", source: "TS_OBJECT_ROOT + TSMDM_ASSET", outputs: ["PDF"] },
+      { id: "device-registry-detail", title: "Device Registry Detail Report", description: "Full list of registered devices with user, OS, IP and status.", type: "Detail", source: "Device Registry", outputs: ["Excel"] },
+      { id: "recently-connected-devices", title: "Recently Connected Devices Report", description: "Devices connected within selected period.", type: "Detail", source: "Connection Telemetry", outputs: ["Excel"] },
+      { id: "stale-sync-devices", title: "Stale Sync Devices Report", description: "Devices not syncing within threshold.", type: "Detail", source: "Last Sync / Last Connected", outputs: ["PDF", "Excel"] },
+      { id: "locked-device", title: "Locked Device Report", description: "Devices currently locked or requiring approval trail.", type: "Detail", source: "MDM Security State", outputs: ["PDF", "Excel"] },
+      { id: "offline-not-reporting-devices", title: "Offline / Not Reporting Devices Report", description: "Devices with no recent telemetry.", type: "Detail", source: "Telemetry Status", outputs: ["PDF", "Excel"] }
+    ]
+  },
+  {
+    name: "Asset & Lifecycle",
+    desc: "Reports for hardware inventory, aging assets and replacement planning.",
+    icon: "asset",
+    items: [
+      { id: "asset-lifecycle-summary", title: "Asset Lifecycle Summary", description: "New, standard, aging and critical asset overview.", type: "Summary", source: "Asset Lifecycle", outputs: ["PDF"] },
+      { id: "aging-device", title: "Aging Device Report", description: "Devices above age threshold or replacement candidate.", type: "Detail", source: "Hardware Inventory", outputs: ["Excel"] },
+      { id: "hardware-inventory", title: "Hardware Inventory Report", description: "CPU, RAM, storage, model and manufacturer breakdown.", type: "Detail", source: "Hardware Inventory", outputs: ["Excel"] },
+      { id: "missing-hardware-information", title: "Missing Hardware Information Report", description: "Devices with incomplete hardware data.", type: "Detail", source: "Data Quality", outputs: ["Excel"] },
+      { id: "asset-replacement-planning", title: "Asset Replacement Planning Report", description: "Devices that may require refresh planning.", type: "Summary", source: "Lifecycle + Risk", outputs: ["PDF", "Excel"] }
+    ]
+  },
+  {
+    name: "Security & Risk",
+    desc: "Security exposure, exception and compliance-risk reports.",
+    icon: "shield",
+    items: [
+      { id: "high-risk-endpoint", title: "High Risk Endpoint Report", description: "Endpoints with critical risk indicators.", type: "Risk", source: "Risk Indicators", outputs: ["PDF"] },
+      { id: "security-exception", title: "Security Exception Report", description: "Locked, offline, stale, unsupported or abnormal devices.", type: "Detail", source: "Security Exceptions", outputs: ["PDF", "Excel"] },
+      { id: "unsupported-os", title: "Unsupported OS Report", description: "Devices running outdated or unsupported OS where OS data is available.", type: "Compliance", source: "OS Inventory", outputs: ["Excel"] },
+      { id: "duplicate-ip", title: "Duplicate IP Report", description: "Devices with possible IP conflict.", type: "Detail", source: "Device + Network Inventory", outputs: ["Excel"] },
+      { id: "compliance-exposure", title: "Compliance Exposure Report", description: "Compliance-related endpoint findings.", type: "Compliance", source: "Risk + Compliance", outputs: ["PDF"] }
+    ]
+  },
+  {
+    name: "Software & Compliance",
+    desc: "Software inventory, unauthorized software and application metering reports.",
+    icon: "software",
+    items: [
+      { id: "software-inventory-summary", title: "Software Inventory Summary", description: "Total software, category distribution and software inventory coverage.", type: "Summary", source: "TSMDM_SW_LIST + TS_SW_CATEGORY", outputs: ["PDF"] },
+      { id: "unauthorized-software", title: "Unauthorized Software Report", description: "Software requiring removal or review based on category/visibility data.", type: "Compliance", source: "Software Inventory", outputs: ["Excel"] },
+      { id: "outdated-software", title: "Outdated Software Report", description: "Software needing update where version/search-date evidence exists.", type: "Detail", source: "Software Inventory", outputs: ["Excel"] },
+      { id: "software-distribution", title: "Software Distribution Report", description: "Package deployment and related task status.", type: "Detail", source: "Software Distribution + TS_JOB", outputs: ["Excel"] },
+      { id: "application-metering", title: "Application Metering Report", description: "Application metering task and collection visibility.", type: "Audit", source: "Application Metering + TS_JOB", outputs: ["PDF", "Excel"] }
+    ]
+  },
+  {
+    name: "Geolocation",
+    desc: "Location, abnormal movement and geolocation exception reports.",
+    icon: "geo",
+    items: [
+      { id: "device-location-summary", title: "Device Location Summary", description: "Device distribution by site or branch and latest location availability.", type: "Summary", source: "TSMDM_GEOLOCATION + Device Registry", outputs: ["PDF"] },
+      { id: "abnormal-location", title: "Abnormal Location Report", description: "Device detected outside expected location based on available location records.", type: "Detail", source: "Location Telemetry", outputs: ["Excel"] },
+      { id: "indoor-location-accuracy", title: "Indoor Location Accuracy Report", description: "Accuracy, signal and indoor tracking data where available.", type: "Detail", source: "Indoor Location", outputs: ["Excel"] },
+      { id: "location-history", title: "Location History Report", description: "Device movement and location timeline.", type: "Audit", source: "TSMDM_GEOLOCATION", outputs: ["Excel"] },
+      { id: "geolocation-exception", title: "Geolocation Exception Report", description: "Devices with missing, inaccurate or abnormal location data.", type: "Summary", source: "Geolocation Exceptions", outputs: ["PDF"] }
+    ]
+  },
+  {
+    name: "Remote Control Audit",
+    desc: "Audit reports for remote activity, failed access and after-hours sessions.",
+    icon: "remote",
+    items: [
+      { id: "remote-session-summary", title: "Remote Session Summary", description: "Total remote-related task, success, failed and after-hours indicators where stored.", type: "Summary", source: "MDM Remote Control + TS_JOB", outputs: ["PDF"] },
+      { id: "remote-control-audit-log", title: "Remote Control Audit Log", description: "Who initiated remote-related actions and when.", type: "Audit", source: "Task List / Remote Control", outputs: ["Excel"] },
+      { id: "failed-remote-session", title: "Failed Remote Session Report", description: "Failed remote attempts where job history is available.", type: "Detail", source: "Remote Control", outputs: ["Excel"] },
+      { id: "after-hours-remote-access", title: "After-Hours Remote Access Report", description: "Remote-related activity outside working hours.", type: "Audit", source: "Remote Audit Log", outputs: ["Excel"] },
+      { id: "remote-activity-by-user", title: "Remote Activity by User Report", description: "Support activity by technician or admin.", type: "Detail", source: "Remote Control + Console Users", outputs: ["Excel"] }
+    ]
+  },
+  {
+    name: "Service Desk",
+    desc: "Ticket, SLA, incident trend and support workload reports.",
+    icon: "ticket",
+    items: [
+      { id: "ticket-status-summary", title: "Ticket Status Summary", description: "New, in progress, pending vendor and resolved ticket status.", type: "Summary", source: "HD_Incidents", outputs: ["PDF"] },
+      { id: "sla-risk", title: "SLA Risk Report", description: "Tickets nearing or breaching SLA.", type: "Risk", source: "HD_Incidents.SlaDue", outputs: ["Excel"] },
+      { id: "incident-trend", title: "Incident Trend Report", description: "Ticket trend by day, week or month.", type: "Summary", source: "HD_Incidents.CreatedAt", outputs: ["PDF"] },
+      { id: "site-ticket", title: "Site Ticket Report", description: "Ticket count by branch or site.", type: "Detail", source: "HD_Incidents.CustomerName", outputs: ["Excel"] },
+      { id: "support-workload", title: "Support Workload Report", description: "Assigned workload by support user or team.", type: "Summary", source: "HD_Incidents.AssignedTo", outputs: ["PDF"] }
+    ]
+  },
+  {
+    name: "Data Quality",
+    desc: "Completeness, duplicate, invalid data and telemetry gap reports.",
+    icon: "data",
+    items: [
+      { id: "data-completeness", title: "Data Completeness Report", description: "Missing fields and incomplete records.", type: "Summary", source: "Device Registry + Software + Ticket Data", outputs: ["PDF"] },
+      { id: "duplicate-device", title: "Duplicate Device Report", description: "Duplicate hostname, IP or device identity.", type: "Detail", source: "Device Registry", outputs: ["Excel"] },
+      { id: "missing-user-mapping", title: "Missing User Mapping Report", description: "Devices not linked to department or owner fields available in registry.", type: "Detail", source: "User Mapping", outputs: ["Excel"] },
+      { id: "invalid-data", title: "Invalid Data Report", description: "Incorrect or abnormal field values.", type: "Detail", source: "Data Quality", outputs: ["Excel"] },
+      { id: "telemetry-gap", title: "Telemetry Gap Report", description: "Devices with incomplete or delayed data.", type: "Summary", source: "Telemetry", outputs: ["PDF"] }
+    ]
+  }
+];
+
+function getApiBases() {
+  const viteBase = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL || "";
+  const configured = String(viteBase || "").replace(/\/$/, "");
+
+  // First use project config/proxy. If Vite proxy is not configured, fall back to the backend port used by server.js.
+  return Array.from(new Set([configured, "", "http://localhost:3001"].filter((item) => item !== null && item !== undefined)));
+}
+
+function pickTokenFromJson(value: string | null) {
+  if (!value) return "";
+  try {
+    const parsed = JSON.parse(value);
+    return String(parsed?.token || parsed?.accessToken || parsed?.authToken || parsed?.jwt || parsed?.data?.token || parsed?.user?.token || "");
+  } catch {
+    return "";
+  }
+}
+
+function getAuthToken() {
+  const keys = [
+    "token",
+    "accessToken",
+    "authToken",
+    "emaToken",
+    "ema_token",
+    "access_token",
+    "auth_token",
+    "jwt",
+    "userToken"
+  ];
+
+  for (const storage of [localStorage, sessionStorage]) {
+    for (const key of keys) {
+      const value = storage.getItem(key);
+      if (value) return value;
+    }
+
+    for (const key of ["user", "auth", "authUser", "emaUser", "currentUser", "loginUser"]) {
+      const token = pickTokenFromJson(storage.getItem(key));
+      if (token) return token;
+    }
+  }
+
+  return "";
+}
+
+async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getAuthToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>)
+  };
+
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let lastError: Error | null = null;
+
+  for (const base of getApiBases()) {
+    try {
+      const response = await fetch(`${base}${path}`, {
+        ...options,
+        headers,
+        credentials: "include"
+      });
+
+      const text = await response.text();
+      let payload: any = {};
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(`Invalid JSON from ${base || "current origin"}${path}. Check Vite proxy or set VITE_API_URL=http://localhost:3001`);
+      }
+
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || payload?.error || `Report request failed: ${response.status}`);
+      }
+
+      return payload as T;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  throw lastError || new Error("Report Center request failed.");
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatGeneratedTime() {
+  return new Date().toLocaleString("en-MY", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatLabel(value: string) {
+  return String(value || "")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/_/g, " ")
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function valueText(value: any) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (String(value).includes("T") && !Number.isNaN(new Date(value).getTime())) return formatDateTime(value);
+  return String(value);
+}
+
+function getPreviewRows(report?: ReportTemplate, payload?: ReportPayload) {
+  if (payload?.sections?.length) return payload.sections.map((section) => section.title);
+  if (!report) return ["Select report template", "Configure filters", "Preview output", "Generate report"];
+  if (report.type === "Detail") return ["Report title and filter summary", "Detailed record table", "Exception indicator", "Export-ready dataset", "Operational notes"];
+  if (report.type === "Audit") return ["Audit scope and period", "Access / action summary", "User activity trail", "Exception log", "Evidence-ready output"];
+  if (report.type === "Risk") return ["Risk summary", "Severity breakdown", "Affected endpoints", "Business impact", "Recommended action"];
+  return ["Executive summary", "KPI snapshot", "Visual section", "Management findings", "Recommended action"];
+}
+
+function normalizeOptionList(items: any[] | undefined, fallback: ReportOptionItem[]) {
+  if (!Array.isArray(items) || items.length === 0) return fallback;
+  return items.map((item) => {
+    if (typeof item === "string") {
+      const value = item.toLowerCase().replace(/\s+/g, "-").replace("all-status", "all");
+      return { value, label: item };
+    }
+    return {
+      value: String(item.value ?? item.id ?? item.name ?? "").trim() || "all",
+      label: String(item.label ?? item.name ?? item.value ?? "All").trim() || "All"
+    };
+  });
+}
+
+function allowedOutputs(report?: ReportTemplate, options?: ReportOptions) {
+  const base = (options?.outputFormats?.length ? options.outputFormats : fallbackOptions.outputFormats).map((item) => item.value);
+  const reportOutputs = report?.outputs?.length ? report.outputs : [];
+  const merged = [...reportOutputs, ...base, "PDF", "Excel", "PowerPoint"];
+  return Array.from(new Set(merged.filter(Boolean)));
+}
+
+function outputLabel(value: string) {
+  const found = fallbackOptions.outputFormats.find((item) => item.value === value);
+  return found?.label || value;
+}
+
+function downloadPowerPoint(payload: ReportPayload) {
+  const sections = payload.sections
+    .map((section) => {
+      const rows = (section.rows || []).slice(0, 8);
+      const list = rows
+        .map((row) => `<li>${Object.entries(row).slice(0, 4).map(([key, value]) => `<strong>${formatLabel(key)}:</strong> ${valueText(value)}`).join(" &nbsp; ")}</li>`)
+        .join("");
+      return `<div class="slide"><h2>${section.title}</h2><ul>${list || "<li>No matching records for this section.</li>"}</ul></div>`;
+    })
+    .join("");
+
+  const body = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:p="urn:schemas-microsoft-com:office:powerpoint" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="utf-8"><title>${payload.report.title}</title></head>
+      <body style="font-family:Arial,sans-serif;color:#0f2347">
+        <div class="slide"><h1>${payload.report.title}</h1><p>${payload.narrative.executiveSummary}</p><p><small>${formatDateTime(payload.generatedAt)}</small></p></div>
+        <div class="slide"><h2>Key Findings</h2><ul>${payload.narrative.keyFindings.map((item) => `<li>${item}</li>`).join("")}</ul></div>
+        ${sections}
+        <div class="slide"><h2>Recommended Actions</h2><ol>${payload.recommendations.map((item) => `<li><strong>${item.priority}</strong> ${item.action}</li>`).join("")}</ol></div>
+      </body>
+    </html>`;
+  const blob = new Blob([body], { type: "application/vnd.ms-powerpoint;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${payload.report.id}-${Date.now()}.ppt`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function applyOutputAction(payload: ReportPayload, format: string) {
+  if (format === "Excel" || format === "CSV") downloadCsv(payload);
+  if (format === "PowerPoint") downloadPowerPoint(payload);
+}
+
+function SearchIcon() {
+  return (
+    <svg fill="none" viewBox="0 0 24 24">
+      <path d="m21 21-4.3-4.3M10.8 18.2a7.4 7.4 0 1 1 0-14.8 7.4 7.4 0 0 1 0 14.8Z" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg fill="none" viewBox="0 0 24 24">
+      <path d="M12 3v11m0 0 4-4m-4 4-4-4M4 17v3h16v-3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function flattenExportRows(payload: ReportPayload) {
+  const reportId = payload.report.id;
+  if (reportId.includes("ticket") || reportId.includes("sla") || reportId.includes("incident") || reportId.includes("workload")) return payload.exportData.incidents || [];
+  if (reportId.includes("software")) return payload.exportData.software || [];
+  if (reportId.includes("remote") || reportId.includes("metering") || reportId.includes("distribution")) return payload.exportData.jobs || [];
+  if (reportId.includes("geo") || reportId.includes("location")) return payload.exportData.geo || [];
+  return payload.exportData.assets || [];
+}
+
+function downloadCsv(payload: ReportPayload) {
+  const rows = flattenExportRows(payload);
+  const first = rows[0] || {};
+  const columns = Object.keys(first).length ? Object.keys(first) : ["message"];
+  const csvRows = [columns.join(",")];
+
+  if (!rows.length) {
+    csvRows.push(`"No records returned for ${payload.report.title}"`);
+  } else {
+    rows.forEach((row) => {
+      csvRows.push(
+        columns
+          .map((column) => `"${String(row[column] ?? "").replace(/"/g, '""')}"`)
+          .join(",")
+      );
+    });
+  }
+
+  const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${payload.report.id}-${Date.now()}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadHtmlSummary(payload: ReportPayload) {
+  const body = `
+    <html><head><meta charset="utf-8"><title>${payload.report.title}</title></head>
+    <body style="font-family:Arial,sans-serif;padding:32px;color:#102450">
+      <h1>${payload.report.title}</h1>
+      <h2>Executive Narrative</h2>
+      <p>${payload.narrative.executiveSummary}</p>
+      <h2>Key Findings</h2>
+      <ul>${payload.narrative.keyFindings.map((item) => `<li>${item}</li>`).join("")}</ul>
+      <h2>Recommended Actions</h2>
+      <ol>${payload.recommendations.map((item) => `<li><strong>${item.priority}</strong> ${item.action}</li>`).join("")}</ol>
+      <p><small>Generated ${formatDateTime(payload.generatedAt)}</small></p>
+    </body></html>`;
+  const blob = new Blob([body], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${payload.report.id}-management-summary.html`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function BarSection({ section }: { section: ReportSection }) {
+  const max = Math.max(1, ...section.rows.map((row) => Number(row.value || 0)));
+  return (
+    <div className="report-card dynamic-report-card">
+      <h3>{section.title}</h3>
+      <div className="horizontal-bar-list">
+        {section.rows.length === 0 && <p className="report-empty">No matching data available.</p>}
+        {section.rows.map((row, index) => {
+          const width = Math.max(4, Math.round((Number(row.value || 0) / max) * 100));
+          return (
+            <div className="bar-row-report" key={`${row.label}-${index}`}>
+              <span>{row.label || "Unspecified"}</span>
+              <div className="bar-track-report">
+                <i className="bar-fill-report" style={{ "--w": `${width}%` } as CSSProperties} />
+              </div>
+              <b>{row.value}</b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DonutSection({ section }: { section: ReportSection }) {
+  const rows = section.rows.slice(0, 4);
+  const total = rows.reduce((sum, row) => sum + Number(row.value || 0), 0) || 1;
+  let cursor = 0;
+  const colorsList = ["#10b981", "#f59e0b", "#f43f5e", "#94a3b8"];
+  const stops = rows.map((row, index) => {
+    const start = cursor;
+    const size = (Number(row.value || 0) / total) * 100;
+    cursor += size;
+    return `${colorsList[index]} ${start}% ${cursor}%`;
+  });
+
+  return (
+    <div className="report-card dynamic-report-card">
+      <h3>{section.title}</h3>
+      <div className="donut-report" style={{ background: `conic-gradient(${stops.join(", ")})` }}>
+        <div className="donut-inner-report">
+          <div>
+            <span>Total</span>
+            <strong>{total}</strong>
+          </div>
+        </div>
+      </div>
+      <div className="legend-report">
+        {rows.map((row, index) => (
+          <div key={`${row.label}-${index}`}>
+            <i style={{ background: colorsList[index] }} /> {row.label}: {row.value}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function KpiSection({ section }: { section: ReportSection }) {
+  return (
+    <section className="report-section">
+      <div className="section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>KPI snapshot for the selected reporting scope.</p>
+        </div>
+        <span className="section-tag">KPI</span>
+      </div>
+      <div className="report-kpi-grid">
+        {section.rows.map((row, index) => (
+          <div className="report-kpi" key={`${row.label}-${index}`} style={{ "--accent": colorsListForIndex(index) } as CSSProperties}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+            <small>{row.note}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function colorsListForIndex(index: number) {
+  return ["#2563eb", "#10b981", "#f59e0b", "#f43f5e", "#7c3aed"][index % 5];
+}
+
+function RiskSection({ section }: { section: ReportSection }) {
+  return (
+    <section className="report-section">
+      <div className="section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Management attention areas prepared from current operational records.</p>
+        </div>
+        <span className="section-tag">Risk</span>
+      </div>
+      <div className="report-table-wrap report-risk-wrap">
+        <table className="report-table report-risk-table">
+          <thead>
+            <tr>
+              <th>Area</th>
+            <th>Severity</th>
+            <th>Finding</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {section.rows.map((row, index) => (
+            <tr key={`${row.area}-${index}`}>
+              <td>{row.area}</td>
+              <td>
+                <span className={`risk-pill ${String(row.severity).toLowerCase().includes("high") ? "risk-high" : String(row.severity).toLowerCase().includes("medium") ? "risk-med" : "risk-low"}`}>{row.severity}</span>
+              </td>
+              <td>{row.finding}</td>
+              <td>{row.action}</td>
+            </tr>
+          ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function TableSection({ section }: { section: ReportSection }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  return (
+    <section className="report-section">
+      <div className="section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>{section.rows.length} item(s) included for this section.</p>
+        </div>
+        <span className="section-tag">Table</span>
+      </div>
+      <div className="report-table-wrap">
+        <table className="report-table report-detail-table">
+          <thead>
+            <tr>
+              {columns.map((column) => (
+                <th key={column}>{formatLabel(column)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {section.rows.length === 0 && (
+              <tr>
+                <td colSpan={Math.max(columns.length, 1)}>No matching records for this report and filter.</td>
+              </tr>
+            )}
+            {section.rows.slice(0, 25).map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {columns.map((column) => (
+                  <td key={column}>{valueText(row[column])}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {section.rows.length > 25 && <p className="report-table-note">Showing first 25 records in the PDF preview. Full detail is available in Excel/CSV export.</p>}
+    </section>
+  );
+}
+
+
+type ReportVisualProfile = {
+  key: string;
+  label: string;
+  eyebrow: string;
+  accent: string;
+  softAccent: string;
+  storyTitle: string;
+  storyHelp: string;
+  heroMetricLabel: string;
+};
+
+function getReportProfile(report: ReportTemplate): ReportVisualProfile {
+  const id = String(report.id || "").toLowerCase();
+  const title = String(report.title || "").toLowerCase();
+  const category = String(report.category || "").toLowerCase();
+  const haystack = `${id} ${title} ${category}`;
+
+  if (haystack.includes("risk") || haystack.includes("security") || haystack.includes("compliance") || haystack.includes("duplicate") || haystack.includes("sla")) {
+    return {
+      key: "risk",
+      label: "Risk Register Layout",
+      eyebrow: "Risk & Control Evidence",
+      accent: "#ef4444",
+      softAccent: "rgba(239,68,68,.10)",
+      storyTitle: "Risk Interpretation",
+      storyHelp: "Highlights exposure, business impact and control action.",
+      heroMetricLabel: "Risk Items"
+    };
+  }
+
+  if (haystack.includes("software") || haystack.includes("application-metering") || haystack.includes("distribution") || haystack.includes("unauthorized") || haystack.includes("outdated")) {
+    return {
+      key: "software",
+      label: "Software Portfolio Layout",
+      eyebrow: "Software & Deployment Evidence",
+      accent: "#7c3aed",
+      softAccent: "rgba(124,58,237,.10)",
+      storyTitle: "Software Inventory Interpretation",
+      storyHelp: "Highlights application coverage, category concentration and deployment status.",
+      heroMetricLabel: "Software Rows"
+    };
+  }
+
+  if (haystack.includes("geo") || haystack.includes("location") || haystack.includes("indoor")) {
+    return {
+      key: "geo",
+      label: "Location Evidence Layout",
+      eyebrow: "Location Coverage Evidence",
+      accent: "#0891b2",
+      softAccent: "rgba(8,145,178,.10)",
+      storyTitle: "Location Coverage Interpretation",
+      storyHelp: "Highlights tracked devices, missing coverage and location-quality exceptions.",
+      heroMetricLabel: "Tracked Devices"
+    };
+  }
+
+  if (haystack.includes("remote") || haystack.includes("audit") || haystack.includes("metering")) {
+    return {
+      key: "audit",
+      label: "Audit Timeline Layout",
+      eyebrow: "Activity Evidence & Traceability",
+      accent: "#0f766e",
+      softAccent: "rgba(15,118,110,.10)",
+      storyTitle: "Audit Interpretation",
+      storyHelp: "Highlights traceability, initiator, timestamp and exception evidence.",
+      heroMetricLabel: "Activity Rows"
+    };
+  }
+
+  if (haystack.includes("ticket") || haystack.includes("incident") || haystack.includes("support") || haystack.includes("workload")) {
+    return {
+      key: "service",
+      label: "Service Desk SLA Layout",
+      eyebrow: "Ticket & SLA Operations",
+      accent: "#f97316",
+      softAccent: "rgba(249,115,22,.10)",
+      storyTitle: "Service Desk Interpretation",
+      storyHelp: "Highlights ticket pressure, SLA exposure and workload ownership.",
+      heroMetricLabel: "Open Tickets"
+    };
+  }
+
+  if (haystack.includes("asset") || haystack.includes("hardware") || haystack.includes("registry") || haystack.includes("lifecycle") || haystack.includes("replacement")) {
+    return {
+      key: "register",
+      label: "Asset Ledger Layout",
+      eyebrow: "Inventory Register & Lifecycle",
+      accent: "#2563eb",
+      softAccent: "rgba(37,99,235,.10)",
+      storyTitle: "Asset Register Interpretation",
+      storyHelp: "Highlights device register, lifecycle readiness and inventory completeness.",
+      heroMetricLabel: "Inventory Rows"
+    };
+  }
+
+  if (haystack.includes("data") || haystack.includes("missing") || haystack.includes("invalid") || haystack.includes("telemetry")) {
+    return {
+      key: "data",
+      label: "Data Quality Layout",
+      eyebrow: "Reporting Confidence & Data Quality",
+      accent: "#6366f1",
+      softAccent: "rgba(99,102,241,.10)",
+      storyTitle: "Data Quality Interpretation",
+      storyHelp: "Highlights completeness, duplicate records and reporting confidence.",
+      heroMetricLabel: "Data Issues"
+    };
+  }
+
+  if (haystack.includes("endpoint") || haystack.includes("offline") || haystack.includes("stale") || haystack.includes("locked") || haystack.includes("operations")) {
+    return {
+      key: "operations",
+      label: "Operations Health Layout",
+      eyebrow: "Endpoint Operations Health",
+      accent: "#0ea5e9",
+      softAccent: "rgba(14,165,233,.10)",
+      storyTitle: "Operations Interpretation",
+      storyHelp: "Highlights endpoint availability, stale telemetry and operational exceptions.",
+      heroMetricLabel: "Online Rate"
+    };
+  }
+
+  return {
+    key: "executive",
+    label: "Executive Board Layout",
+    eyebrow: "Executive Management Pack",
+    accent: "#1d4ed8",
+    softAccent: "rgba(29,78,216,.10)",
+    storyTitle: "Management Interpretation",
+    storyHelp: "A compact management summary with score, findings and action priorities.",
+    heroMetricLabel: "Ops Score"
+  };
+}
+
+function numberMetric(payload: ReportPayload, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const value = payload.metrics?.[key];
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) return numeric;
+  }
+  return fallback;
+}
+
+function getHeroMetric(payload: ReportPayload, profile: ReportVisualProfile) {
+  if (profile.key === "risk") return String(numberMetric(payload, ["slaBreached", "duplicateIpGroups"]) + numberMetric(payload, ["offlineEndpoints"]));
+  if (profile.key === "software") return String(numberMetric(payload, ["totalSoftwareRecords"]));
+  if (profile.key === "geo") return String(numberMetric(payload, ["geolocationDevices", "geolocationRecords"]));
+  if (profile.key === "audit") return String(numberMetric(payload, ["totalJobs"]));
+  if (profile.key === "service") return String(numberMetric(payload, ["openTickets", "totalTickets"]));
+  if (profile.key === "register") return String(numberMetric(payload, ["totalEndpoints"]));
+  if (profile.key === "data") return String(numberMetric(payload, ["missingIp"]) + numberMetric(payload, ["missingModel"]) + numberMetric(payload, ["missingMapping"]));
+  if (profile.key === "operations") return `${numberMetric(payload, ["onlineRate"])}%`;
+  return `${numberMetric(payload, ["operationalScore"])}%`;
+}
+
+function firstSection(sections: ReportSection[], type: string) {
+  return sections.find((section) => section.type === type);
+}
+
+function sectionGroup(sections: ReportSection[], types: string[]) {
+  return sections.filter((section) => types.includes(String(section.type)));
+}
+
+
+function getReportSkin(report: ReportTemplate) {
+  const id = String(report.id || "").toLowerCase();
+  const title = String(report.title || "").toLowerCase();
+  const haystack = `${id} ${title}`;
+  if (haystack.includes("monthly") || haystack.includes("dashboard")) return "dashboard-pack";
+  if (haystack.includes("action")) return "action-pack";
+  if (haystack.includes("risk") || haystack.includes("security") || haystack.includes("sla-risk")) return "risk-register";
+  if (haystack.includes("health") || haystack.includes("offline") || haystack.includes("stale") || haystack.includes("locked")) return "ops-board";
+  if (haystack.includes("registry") || haystack.includes("hardware") || haystack.includes("asset") || haystack.includes("lifecycle")) return "asset-ledger";
+  if (haystack.includes("software") || haystack.includes("application") || haystack.includes("distribution")) return "software-portfolio";
+  if (haystack.includes("geo") || haystack.includes("location")) return "location-pack";
+  if (haystack.includes("remote") || haystack.includes("audit")) return "audit-pack";
+  if (haystack.includes("ticket") || haystack.includes("incident") || haystack.includes("workload") || haystack.includes("sla")) return "service-pack";
+  if (haystack.includes("data") || haystack.includes("missing") || haystack.includes("duplicate") || haystack.includes("telemetry")) return "quality-pack";
+  return "board-pack";
+}
+
+function topKpiRows(sections: ReportSection[], limit = 4) {
+  const kpi = firstSection(sections, "kpi");
+  return (kpi?.rows || []).slice(0, limit);
+}
+
+function firstTableSection(sections: ReportSection[]) {
+  return sections.find((section) => section.type === "table" && section.rows?.length);
+}
+
+function ProfileDesignStrip({ payload, profile }: { payload: ReportPayload; profile: ReportVisualProfile }) {
+  const rows = topKpiRows(payload.sections, 4);
+  if (!rows.length) return null;
+  return (
+    <section className={`report-section design-strip-section strip-${profile.key}`}>
+      <div className="design-strip-grid">
+        {rows.map((row, index) => (
+          <div className="design-strip-card" key={`${row.label}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+            <small>{row.note}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ExecutiveSnapshotBoard({ payload, profile }: { payload: ReportPayload; profile: ReportVisualProfile }) {
+  const rows = topKpiRows(payload.sections, 5);
+  const risk = firstSection(payload.sections, "risk");
+  return (
+    <section className="report-section executive-snapshot-board">
+      <div className="executive-score-tile" style={{ "--template-accent": profile.accent } as CSSProperties}>
+        <span>Management Score</span>
+        <strong>{payload.metrics.operationalScore || 0}%</strong>
+        <p>{payload.narrative.managementConclusion}</p>
+      </div>
+      <div className="executive-signal-grid">
+        {rows.map((row, index) => (
+          <div className="executive-signal-card" key={`${row.label}-${index}`}>
+            <small>{row.label}</small>
+            <b>{row.value}</b>
+            <span>{row.note}</span>
+          </div>
+        ))}
+      </div>
+      {risk?.rows?.length ? (
+        <div className="executive-priority-stack">
+          <span>Priority Focus</span>
+          {risk.rows.slice(0, 3).map((row, index) => (
+            <p key={`${row.area}-${index}`}><b>{row.area}</b>{row.finding}</p>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function RiskHeatMap({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  const rows = section.rows || [];
+  return (
+    <section className="report-section risk-heatmap-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Severity-led risk view with management action direction.</p>
+        </div>
+        <span className="section-tag">Risk View</span>
+      </div>
+      <div className="risk-heatmap-grid">
+        {rows.length === 0 && <p className="report-empty">No matching risk record for this report and filter.</p>}
+        {rows.map((row, index) => {
+          const severity = String(row.severity || "low").toLowerCase();
+          return (
+            <div className={`risk-heatmap-card severity-${severity.includes("high") ? "high" : severity.includes("medium") ? "medium" : "low"}`} key={`${row.area}-${index}`}>
+              <div><span>{row.area}</span><b>{row.severity}</b></div>
+              <strong>{row.finding}</strong>
+              <p>{row.action}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function OperationsBoardSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  const nameKey = columns.find((column) => ["deviceName", "name", "assetName"].includes(column)) || columns[0];
+  const statusKey = columns.find((column) => column.toLowerCase().includes("status"));
+  const siteKey = columns.find((column) => ["site", "department", "group"].some((word) => column.toLowerCase().includes(word)));
+  const timeKey = columns.find((column) => column.toLowerCase().includes("seen") || column.toLowerCase().includes("date"));
+  return (
+    <section className="report-section operations-board-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Endpoint exceptions shown as operational cards for quick triage.</p>
+        </div>
+        <span className="section-tag">Ops Board</span>
+      </div>
+      <div className="ops-card-grid">
+        {section.rows.slice(0, 12).map((row, index) => (
+          <div className="ops-device-card" key={index} style={{ "--template-accent": profile.accent } as CSSProperties}>
+            <div><span>{statusKey ? valueText(row[statusKey]) : "Endpoint"}</span><b>#{String(index + 1).padStart(2, "0")}</b></div>
+            <strong>{valueText(row[nameKey])}</strong>
+            <p>{siteKey ? valueText(row[siteKey]) : "All sites"}</p>
+            <small>{timeKey ? valueText(row[timeKey]) : "No timestamp"}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SoftwarePortfolioSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  const nameKey = columns.find((column) => ["softwareName", "name", "item"].includes(column)) || columns[0];
+  const categoryKey = columns.find((column) => column.toLowerCase().includes("category"));
+  const deviceKey = columns.find((column) => column.toLowerCase().includes("device"));
+  return (
+    <section className="report-section software-portfolio-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Application evidence shown as portfolio tiles with supporting detail.</p>
+        </div>
+        <span className="section-tag">Portfolio</span>
+      </div>
+      <div className="software-tile-grid">
+        {section.rows.slice(0, 10).map((row, index) => (
+          <div className="software-tile" key={index} style={{ "--template-accent": profile.accent } as CSSProperties}>
+            <span>{categoryKey ? valueText(row[categoryKey]) : "Application"}</span>
+            <strong>{valueText(row[nameKey])}</strong>
+            <p>{deviceKey ? `Device: ${valueText(row[deviceKey])}` : columns.slice(0, 2).map((column) => `${formatLabel(column)}: ${valueText(row[column])}`).join(" · ")}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DataQualityBoardSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  const nameKey = columns.find((column) => ["deviceName", "area", "item"].includes(column)) || columns[0];
+  return (
+    <section className="report-section data-quality-board-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Data issues shown as correction cards with supporting detail.</p>
+        </div>
+        <span className="section-tag">Quality</span>
+      </div>
+      <div className="quality-card-grid">
+        {section.rows.slice(0, 9).map((row, index) => (
+          <div className="quality-card" key={index} style={{ "--template-accent": profile.accent } as CSSProperties}>
+            <span>Check {index + 1}</span>
+            <strong>{valueText(row[nameKey])}</strong>
+            <p>{columns.slice(0, 3).map((column) => `${formatLabel(column)}: ${valueText(row[column])}`).join(" · ")}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ActionPriorityBoard({ payload, profile }: { payload: ReportPayload; profile: ReportVisualProfile }) {
+  return (
+    <section className="report-section action-priority-board">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>Priority Execution Board</h2>
+          <p>Action cards arranged for management follow-up.</p>
+        </div>
+        <span className="section-tag">Execution</span>
+      </div>
+      <div className="priority-lane-grid">
+        {payload.recommendations.map((item, index) => (
+          <div className="priority-lane-card" key={`${item.priority}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+            <span>{item.priority}</span>
+            <strong>{item.action}</strong>
+            <p>Assign owner, target date and evidence update before the next review cycle.</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProfileCover({ payload, filters, profile, skin }: { payload: ReportPayload; filters: ReportFilters; profile: ReportVisualProfile; skin: string }) {
+  const kpiRows = topKpiRows(payload.sections, 6);
+  const riskRows = (firstSection(payload.sections, "risk")?.rows || []).slice(0, 3);
+  const visualSection = firstSection(payload.sections, "bar") || firstSection(payload.sections, "donut");
+  const score = numberMetric(payload, ["operationalScore"], 0);
+  const online = numberMetric(payload, ["onlineRate"], 0);
+  const offline = numberMetric(payload, ["offlineEndpoints"], 0);
+  const stale = numberMetric(payload, ["staleEndpoints"], 0);
+  const openTickets = numberMetric(payload, ["openTickets", "totalTickets"], 0);
+  const software = numberMetric(payload, ["totalSoftwareRecords", "distinctSoftware"], 0);
+  const geo = numberMetric(payload, ["geolocationDevices", "geolocationRecords"], 0);
+  const totalEndpoints = numberMetric(payload, ["totalEndpoints"], 0);
+
+  const reportPackLabel = skin
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+  const coverStats = profile.key === "executive"
+    ? [
+        { label: "Ops Score", value: `${score}%`, note: "Management posture" },
+        { label: "Online Rate", value: `${online}%`, note: `${offline} offline endpoint(s)` },
+        { label: "Open Tickets", value: openTickets, note: "Service desk pressure" },
+        { label: "Software", value: software, note: "Inventory records" }
+      ]
+    : profile.key === "operations"
+    ? [
+        { label: "Online Rate", value: `${online}%`, note: `${offline} offline` },
+        { label: "Stale Telemetry", value: stale, note: "Delayed check-in" },
+        { label: "Total Endpoint", value: totalEndpoints, note: "Current scope" },
+        { label: "Tickets", value: openTickets, note: "Operational impact" }
+      ]
+    : profile.key === "service"
+    ? [
+        { label: "Open Tickets", value: openTickets, note: "Active workload" },
+        { label: "SLA Exposure", value: numberMetric(payload, ["slaBreached"], 0), note: "Breach candidate(s)" },
+        { label: "Ops Score", value: `${score}%`, note: "Service impact" },
+        { label: "Endpoint Scope", value: totalEndpoints, note: "Affected estate" }
+      ]
+    : profile.key === "geo"
+    ? [
+        { label: "Geo Records", value: geo, note: "Location telemetry" },
+        { label: "Endpoint Scope", value: totalEndpoints, note: "Current coverage" },
+        { label: "Offline", value: offline, note: "Location risk" },
+        { label: "Stale", value: stale, note: "Freshness risk" }
+      ]
+    : profile.key === "software"
+    ? [
+        { label: "Software Records", value: software, note: "Inventory volume" },
+        { label: "Distinct Names", value: numberMetric(payload, ["distinctSoftware"], 0), note: "Application spread" },
+        { label: "Endpoint Scope", value: totalEndpoints, note: "Installed base" },
+        { label: "Ops Score", value: `${score}%`, note: "Compliance posture" }
+      ]
+    : [
+        { label: profile.heroMetricLabel, value: getHeroMetric(payload, profile), note: payload.report.type },
+        { label: "Endpoint Scope", value: totalEndpoints, note: payload.narrative.scope },
+        { label: "Open Tickets", value: openTickets, note: "Support exposure" },
+        { label: "Online Rate", value: `${online}%`, note: `${offline} offline` }
+      ];
+
+  return (
+    <section className={`report-cover report-template-cover report-cover-revamp cover-skin-${skin}`} style={{ "--template-accent": profile.accent, "--template-soft": profile.softAccent } as CSSProperties}>
+      <div className="report-cover-content report-template-cover-content revamp-cover-content">
+        <div className="revamp-cover-left">
+          <div className="report-logo-line revamp-cover-brand">
+            <div className="report-logo">E</div>
+            <div>
+              <b>EMA Unified System</b>
+              <span>{profile.eyebrow}</span>
+            </div>
+          </div>
+          <span className="template-badge revamp-cover-badge">{reportPackLabel}</span>
+          <h1>{payload.report.title}</h1>
+          <p>{payload.report.description}</p>
+          <div className="revamp-cover-pills">
+            <span>{payload.report.type}</span>
+            <span>{payload.narrative.scope}</span>
+            <span>{payload.narrative.period}</span>
+            <span>{filters.outputFormat}</span>
+          </div>
+        </div>
+
+        <div className="revamp-cover-center">
+          <div className="revamp-cover-score-card">
+            <span>{profile.heroMetricLabel}</span>
+            <strong>{getHeroMetric(payload, profile)}</strong>
+            <small>{payload.narrative.managementConclusion}</small>
+          </div>
+          <div className="revamp-cover-stat-grid">
+            {coverStats.slice(0, 4).map((item, index) => (
+              <div className="revamp-cover-stat" key={`${item.label}-${index}`}>
+                <span>{item.label}</span>
+                <b>{item.value}</b>
+                <small>{item.note}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {profile.key === "executive" ? (
+          <div className="revamp-cover-right revamp-executive-cover-panel">
+            <div className="revamp-cover-panel-head">
+              <span>Executive Snapshot</span>
+              <b>{formatDateTime(payload.generatedAt)}</b>
+            </div>
+            <div className="cover-health-card">
+              <div className="cover-health-head">
+                <span>Endpoint Health Mix</span>
+                <b>{totalEndpoints}</b>
+              </div>
+              <div className="cover-health-bars" aria-label="Endpoint health mix">
+                <i style={{ width: `${Math.max(online, 2)}%` }} />
+                <em style={{ width: `${Math.max(100 - online, 2)}%` }} />
+              </div>
+              <div className="cover-health-grid">
+                <div><span>Online</span><b>{numberMetric(payload, ["onlineEndpoints"], 0)}</b></div>
+                <div><span>Offline</span><b>{offline}</b></div>
+                <div><span>Stale</span><b>{stale}</b></div>
+              </div>
+            </div>
+            <div className="cover-exec-focus-grid">
+              {(riskRows.length ? riskRows : kpiRows.slice(0, 3)).slice(0, 3).map((row, index) => (
+                <div key={index}>
+                  <span>{valueText(row.severity || row.label || `Focus ${index + 1}`)}</span>
+                  <p>{valueText(row.finding || row.note || row.action || row.value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="revamp-cover-right">
+            <div className="revamp-cover-panel-head">
+              <span>Report Snapshot</span>
+              <b>{formatDateTime(payload.generatedAt)}</b>
+            </div>
+            {visualSection ? (
+              <div className="revamp-cover-mini-chart">
+                {visualSection.type === "donut" ? <DonutSection section={visualSection} /> : <BarSection section={visualSection} />}
+              </div>
+            ) : (
+              <div className="revamp-cover-mini-chart revamp-cover-no-chart">
+                {kpiRows.slice(0, 4).map((row, index) => (
+                  <div key={`${row.label}-${index}`}><span>{row.label}</span><b>{row.value}</b></div>
+                ))}
+              </div>
+            )}
+            <div className="revamp-cover-focus-list">
+              {(riskRows.length ? riskRows : kpiRows.slice(0, 3)).map((row, index) => (
+                <div key={index}>
+                  <span>{valueText(row.severity || row.label || `Focus ${index + 1}`)}</span>
+                  <p>{valueText(row.finding || row.note || row.action || row.value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+function ProfileNarrative({ payload, profile }: { payload: ReportPayload; profile: ReportVisualProfile }) {
+  return (
+    <section className="report-section template-narrative-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{profile.storyTitle}</h2>
+          <p>{profile.storyHelp}</p>
+        </div>
+        <span className="section-tag">Narrative</span>
+      </div>
+      <div className="template-story-card">
+        <div className="template-story-main">
+          <p>{payload.narrative.executiveSummary}</p>
+          <ul className="report-finding-list template-finding-list">
+            {payload.narrative.keyFindings.map((finding) => <li key={finding}>{finding}</li>)}
+          </ul>
+          <p className="template-conclusion">{payload.narrative.managementConclusion}</p>
+        </div>
+        <div className="template-score-panel">
+          <span>Operational Score</span>
+          <strong>{payload.metrics.operationalScore || 0}%</strong>
+          <small>Based on availability, SLA exposure and reporting quality.</small>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TemplateKpiSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  return (
+    <section className="report-section template-kpi-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>{profile.key === "executive" ? "Board-level KPI snapshot." : `KPI snapshot for ${profile.label.toLowerCase()}.`}</p>
+        </div>
+        <span className="section-tag">KPI</span>
+      </div>
+      <div className={`template-kpi-grid template-kpi-${profile.key}`}>
+        {section.rows.map((row, index) => (
+          <div className="template-kpi-card" key={`${row.label}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+            <small>{row.label}</small>
+            <strong>{row.value}</strong>
+            <span>{row.note}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TemplateChartSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  return (
+    <section className={`report-section template-chart-section chart-${profile.key}`}>
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>{profile.key === "geo" ? "Location coverage distribution." : profile.key === "service" ? "Ticket/service pressure distribution." : "Visual summary for the selected reporting scope."}</p>
+        </div>
+        <span className="section-tag">{section.type === "donut" ? "Donut" : "Graph"}</span>
+      </div>
+      <div className="template-chart-shell">
+        {section.type === "donut" ? <DonutSection section={section} /> : <BarSection section={section} />}
+      </div>
+    </section>
+  );
+}
+
+
+function CompactTableOnly({ section, limit = 25 }: { section: ReportSection; limit?: number }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  return (
+    <div className="report-table-wrap template-compact-table-wrap">
+      <table className="report-table report-detail-table template-compact-table">
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th key={column}>{formatLabel(column)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {section.rows.length === 0 && (
+            <tr>
+              <td colSpan={Math.max(columns.length, 1)}>No matching records for this report and filter.</td>
+            </tr>
+          )}
+          {section.rows.slice(0, limit).map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {columns.map((column) => (
+                <td key={column}>{valueText(row[column])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {section.rows.length > limit && <p className="report-table-note">Showing first {limit} records in the PDF preview. Full detail is available in Excel/CSV export.</p>}
+    </div>
+  );
+}
+
+function TemplateRiskSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  return (
+    <section className={`report-section template-risk-section risk-${profile.key}`}>
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>{profile.key === "risk" ? "Risk register format with finding, severity and action owner direction." : "Management attention areas prepared from current operational records."}</p>
+        </div>
+        <span className="section-tag">Risk</span>
+      </div>
+      <div className="report-table-wrap report-risk-wrap template-risk-table-wrap">
+        <table className="report-table report-risk-table template-risk-table">
+          <thead>
+            <tr>
+              <th>Area</th>
+              <th>Severity</th>
+              <th>Finding</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {section.rows.length === 0 && (
+              <tr>
+                <td colSpan={4}>No matching risk record for this report and filter.</td>
+              </tr>
+            )}
+            {section.rows.map((row, index) => (
+              <tr key={`${row.area}-${index}`}>
+                <td>{row.area}</td>
+                <td>
+                  <span className={`risk-pill ${String(row.severity).toLowerCase().includes("high") ? "risk-high" : String(row.severity).toLowerCase().includes("medium") ? "risk-med" : "risk-low"}`}>{row.severity}</span>
+                </td>
+                <td>{row.finding}</td>
+                <td>{row.action}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function TemplateTableSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  if (profile.key === "audit") return <TimelineSection section={section} profile={profile} />;
+  if (profile.key === "geo") return <GeoEvidenceSection section={section} profile={profile} />;
+  if (profile.key === "service") return <ServiceEvidenceSection section={section} profile={profile} />;
+  if (profile.key === "operations") return <OperationsBoardSection section={section} profile={profile} />;
+  if (profile.key === "software") return <SoftwarePortfolioSection section={section} profile={profile} />;
+  if (profile.key === "data") return <DataQualityBoardSection section={section} profile={profile} />;
+
+  return (
+    <section className={`report-section template-table-section table-${profile.key}`}>
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>{profile.key === "register" ? "Asset ledger view for review and export." : `${section.rows.length} item(s) listed for review.`}</p>
+        </div>
+        <span className="section-tag">{profile.key === "register" ? "Register" : "Table"}</span>
+      </div>
+      <CompactTableOnly section={section} limit={profile.key === "register" ? 35 : 25} />
+    </section>
+  );
+}
+
+function TimelineSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  const primary = columns.find((column) => ["jobCommand", "description", "title", "item"].includes(column)) || columns[0];
+  const actor = columns.find((column) => ["createdBy", "assignedTo", "owner"].includes(column));
+  const time = columns.find((column) => ["startTime", "createdAt", "locationTime", "lastSeen"].includes(column));
+
+  return (
+    <section className="report-section template-timeline-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Timeline view for traceability and review.</p>
+        </div>
+        <span className="section-tag">Audit Trail</span>
+      </div>
+      <div className="template-timeline">
+        {section.rows.length === 0 && <p className="report-empty">No matching audit record.</p>}
+        {section.rows.slice(0, 14).map((row, index) => (
+          <div className="template-timeline-item" key={index} style={{ "--template-accent": profile.accent } as CSSProperties}>
+            <i />
+            <div>
+              <strong>{valueText(row[primary])}</strong>
+              <p>{actor ? `By ${valueText(row[actor])}` : "Actor unavailable"} {time ? `· ${valueText(row[time])}` : ""}</p>
+              <small>{columns.slice(0, 4).map((column) => `${formatLabel(column)}: ${valueText(row[column])}`).join(" · ")}</small>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function GeoEvidenceSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  const nameKey = columns.find((column) => ["deviceName", "locationName", "site"].includes(column)) || columns[0];
+  const accuracyKey = columns.find((column) => column.toLowerCase().includes("accuracy"));
+  const timeKey = columns.find((column) => ["locationTime", "lastSeen"].includes(column));
+
+  return (
+    <section className="report-section template-geo-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Location exceptions displayed as evidence cards with supporting detail.</p>
+        </div>
+        <span className="section-tag">Location</span>
+      </div>
+      <div className="geo-card-grid">
+        {section.rows.slice(0, 6).map((row, index) => (
+          <div className="geo-evidence-card" key={index} style={{ "--template-accent": profile.accent } as CSSProperties}>
+            <span>Location Evidence</span>
+            <strong>{valueText(row[nameKey])}</strong>
+            <p>{accuracyKey ? `Accuracy: ${valueText(row[accuracyKey])}` : "Accuracy evidence unavailable"}</p>
+            <small>{timeKey ? valueText(row[timeKey]) : "No timestamp"}</small>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ServiceEvidenceSection({ section, profile }: { section: ReportSection; profile: ReportVisualProfile }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  const titleKey = columns.find((column) => ["title", "item", "id"].includes(column)) || columns[0];
+  const statusKey = columns.find((column) => column.toLowerCase().includes("status"));
+  const priorityKey = columns.find((column) => column.toLowerCase().includes("priority"));
+
+  return (
+    <section className="report-section template-service-section">
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{section.title}</h2>
+          <p>Service desk queue displayed as SLA cards with supporting detail.</p>
+        </div>
+        <span className="section-tag">Tickets</span>
+      </div>
+      <div className="ticket-card-grid">
+        {section.rows.slice(0, 8).map((row, index) => (
+          <div className="ticket-evidence-card" key={index} style={{ "--template-accent": profile.accent } as CSSProperties}>
+            <div>
+              <span>{priorityKey ? valueText(row[priorityKey]) : "Ticket"}</span>
+              <b>{statusKey ? valueText(row[statusKey]) : "Status n/a"}</b>
+            </div>
+            <strong>{valueText(row[titleKey])}</strong>
+            <p>{columns.slice(0, 3).map((column) => `${formatLabel(column)}: ${valueText(row[column])}`).join(" · ")}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+
+function getDisplayRows(section?: ReportSection, limit = 6) {
+  return (section?.rows || []).slice(0, limit);
+}
+
+function ExecutiveNumberDashboard({ payload, profile }: { payload: ReportPayload; profile: ReportVisualProfile }) {
+  const kpiRows = topKpiRows(payload.sections, 6);
+  const chartSections = sectionGroup(payload.sections, ["bar", "donut"]);
+  const riskSection = firstSection(payload.sections, "risk");
+  const score = numberMetric(payload, ["operationalScore"], 0);
+  const onlineRate = numberMetric(payload, ["onlineRate"], 0);
+  const offline = numberMetric(payload, ["offlineEndpoints"], 0);
+  const openTickets = numberMetric(payload, ["openTickets", "totalTickets"], 0);
+
+  return (
+    <section className="report-section executive-number-dashboard">
+      <div className="executive-number-hero">
+        <div className="executive-number-score" style={{ "--template-accent": profile.accent } as CSSProperties}>
+          <span>Management Score</span>
+          <strong>{score}%</strong>
+          <p>{payload.narrative.managementConclusion}</p>
+        </div>
+        <div className="executive-number-metrics">
+          <div><small>Online Rate</small><b>{onlineRate}%</b><span>Endpoint reachability</span></div>
+          <div><small>Offline</small><b>{offline}</b><span>Requires follow-up</span></div>
+          <div><small>Open Tickets</small><b>{openTickets}</b><span>Support workload</span></div>
+        </div>
+      </div>
+
+      <div className="executive-number-card-grid">
+        {kpiRows.map((row, index) => (
+          <div className="executive-number-card" key={`${row.label}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+            <small>{row.note}</small>
+          </div>
+        ))}
+      </div>
+
+      {chartSections.length ? (
+        <div className="executive-visual-grid">
+          {chartSections.slice(0, 2).map((section, index) => (
+            <div className="executive-visual-card" key={`${section.title}-${index}`}>
+              <div className="section-head template-section-head compact-head">
+                <div>
+                  <h2>{section.title}</h2>
+                  <p>Visual management indicator without operational detail table.</p>
+                </div>
+                <span className="section-tag">Visual</span>
+              </div>
+              <div className="template-chart-shell executive-chart-shell">
+                {section.type === "donut" ? <DonutSection section={section} /> : <BarSection section={section} />}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {riskSection?.rows?.length ? (
+        <div className="executive-attention-mosaic">
+          <div className="section-head template-section-head compact-head">
+            <div>
+              <h2>Management Attention</h2>
+              <p>Number-led focus areas for executive discussion.</p>
+            </div>
+            <span className="section-tag">Focus</span>
+          </div>
+          <div className="executive-attention-grid">
+            {riskSection.rows.slice(0, 4).map((row, index) => (
+              <div className="executive-attention-card" key={`${row.area}-${index}`}>
+                <span>{row.severity}</span>
+                <strong>{row.area}</strong>
+                <p>{row.finding}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ExecutiveMemoBoard({ payload, profile }: { payload: ReportPayload; profile: ReportVisualProfile }) {
+  const score = numberMetric(payload, ["operationalScore"], 0);
+  const totalEndpoints = numberMetric(payload, ["totalEndpoints"], 0);
+  const onlineRate = numberMetric(payload, ["onlineRate"], 0);
+  const onlineEndpoints = numberMetric(payload, ["onlineEndpoints"], 0);
+  const offlineEndpoints = numberMetric(payload, ["offlineEndpoints"], 0);
+  const openTickets = numberMetric(payload, ["openTickets", "totalTickets"], 0);
+  const slaBreached = numberMetric(payload, ["slaBreached"], 0);
+  const softwareRecords = numberMetric(payload, ["totalSoftwareRecords"], 0);
+  const distinctSoftware = numberMetric(payload, ["distinctSoftwareNames"], 0);
+  const dataIssues = numberMetric(payload, ["dataQualityIssues"], 0);
+  const executiveSummaryLine = `${payload.report.title} covers ${payload.narrative.scope} for ${payload.narrative.period}. Board view combines endpoint availability, service desk pressure, software coverage and data quality into a ${score}% operational score.`;
+  const compactFindings = [
+    `${totalEndpoints} endpoints reviewed: ${onlineEndpoints || onlineRate} online and ${offlineEndpoints} offline.`,
+    `${openTickets} open tickets, including ${slaBreached} SLA breach candidate(s).`,
+    `${softwareRecords} software records across ${distinctSoftware} distinct software names.`,
+    `${dataIssues} endpoint data-quality issue(s) affecting reporting confidence.`
+  ];
+
+  return (
+    <section className="report-section executive-memo-board" style={{ "--template-accent": profile.accent } as CSSProperties}>
+      <div className="executive-memo-copy">
+        <span>Management Interpretation</span>
+        <h2>{payload.narrative.title || "Executive Interpretation"}</h2>
+        <p>{executiveSummaryLine}</p>
+      </div>
+      <div className="executive-memo-list">
+        {compactFindings.map((finding, index) => (
+          <div key={finding}>
+            <b>{String(index + 1).padStart(2, "0")}</b>
+            <span>{finding}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DashboardScoreboard({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const kpiSections = sectionGroup(sections, ["kpi"]);
+  const chartSections = sectionGroup(sections, ["bar", "donut"]);
+  const riskSections = sectionGroup(sections, ["risk"]);
+  return (
+    <>
+      <section className="report-section monthly-scoreboard-section">
+        <div className="section-head template-section-head">
+          <div>
+            <h2>Monthly Performance Board</h2>
+            <p>Dashboard-style indicators prepared for management review.</p>
+          </div>
+          <span className="section-tag">Dashboard</span>
+        </div>
+        <div className="monthly-scoreboard-grid">
+          {kpiSections.flatMap((section) => section.rows).slice(0, 8).map((row, index) => (
+            <div className="monthly-score-card" key={`${row.label}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+              <small>{row.label}</small>
+              <strong>{row.value}</strong>
+              <span>{row.note}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <div className="template-two-col dashboard-visuals">
+        {chartSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+      </div>
+      {riskSections.map((section, index) => <RiskHeatMap key={`${section.title}-${index}`} section={section} profile={profile} />)}
+    </>
+  );
+}
+
+function ActionQueueVisual({ payload, profile, sections }: { payload: ReportPayload; profile: ReportVisualProfile; sections: ReportSection[] }) {
+  const riskSections = sectionGroup(sections, ["risk"]);
+  const kpiRows = sectionGroup(sections, ["kpi"]).flatMap((section) => section.rows).slice(0, 4);
+  return (
+    <>
+      <section className="report-section action-command-strip">
+        <div className="section-head template-section-head">
+          <div>
+            <h2>Execution Command View</h2>
+            <p>Priority items grouped as management follow-up cards.</p>
+          </div>
+          <span className="section-tag">Queue</span>
+        </div>
+        <div className="action-command-kpis">
+          {kpiRows.map((row, index) => (
+            <div key={`${row.label}-${index}`}><span>{row.label}</span><b>{row.value}</b><small>{row.note}</small></div>
+          ))}
+        </div>
+      </section>
+      {riskSections.map((section, index) => <RiskHeatMap key={`${section.title}-${index}`} section={section} profile={profile} />)}
+      <ActionPriorityBoard payload={payload} profile={profile} />
+    </>
+  );
+}
+
+function DetailEvidenceCards({ section, profile, label = "Evidence" }: { section: ReportSection; profile: ReportVisualProfile; label?: string }) {
+  const columns = section.columns?.length ? section.columns : Object.keys(section.rows[0] || {});
+  const primary = columns.find((column) => ["deviceName", "softwareName", "title", "item", "name", "assetName"].includes(column)) || columns[0];
+  const status = columns.find((column) => column.toLowerCase().includes("status") || column.toLowerCase().includes("priority"));
+  const secondary = columns.find((column) => column !== primary && column !== status) || columns[1];
+  return (
+    <div className="detail-evidence-grid">
+      {section.rows.slice(0, 12).map((row, index) => (
+        <div className="detail-evidence-card" key={index} style={{ "--template-accent": profile.accent } as CSSProperties}>
+          <div><span>{label}</span><b>{status ? valueText(row[status]) : `#${String(index + 1).padStart(2, "0")}`}</b></div>
+          <strong>{valueText(row[primary])}</strong>
+          <p>{secondary ? `${formatLabel(secondary)}: ${valueText(row[secondary])}` : "Record available for export."}</p>
+          <small>{columns.slice(0, 3).map((column) => `${formatLabel(column)}: ${valueText(row[column])}`).join(" · ")}</small>
+        </div>
+      ))}
+      {!section.rows.length && <p className="report-empty">No matching records for this report and filter.</p>}
+    </div>
+  );
+}
+
+function sectionRows(section?: ReportSection, limit = 12) {
+  return (section?.rows || []).slice(0, limit);
+}
+
+function firstColumn(section?: ReportSection, candidates: string[] = []) {
+  const columns = section?.columns?.length ? section.columns : Object.keys(section?.rows?.[0] || {});
+  return candidates.find((candidate) => columns.includes(candidate)) || columns[0] || "item";
+}
+
+function valueFromRow(row: any, key?: string) {
+  if (!row || !key) return "-";
+  return valueText(row[key]);
+}
+
+function RevampKpiRibbon({ sections, tone = "default" }: { sections: ReportSection[]; tone?: string }) {
+  const rows = sectionGroup(sections, ["kpi"]).flatMap((section) => section.rows || []).slice(0, 8);
+  if (!rows.length) return null;
+  return (
+    <section className={`report-section revamp-kpi-ribbon revamp-kpi-${tone}`}>
+      {rows.map((row, index) => (
+        <div className="revamp-kpi-tile" key={`${row.label}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+          <span>{row.label}</span>
+          <strong>{row.value}</strong>
+          <small>{row.note}</small>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function RevampVisualPair({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const charts = sectionGroup(sections, ["bar", "donut"]).slice(0, 2);
+  if (!charts.length) return null;
+  return (
+    <section className="report-section revamp-visual-pair">
+      {charts.map((section, index) => (
+        <div className="revamp-visual-card" key={`${section.title}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+          <div className="revamp-mini-head">
+            <span>{section.type === "donut" ? "Distribution" : "Trend"}</span>
+            <h2>{section.title}</h2>
+          </div>
+          <div className="template-chart-shell revamp-chart-shell">
+            {section.type === "donut" ? <DonutSection section={section} /> : <BarSection section={section} />}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function ExecutiveBoardPackV2({ payload, sections, profile }: { payload: ReportPayload; sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const risk = firstSection(sections, "risk");
+  const score = numberMetric(payload, ["operationalScore"], 0);
+  const online = numberMetric(payload, ["onlineRate"], 0);
+  const totalEndpoints = numberMetric(payload, ["totalEndpoints"], 0);
+  const offline = numberMetric(payload, ["offlineEndpoints"], 0);
+  const stale = numberMetric(payload, ["staleEndpoints"], 0);
+  const tickets = numberMetric(payload, ["openTickets", "totalTickets"], 0);
+  const sla = numberMetric(payload, ["slaBreached"], 0);
+  const software = numberMetric(payload, ["totalSoftwareRecords"], 0);
+
+  const executiveMetrics = [
+    { label: "Endpoint Estate", value: totalEndpoints, note: `${online}% online · ${offline} offline` },
+    { label: "Service Desk", value: tickets, note: `${sla} SLA breach candidate(s)` },
+    { label: "Telemetry", value: stale, note: "Stale / missing last-seen" },
+    { label: "Software", value: software, note: "Inventory records in scope" }
+  ];
+
+  return (
+    <div className="exec-body-stack">
+      <section className="report-section exec-clean-pack" style={{ "--template-accent": profile.accent } as CSSProperties}>
+        <div className="exec-clean-head">
+          <span>Executive Decision Snapshot</span>
+          <h2>Management view without operational detail table</h2>
+          <p>{payload.narrative.managementConclusion}</p>
+        </div>
+        <div className="exec-clean-score">
+          <small>Board Score</small>
+          <strong>{score}%</strong>
+          <span>Composite posture</span>
+        </div>
+        <div className="exec-clean-metrics">
+          {executiveMetrics.map((row, index) => (
+            <div key={`${row.label}-${index}`}>
+              <span>{row.label}</span>
+              <b>{row.value}</b>
+              <small>{row.note}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {risk?.rows?.length ? (
+        <section className="report-section exec-clean-focus">
+          <div className="section-head template-section-head compact-head">
+            <div>
+              <h2>Board Attention Focus</h2>
+              <p>Only management-level focus areas are shown for executive review.</p>
+            </div>
+            <span className="section-tag">Decision Focus</span>
+          </div>
+          <div className="exec-clean-focus-grid">
+            {risk.rows.slice(0, 4).map((row, index) => (
+              <div className="exec-clean-focus-card" key={`${row.area}-${index}`}>
+                <span>{row.severity}</span>
+                <strong>{row.area}</strong>
+                <p>{row.finding}</p>
+                <small>{row.action}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function MonthlyDashboardPackV2({ payload, sections, profile }: { payload: ReportPayload; sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const kpiRows = sectionGroup(sections, ["kpi"]).flatMap((section) => section.rows || []).slice(0, 8);
+  const riskRows = sectionGroup(sections, ["risk"]).flatMap((section) => section.rows || []).slice(0, 4);
+  return (
+    <>
+      <section className="report-section revamp-monthly-command">
+        <div className="revamp-monthly-title">
+          <span>Monthly Command View</span>
+          <h2>{payload.narrative.period}</h2>
+          <p>{payload.narrative.executiveSummary}</p>
+        </div>
+        <div className="revamp-monthly-grid">
+          {kpiRows.map((row, index) => (
+            <div className="revamp-monthly-card" key={`${row.label}-${index}`} style={{ "--template-accent": colorsListForIndex(index) } as CSSProperties}>
+              <small>{row.label}</small>
+              <strong>{row.value}</strong>
+              <span>{row.note}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <RevampVisualPair sections={sections} profile={profile} />
+      {riskRows.length ? (
+        <section className="report-section revamp-monthly-focus">
+          <div className="section-head template-section-head"><div><h2>Monthly Attention Matrix</h2><p>Items that should be tracked into the next management cycle.</p></div><span className="section-tag">Matrix</span></div>
+          <div className="revamp-matrix-grid">
+            {riskRows.map((row, index) => <div key={`${row.area}-${index}`}><b>{row.area}</b><span>{row.severity}</span><p>{row.action}</p></div>)}
+          </div>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+function ActionQueuePackV2({ payload, sections, profile }: { payload: ReportPayload; sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const riskRows = sectionGroup(sections, ["risk"]).flatMap((section) => section.rows || []).slice(0, 6);
+  const kpiRows = sectionGroup(sections, ["kpi"]).flatMap((section) => section.rows || []).slice(0, 4);
+  return (
+    <>
+      <section className="report-section revamp-action-warroom">
+        <div className="revamp-action-left">
+          <span>Execution Board</span>
+          <h2>Priority Queue</h2>
+          <p>{payload.narrative.managementConclusion}</p>
+        </div>
+        <div className="revamp-action-stat-grid">
+          {kpiRows.map((row, index) => <div key={`${row.label}-${index}`}><small>{row.label}</small><b>{row.value}</b><span>{row.note}</span></div>)}
+        </div>
+      </section>
+      <section className="report-section revamp-kanban-board">
+        <div className="revamp-kanban-lane"><h3>Now</h3>{riskRows.slice(0, 2).map((row, index) => <div key={index}><b>{row.area}</b><p>{row.finding}</p></div>)}</div>
+        <div className="revamp-kanban-lane"><h3>Next</h3>{riskRows.slice(2, 4).map((row, index) => <div key={index}><b>{row.area}</b><p>{row.action}</p></div>)}</div>
+        <div className="revamp-kanban-lane"><h3>Follow-Up</h3>{payload.recommendations.slice(0, 3).map((row, index) => <div key={index}><b>{row.priority}</b><p>{row.action}</p></div>)}</div>
+      </section>
+    </>
+  );
+}
+
+function RiskRegisterPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const riskRows = sectionGroup(sections, ["risk"]).flatMap((section) => section.rows || []);
+  const tableSections = sectionGroup(sections, ["table"]);
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="risk" />
+      <section className="report-section revamp-risk-register">
+        <div className="section-head template-section-head"><div><h2>Risk Register</h2><p>Each risk is shown with severity, finding and control action.</p></div><span className="section-tag">Control</span></div>
+        <div className="revamp-risk-grid">
+          {riskRows.map((row, index) => {
+            const severity = String(row.severity || "low").toLowerCase();
+            return <div className={`revamp-risk-card risk-${severity.includes("high") ? "high" : severity.includes("medium") ? "medium" : "low"}`} key={`${row.area}-${index}`}><span>{row.severity}</span><h3>{row.area}</h3><p>{row.finding}</p><b>{row.action}</b></div>;
+          })}
+        </div>
+      </section>
+      {tableSections.map((section, index) => <section className="report-section revamp-evidence-strip" key={`${section.title}-${index}`}><div className="section-head template-section-head"><div><h2>{section.title}</h2><p>Evidence preview for validation. Full list remains available through export.</p></div><span className="section-tag">Evidence</span></div><DetailEvidenceCards section={section} profile={profile} label="Evidence" /></section>)}
+      <RevampVisualPair sections={sections} profile={profile} />
+    </>
+  );
+}
+
+function EndpointOpsPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const table = firstTableSection(sections);
+  const rows = sectionRows(table, 12);
+  const nameKey = firstColumn(table, ["deviceName", "assetName", "name"]);
+  const statusKey = table?.columns?.find((column) => column.toLowerCase().includes("status"));
+  const siteKey = table?.columns?.find((column) => column.toLowerCase().includes("site"));
+  const timeKey = table?.columns?.find((column) => column.toLowerCase().includes("seen") || column.toLowerCase().includes("date"));
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="ops" />
+      <RevampVisualPair sections={sections} profile={profile} />
+      <section className="report-section revamp-noc-wall">
+        <div className="section-head template-section-head"><div><h2>Endpoint Operations Wall</h2><p>Operational cards for endpoints that need attention.</p></div><span className="section-tag">NOC View</span></div>
+        <div className="revamp-noc-grid">
+          {rows.map((row, index) => <div className="revamp-noc-card" key={index}><span>{valueFromRow(row, statusKey) || "Endpoint"}</span><strong>{valueFromRow(row, nameKey)}</strong><p>{valueFromRow(row, siteKey)}</p><small>{valueFromRow(row, timeKey)}</small></div>)}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function AssetLedgerPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const tables = sectionGroup(sections, ["table"]);
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="asset" />
+      <section className="report-section revamp-ledger-cover">
+        <div><span>Inventory Register</span><h2>Asset Ledger Review</h2><p>Designed as a record-first report for asset control, lifecycle review and export.</p></div>
+        <div className="revamp-ledger-stamp">REGISTER</div>
+      </section>
+      {tables.map((section, index) => <section className="report-section revamp-ledger-table" key={`${section.title}-${index}`}><div className="section-head template-section-head"><div><h2>{section.title}</h2><p>Structured asset register for audit and reconciliation.</p></div><span className="section-tag">Ledger</span></div><CompactTableOnly section={section} limit={35} /></section>)}
+      <RevampVisualPair sections={sections} profile={profile} />
+    </>
+  );
+}
+
+function SoftwarePortfolioPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const table = firstTableSection(sections);
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="software" />
+      <section className="report-section revamp-software-showcase">
+        <div className="section-head template-section-head"><div><h2>Software Portfolio View</h2><p>Application records are grouped into portfolio-style evidence tiles.</p></div><span className="section-tag">Portfolio</span></div>
+        {table ? <SoftwarePortfolioSection section={table} profile={profile} /> : <p className="report-empty">No software records returned.</p>}
+      </section>
+      <RevampVisualPair sections={sections} profile={profile} />
+    </>
+  );
+}
+
+function GeoExceptionPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const table = firstTableSection(sections);
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="geo" />
+      <section className="report-section revamp-location-board">
+        <div className="revamp-location-map"><i /><i /><i /><span>Location Coverage</span></div>
+        <div className="revamp-location-copy"><h2>Geolocation Exception Board</h2><p>Location evidence is shown as exception cards instead of a raw technical table.</p></div>
+      </section>
+      {table ? <GeoEvidenceSection section={table} profile={profile} /> : null}
+      <RevampVisualPair sections={sections} profile={profile} />
+    </>
+  );
+}
+
+function RemoteAuditPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const table = firstTableSection(sections);
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="audit" />
+      <section className="report-section revamp-audit-coverline"><span>Audit Trail</span><h2>Remote Activity Evidence Timeline</h2><p>Activity is presented as traceable events for reviewer follow-up.</p></section>
+      {table ? <TimelineSection section={table} profile={profile} /> : null}
+      <RevampVisualPair sections={sections} profile={profile} />
+    </>
+  );
+}
+
+function ServiceDeskPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const table = firstTableSection(sections);
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="service" />
+      <section className="report-section revamp-sla-pack">
+        <div><span>SLA Pack</span><h2>Service Desk Pressure View</h2><p>Ticket and SLA information is shown as queue cards for operational review.</p></div>
+        <div className="revamp-sla-meter"><b>{getDisplayRows(table, 99).length}</b><span>records in preview</span></div>
+      </section>
+      {table ? <ServiceEvidenceSection section={table} profile={profile} /> : null}
+      <RevampVisualPair sections={sections} profile={profile} />
+    </>
+  );
+}
+
+function DataQualityPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const table = firstTableSection(sections);
+  const risks = sectionGroup(sections, ["risk"]);
+  return (
+    <>
+      <RevampKpiRibbon sections={sections} tone="data" />
+      <section className="report-section revamp-quality-gates">
+        <div><span>Reporting Confidence</span><h2>Data Quality Gates</h2><p>Designed to show correction work required before management reporting can be trusted.</p></div>
+        <div className="revamp-gate-grid"><i>Completeness</i><i>Mapping</i><i>Telemetry</i><i>Duplicate Check</i></div>
+      </section>
+      {risks.map((section, index) => <TemplateRiskSection key={`${section.title}-${index}`} section={section} profile={profile} />)}
+      {table ? <DataQualityBoardSection section={table} profile={profile} /> : null}
+    </>
+  );
+}
+
+function ReportPackBody({ payload, sections, profile, skin }: { payload: ReportPayload; sections: ReportSection[]; profile: ReportVisualProfile; skin: string }) {
+  if (profile.key === "executive") {
+    if (skin === "dashboard-pack") return <MonthlyDashboardPackV2 payload={payload} sections={sections} profile={profile} />;
+    if (skin === "action-pack") return <ActionQueuePackV2 payload={payload} sections={sections} profile={profile} />;
+    return <ExecutiveBoardPackV2 payload={payload} sections={sections} profile={profile} />;
+  }
+
+  if (profile.key === "risk") return <RiskRegisterPackV2 sections={sections} profile={profile} />;
+  if (profile.key === "operations") return <EndpointOpsPackV2 sections={sections} profile={profile} />;
+  if (profile.key === "register") return <AssetLedgerPackV2 sections={sections} profile={profile} />;
+  if (profile.key === "software") return <SoftwarePortfolioPackV2 sections={sections} profile={profile} />;
+  if (profile.key === "geo") return <GeoExceptionPackV2 sections={sections} profile={profile} />;
+  if (profile.key === "audit") return <RemoteAuditPackV2 sections={sections} profile={profile} />;
+  if (profile.key === "service") return <ServiceDeskPackV2 sections={sections} profile={profile} />;
+  if (profile.key === "data") return <DataQualityPackV2 sections={sections} profile={profile} />;
+
+  return <ProfiledBody sections={sections} profile={profile} />;
+}
+
+function TemplateRecommendations({ payload, profile }: { payload: ReportPayload; profile: ReportVisualProfile }) {
+  return (
+    <section className={`report-section template-action-section action-${profile.key}`}>
+      <div className="section-head template-section-head">
+        <div>
+          <h2>{profile.key === "risk" ? "Control Actions" : profile.key === "audit" ? "Follow-Up Evidence Required" : "Recommended Actions"}</h2>
+          <p>Recommended action based on current report findings.</p>
+        </div>
+        <span className="section-tag">Action Plan</span>
+      </div>
+      <div className="action-grid-report dynamic-action-grid template-action-grid">
+        {payload.recommendations.map((item) => (
+          <div className="action-card-report template-action-card" key={`${item.priority}-${item.action}`} style={{ "--template-accent": profile.accent } as CSSProperties}>
+            <span>{item.priority}</span>
+            <strong>{item.action}</strong>
+            <p>{profile.key === "service" ? "Update ticket owner, SLA note and resolution target." : profile.key === "audit" ? "Attach evidence, reviewer and approval note for traceability." : "Assign owner, due date and follow-up evidence before the next reporting cycle."}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function renderSectionByProfile(section: ReportSection, profile: ReportVisualProfile, index: number) {
+  if (section.type === "kpi") return <TemplateKpiSection key={`${section.title}-${index}`} section={section} profile={profile} />;
+  if (["bar", "donut"].includes(String(section.type))) return <TemplateChartSection key={`${section.title}-${index}`} section={section} profile={profile} />;
+  if (section.type === "risk") return profile.key === "risk" ? <RiskHeatMap key={`${section.title}-${index}`} section={section} profile={profile} /> : <TemplateRiskSection key={`${section.title}-${index}`} section={section} profile={profile} />;
+  if (section.type === "table") return <TemplateTableSection key={`${section.title}-${index}`} section={section} profile={profile} />;
+  return null;
+}
+
+function ProfiledBody({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
+  const kpiSections = sectionGroup(sections, ["kpi"]);
+  const chartSections = sectionGroup(sections, ["bar", "donut"]);
+  const riskSections = sectionGroup(sections, ["risk"]);
+  const tableSections = sectionGroup(sections, ["table"]);
+
+  if (profile.key === "executive") {
+    return (
+      <>
+        {kpiSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        <div className="template-two-col template-executive-grid">
+          {chartSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        </div>
+        {riskSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        {tableSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+      </>
+    );
+  }
+
+  if (profile.key === "risk") {
+    return (
+      <>
+        {riskSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        {kpiSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        {tableSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        <div className="template-two-col">{chartSections.map((section, index) => renderSectionByProfile(section, profile, index))}</div>
+      </>
+    );
+  }
+
+  if (["register", "data"].includes(profile.key)) {
+    return (
+      <>
+        {kpiSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        {tableSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        <div className="template-two-col">{chartSections.map((section, index) => renderSectionByProfile(section, profile, index))}</div>
+        {riskSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+      </>
+    );
+  }
+
+  if (["audit", "service", "geo", "software", "operations"].includes(profile.key)) {
+    return (
+      <>
+        {kpiSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        <div className="template-two-col">{chartSections.map((section, index) => renderSectionByProfile(section, profile, index))}</div>
+        {riskSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+        {tableSections.map((section, index) => renderSectionByProfile(section, profile, index))}
+      </>
+    );
+  }
+
+  return <>{sections.map((section, index) => renderSectionByProfile(section, profile, index))}</>;
+}
+
+function ReportDocument({ payload, filters }: { payload: ReportPayload; filters: ReportFilters }) {
+  const profile = getReportProfile(payload.report);
+  const skin = getReportSkin(payload.report);
+  const isExecutivePack = profile.key === "executive";
+  const shouldRenderChart = (section: ReportSection) => ["bar", "donut"].includes(section.type);
+  const shouldRenderTable = (section: ReportSection) => ["table", "risk"].includes(section.type);
+  const visibleSections = payload.sections.filter((section) => {
+    if (section.type === "kpi") return filters.includeSummary;
+    if (shouldRenderChart(section)) return filters.includeChart;
+    if (shouldRenderTable(section)) {
+      if (isExecutivePack && section.type === "table") return false;
+      return filters.includeTable || isExecutivePack;
+    }
+    return true;
+  });
+
+  return (
+    <article
+      className={`executive-report-page dynamic-report-page report-template report-template-${profile.key} report-skin-${skin}`}
+      id="reportPrintArea"
+      style={{ "--template-accent": profile.accent, "--template-soft": profile.softAccent } as CSSProperties}
+    >
+      <ProfileCover payload={payload} filters={filters} profile={profile} skin={skin} />
+      {!isExecutivePack && <ProfileDesignStrip payload={payload} profile={profile} />}
+      {isExecutivePack && filters.includeSummary ? <ExecutiveMemoBoard payload={payload} profile={profile} /> : filters.includeSummary ? <ProfileNarrative payload={payload} profile={profile} /> : null}
+      <ReportPackBody payload={payload} sections={visibleSections} profile={profile} skin={skin} />
+      {filters.includeRecommendation && !isExecutivePack && (skin === "action-pack" ? <ActionPriorityBoard payload={payload} profile={profile} /> : <TemplateRecommendations payload={payload} profile={profile} />)}
+    </article>
+  );
+}
+
+
+function pdfEscape(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function pdfText(value: unknown, max = 120) {
+  const text = String(value ?? "-").replace(/\s+/g, " ").trim() || "-";
+  return pdfEscape(text.length > max ? `${text.slice(0, max - 1)}…` : text);
+}
+
+function pdfNumber(payload: ReportPayload, keys: string[], fallback = 0) {
+  return numberMetric(payload, keys, fallback);
+}
+
+function metricFromRows(section?: ReportSection, limit = 4) {
+  return (section?.rows || []).slice(0, limit).map((row) => {
+    const label = row.label ?? row.name ?? row.status ?? row.category ?? row.metric ?? row.area ?? "Metric";
+    const value = row.value ?? row.count ?? row.total ?? row.score ?? row.percentage ?? "-";
+    const note = row.note ?? row.description ?? row.finding ?? row.action ?? "";
+    return { label, value, note };
+  });
+}
+
+function printableKpis(payload: ReportPayload) {
+  const kpiSection = payload.sections.find((section) => section.type === "kpi");
+  const fromSection = metricFromRows(kpiSection, 4);
+  if (fromSection.length) return fromSection;
+
+  return [
+    { label: "Endpoint Estate", value: pdfNumber(payload, ["endpointTotal", "totalEndpoints", "assets"], 0), note: `${pdfNumber(payload, ["onlineEndpoints", "online"], 0)} online · ${pdfNumber(payload, ["offlineEndpoints", "offline"], 0)} offline` },
+    { label: "Open Tickets", value: pdfNumber(payload, ["openTickets", "tickets"], 0), note: `${pdfNumber(payload, ["slaBreachCandidates", "slaBreaches"], 0)} SLA breach candidate(s)` },
+    { label: "Software Records", value: pdfNumber(payload, ["softwareRows", "softwareRecords"], 0), note: `${pdfNumber(payload, ["distinctSoftware", "softwareNames"], 0)} distinct software name(s)` },
+    { label: "Telemetry Watch", value: pdfNumber(payload, ["staleEndpoints", "stale"], 0), note: "Stale or missing last-seen telemetry" }
+  ];
+}
+
+function sectionByType(payload: ReportPayload, type: string) {
+  return payload.sections.find((section) => section.type === type);
+}
+
+function sectionRowsHtml(section?: ReportSection, limit = 8) {
+  const rows = (section?.rows || []).slice(0, limit);
+  if (!rows.length) return `<div class="pdf-empty">No matching records for this section.</div>`;
+  return rows
+    .map((row) => {
+      const entries = Object.entries(row).slice(0, 4);
+      const title = row.title ?? row.name ?? row.deviceName ?? row.area ?? row.category ?? row.status ?? entries[0]?.[1] ?? "Record";
+      const meta = entries
+        .filter(([key]) => !["title", "name", "deviceName", "area"].includes(key))
+        .map(([key, value]) => `<span><b>${pdfEscape(formatLabel(key))}</b>${pdfText(value, 80)}</span>`)
+        .join("");
+      return `<article class="pdf-evidence-card"><strong>${pdfText(title, 90)}</strong><div>${meta}</div></article>`;
+    })
+    .join("");
+}
+
+function tableRowsHtml(section?: ReportSection, limit = 18) {
+  const rows = (section?.rows || []).slice(0, limit);
+  if (!rows.length) return `<div class="pdf-empty">No matching records for this table.</div>`;
+  const columns = (section?.columns?.length ? section.columns : Object.keys(rows[0] || {})).slice(0, 5);
+  return `
+    <table class="pdf-real-table">
+      <thead><tr>${columns.map((col) => `<th>${pdfEscape(formatLabel(col))}</th>`).join("")}</tr></thead>
+      <tbody>
+        ${rows.map((row) => `<tr>${columns.map((col) => `<td>${pdfText(row[col], 90)}</td>`).join("")}</tr>`).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function riskCardsHtml(payload: ReportPayload) {
+  const riskSection = sectionByType(payload, "risk");
+  const risks = (riskSection?.rows || payload.recommendations || []).slice(0, 4);
+  if (!risks.length) return `<div class="pdf-empty">No management attention items returned.</div>`;
+  return risks
+    .map((row: any) => {
+      const severity = row.severity || row.priority || "Focus";
+      const area = row.area || row.title || row.action || "Management Focus";
+      const finding = row.finding || row.description || row.action || "Review this focus area.";
+      const action = row.action || row.recommendation || "Assign owner and track closure.";
+      return `
+        <article class="pdf-focus-card">
+          <span class="pdf-severity">${pdfText(severity, 24)}</span>
+          <h3>${pdfText(area, 70)}</h3>
+          <p>${pdfText(finding, 120)}</p>
+          <div>${pdfText(action, 120)}</div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function barListHtml(section?: ReportSection, limit = 6) {
+  const rows = (section?.rows || []).slice(0, limit);
+  if (!rows.length) return `<div class="pdf-empty">No chart rows available.</div>`;
+  const max = Math.max(...rows.map((row) => Number(row.value ?? row.count ?? row.total ?? 0)), 1);
+  return rows
+    .map((row) => {
+      const label = row.label ?? row.name ?? row.status ?? row.category ?? "Item";
+      const value = Number(row.value ?? row.count ?? row.total ?? 0);
+      const width = Math.max(4, Math.min(100, Math.round((value / max) * 100)));
+      return `<div class="pdf-bar-row"><span>${pdfText(label, 46)}</span><b>${pdfEscape(value)}</b><i><em style="width:${width}%"></em></i></div>`;
+    })
+    .join("");
+}
+
+function buildExecutivePrintableHtml(payload: ReportPayload, filters: ReportFilters) {
+  const generated = formatDateTime(payload.generatedAt);
+  const scope = payload.narrative.scope || "All Sites";
+  const period = payload.narrative.period || filters.dateRange;
+  const endpointTotal = pdfNumber(payload, ["endpointTotal", "totalEndpoints", "assets"], 0);
+  const online = pdfNumber(payload, ["onlineEndpoints", "online"], 0);
+  const offline = pdfNumber(payload, ["offlineEndpoints", "offline"], 0);
+  const stale = pdfNumber(payload, ["staleEndpoints", "stale"], 0);
+  const openTickets = pdfNumber(payload, ["openTickets", "tickets"], 0);
+  const sla = pdfNumber(payload, ["slaBreachCandidates", "slaBreaches"], 0);
+  const software = pdfNumber(payload, ["softwareRows", "softwareRecords"], 0);
+  const score = pdfNumber(payload, ["operationalScore", "score"], 0);
+  const onlineRate = endpointTotal ? Math.round((online / endpointTotal) * 100) : pdfNumber(payload, ["onlineRate"], 0);
+  const onlineWidth = Math.max(0, Math.min(100, onlineRate));
+
+  return `
+    <section class="pdf-hero pdf-exec-hero">
+      <div class="pdf-brand-panel">
+        <div class="pdf-logo-row"><span>E</span><div><b>EMA Unified System</b><small>Executive Management Pack</small></div></div>
+        <div class="pdf-pill">Board Pack</div>
+        <h1>${pdfText(payload.report.title, 80)}</h1>
+        <p>${pdfText(payload.report.description || payload.narrative.executiveSummary, 150)}</p>
+        <div class="pdf-chip-row"><span>${pdfText(payload.report.type, 20)}</span><span>${pdfText(scope, 30)}</span><span>${pdfText(period, 30)}</span><span>PDF</span></div>
+      </div>
+      <div class="pdf-score-panel">
+        <small>Ops Score</small>
+        <strong>${pdfEscape(score)}%</strong>
+        <p>${pdfText(payload.narrative.managementConclusion || "Management attention should focus on priority operations items.", 130)}</p>
+      </div>
+      <div class="pdf-snapshot-panel">
+        <div class="pdf-snapshot-head"><span>Executive Snapshot</span><b>${pdfEscape(generated)}</b></div>
+        <div class="pdf-health-bar"><i style="width:${onlineWidth}%"></i></div>
+        <div class="pdf-mini-stats">
+          <span><small>Online</small><b>${pdfEscape(online)}</b></span>
+          <span><small>Offline</small><b>${pdfEscape(offline)}</b></span>
+          <span><small>Stale</small><b>${pdfEscape(stale)}</b></span>
+        </div>
+        <div class="pdf-alert-stack">
+          ${payload.narrative.keyFindings.slice(0, 3).map((item) => `<div><b>High</b>${pdfText(item, 125)}</div>`).join("")}
+        </div>
+      </div>
+    </section>
+
+    <section class="pdf-section pdf-interpretation">
+      <div>
+        <span class="pdf-section-kicker">Management Interpretation</span>
+        <h2>${pdfText(payload.narrative.title || payload.report.title, 90)}</h2>
+        <p>${pdfText(payload.narrative.executiveSummary, 280)}</p>
+      </div>
+      <div class="pdf-finding-list">
+        ${payload.narrative.keyFindings.slice(0, 4).map((item, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><b>${pdfText(item, 160)}</b></div>`).join("")}
+      </div>
+    </section>
+
+    <section class="pdf-section pdf-decision-grid">
+      <div class="pdf-decision-copy">
+        <span class="pdf-section-kicker">Executive Decision Snapshot</span>
+        <h2>Management view without operational detail table</h2>
+        <p>${pdfText(payload.narrative.managementConclusion, 180)}</p>
+      </div>
+      <div class="pdf-board-score"><small>Board Score</small><strong>${pdfEscape(score)}%</strong><span>Composite posture</span></div>
+      <div class="pdf-metric-grid">
+        <article><small>Endpoint Estate</small><strong>${pdfEscape(endpointTotal)}</strong><span>${pdfEscape(onlineRate)}% online · ${pdfEscape(offline)} offline</span></article>
+        <article><small>Service Desk Pressure</small><strong>${pdfEscape(openTickets)}</strong><span>${pdfEscape(sla)} SLA breach candidate(s)</span></article>
+        <article><small>Telemetry Watch</small><strong>${pdfEscape(stale)}</strong><span>Stale or missing telemetry</span></article>
+        <article><small>Software Coverage</small><strong>${pdfEscape(software)}</strong><span>Inventory records visible in scope</span></article>
+      </div>
+    </section>
+
+    <section class="pdf-section pdf-focus-section">
+      <div class="pdf-section-head"><div><h2>Board Attention Focus</h2><p>Only management-level focus areas are shown for executive review.</p></div><span>Decision Focus</span></div>
+      <div class="pdf-focus-grid">${riskCardsHtml(payload)}</div>
+    </section>
+  `;
+}
+
+function buildGenericPrintableHtml(payload: ReportPayload, filters: ReportFilters) {
+  const kpis = printableKpis(payload);
+  const barSection = payload.sections.find((section) => ["bar", "donut"].includes(section.type));
+  const tableSection = payload.sections.find((section) => section.type === "table");
+  const riskSection = payload.sections.find((section) => section.type === "risk");
+
+  return `
+    <section class="pdf-hero pdf-generic-hero">
+      <div>
+        <div class="pdf-logo-row"><span>E</span><div><b>EMA Unified System</b><small>${pdfText(payload.report.category || payload.report.type, 60)}</small></div></div>
+        <h1>${pdfText(payload.report.title, 90)}</h1>
+        <p>${pdfText(payload.narrative.executiveSummary || payload.report.description, 220)}</p>
+      </div>
+      <div class="pdf-kpi-strip">
+        ${kpis.map((item) => `<article><small>${pdfText(item.label, 36)}</small><strong>${pdfText(item.value, 20)}</strong><span>${pdfText(item.note, 70)}</span></article>`).join("")}
+      </div>
+    </section>
+
+    <section class="pdf-section pdf-interpretation">
+      <div>
+        <span class="pdf-section-kicker">Report Interpretation</span>
+        <h2>${pdfText(payload.narrative.title || payload.report.title, 90)}</h2>
+        <p>${pdfText(payload.narrative.managementConclusion || payload.narrative.executiveSummary, 280)}</p>
+      </div>
+      <div class="pdf-finding-list">
+        ${payload.narrative.keyFindings.slice(0, 4).map((item, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><b>${pdfText(item, 160)}</b></div>`).join("")}
+      </div>
+    </section>
+
+    ${filters.includeChart ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(barSection?.title || "Operational Distribution", 80)}</h2><p>Summary chart generated as real HTML bars.</p></div></div><div class="pdf-bars">${barListHtml(barSection)}</div></section>` : ""}
+    ${riskSection && filters.includeTable ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(riskSection.title, 80)}</h2><p>Evidence and priority items.</p></div></div><div class="pdf-focus-grid">${riskCardsHtml(payload)}</div></section>` : ""}
+    ${tableSection && filters.includeTable ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(tableSection.title, 80)}</h2><p>Detail rows are rendered as real selectable table data.</p></div></div>${tableRowsHtml(tableSection, 18)}</section>` : ""}
+    ${filters.includeRecommendation ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>Recommended Actions</h2><p>Management actions generated from the live report dataset.</p></div></div><div class="pdf-evidence-grid">${sectionRowsHtml({ type: "table", title: "Actions", rows: payload.recommendations || [] }, 6)}</div></section>` : ""}
+  `;
+}
+
+function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilters) {
+  const isExecutive = /executive/i.test(`${payload.report.id} ${payload.report.title} ${payload.report.category || ""}`);
+  const content = isExecutive ? buildExecutivePrintableHtml(payload, filters) : buildGenericPrintableHtml(payload, filters);
+  return `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${pdfText(payload.report.title, 90)}</title>
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #0f2347; font-family: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { width: 210mm; min-height: 297mm; }
+    .pdf-pack { width: 190mm; margin: 10mm auto; display: flex; flex-direction: column; gap: 7mm; }
+    .pdf-hero, .pdf-section { width: 100%; border: 1px solid #dbe6f5; border-radius: 8mm; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+    .pdf-hero { min-height: 116mm; display: grid; gap: 6mm; padding: 8mm; background: linear-gradient(135deg, #102a56 0 48%, #f8fbff 48% 100%); }
+    .pdf-exec-hero { grid-template-columns: 72mm 56mm 1fr; align-items: stretch; }
+    .pdf-generic-hero { grid-template-columns: 66mm 1fr; min-height: 88mm; background: linear-gradient(135deg, #102a56 0 42%, #f8fbff 42% 100%); }
+    .pdf-logo-row { display: flex; align-items: center; gap: 4mm; margin-bottom: 15mm; color: #fff; }
+    .pdf-logo-row > span { width: 12mm; height: 12mm; border-radius: 4mm; border: 1px solid rgba(255,255,255,.35); display: grid; place-items: center; font-weight: 900; }
+    .pdf-logo-row b { display: block; font-size: 12pt; }
+    .pdf-logo-row small { display: block; font-size: 7pt; letter-spacing: .2em; text-transform: uppercase; opacity: .75; }
+    .pdf-brand-panel { color: #fff; padding: 2mm; }
+    .pdf-brand-panel h1, .pdf-generic-hero h1 { margin: 7mm 0 5mm; font-size: 25pt; line-height: 1.03; letter-spacing: -.04em; font-weight: 650; }
+    .pdf-generic-hero h1, .pdf-generic-hero p { color: #fff; }
+    .pdf-brand-panel p, .pdf-generic-hero p { margin: 0; font-size: 10pt; line-height: 1.55; font-weight: 750; opacity: .85; }
+    .pdf-pill, .pdf-chip-row span { display: inline-flex; align-items: center; border: 1px solid rgba(255,255,255,.24); border-radius: 999px; padding: 2mm 4mm; font-size: 7pt; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; background: rgba(255,255,255,.08); }
+    .pdf-chip-row { display: flex; flex-wrap: wrap; gap: 2mm; margin-top: 12mm; }
+    .pdf-score-panel, .pdf-snapshot-panel { background: rgba(255,255,255,.96); border: 1px solid #e0e9f6; border-radius: 6mm; padding: 7mm; box-shadow: 0 12mm 30mm rgba(15,35,71,.08); }
+    .pdf-score-panel small, .pdf-snapshot-head span, .pdf-section-kicker, .pdf-metric-grid small, .pdf-kpi-strip small, .pdf-focus-card .pdf-severity { display: block; text-transform: uppercase; letter-spacing: .12em; font-size: 7pt; font-weight: 900; color: #5f728e; }
+    .pdf-score-panel strong { display: block; margin: 3mm 0 2mm; font-size: 34pt; color: #2457d6; line-height: 1; }
+    .pdf-score-panel p { margin: 0; font-size: 8.5pt; line-height: 1.45; font-weight: 800; color: #53647d; }
+    .pdf-snapshot-head { display: flex; justify-content: space-between; gap: 5mm; align-items: center; margin-bottom: 6mm; }
+    .pdf-snapshot-head b { font-size: 7.5pt; color: #172b4d; white-space: nowrap; }
+    .pdf-health-bar { height: 6mm; border-radius: 999px; background: linear-gradient(90deg,#ef476f,#f59e0b); overflow: hidden; margin-bottom: 5mm; }
+    .pdf-health-bar i { display: block; height: 100%; background: #34d399; border-radius: inherit; }
+    .pdf-mini-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 2mm; margin-bottom: 5mm; }
+    .pdf-mini-stats span, .pdf-metric-grid article, .pdf-kpi-strip article { border: 1px solid #dce7f4; border-radius: 4mm; padding: 3.2mm; background: #f7faff; min-width: 0; }
+    .pdf-mini-stats small { display: block; text-transform: uppercase; color: #71839e; font-size: 7pt; font-weight: 900; }
+    .pdf-mini-stats b { display: block; font-size: 16pt; line-height: 1.1; margin-top: 1mm; }
+    .pdf-alert-stack { display: flex; flex-direction: column; gap: 3mm; }
+    .pdf-alert-stack div { border: 1px solid #e2eaf5; border-radius: 4mm; padding: 3mm 3.5mm; background: #fff; font-size: 8pt; line-height: 1.35; font-weight: 800; }
+    .pdf-alert-stack b { display: block; text-transform: uppercase; color: #6d7f99; font-size: 7pt; margin-bottom: 1mm; }
+    .pdf-section { padding: 7mm; background: linear-gradient(135deg,#fff,#f8fbff); }
+    .pdf-interpretation { display: grid; grid-template-columns: 70mm 1fr; gap: 10mm; align-items: start; }
+    .pdf-section h2 { margin: 2mm 0 3mm; font-size: 16pt; line-height: 1.15; letter-spacing: -.035em; }
+    .pdf-section p { margin: 0; color: #5b6a82; line-height: 1.55; font-size: 9.5pt; }
+    .pdf-finding-list { display: flex; flex-direction: column; gap: 3mm; }
+    .pdf-finding-list div { display: grid; grid-template-columns: 13mm 1fr; align-items: center; gap: 3mm; border: 1px solid #dce7f4; background: #fff; border-radius: 4mm; padding: 3mm; }
+    .pdf-finding-list span { display: grid; place-items: center; width: 10mm; height: 10mm; border-radius: 3mm; background: #2457d6; color: #fff; font-weight: 900; font-size: 8pt; }
+    .pdf-finding-list b { font-size: 9pt; line-height: 1.35; }
+    .pdf-decision-grid { display: grid; grid-template-columns: 48mm 38mm 1fr; gap: 6mm; align-items: stretch; }
+    .pdf-decision-copy h2 { font-size: 15pt; }
+    .pdf-decision-copy p { font-weight: 800; color: #53647d; }
+    .pdf-board-score { background: #163b9f; color: #fff; border-radius: 6mm; padding: 7mm; display: flex; flex-direction: column; justify-content: center; }
+    .pdf-board-score small, .pdf-board-score span { color: rgba(255,255,255,.75); text-transform: uppercase; letter-spacing: .12em; font-size: 7pt; font-weight: 900; }
+    .pdf-board-score strong { font-size: 31pt; line-height: 1; margin: 3mm 0; }
+    .pdf-metric-grid, .pdf-kpi-strip { display: grid; grid-template-columns: repeat(2,1fr); gap: 4mm; }
+    .pdf-metric-grid article strong, .pdf-kpi-strip article strong { display: block; font-size: 17pt; line-height: 1.1; margin: 2mm 0 1mm; }
+    .pdf-metric-grid article span, .pdf-kpi-strip article span { display: block; font-size: 7.5pt; color: #53647d; font-weight: 800; line-height: 1.35; }
+    .pdf-section-head { display: flex; justify-content: space-between; gap: 5mm; align-items: start; border-bottom: 1px solid #dce7f4; padding-bottom: 4mm; margin-bottom: 5mm; }
+    .pdf-section-head h2 { margin: 0 0 1mm; }
+    .pdf-section-head > span { border: 1px solid #c8d8f2; border-radius: 999px; padding: 2mm 4mm; color: #1d4ed8; text-transform: uppercase; letter-spacing: .08em; font-weight: 900; font-size: 7pt; white-space: nowrap; }
+    .pdf-focus-grid, .pdf-evidence-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 4mm; }
+    .pdf-focus-card, .pdf-evidence-card { border: 1px solid #dce7f4; border-radius: 5mm; background: #fff; padding: 4mm; break-inside: avoid; }
+    .pdf-focus-card h3 { margin: 2mm 0; font-size: 11pt; }
+    .pdf-focus-card p { font-size: 8pt; font-weight: 800; color: #172b4d; border-bottom: 1px solid #e5edf7; padding-bottom: 3mm; margin-bottom: 3mm; }
+    .pdf-focus-card div { font-size: 7.8pt; color: #53647d; line-height: 1.35; font-weight: 800; }
+    .pdf-generic-hero .pdf-logo-row { margin-bottom: 10mm; }
+    .pdf-kpi-strip { align-self: stretch; }
+    .pdf-bars { display: flex; flex-direction: column; gap: 3mm; }
+    .pdf-bar-row { display: grid; grid-template-columns: 42mm 18mm 1fr; gap: 3mm; align-items: center; font-size: 8pt; font-weight: 800; }
+    .pdf-bar-row i { display: block; height: 5mm; background: #edf3fb; border-radius: 999px; overflow: hidden; }
+    .pdf-bar-row em { display: block; height: 100%; background: linear-gradient(90deg,#2563eb,#67e8f9); border-radius: inherit; }
+    .pdf-real-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 7.7pt; }
+    .pdf-real-table th, .pdf-real-table td { text-align: left; padding: 2.5mm; border-bottom: 1px solid #e5edf7; vertical-align: top; }
+    .pdf-real-table th { background: #f3f7fd; color: #52647f; text-transform: uppercase; font-size: 7pt; letter-spacing: .06em; }
+    .pdf-evidence-card strong { display: block; margin-bottom: 2mm; font-size: 9pt; }
+    .pdf-evidence-card div { display: grid; gap: 1.5mm; }
+    .pdf-evidence-card span { display: grid; grid-template-columns: 24mm 1fr; gap: 2mm; font-size: 7.5pt; }
+    .pdf-empty { padding: 5mm; border: 1px dashed #cbd8ea; border-radius: 4mm; color: #6b7c94; }
+    @media print {
+      html, body { width: 210mm; background: #fff !important; }
+      .pdf-pack { width: 190mm; margin: 10mm auto; }
+      .pdf-hero, .pdf-section { box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="pdf-pack">${content}</main>
+  <script>
+    const triggerPrint = () => setTimeout(() => { window.focus(); window.print(); }, 250);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(triggerPrint).catch(triggerPrint);
+    else window.addEventListener('load', triggerPrint);
+  <\/script>
+</body>
+</html>`;
+}
+
+
+function buildReportAnalysis(report: ReportTemplate | null, filters: ReportFilters, payload?: ReportPayload | null) {
+  if (!report) {
+    return {
+      title: "Report readiness analysis",
+      summary: "Pilih satu template report untuk lihat data source, output dan komponen PDF yang boleh dijana.",
+      bullets: [
+        "Catalog report akan datang dari API /api/reports/catalog.",
+        "Filter site, device group, status dan date range akan digunakan semasa preview/generate.",
+        "PDF boleh dikawal melalui pilihan Summary, Chart, Detail Table dan Recommendation."
+      ],
+      sources: ["Endpoint inventory", "Service desk", "Software", "Task/job", "Geolocation"]
+    };
+  }
+
+  const id = `${report.id} ${report.title}`.toLowerCase();
+  const pdfParts = [
+    filters.includeSummary ? "summary narrative" : "summary hidden",
+    filters.includeChart ? "chart/graph" : "chart hidden",
+    filters.includeTable ? "detail table" : "detail table hidden",
+    filters.includeRecommendation ? "recommendation" : "recommendation hidden"
+  ];
+
+  const bullets = [
+    `${report.title} boleh dijana sebagai ${allowedOutputs(report).join(" / ")}.`,
+    `PDF layout akan bawa ${pdfParts.join(", ")}.`,
+    `Scope semasa: ${filters.relationID ? `site ID ${filters.relationID}` : "all sites"}, ${filters.deviceGroup === "all" ? "all device groups" : filters.deviceGroup.toUpperCase()}, status ${filters.status}.`
+  ];
+
+  if (id.includes("ticket") || id.includes("sla") || id.includes("incident") || id.includes("support")) {
+    bullets.push("Analisis yang sesuai: volume ticket, status queue, SLA breach candidate, priority dan assignment workload.");
+  } else if (id.includes("software") || id.includes("application") || id.includes("metering")) {
+    bullets.push("Analisis yang sesuai: software coverage, category distribution, unauthorized/outdated candidate dan deployment/metering evidence.");
+  } else if (id.includes("geo") || id.includes("location")) {
+    bullets.push("Analisis yang sesuai: geolocation coverage, abnormal/missing location evidence dan latest location history.");
+  } else if (id.includes("risk") || id.includes("security") || id.includes("duplicate") || id.includes("compliance")) {
+    bullets.push("Analisis yang sesuai: high-risk endpoint, duplicate IP, stale/offline exposure, SLA risk dan data quality issue.");
+  } else {
+    bullets.push("Analisis yang sesuai: endpoint health, inventory completeness, lifecycle candidate, telemetry freshness dan management score.");
+  }
+
+  if (payload) {
+    bullets.push(`Preview semasa ada ${payload.sections.length} section, ${payload.dataSources.reduce((sum, item) => sum + Number(item.rows || 0), 0)} row sumber data dan operational score ${payload.metrics.operationalScore || 0}%.`);
+  }
+
+  return {
+    title: "AI report analysis",
+    summary: report.description || "Management-ready report generated from available EMA data.",
+    bullets,
+    sources: report.source.split("+").map((item) => item.trim()).filter(Boolean)
+  };
+}
+
+export default function Report() {
+  const [categories, setCategories] = useState<ReportCategory[]>(FRONTEND_REPORT_CATALOG);
+  const [options, setOptions] = useState<ReportOptions>(fallbackOptions);
+  const [activeCategory, setActiveCategory] = useState(FRONTEND_REPORT_CATALOG[0]?.name || "");
+  const [selectedReport, setSelectedReport] = useState<ReportTemplate | null>(FRONTEND_REPORT_CATALOG[0]?.items?.[0] || null);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [filters, setFilters] = useState<ReportFilters>(() => ({
+    ...emptyFilters,
+    outputFormat: allowedOutputs(FRONTEND_REPORT_CATALOG[0]?.items?.[0] || undefined, fallbackOptions)[0] || "PDF"
+  }));
+  const [payload, setPayload] = useState<ReportPayload | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isScheduleOpen, setIsScheduleOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [bootLoading, setBootLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [previewStatus, setPreviewStatus] = useState("Ready");
+  const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>({
+    frequency: "monthly",
+    delivery: "download",
+    outputFormat: "PDF",
+    time: "09:00",
+    dayOfWeek: "monday",
+    dayOfMonth: "1"
+  });
+  const [savedSchedules, setSavedSchedules] = useState<HistoryItem[]>([]);
+
+  const activeReportGroup = useMemo(() => categories.find((item) => item.name === activeCategory), [categories, activeCategory]);
+  const previewRows = getPreviewRows(selectedReport || undefined, payload || undefined);
+
+  const filteredReports = useMemo(() => {
+    const normalizedSearch = search.toLowerCase();
+    return (activeReportGroup?.items || []).filter((item) => {
+      const haystack = `${item.title} ${item.description} ${item.type} ${item.source}`.toLowerCase();
+      const matchesSearch = haystack.includes(normalizedSearch);
+      const matchesType = typeFilter === "all" || item.type === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [activeReportGroup, search, typeFilter]);
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.add("ema-settings-page-active", "ema-report-page-active");
+    document.body.classList.add("ema-settings-page-active", "ema-report-page-active");
+
+    return () => {
+      document.documentElement.classList.remove("ema-settings-page-active", "ema-report-page-active");
+      document.body.classList.remove("ema-settings-page-active", "ema-report-page-active");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedReport) return;
+    if (!allowedOutputs(selectedReport).includes(filters.outputFormat)) {
+      setFilters((current) => ({ ...current, outputFormat: allowedOutputs(selectedReport, options)[0] || "PDF" }));
+      setScheduleDraft((current) => ({ ...current, outputFormat: allowedOutputs(selectedReport, options)[0] || "PDF" }));
+    }
+  }, [selectedReport]);
+
+  async function loadInitialData() {
+    setBootLoading(true);
+    setError("");
+
+    // Render immediately using the local catalog so the sidebar never flashes a loading box.
+    // The API catalog is still fetched quietly and replaces the local copy only when it succeeds.
+    try {
+      const catalogResponse = await apiRequest<{ success: boolean; data: ReportCategory[] }>("/api/reports/catalog");
+      const loadedCategories = Array.isArray(catalogResponse.data) && catalogResponse.data.length > 0
+        ? catalogResponse.data
+        : FRONTEND_REPORT_CATALOG;
+
+      setCategories(loadedCategories);
+
+      const nextCategory = loadedCategories.find((item) => item.name === activeCategory) || loadedCategories[0];
+      const nextReport = selectedReport
+        ? nextCategory?.items?.find((item) => item.id === selectedReport.id) || nextCategory?.items?.[0] || null
+        : nextCategory?.items?.[0] || null;
+
+      setActiveCategory(nextCategory?.name || "");
+      setSelectedReport(nextReport);
+      setFilters((current) => ({ ...current, outputFormat: allowedOutputs(nextReport || undefined, fallbackOptions)[0] || "PDF" }));
+      setScheduleDraft((current) => ({ ...current, outputFormat: allowedOutputs(nextReport || undefined, fallbackOptions)[0] || "PDF" }));
+      setPreviewStatus("Ready");
+    } catch {
+      setCategories((current) => current.length ? current : FRONTEND_REPORT_CATALOG);
+      setSelectedReport((current) => current || FRONTEND_REPORT_CATALOG[0]?.items?.[0] || null);
+      setActiveCategory((current) => current || FRONTEND_REPORT_CATALOG[0]?.name || "");
+    }
+
+    try {
+      const optionsResponse = await apiRequest<{ success: boolean; data: Partial<ReportOptions> }>("/api/reports/options");
+      setOptions({
+        sites: Array.isArray(optionsResponse.data?.sites) ? optionsResponse.data?.sites || [] : [],
+        groups: normalizeOptionList(optionsResponse.data?.groups as any[], fallbackOptions.groups),
+        statuses: normalizeOptionList(optionsResponse.data?.statuses as any[], fallbackOptions.statuses),
+        dateRanges: normalizeOptionList(optionsResponse.data?.dateRanges as any[], fallbackOptions.dateRanges),
+        outputFormats: normalizeOptionList(optionsResponse.data?.outputFormats as any[], fallbackOptions.outputFormats)
+      });
+    } catch (optionErr) {
+      setOptions(fallbackOptions);
+      setError(`Report filter options failed, fallback options are used: ${optionErr instanceof Error ? optionErr.message : "Unknown error"}`);
+    } finally {
+      setBootLoading(false);
+    }
+  }
+
+  function updateFilter<K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectCategory(categoryName: string) {
+    const category = categories.find((item) => item.name === categoryName);
+    const firstReport = category?.items?.[0] || null;
+    setActiveCategory(categoryName);
+    setSelectedReport(firstReport);
+    setSearch("");
+    setTypeFilter("all");
+    setPayload(null);
+    setPreviewStatus("Ready");
+    if (firstReport) {
+      const nextOutput = allowedOutputs(firstReport, options)[0] || "PDF";
+      updateFilter("outputFormat", nextOutput);
+      setScheduleDraft((current) => ({ ...current, outputFormat: nextOutput }));
+    }
+  }
+
+  function selectTemplate(report: ReportTemplate) {
+    setSelectedReport(report);
+    setPayload(null);
+    setPreviewStatus("Ready");
+    const nextOutput = allowedOutputs(report, options)[0] || "PDF";
+    updateFilter("outputFormat", nextOutput);
+    setScheduleDraft((current) => ({ ...current, outputFormat: nextOutput }));
+  }
+
+  async function requestReport(mode: "preview" | "generate") {
+    if (!selectedReport) return null;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await apiRequest<ReportPayload>(`/api/reports/${mode === "preview" ? "preview" : "generate"}`, {
+        method: "POST",
+        body: JSON.stringify({ reportId: selectedReport.id, ...filters })
+      });
+      setPayload(response);
+      setPreviewStatus(mode === "preview" ? "Previewed" : "Generated");
+      setIsPreviewOpen(true);
+
+      if (mode === "generate") {
+        setHistory((current) => [
+          { title: response.report.title, format: filters.outputFormat, time: formatGeneratedTime(), payload: response },
+          ...current.slice(0, 7)
+        ]);
+
+        if (filters.outputFormat === "PDF") {
+          exportPdfPayload(response);
+        } else {
+          applyOutputAction(response, filters.outputFormat);
+        }
+      }
+
+      return response;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Report generation failed.");
+      setPreviewStatus("Error");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openRegeneratedPrintWindow(reportPayload: ReportPayload) {
+    const printWindow = window.open("", "_blank", "width=1180,height=900");
+    if (!printWindow) return false;
+
+    const html = buildRegeneratedReportHtml(reportPayload, filters);
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    return true;
+  }
+
+  function exportPdfPayload(reportPayload: ReportPayload) {
+    // This export rebuilds the report from live payload as real HTML text/cards/tables.
+    // Browser print dialog lets user save the generated output as PDF without adding a new frontend package.
+    const opened = openRegeneratedPrintWindow(reportPayload);
+    if (!opened) {
+      const blob = new Blob([buildRegeneratedReportHtml(reportPayload, filters)], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
+  }
+
+  async function handleExportPdf() {
+    if (!payload) return;
+    exportPdfPayload(payload);
+  }
+
+  function handleRefresh() {
+    setSearch("");
+    setTypeFilter("all");
+    setPayload(null);
+    setPreviewStatus("Ready");
+    loadInitialData();
+  }
+
+  function handleScheduleSave() {
+    if (!selectedReport) return;
+    const time = formatGeneratedTime();
+    const item = {
+      title: `${selectedReport.title} schedule draft`,
+      format: scheduleDraft.outputFormat,
+      time: `${scheduleDraft.frequency} · ${scheduleDraft.delivery} · ${time}`
+    };
+    setHistory((current) => [item, ...current.slice(0, 7)]);
+    setSavedSchedules((current) => [item, ...current.slice(0, 4)]);
+    try {
+      const existing = JSON.parse(localStorage.getItem("emaReportSchedules") || "[]");
+      localStorage.setItem("emaReportSchedules", JSON.stringify([{ reportId: selectedReport.id, reportTitle: selectedReport.title, filters, schedule: scheduleDraft, savedAt: new Date().toISOString() }, ...existing].slice(0, 20)));
+    } catch {
+      // Local storage can be disabled in some browsers; schedule draft still stays in the current session.
+    }
+    setPreviewStatus("Schedule Draft Saved");
+    setIsScheduleOpen(false);
+  }
+
+  const selectedOutputs = allowedOutputs(selectedReport || undefined, options);
+  const selectedStatusOptions = options.statuses?.length ? options.statuses : fallbackOptions.statuses;
+  const selectedGroupOptions = options.groups?.length ? options.groups : fallbackOptions.groups;
+  const selectedDateRangeOptions = options.dateRanges?.length ? options.dateRanges : fallbackOptions.dateRanges;
+  const totalTemplateCount = categories.reduce((sum, category) => sum + category.items.length, 0);
+  const reportAnalysis = buildReportAnalysis(selectedReport, filters, payload);
+
+  return (
+    <>
+      <main className="settings-module-root ema-settings-pro ema-report-pro container-fluid p-3 p-xl-4" data-section="users">
+        <input aria-hidden="true" id="globalSearch" type="hidden" />
+        <button hidden id="themeBtn" type="button">
+          <span id="themeLabel">Dark Mode</span>
+        </button>
+
+        <div className="settings-layout d-grid gap-3">
+          <aside className="settings-menu ema-panel-surface">
+            <div className="panel-head">
+              <span>REPORT CENTER</span>
+              <strong>Report Category</strong>
+              <small>Management-ready reporting</small>
+            </div>
+
+            <div className="settings-menu-list" id="categoryList" role="tablist" aria-label="Report category navigation">
+              {categories.length === 0 && <div className="report-mini-state error">No catalog loaded.</div>}
+              {categories.map((category) => (
+                <button
+                  key={category.name}
+                  className={`setting-btn ${category.name === activeCategory ? "active" : ""}`}
+                  type="button"
+                  onClick={() => selectCategory(category.name)}
+                >
+                  <span className="setting-icon" dangerouslySetInnerHTML={{ __html: icons[category.icon] || icons.chart }} />
+                  <span>
+                    <strong>{category.name}</strong>
+                    <small>{category.desc}</small>
+                  </span>
+                  <b>{category.items.length}</b>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <section className="settings-content d-grid gap-3 report-main-content">
+            <div className="settings-hero ema-panel-surface users-hero">
+              <div>
+                <span className="eyebrow">REPORT GENERATOR WORKSPACE</span>
+                <h2 id="categoryTitle">{activeCategory || "Report Center"}</h2>
+                <p id="categoryDesc">{activeReportGroup?.desc || "Select a category to build management-ready report output."}</p>
+              </div>
+              <div className="settings-score users-hero-score">
+                <div className="score-box">
+                  <span>Total Templates</span>
+                  <strong>{totalTemplateCount}</strong>
+                  <small>Available reports</small>
+                </div>
+                <div className="score-box">
+                  <span>Selected Type</span>
+                  <strong>{selectedReport?.type || "-"}</strong>
+                  <small>{selectedReport ? "Ready to configure" : "No template"}</small>
+                </div>
+                <div className="score-box">
+                  <span>Status</span>
+                  <strong>{previewStatus}</strong>
+                  <small>{payload ? formatDateTime(payload.generatedAt) : "No preview yet"}</small>
+                </div>
+                <div className="score-box">
+                  <span>Generated</span>
+                  <strong>{history.length}</strong>
+                  <small>Current session</small>
+                </div>
+              </div>
+            </div>
+
+            <div className="content-shell ema-panel-surface report-workspace-shell">
+              <div className="content-toolbar report-toolbar">
+                <label className="section-search report-search">
+                  <SearchIcon />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search report by name, source or type..."
+                  />
+                </label>
+
+                <div className="report-toolbar-filters">
+                  <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Report type filter">
+                    <option value="all">All Types</option>
+                    {Array.from(new Set((activeReportGroup?.items || []).map((item) => item.type))).map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="content-actions toolbar-actions report-toolbar-actions">
+                  <button className="soft-btn" id="refreshBtn" type="button" onClick={handleRefresh} disabled={loading}>
+                    Refresh
+                  </button>
+                  <button className="primary-btn" id="scheduleBtn" type="button" onClick={() => setIsScheduleOpen(true)} disabled={!selectedReport}>
+                    New Schedule
+                  </button>
+                </div>
+              </div>
+
+              {error && <div className="settings-inline-alert error report-error-banner">{error}</div>}
+
+              <div className="content-body report-workspace-body" id="contentBody">
+                <div className="report-builder-grid">
+                  <section className="report-template-column">
+                    <div className="settings-helper-card compact report-ai-panel">
+                      <div>
+                        <span className="section-tag">AI ANALYSIS</span>
+                        <h3>{reportAnalysis.title}</h3>
+                        <p>{reportAnalysis.summary}</p>
+                      </div>
+                      <div className="report-analysis-grid">
+                        {reportAnalysis.bullets.map((item, index) => (
+                          <div key={`${item}-${index}`}>
+                            <span>{String(index + 1).padStart(2, "0")}</span>
+                            <p>{item}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="report-source-chips">
+                        {reportAnalysis.sources.map((source) => <span key={source}>{source}</span>)}
+                      </div>
+                    </div>
+
+                    <div className="template-list" id="templateList">
+                      {filteredReports.map((report) => (
+                        <article
+                          key={report.id}
+                          className={`template-card ${report.id === selectedReport?.id ? "active" : ""}`}
+                          style={{ "--accent": colors[report.type] || "#2563eb" } as CSSProperties}
+                          onClick={() => selectTemplate(report)}
+                        >
+                          <div className="card-top">
+                            <h4>{report.title}</h4>
+                            <span className="type">{report.type}</span>
+                          </div>
+                          <p>{report.description}</p>
+                          <div className="card-meta">
+                            <div><span>Design</span><b>{getReportProfile(report).eyebrow}</b></div>
+                            <div><span>Output</span><b>{report.outputs.join(" / ")}</b></div>
+                          </div>
+                          <div className="card-actions">
+                            <div className="card-select-hint">
+                              <span>{report.id === selectedReport?.id ? "Selected" : "Click to configure"}</span>
+                              <b>{report.id === selectedReport?.id ? "Active" : "Configure"}</b>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                      {filteredReports.length === 0 && <div className="settings-empty-state report-empty-block">No report template matches the current search/filter.</div>}
+                    </div>
+                  </section>
+
+                  <aside className="config-panel report-config-panel">
+                    <div className="config-card">
+                      <div className="config-head">
+                        <span>SELECTED REPORT</span>
+                        <h3 id="selectedTitle">{selectedReport?.title || "No report selected"}</h3>
+                        <p id="selectedDesc">{selectedReport?.description || "Select a report template from the list."}</p>
+                      </div>
+
+                      <div className="selected-meta selected-action-meta">
+                        <button type="button" className="meta-pill active" onClick={() => selectedReport && setTypeFilter(selectedReport.type)}>{selectedReport?.type || "-"}</button>
+                        {selectedOutputs.map((output) => (
+                          <button
+                            type="button"
+                            key={output}
+                            className={`meta-pill ${filters.outputFormat === output ? "active" : ""}`}
+                            onClick={() => updateFilter("outputFormat", output)}
+                          >
+                            {outputLabel(output)}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="config-form">
+                        <label>
+                          Date Range
+                          <select value={filters.dateRange} onChange={(event) => updateFilter("dateRange", event.target.value)}>
+                            {selectedDateRangeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
+                          </select>
+                        </label>
+                        {filters.dateRange === "custom" && (
+                          <div className="date-range-grid">
+                            <label>
+                              Start Date
+                              <input type="date" value={filters.startDate || ""} onChange={(event) => updateFilter("startDate", event.target.value)} />
+                            </label>
+                            <label>
+                              End Date
+                              <input type="date" value={filters.endDate || ""} onChange={(event) => updateFilter("endDate", event.target.value)} />
+                            </label>
+                          </div>
+                        )}
+                        <label>
+                          Site / Branch
+                          <select value={filters.relationID} onChange={(event) => updateFilter("relationID", Number(event.target.value))}>
+                            <option value={0}>All Sites</option>
+                            {options.sites.map((site) => <option value={site.id} key={site.id}>{site.name}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          Device Group
+                          <select value={filters.deviceGroup} onChange={(event) => updateFilter("deviceGroup", event.target.value)}>
+                            {selectedGroupOptions.map((group) => <option value={group.value} key={group.value}>{group.label}</option>)}
+                          </select>
+                        </label>
+                        <label>
+                          Endpoint Status
+                          <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>
+                            {selectedStatusOptions.map((status) => <option value={status.value} key={status.value}>{status.label}</option>)}
+                          </select>
+                        </label>
+
+                        <div className="check-grid">
+                          <label><input checked={filters.includeChart} type="checkbox" onChange={(event) => updateFilter("includeChart", event.target.checked)} /> Include Chart</label>
+                          <label><input checked={filters.includeSummary} type="checkbox" onChange={(event) => updateFilter("includeSummary", event.target.checked)} /> Include Summary</label>
+                          <label><input checked={filters.includeTable} type="checkbox" onChange={(event) => updateFilter("includeTable", event.target.checked)} /> Detail Table</label>
+                          <label><input checked={filters.includeRecommendation} type="checkbox" onChange={(event) => updateFilter("includeRecommendation", event.target.checked)} /> Recommendation</label>
+                        </div>
+
+                        <label>
+                          Output Format
+                          <select id="outputFormat" value={filters.outputFormat} onChange={(event) => updateFilter("outputFormat", event.target.value)}>
+                            {selectedOutputs.map((output) => <option key={output} value={output}>{outputLabel(output)}</option>)}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="config-actions">
+                        <button className="soft" id="previewBtn" type="button" onClick={() => requestReport("preview")} disabled={!selectedReport || loading}>
+                          {loading ? "Loading..." : "Preview"}
+                        </button>
+                        <button className="primary" id="generateBtn" type="button" onClick={() => requestReport("generate")} disabled={!selectedReport || loading}>
+                          Generate
+                        </button>
+                      </div>
+
+                      <div className="report-preview-map">
+                        <strong>PDF content preview</strong>
+                        {previewRows.map((row, index) => <span key={`${row}-${index}`}>{row}</span>)}
+                      </div>
+
+                      {history.length > 0 && (
+                        <div className="report-history-list">
+                          <strong>Generated History</strong>
+                          {history.slice(0, 5).map((item, index) => (
+                            <button
+                              key={`${item.title}-${index}`}
+                              type="button"
+                              onClick={() => {
+                                if (item.payload) {
+                                  setPayload(item.payload);
+                                  setIsPreviewOpen(true);
+                                }
+                              }}
+                            >
+                              <span>{item.title}</span>
+                              <small>{item.format} · {item.time}</small>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <div aria-hidden={!isPreviewOpen} className={`executive-preview-modal ${isPreviewOpen ? "open" : ""}`} id="executivePreviewModal" onClick={(event) => event.target === event.currentTarget && setIsPreviewOpen(false)}>
+        <div className="executive-preview-shell dynamic-preview-shell">
+          <div className="executive-preview-top">
+            <div className="executive-preview-top-left">
+              <strong>{payload?.report.title || selectedReport?.title || "Report Preview"}</strong>
+              <span>{payload ? `Prepared on ${formatDateTime(payload.generatedAt)}` : "Preview will appear after the report is prepared."}</span>
+            </div>
+            <div className="executive-preview-actions">
+              <button type="button" onClick={() => setIsPreviewOpen(false)}>Close</button>
+              <button type="button" onClick={() => payload && downloadCsv(payload)} disabled={!payload}><DownloadIcon /> Excel/CSV</button>
+              <button type="button" onClick={() => payload && downloadPowerPoint(payload)} disabled={!payload}>PowerPoint</button>
+              <button type="button" onClick={handleExportPdf} disabled={!payload}>Export PDF</button>
+              <button className="primary" type="button" onClick={() => requestReport("generate")} disabled={!selectedReport || loading}>Generate Report</button>
+            </div>
+          </div>
+          <div className="executive-preview-body">
+            {payload ? <ReportDocument payload={payload} filters={filters} /> : <div className="report-empty-block">No preview data yet.</div>}
+          </div>
+        </div>
+      </div>
+
+      <div aria-hidden={!isScheduleOpen} className={`executive-preview-modal ${isScheduleOpen ? "open" : ""}`} onClick={(event) => event.target === event.currentTarget && setIsScheduleOpen(false)}>
+        <div className="report-schedule-dialog">
+          <div className="config-head">
+            <span>SCHEDULE DRAFT</span>
+            <h3>{selectedReport?.title || "Report Schedule"}</h3>
+            <p>This saves a schedule draft in the local generated history. Backend automation can be added later if needed.</p>
+          </div>
+          <div className="config-form">
+            <label>
+              Frequency
+              <select value={scheduleDraft.frequency} onChange={(event) => setScheduleDraft((current) => ({ ...current, frequency: event.target.value }))}>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+              </select>
+            </label>
+            {scheduleDraft.frequency === "weekly" && (
+              <label>
+                Day of Week
+                <select value={scheduleDraft.dayOfWeek} onChange={(event) => setScheduleDraft((current) => ({ ...current, dayOfWeek: event.target.value }))}>
+                  <option value="monday">Monday</option>
+                  <option value="tuesday">Tuesday</option>
+                  <option value="wednesday">Wednesday</option>
+                  <option value="thursday">Thursday</option>
+                  <option value="friday">Friday</option>
+                </select>
+              </label>
+            )}
+            {(scheduleDraft.frequency === "monthly" || scheduleDraft.frequency === "quarterly") && (
+              <label>
+                Day of Month
+                <select value={scheduleDraft.dayOfMonth} onChange={(event) => setScheduleDraft((current) => ({ ...current, dayOfMonth: event.target.value }))}>
+                  {Array.from({ length: 28 }, (_, index) => String(index + 1)).map((day) => <option value={day} key={day}>{day}</option>)}
+                </select>
+              </label>
+            )}
+            <label>
+              Time
+              <input type="time" value={scheduleDraft.time} onChange={(event) => setScheduleDraft((current) => ({ ...current, time: event.target.value }))} />
+            </label>
+            <label>
+              Delivery
+              <select value={scheduleDraft.delivery} onChange={(event) => setScheduleDraft((current) => ({ ...current, delivery: event.target.value }))}>
+                <option value="download">Manual Download</option>
+                <option value="email-draft">Email Draft</option>
+                <option value="management-pack">Management Pack</option>
+              </select>
+            </label>
+            <label>
+              Output
+              <select value={scheduleDraft.outputFormat} onChange={(event) => setScheduleDraft((current) => ({ ...current, outputFormat: event.target.value }))}>
+                {selectedOutputs.map((output) => <option key={output} value={output}>{outputLabel(output)}</option>)}
+              </select>
+            </label>
+            {savedSchedules.length > 0 && (
+              <div className="schedule-preview-list">
+                <strong>Saved Drafts</strong>
+                {savedSchedules.map((item, index) => <small key={`${item.title}-${index}`}>{item.title} · {item.time}</small>)}
+              </div>
+            )}
+          </div>
+          <div className="config-actions">
+            <button className="soft" type="button" onClick={() => setIsScheduleOpen(false)}>Cancel</button>
+            <button className="primary" type="button" onClick={handleScheduleSave}>Save Draft</button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

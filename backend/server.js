@@ -18746,6 +18746,21 @@ function erIsOnline(value) {
   return erStatusText(value).toLowerCase() === "online";
 }
 
+function erIsStaleAssetRow(row, days = 14) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const lastSeen = erSqlDate(row?.lastSeen, null);
+  return !lastSeen || lastSeen < cutoff;
+}
+
+function erNormalizeReportFilter(value, fallback = "all") {
+  return erText(value, fallback)
+    .toLowerCase()
+    .replace(/_/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/^all-.+$/, "all");
+}
+
 function erIsClosedTicket(status) {
   const text = erText(status).toLowerCase();
   return ["resolved", "closed", "completed", "done", "cancelled", "canceled"].some((word) => text.includes(word));
@@ -18770,7 +18785,34 @@ function erTopRows(rows, scoreFn, limit = 20) {
 }
 
 async function erGetReportOptions(pool) {
-  const options = { sites: [], groups: [], statuses: ["All Status", "Online", "Offline", "Stale Sync"] };
+  const options = {
+    sites: [],
+    groups: [
+      { value: "all", label: "All Groups" },
+      { value: "em", label: "EM Devices" },
+      { value: "mdm", label: "MDM Devices" }
+    ],
+    statuses: [
+      { value: "all", label: "All Status" },
+      { value: "online", label: "Online" },
+      { value: "offline", label: "Offline" },
+      { value: "stale", label: "Stale Sync" },
+      { value: "locked", label: "Locked" }
+    ],
+    dateRanges: [
+      { value: "current-month", label: "Current Month" },
+      { value: "last-7-days", label: "Last 7 Days" },
+      { value: "last-30-days", label: "Last 30 Days" },
+      { value: "quarter-to-date", label: "Quarter to Date" },
+      { value: "year-to-date", label: "Year to Date" },
+      { value: "custom", label: "Custom Range" }
+    ],
+    outputFormats: [
+      { value: "PDF", label: "PDF" },
+      { value: "Excel", label: "Excel / CSV" },
+      { value: "PowerPoint", label: "PowerPoint" }
+    ]
+  };
 
   if (await erTableExists(pool, "TS_OBJECT_RELATION")) {
     const sites = await pool.request().query(`
@@ -18848,11 +18890,19 @@ async function erGetAssetRows(pool, filters = {}) {
       ORDER BY ISNULL(lastSeen, '1900-01-01') DESC, deviceName ASC;
     `);
 
-  // Run status filter in JS to keep EM numeric and MDM text status handling consistent.
-  const status = erText(filters.status, "all").toLowerCase().replace("all status", "all");
+  // Run device group and status filters in JS to keep EM numeric and MDM text status handling consistent.
+  const status = erNormalizeReportFilter(filters.status, "all");
+  const deviceGroup = erNormalizeReportFilter(filters.deviceGroup, "all");
+
   return (result.recordset || [])
     .map((row) => ({ ...row, status: erStatusText(row.status) }))
-    .filter((row) => status === "all" || row.status.toLowerCase() === status)
+    .filter((row) => deviceGroup === "all" || erText(row.source).toLowerCase() === deviceGroup)
+    .filter((row) => {
+      if (status === "all") return true;
+      if (status === "stale" || status === "stale-sync") return erIsStaleAssetRow(row);
+      if (status === "locked") return erText(row.status).toLowerCase().includes("lock");
+      return erNormalizeReportFilter(row.status, "unknown") === status;
+    })
     .slice(0, 2000);
 }
 
@@ -20107,8 +20157,13 @@ function erReadFilters(req) {
     startDate: erText(req.body?.startDate ?? req.query?.startDate, ""),
     endDate: erText(req.body?.endDate ?? req.query?.endDate, ""),
     relationID: erNumber(req.body?.relationID ?? req.body?.relationId ?? req.query?.relationID ?? req.query?.relationId, 0),
-    status: erText(req.body?.status ?? req.query?.status, "all"),
-    outputFormat: erText(req.body?.outputFormat ?? req.query?.outputFormat, "PDF")
+    deviceGroup: erNormalizeReportFilter(req.body?.deviceGroup ?? req.query?.deviceGroup, "all"),
+    status: erNormalizeReportFilter(req.body?.status ?? req.query?.status, "all"),
+    outputFormat: erText(req.body?.outputFormat ?? req.query?.outputFormat, "PDF"),
+    includeChart: req.body?.includeChart !== false && req.query?.includeChart !== "false",
+    includeSummary: req.body?.includeSummary !== false && req.query?.includeSummary !== "false",
+    includeTable: req.body?.includeTable !== false && req.query?.includeTable !== "false",
+    includeRecommendation: req.body?.includeRecommendation !== false && req.query?.includeRecommendation !== "false"
   };
 }
 

@@ -8345,3 +8345,2661 @@ body.ema-settings-page-active .ema-page {
   display: inline-block;
   max-width: 130px;
 }
+
+/* ============================================================
+   EMA Report Center - Settings Layout Aligned UI
+   Report page follows Settings.tsx structure: settings sidebar,
+   settings hero, content shell, global table/cards and preview modal.
+============================================================ */
+
+html.ema-report-page-active,
+body.ema-report-page-active {
+  background: #f4f7fb;
+}
+
+.ema-report-pro {
+  --report-blue: #2563eb;
+  --report-ink: #10203f;
+  --report-muted: #64748b;
+  --report-line: rgba(148, 163, 184, 0.26);
+  --report-soft: #f8fbff;
+  color: var(--report-ink);
+}
+
+.ema-report-pro .report-settings-layout {
+  grid-template-columns: minmax(290px, 320px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.ema-report-pro .report-category-panel {
+  position: sticky;
+  top: 1rem;
+  min-height: calc(100vh - 2rem);
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+}
+
+.ema-report-pro .report-category-panel .panel-head {
+  border-bottom: 1px solid var(--report-line);
+}
+
+.ema-report-pro .category-list {
+  padding: 0.75rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 10rem);
+}
+
+.ema-report-pro .category-btn {
+  width: 100%;
+  min-height: 76px;
+  text-align: left;
+}
+
+.ema-report-pro .category-btn b {
+  margin-left: auto;
+  min-width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 0.78rem;
+}
+
+.ema-report-pro .category-icon svg,
+.ema-report-pro .report-search svg,
+.executive-preview-actions svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.ema-report-pro .report-main-content {
+  min-width: 0;
+}
+
+.ema-report-pro .report-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(520px, 0.9fr);
+  gap: 1rem;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.ema-report-pro .report-hero h2 {
+  margin: 0.25rem 0 0.45rem;
+  letter-spacing: -0.04em;
+}
+
+.ema-report-pro .report-hero-score {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ema-report-pro .report-hero-score .score-box strong {
+  font-size: clamp(1.2rem, 1.8vw, 1.8rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ema-report-pro .report-workspace-shell {
+  overflow: visible;
+}
+
+.ema-report-pro .report-toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--report-line);
+}
+
+.ema-report-pro .report-search {
+  min-height: 44px;
+}
+
+.ema-report-pro .report-search input {
+  min-width: 0;
+}
+
+.ema-report-pro .report-toolbar-filters select,
+.ema-report-pro .config-form select,
+.ema-report-pro .config-form input[type="date"],
+.ema-report-pro .config-form input[type="time"] {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 0.9rem;
+  background: #fff;
+  color: #0f172a;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ema-report-pro .report-toolbar-filters select:focus,
+.ema-report-pro .config-form select:focus,
+.ema-report-pro .config-form input:focus {
+  border-color: rgba(37, 99, 235, 0.7);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.11);
+}
+
+.ema-report-pro .report-toolbar-actions {
+  justify-content: end;
+}
+
+.ema-report-pro .report-workspace-body {
+  padding: 1rem;
+}
+
+.ema-report-pro .report-builder-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 390px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.ema-report-pro .report-template-column {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.ema-report-pro .report-ai-panel {
+  display: grid;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 34%),
+    linear-gradient(135deg, #ffffff, #f8fbff);
+  border: 1px solid rgba(191, 219, 254, 0.9);
+}
+
+.ema-report-pro .report-ai-panel h3 {
+  margin: 0.35rem 0 0.35rem;
+  font-size: 1.12rem;
+  letter-spacing: -0.025em;
+}
+
+.ema-report-pro .report-ai-panel p {
+  margin: 0;
+  color: #5f6f87;
+  line-height: 1.55;
+}
+
+.ema-report-pro .report-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.ema-report-pro .report-analysis-grid > div {
+  display: grid;
+  grid-template-columns: 2.2rem minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.ema-report-pro .report-analysis-grid span {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+
+.ema-report-pro .report-source-chips,
+.ema-report-pro .selected-meta,
+.ema-report-pro .revamp-cover-pills,
+.ema-report-pro .report-logo-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.ema-report-pro .report-source-chips span,
+.ema-report-pro .meta-pill,
+.ema-report-pro .section-tag,
+.report-template .section-tag,
+.report-template .template-badge {
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 0.32rem 0.65rem;
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ema-report-pro .template-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 0.9rem;
+}
+
+.ema-report-pro .template-card {
+  position: relative;
+  min-height: 208px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 1.2rem;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ema-report-pro .template-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 1.2rem 0 0 1.2rem;
+  background: var(--accent, #2563eb);
+  opacity: 0.9;
+}
+
+.ema-report-pro .template-card:hover,
+.ema-report-pro .template-card.active {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 46%, #cbd5e1);
+  box-shadow: 0 24px 60px rgba(37, 99, 235, 0.12);
+}
+
+.ema-report-pro .template-card.active {
+  background: linear-gradient(180deg, #ffffff, #eff6ff);
+}
+
+.ema-report-pro .card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.ema-report-pro .card-top h4 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+
+.ema-report-pro .template-card p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.55;
+  font-size: 0.87rem;
+}
+
+.ema-report-pro .template-card .type {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  background: color-mix(in srgb, var(--accent, #2563eb) 12%, #ffffff);
+  color: var(--accent, #2563eb);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.ema-report-pro .card-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin-top: auto;
+}
+
+.ema-report-pro .card-meta > div {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.9rem;
+  padding: 0.6rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.ema-report-pro .card-meta span,
+.ema-report-pro .card-select-hint span,
+.ema-report-pro .config-head span,
+.report-template small,
+.report-template .report-logo-line span,
+.report-template .revamp-cover-panel-head span {
+  display: block;
+  color: #75849a;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+
+.ema-report-pro .card-meta b {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.ema-report-pro .card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ema-report-pro .card-select-hint {
+  display: inline-flex;
+  gap: 0.55rem;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.42rem 0.7rem;
+  background: #f1f5f9;
+}
+
+.ema-report-pro .card-select-hint b {
+  color: #1d4ed8;
+  font-size: 0.78rem;
+}
+
+.ema-report-pro .report-config-panel {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+}
+
+.ema-report-pro .config-card,
+.report-schedule-dialog {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+}
+
+.ema-report-pro .config-head h3,
+.report-schedule-dialog .config-head h3 {
+  margin: 0.25rem 0 0.25rem;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.ema-report-pro .config-head p,
+.report-schedule-dialog .config-head p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.5;
+  font-size: 0.86rem;
+}
+
+.ema-report-pro .meta-pill {
+  border: 0;
+  cursor: pointer;
+}
+
+.ema-report-pro .meta-pill.active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.ema-report-pro .config-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.ema-report-pro .config-form label,
+.report-schedule-dialog .config-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: #42526e;
+  font-weight: 800;
+  font-size: 0.82rem;
+}
+
+.ema-report-pro .date-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.ema-report-pro .check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.ema-report-pro .check-grid label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #f8fbff;
+  font-size: 0.78rem;
+}
+
+.ema-report-pro .check-grid input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: #2563eb;
+}
+
+.ema-report-pro .config-actions,
+.report-schedule-dialog .config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.ema-report-pro .config-actions button,
+.report-schedule-dialog .config-actions button,
+.executive-preview-actions button {
+  min-height: 40px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 0.85rem;
+  padding: 0.5rem 0.85rem;
+  background: #fff;
+  color: #1f2a44;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.ema-report-pro .config-actions .primary,
+.report-schedule-dialog .config-actions .primary,
+.executive-preview-actions .primary {
+  border-color: #1d4ed8;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+}
+
+.ema-report-pro .config-actions .soft,
+.report-schedule-dialog .config-actions .soft {
+  background: #f8fafc;
+}
+
+.ema-report-pro .config-actions button:disabled,
+.executive-preview-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ema-report-pro .report-preview-map,
+.ema-report-pro .report-history-list {
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--report-line);
+}
+
+.ema-report-pro .report-preview-map strong,
+.ema-report-pro .report-history-list strong {
+  font-size: 0.85rem;
+}
+
+.ema-report-pro .report-preview-map span,
+.ema-report-pro .schedule-preview-list small {
+  display: block;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.8rem;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.ema-report-pro .report-history-list button {
+  text-align: left;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.85rem;
+  background: #fff;
+  padding: 0.65rem;
+  cursor: pointer;
+}
+
+.ema-report-pro .report-history-list span,
+.ema-report-pro .report-history-list small {
+  display: block;
+}
+
+.ema-report-pro .report-history-list small {
+  color: #64748b;
+  margin-top: 0.15rem;
+}
+
+.ema-report-pro .report-mini-state,
+.ema-report-pro .report-empty-block,
+.ema-report-pro .settings-empty-state {
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px dashed rgba(148, 163, 184, 0.45);
+  color: #64748b;
+  background: #f8fbff;
+}
+
+.ema-report-pro .report-mini-state.error,
+.ema-report-pro .report-error-banner {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+/* Preview modal */
+.executive-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: none;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(10px);
+}
+
+.executive-preview-modal.open {
+  display: grid;
+  place-items: center;
+}
+
+.executive-preview-shell,
+.report-schedule-dialog {
+  width: min(1180px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background: #f7faff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 32px 90px rgba(15, 23, 42, 0.3);
+}
+
+.executive-preview-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  background: #fff;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.executive-preview-top-left strong,
+.executive-preview-top-left span {
+  display: block;
+}
+
+.executive-preview-top-left strong {
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.executive-preview-top-left span {
+  color: #64748b;
+  font-size: 0.83rem;
+  margin-top: 0.12rem;
+}
+
+.executive-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.executive-preview-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 38px;
+  font-size: 0.82rem;
+}
+
+.executive-preview-body {
+  max-height: calc(100vh - 8rem);
+  overflow: auto;
+  padding: 1rem;
+}
+
+.report-schedule-dialog {
+  width: min(520px, calc(100vw - 2rem));
+  padding: 1.15rem;
+  overflow: auto;
+}
+
+.report-schedule-dialog .config-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.report-schedule-dialog select,
+.report-schedule-dialog input {
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 0.9rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.schedule-preview-list {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  border-radius: 0.9rem;
+  background: #f8fafc;
+}
+
+/* Report document preview */
+.report-template {
+  --template-accent: #2563eb;
+  --template-soft: rgba(37, 99, 235, 0.09);
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 1rem;
+  color: #10203f;
+}
+
+.report-section,
+.report-cover,
+.report-card {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1.35rem;
+  background: linear-gradient(180deg, #fff, #f8fbff);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.06);
+}
+
+.report-section {
+  padding: 1.15rem;
+}
+
+.report-cover {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--template-accent) 24%, transparent), transparent 35%),
+    linear-gradient(135deg, #102a56 0 42%, #f8fbff 42% 100%);
+}
+
+.report-cover-content,
+.revamp-cover-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.75fr) minmax(300px, 0.95fr);
+  gap: 1rem;
+  padding: 1.3rem;
+  align-items: stretch;
+}
+
+.revamp-cover-left {
+  color: #fff;
+}
+
+.report-logo {
+  width: 2.65rem;
+  height: 2.65rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+}
+
+.report-logo-line b,
+.report-logo-line span {
+  color: #fff;
+}
+
+.revamp-cover-left h1 {
+  margin: 1rem 0 0.65rem;
+  font-size: clamp(1.85rem, 4vw, 3.4rem);
+  line-height: 0.98;
+  letter-spacing: -0.065em;
+}
+
+.revamp-cover-left p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.55;
+  font-weight: 650;
+}
+
+.revamp-cover-pills {
+  margin-top: 1rem;
+}
+
+.revamp-cover-pills span,
+.revamp-cover-badge {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.38rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.revamp-cover-center,
+.revamp-cover-right,
+.template-score-panel,
+.executive-score-tile,
+.revamp-action-left,
+.revamp-sla-pack > div,
+.revamp-quality-gates > div:first-child,
+.revamp-ledger-cover > div:first-child,
+.revamp-location-copy {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.15rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
+}
+
+.revamp-cover-score-card span,
+.revamp-cover-stat span,
+.cover-health-head span,
+.cover-exec-focus-grid span,
+.template-score-panel span,
+.executive-score-tile span {
+  display: block;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.revamp-cover-score-card strong,
+.template-score-panel strong,
+.executive-score-tile strong {
+  display: block;
+  margin: 0.35rem 0;
+  font-size: clamp(2.1rem, 4vw, 3.5rem);
+  line-height: 1;
+  color: var(--template-accent);
+}
+
+.revamp-cover-score-card small,
+.executive-score-tile p,
+.template-score-panel small {
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.revamp-cover-stat-grid,
+.cover-health-grid,
+.executive-signal-grid,
+.template-kpi-grid,
+.report-kpi-grid,
+.design-strip-grid,
+.revamp-kpi-ribbon,
+.revamp-monthly-grid,
+.revamp-action-stat-grid,
+.revamp-noc-grid,
+.revamp-risk-grid,
+.geo-card-grid,
+.ticket-card-grid,
+.software-tile-grid,
+.quality-card-grid,
+.priority-lane-grid,
+.action-grid-report,
+.detail-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.revamp-cover-stat,
+.cover-health-grid div,
+.executive-signal-card,
+.template-kpi-card,
+.report-kpi,
+.design-strip-card,
+.revamp-kpi-tile,
+.revamp-monthly-card,
+.revamp-action-stat-grid > div,
+.revamp-noc-card,
+.revamp-risk-card,
+.geo-evidence-card,
+.ticket-evidence-card,
+.software-tile,
+.quality-card,
+.priority-lane-card,
+.action-card-report,
+.detail-evidence-card,
+.executive-attention-card,
+.executive-number-card,
+.executive-visual-card,
+.revamp-visual-card,
+.risk-heatmap-card {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1rem;
+  background: #fff;
+  padding: 0.95rem;
+  min-width: 0;
+}
+
+.revamp-cover-stat b,
+.executive-signal-card b,
+.template-kpi-card strong,
+.report-kpi strong,
+.design-strip-card strong,
+.revamp-kpi-tile b,
+.revamp-monthly-card b,
+.revamp-action-stat-grid b,
+.revamp-noc-card strong,
+.revamp-risk-card h3,
+.geo-evidence-card strong,
+.ticket-evidence-card strong,
+.software-tile strong,
+.quality-card strong,
+.priority-lane-card strong,
+.action-card-report strong,
+.detail-evidence-card strong,
+.executive-number-card strong,
+.risk-heatmap-card b {
+  display: block;
+  margin: 0.2rem 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.03em;
+  color: #10203f;
+}
+
+.revamp-cover-stat small,
+.template-kpi-card span,
+.report-kpi small,
+.design-strip-card small,
+.revamp-kpi-tile span,
+.revamp-monthly-card span,
+.revamp-action-stat-grid span,
+.revamp-noc-card small,
+.revamp-risk-card p,
+.geo-evidence-card p,
+.ticket-evidence-card p,
+.software-tile p,
+.quality-card p,
+.priority-lane-card p,
+.action-card-report p,
+.detail-evidence-card p,
+.executive-number-card span,
+.risk-heatmap-card p {
+  color: #64748b;
+  line-height: 1.45;
+  font-size: 0.84rem;
+}
+
+.section-head,
+.template-section-head,
+.compact-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.section-head h2,
+.template-section-head h2,
+.compact-head h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+  letter-spacing: -0.035em;
+}
+
+.section-head p,
+.template-section-head p,
+.compact-head p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.template-two-col,
+.template-executive-grid,
+.revamp-visual-pair,
+.executive-snapshot-board,
+.executive-number-dashboard,
+.revamp-action-warroom,
+.revamp-sla-pack,
+.revamp-quality-gates,
+.revamp-location-board,
+.revamp-ledger-cover,
+.report-template .template-story-card,
+.report-template .executive-memo-board,
+.report-template .revamp-monthly-command {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.template-story-main p,
+.template-conclusion,
+.executive-memo-copy p,
+.revamp-location-copy p,
+.revamp-action-left p,
+.revamp-sla-pack p,
+.revamp-quality-gates p,
+.revamp-ledger-cover p,
+.revamp-audit-coverline p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.58;
+}
+
+.report-finding-list,
+.template-finding-list,
+.executive-memo-list,
+.revamp-cover-focus-list,
+.cover-exec-focus-grid,
+.executive-priority-stack,
+.revamp-kanban-lane,
+.template-timeline {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.report-finding-list li,
+.executive-memo-list li,
+.revamp-cover-focus-list div,
+.cover-exec-focus-grid div,
+.executive-priority-stack p,
+.revamp-kanban-lane > div,
+.template-timeline-item {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 0.9rem;
+  background: #fff;
+  padding: 0.75rem;
+}
+
+.report-finding-list li {
+  list-style: none;
+}
+
+.report-finding-list {
+  padding-left: 0;
+}
+
+.horizontal-bar-list,
+.pdf-bars {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.bar-row-report,
+.pdf-bar-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(110px, 2fr) 3rem;
+  gap: 0.75rem;
+  align-items: center;
+  color: #42526e;
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.bar-track-report,
+.pdf-bar-row i {
+  display: block;
+  height: 0.65rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e8eef7;
+}
+
+.bar-fill-report,
+.pdf-bar-row em {
+  display: block;
+  width: var(--w, 40%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--template-accent, #2563eb), #67e8f9);
+}
+
+.donut-report {
+  width: 170px;
+  height: 170px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.donut-inner-report {
+  width: 108px;
+  height: 108px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.22);
+  text-align: center;
+}
+
+.donut-inner-report span,
+.legend-report div {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.donut-inner-report strong {
+  display: block;
+  font-size: 1.55rem;
+}
+
+.legend-report {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+
+.legend-report i {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  margin-right: 0.35rem;
+}
+
+.report-table-wrap,
+.template-compact-table-wrap,
+.template-risk-table-wrap {
+  width: 100%;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1rem;
+  background: #fff;
+}
+
+.report-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.82rem;
+}
+
+.report-table th,
+.report-table td {
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.report-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fbff;
+  color: #52627a;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+}
+
+.report-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.report-table-note,
+.report-empty {
+  margin: 0.65rem 0 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.risk-pill,
+.revamp-risk-card span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.risk-high,
+.risk-high span,
+.revamp-risk-card.risk-high span {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.risk-med,
+.risk-medium span,
+.revamp-risk-card.risk-medium span {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.risk-low,
+.revamp-risk-card.risk-low span {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.template-timeline-item {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.template-timeline-item i {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: 0.25rem;
+  border-radius: 50%;
+  background: var(--template-accent);
+  box-shadow: 0 0 0 5px var(--template-soft);
+}
+
+.template-timeline-item strong,
+.template-timeline-item p,
+.template-timeline-item small {
+  display: block;
+}
+
+.template-timeline-item p,
+.template-timeline-item small {
+  margin: 0.15rem 0 0;
+  color: #64748b;
+}
+
+.revamp-kanban-board,
+.revamp-gate-grid,
+.revamp-matrix-grid,
+.executive-attention-grid,
+.executive-visual-grid,
+.executive-number-card-grid,
+.cover-exec-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.revamp-kanban-lane {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1rem;
+  background: #f8fbff;
+  padding: 0.9rem;
+}
+
+.revamp-kanban-lane h3 {
+  margin: 0 0 0.65rem;
+}
+
+.revamp-gate-grid i,
+.revamp-matrix-grid > div {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: #fff;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.revamp-location-map {
+  min-height: 220px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.2rem;
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(37, 99, 235, 0.08) 1px, transparent 1px),
+    #eff6ff;
+  background-size: 32px 32px;
+  display: grid;
+  place-items: center;
+}
+
+.revamp-location-map i {
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 8px rgba(37, 99, 235, 0.12);
+}
+
+.revamp-location-map i:nth-child(1) { top: 22%; left: 28%; }
+.revamp-location-map i:nth-child(2) { top: 52%; left: 62%; }
+.revamp-location-map i:nth-child(3) { top: 72%; left: 42%; }
+.revamp-location-map span {
+  position: relative;
+  z-index: 1;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 900;
+  color: #1d4ed8;
+}
+
+.revamp-ledger-stamp,
+.revamp-sla-meter {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  border-radius: 1.2rem;
+  border: 1px dashed rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  font-weight: 950;
+  font-size: clamp(1.4rem, 4vw, 2.4rem);
+  letter-spacing: -0.04em;
+}
+
+.revamp-sla-meter b,
+.revamp-sla-meter span {
+  display: block;
+  text-align: center;
+}
+
+.revamp-sla-meter span {
+  font-size: 0.8rem;
+  color: #64748b;
+  letter-spacing: 0;
+}
+
+.revamp-audit-coverline {
+  background: linear-gradient(135deg, #0f766e, #0f2347);
+  color: #fff;
+}
+
+.revamp-audit-coverline span,
+.revamp-audit-coverline p {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.cover-health-card,
+.revamp-cover-mini-chart,
+.revamp-cover-focus-list,
+.revamp-cover-stat-grid {
+  margin-top: 0.75rem;
+}
+
+.cover-health-bars {
+  height: 0.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  background: #fee2e2;
+  margin: 0.75rem 0;
+}
+
+.cover-health-bars i,
+.cover-health-bars em {
+  display: block;
+  height: 100%;
+}
+
+.cover-health-bars i { background: #22c55e; }
+.cover-health-bars em { background: #f97316; }
+
+.revamp-cover-mini-chart .report-card,
+.revamp-cover-mini-chart .dynamic-report-card {
+  box-shadow: none;
+  border-radius: 1rem;
+  padding: 0.75rem;
+}
+
+.revamp-cover-mini-chart h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.revamp-cover-no-chart {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.revamp-cover-no-chart div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  padding-bottom: 0.4rem;
+}
+
+/* Print alignment */
+@media print {
+  .executive-preview-modal,
+  .ema-report-pro,
+  .report-center-page > main {
+    background: #fff !important;
+  }
+
+  .executive-preview-top {
+    display: none !important;
+  }
+
+  .executive-preview-body {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .report-template {
+    width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  .report-section,
+  .report-cover,
+  .report-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+}
+
+@media (max-width: 1400px) {
+  .ema-report-pro .report-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .ema-report-pro .report-hero-score {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .ema-report-pro .report-builder-grid,
+  .report-cover-content,
+  .revamp-cover-content,
+  .template-two-col,
+  .template-executive-grid,
+  .revamp-visual-pair,
+  .executive-snapshot-board,
+  .executive-number-dashboard,
+  .revamp-action-warroom,
+  .revamp-sla-pack,
+  .revamp-quality-gates,
+  .revamp-location-board,
+  .revamp-ledger-cover,
+  .report-template .template-story-card,
+  .report-template .executive-memo-board,
+  .report-template .revamp-monthly-command {
+    grid-template-columns: 1fr;
+  }
+
+  .ema-report-pro .report-config-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 992px) {
+  .ema-report-pro .report-settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ema-report-pro .report-category-panel {
+    position: static;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .ema-report-pro .category-list {
+    max-height: none;
+  }
+
+  .ema-report-pro .report-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .ema-report-pro .report-toolbar-actions {
+    justify-content: stretch;
+  }
+
+  .ema-report-pro .report-toolbar-actions button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .ema-report-pro .report-hero-score,
+  .ema-report-pro .report-analysis-grid,
+  .ema-report-pro .card-meta,
+  .ema-report-pro .check-grid,
+  .ema-report-pro .date-range-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .executive-preview-modal {
+    padding: 0.5rem;
+  }
+
+  .executive-preview-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .executive-preview-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .executive-preview-actions button {
+    flex: 1 1 auto;
+  }
+}
+
+/* ============================================================
+   V33 Report Center polish - instant catalog + sidebar/content balance
+   ============================================================ */
+.ema-report-pro .report-settings-layout {
+  grid-template-columns: 270px minmax(0, 1fr) !important;
+  gap: 1rem !important;
+}
+
+.ema-report-pro .report-category-panel {
+  min-height: calc(100vh - 2rem) !important;
+  max-height: calc(100vh - 2rem) !important;
+  border-radius: 1.25rem !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .report-category-panel .panel-head {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  gap: 0.35rem 0.7rem !important;
+  align-items: center !important;
+  padding: 1rem !important;
+  min-height: 92px !important;
+}
+
+.ema-report-pro .report-category-panel .panel-head span {
+  grid-row: 1 / span 2 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 3rem !important;
+  height: 3rem !important;
+  border-radius: 1rem !important;
+  background: #eef4ff !important;
+  color: #1d4ed8 !important;
+  font-size: 0.64rem !important;
+  line-height: 1.12 !important;
+  letter-spacing: 0.12em !important;
+  text-align: center !important;
+}
+
+.ema-report-pro .report-category-panel .panel-head strong,
+.ema-report-pro .report-category-panel .panel-head small {
+  min-width: 0 !important;
+}
+
+.ema-report-pro .report-category-panel .panel-head strong {
+  font-size: 1rem !important;
+  line-height: 1.12 !important;
+}
+
+.ema-report-pro .report-category-panel .panel-head small {
+  color: #52637c !important;
+  font-size: 0.76rem !important;
+  line-height: 1.35 !important;
+}
+
+.ema-report-pro .category-list {
+  display: grid !important;
+  gap: 0.55rem !important;
+  padding: 0.85rem 0.7rem 1rem !important;
+  max-height: calc(100vh - 7.75rem) !important;
+}
+
+.ema-report-pro .category-btn {
+  display: grid !important;
+  grid-template-columns: 2.45rem minmax(0, 1fr) auto !important;
+  gap: 0.7rem !important;
+  align-items: center !important;
+  min-height: 64px !important;
+  padding: 0.75rem 0.7rem !important;
+  border-radius: 1rem !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: #0b1f3f !important;
+  box-shadow: none !important;
+}
+
+.ema-report-pro .category-btn:hover {
+  background: #f5f8ff !important;
+  border-color: rgba(37, 99, 235, 0.12) !important;
+}
+
+.ema-report-pro .category-btn.active,
+.ema-report-pro .category-btn.is-active {
+  background: linear-gradient(135deg, #3b82f6, #0284c7) !important;
+  color: #fff !important;
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.22) !important;
+}
+
+.ema-report-pro .category-btn .setting-icon,
+.ema-report-pro .category-btn .category-icon {
+  width: 2.45rem !important;
+  height: 2.45rem !important;
+  border-radius: 0.85rem !important;
+  background: #eef4ff !important;
+  color: #2563eb !important;
+}
+
+.ema-report-pro .category-btn.active .setting-icon,
+.ema-report-pro .category-btn.is-active .setting-icon,
+.ema-report-pro .category-btn.active .category-icon,
+.ema-report-pro .category-btn.is-active .category-icon {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+}
+
+.ema-report-pro .category-btn > span:not(.setting-icon):not(.category-icon) {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.1rem !important;
+}
+
+.ema-report-pro .category-btn strong,
+.ema-report-pro .category-btn small {
+  min-width: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.ema-report-pro .category-btn strong {
+  font-size: 0.83rem !important;
+  line-height: 1.2 !important;
+  color: inherit !important;
+}
+
+.ema-report-pro .category-btn small {
+  font-size: 0.68rem !important;
+  line-height: 1.25 !important;
+  color: #53647e !important;
+  opacity: 0.98 !important;
+}
+
+.ema-report-pro .category-btn.active small,
+.ema-report-pro .category-btn.is-active small {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+
+.ema-report-pro .category-btn b {
+  min-width: 1.7rem !important;
+  width: 1.7rem !important;
+  height: 1.7rem !important;
+  margin-left: 0 !important;
+  font-size: 0.68rem !important;
+  background: #eef4ff !important;
+}
+
+.ema-report-pro .category-btn.active b,
+.ema-report-pro .category-btn.is-active b {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+}
+
+.ema-report-pro .report-mini-state {
+  display: none !important;
+}
+
+.ema-report-pro .report-main-content {
+  gap: 1rem !important;
+}
+
+.ema-report-pro .report-workspace-shell {
+  border-radius: 1.25rem !important;
+}
+
+.ema-report-pro .report-toolbar {
+  grid-template-columns: minmax(320px, 1fr) minmax(130px, 150px) auto !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+  padding: 0.85rem 1rem !important;
+}
+
+.ema-report-pro .report-toolbar .report-toolbar-actions,
+.ema-report-pro .report-toolbar .content-actions {
+  grid-column: auto !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  width: auto !important;
+  min-width: max-content !important;
+  margin: 0 !important;
+}
+
+.ema-report-pro .report-toolbar-actions button {
+  white-space: nowrap !important;
+  min-height: 40px !important;
+}
+
+.ema-report-pro .report-workspace-body {
+  padding: 1rem !important;
+}
+
+.ema-report-pro .report-builder-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 370px) !important;
+  gap: 1rem !important;
+}
+
+.ema-report-pro .report-ai-panel {
+  padding: 0.85rem !important;
+  border-radius: 1.15rem !important;
+}
+
+.ema-report-pro .report-ai-panel h3 {
+  font-size: 1rem !important;
+}
+
+.ema-report-pro .report-analysis-grid {
+  gap: 0.55rem !important;
+}
+
+.ema-report-pro .report-analysis-grid > div {
+  min-height: 62px !important;
+  padding: 0.65rem !important;
+  border-radius: 0.9rem !important;
+}
+
+.ema-report-pro .template-list {
+  gap: 0.8rem !important;
+}
+
+.ema-report-pro .template-card {
+  min-height: 190px !important;
+}
+
+.ema-report-pro .report-config-panel {
+  top: 1rem !important;
+}
+
+.ema-report-pro .config-card {
+  border-radius: 1.15rem !important;
+}
+
+@media (max-width: 1320px) {
+  .ema-report-pro .report-settings-layout {
+    grid-template-columns: 250px minmax(0, 1fr) !important;
+  }
+
+  .ema-report-pro .report-builder-grid {
+    grid-template-columns: minmax(0, 1fr) 340px !important;
+  }
+
+  .ema-report-pro .report-toolbar {
+    grid-template-columns: minmax(260px, 1fr) 135px auto !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .ema-report-pro .report-builder-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-report-pro .report-config-panel {
+    position: static !important;
+  }
+}
+
+@media (max-width: 992px) {
+  .ema-report-pro .report-settings-layout,
+  .ema-report-pro .report-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-report-pro .report-category-panel {
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  .ema-report-pro .category-list {
+    max-height: none !important;
+  }
+
+  .ema-report-pro .report-toolbar .report-toolbar-actions,
+  .ema-report-pro .report-toolbar .content-actions {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* ============================================================
+   V34 Report Center fixed viewport split-scroll
+   Sidebar and report workspace stay locked to the visible screen.
+   Only the category list and report content body scroll.
+   ============================================================ */
+html.ema-report-page-active,
+body.ema-report-page-active {
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+body.ema-report-page-active #root,
+body.ema-report-page-active .ema-shell,
+body.ema-report-page-active .ema-main,
+body.ema-report-page-active .ema-page {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+body.ema-report-page-active .ema-page {
+  padding: 0 !important;
+}
+
+.ema-report-pro.report-module-root,
+.settings-module-root.ema-report-pro {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .report-settings-layout {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .report-category-panel {
+  position: relative !important;
+  top: auto !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .report-category-panel .panel-head {
+  flex: 0 0 auto !important;
+}
+
+.ema-report-pro .category-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  padding-bottom: 1rem !important;
+}
+
+.ema-report-pro .report-main-content {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.ema-report-pro .report-hero {
+  flex: 0 0 auto !important;
+  min-height: auto !important;
+}
+
+.ema-report-pro .report-workspace-shell {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.ema-report-pro .report-toolbar {
+  flex: 0 0 auto !important;
+}
+
+.ema-report-pro .report-workspace-body {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+}
+
+.ema-report-pro .report-builder-grid {
+  min-height: 0 !important;
+  align-items: start !important;
+}
+
+.ema-report-pro .report-template-column {
+  min-height: 0 !important;
+}
+
+.ema-report-pro .report-config-panel {
+  position: sticky !important;
+  top: 0 !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 15.5rem) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  padding-right: 0.15rem !important;
+}
+
+.ema-report-pro .report-config-panel .config-card {
+  min-height: 0 !important;
+}
+
+@media (max-width: 1180px) {
+  .ema-report-pro .report-config-panel {
+    position: relative !important;
+    top: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+@media (max-width: 992px) {
+  html.ema-report-page-active,
+  body.ema-report-page-active,
+  body.ema-report-page-active #root,
+  body.ema-report-page-active .ema-shell,
+  body.ema-report-page-active .ema-main,
+  body.ema-report-page-active .ema-page,
+  .ema-report-pro.report-module-root,
+  .settings-module-root.ema-report-pro,
+  .ema-report-pro .report-settings-layout,
+  .ema-report-pro .report-main-content {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .ema-report-pro .report-category-panel {
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .ema-report-pro .category-list,
+  .ema-report-pro .report-workspace-body {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+/* =========================================================
+   Report v4 viewport lock - align sidebar behavior with Settings
+========================================================= */
+.report-center-page {
+  width: 100% !important;
+  height: calc(100dvh - 76px) !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 76px) !important;
+  overflow: hidden !important;
+}
+
+.report-center-page > .settings-module-root.ema-report-pro,
+.ema-report-pro.report-module-root,
+.settings-module-root.ema-report-pro {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .settings-layout.report-settings-layout {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  grid-template-columns: 260px minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .settings-menu.report-category-panel,
+.ema-report-pro .report-category-panel {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  align-self: stretch !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .report-category-panel .panel-head {
+  flex: 0 0 auto !important;
+  min-height: auto !important;
+}
+
+.ema-report-pro .settings-menu-list.category-list,
+.ema-report-pro .category-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  padding-bottom: 0.75rem !important;
+}
+
+.ema-report-pro .settings-content.report-main-content,
+.ema-report-pro .report-main-content {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.ema-report-pro .report-hero {
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.ema-report-pro .content-shell.report-workspace-shell,
+.ema-report-pro .report-workspace-shell {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.ema-report-pro .content-body.report-workspace-body,
+.ema-report-pro .report-workspace-body {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+}
+
+.ema-report-pro .report-builder-grid {
+  min-height: 0 !important;
+  align-items: start !important;
+}
+
+.ema-report-pro .report-config-panel {
+  align-self: start !important;
+  max-height: calc(100dvh - 17rem) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+}
+
+@media (max-width: 992px) {
+  .report-center-page,
+  .report-center-page > .settings-module-root.ema-report-pro,
+  .ema-report-pro.report-module-root,
+  .settings-module-root.ema-report-pro,
+  .ema-report-pro .settings-layout.report-settings-layout,
+  .ema-report-pro .settings-content.report-main-content {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .ema-report-pro .settings-menu.report-category-panel,
+  .ema-report-pro .report-category-panel {
+    max-height: 280px !important;
+  }
+
+  .ema-report-pro .settings-menu-list.category-list,
+  .ema-report-pro .category-list {
+    overflow-y: auto !important;
+  }
+}
+
+/* =========================================================
+   Report v5
+   Report sidebar now uses the same DOM classes as Settings:
+   .settings-menu > .panel-head > .settings-menu-list > .setting-btn
+   No report-specific sidebar panel sizing override is needed.
+========================================================= */
+.ema-report-pro > .settings-layout > .settings-menu {
+  min-height: 0;
+  max-height: 100%;
+}
+
+
+/* ============================================================
+   V36 Report Center: reuse Settings hero/header layout
+   Report hero now uses Settings users-hero/users-hero-score classes.
+   This only prevents old report-specific hero overrides from clipping it.
+============================================================ */
+.ema-report-pro .settings-hero.users-hero {
+  min-height: 6.35rem !important;
+  max-height: 7.45rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .settings-hero.users-hero .settings-score.users-hero-score {
+  max-width: 44rem !important;
+  grid-template-columns: repeat(4, minmax(8.2rem, 1fr)) !important;
+  grid-auto-rows: auto !important;
+  overflow: visible !important;
+}
+
+.ema-report-pro .settings-hero.users-hero .score-box {
+  min-height: 4.75rem !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+/* ============================================================
+   Report v7 - redesign lower workspace
+   Convert the report cards into a compact management ledger and
+   make the build panel feel like a guided report builder.
+============================================================ */
+.ema-report-pro .report-workspace-shell {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,255,0.96)) !important;
+}
+
+.ema-report-pro .report-workspace-body {
+  padding: 1rem 1.1rem 1.1rem !important;
+}
+
+.ema-report-pro .report-builder-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 380px) !important;
+  gap: 1rem !important;
+}
+
+.ema-report-pro .report-template-column {
+  gap: 0.85rem !important;
+}
+
+.ema-report-pro .report-ai-panel {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.28fr) !important;
+  gap: 0.95rem !important;
+  align-items: stretch !important;
+  padding: 0.95rem !important;
+  border-radius: 1rem !important;
+  border: 1px solid rgba(203, 213, 225, 0.82) !important;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,251,255,0.98)) !important;
+  box-shadow: none !important;
+}
+
+.ema-report-pro .report-ai-panel > div:first-child {
+  padding: 0.2rem 0.4rem 0.2rem 0 !important;
+  border-right: 1px solid rgba(203, 213, 225, 0.72) !important;
+}
+
+.ema-report-pro .report-ai-panel .section-tag {
+  border-radius: 0.65rem !important;
+  padding: 0.28rem 0.52rem !important;
+}
+
+.ema-report-pro .report-ai-panel h3 {
+  margin: 0.55rem 0 0.25rem !important;
+  font-size: 1rem !important;
+}
+
+.ema-report-pro .report-ai-panel p {
+  font-size: 0.8rem !important;
+  line-height: 1.5 !important;
+}
+
+.ema-report-pro .report-analysis-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.55rem !important;
+}
+
+.ema-report-pro .report-analysis-grid > div {
+  min-height: 52px !important;
+  grid-template-columns: 2rem minmax(0, 1fr) !important;
+  gap: 0.6rem !important;
+  padding: 0.58rem 0.65rem !important;
+  border-radius: 0.9rem !important;
+  background: #ffffff !important;
+  border-color: rgba(203, 213, 225, 0.78) !important;
+}
+
+.ema-report-pro .report-analysis-grid span {
+  width: 1.85rem !important;
+  height: 1.85rem !important;
+  border-radius: 0.7rem !important;
+}
+
+.ema-report-pro .report-source-chips {
+  grid-column: 1 / -1 !important;
+  padding-top: 0.05rem !important;
+}
+
+.ema-report-pro .report-source-chips span {
+  background: #eef4ff !important;
+  border-color: rgba(147, 197, 253, 0.75) !important;
+}
+
+.ema-report-pro .template-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 0.58rem !important;
+}
+
+.ema-report-pro .template-card {
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.3fr) minmax(180px, 0.72fr) minmax(150px, 0.46fr) !important;
+  gap: 0.85rem !important;
+  align-items: center !important;
+  padding: 0.84rem 0.85rem 0.84rem 1rem !important;
+  border-radius: 1rem !important;
+  border: 1px solid rgba(203, 213, 225, 0.82) !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.ema-report-pro .template-card::before {
+  width: 3px !important;
+  border-radius: 1rem 0 0 1rem !important;
+  opacity: 0.92 !important;
+}
+
+.ema-report-pro .template-card:hover,
+.ema-report-pro .template-card.active {
+  transform: none !important;
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 44%, #cbd5e1) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #2563eb) 18%, transparent), 0 16px 34px rgba(15, 23, 42, 0.07) !important;
+}
+
+.ema-report-pro .template-card.active {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent, #2563eb) 8%, #ffffff), #ffffff 42%) !important;
+}
+
+.ema-report-pro .template-card .card-top {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 0.65rem !important;
+  align-items: start !important;
+}
+
+.ema-report-pro .template-card .card-top h4 {
+  font-size: 0.98rem !important;
+  line-height: 1.25 !important;
+  margin: 0 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.ema-report-pro .template-card .type {
+  padding: 0.28rem 0.56rem !important;
+  font-size: 0.68rem !important;
+}
+
+.ema-report-pro .template-card > p {
+  grid-column: 1 / 2 !important;
+  font-size: 0.83rem !important;
+  line-height: 1.45 !important;
+  margin: -0.25rem 0 0 !important;
+  max-width: 44rem !important;
+}
+
+.ema-report-pro .template-card .card-meta {
+  grid-column: 2 / 3 !important;
+  grid-row: 1 / span 2 !important;
+  grid-template-columns: 1fr !important;
+  gap: 0.45rem !important;
+  margin: 0 !important;
+}
+
+.ema-report-pro .template-card .card-meta > div {
+  padding: 0.55rem 0.62rem !important;
+  border-radius: 0.75rem !important;
+  background: #f8fafc !important;
+  border-color: rgba(203, 213, 225, 0.86) !important;
+}
+
+.ema-report-pro .template-card .card-meta span,
+.ema-report-pro .template-card .card-select-hint span {
+  font-size: 0.66rem !important;
+  letter-spacing: 0.08em !important;
+}
+
+.ema-report-pro .template-card .card-meta b {
+  font-size: 0.8rem !important;
+  line-height: 1.25 !important;
+}
+
+.ema-report-pro .template-card .card-actions {
+  grid-column: 3 / 4 !important;
+  grid-row: 1 / span 2 !important;
+  justify-content: stretch !important;
+  align-self: stretch !important;
+}
+
+.ema-report-pro .template-card .card-select-hint {
+  width: 100% !important;
+  min-height: 100% !important;
+  display: grid !important;
+  place-items: center !important;
+  gap: 0.2rem !important;
+  border-radius: 0.85rem !important;
+  padding: 0.65rem !important;
+  background: #f1f5f9 !important;
+  border: 1px solid rgba(203, 213, 225, 0.7) !important;
+  text-align: center !important;
+}
+
+.ema-report-pro .template-card.active .card-select-hint {
+  background: color-mix(in srgb, var(--accent, #2563eb) 12%, #ffffff) !important;
+  border-color: color-mix(in srgb, var(--accent, #2563eb) 34%, #dbeafe) !important;
+}
+
+.ema-report-pro .template-card .card-select-hint b {
+  font-size: 0.8rem !important;
+  color: var(--accent, #2563eb) !important;
+}
+
+.ema-report-pro .report-config-panel {
+  max-height: calc(100dvh - 15.8rem) !important;
+  border-radius: 1rem !important;
+}
+
+.ema-report-pro .report-config-panel .config-card {
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  border-radius: 1.1rem !important;
+  border-color: rgba(203, 213, 225, 0.86) !important;
+  box-shadow: none !important;
+  background: #ffffff !important;
+}
+
+.ema-report-pro .report-config-panel .config-head {
+  padding: 1rem 1rem 0.9rem !important;
+  background: linear-gradient(135deg, #f8fbff, #ffffff) !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.76) !important;
+}
+
+.ema-report-pro .report-config-panel .config-head h3 {
+  font-size: 1.02rem !important;
+}
+
+.ema-report-pro .report-config-panel .selected-meta {
+  padding: 0.85rem 1rem 0.2rem !important;
+}
+
+.ema-report-pro .report-config-panel .config-form {
+  padding: 0.8rem 1rem 1rem !important;
+  gap: 0.7rem !important;
+}
+
+.ema-report-pro .report-config-panel .config-form label {
+  gap: 0.32rem !important;
+}
+
+.ema-report-pro .report-config-panel .config-form select,
+.ema-report-pro .report-config-panel .config-form input[type="date"],
+.ema-report-pro .report-config-panel .config-form input[type="time"] {
+  min-height: 40px !important;
+  border-radius: 0.8rem !important;
+  background: #fbfdff !important;
+}
+
+.ema-report-pro .report-config-panel .check-grid {
+  gap: 0.45rem !important;
+}
+
+.ema-report-pro .report-config-panel .check-grid label {
+  min-height: 48px !important;
+  padding: 0.55rem 0.6rem !important;
+  border-radius: 0.8rem !important;
+  background: #f8fafc !important;
+}
+
+.ema-report-pro .report-config-panel .config-actions {
+  position: sticky !important;
+  bottom: 0 !important;
+  padding: 0.85rem 1rem !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.82) !important;
+  background: rgba(255,255,255,0.96) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.ema-report-pro .report-config-panel .config-actions button {
+  flex: 1 1 0 !important;
+  min-height: 42px !important;
+}
+
+.ema-report-pro .report-config-panel .report-preview-map,
+.ema-report-pro .report-config-panel .report-history-list {
+  margin: 0 1rem 1rem !important;
+  padding-top: 0.75rem !important;
+}
+
+@media (max-width: 1320px) {
+  .ema-report-pro .template-card {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.62fr) !important;
+  }
+
+  .ema-report-pro .template-card .card-actions {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+
+  .ema-report-pro .template-card .card-select-hint {
+    min-height: 42px !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .ema-report-pro .report-ai-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-report-pro .report-ai-panel > div:first-child {
+    border-right: 0 !important;
+    border-bottom: 1px solid rgba(203, 213, 225, 0.72) !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .ema-report-pro .template-card {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-report-pro .template-card > p,
+  .ema-report-pro .template-card .card-meta,
+  .ema-report-pro .template-card .card-actions {
+    grid-column: auto !important;
+    grid-row: auto !important;
+  }
+
+  .ema-report-pro .template-card .card-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ============================================================
+   REPORT CENTER V8 - SCROLL PERFORMANCE PATCH
+   Punca lag sebelum ini: shadow/gradient/transition berat pada banyak card,
+   sticky config panel dalam nested scroll, dan banyak repaint masa scroll.
+   Patch ini ringankan report workspace tanpa kacau Settings sidebar classes.
+============================================================ */
+.ema-report-pro,
+.ema-report-pro * {
+  scroll-behavior: auto !important;
+}
+
+.ema-report-pro .settings-menu,
+.ema-report-pro .settings-menu-list,
+.ema-report-pro .settings-content,
+.ema-report-pro .content-shell,
+.ema-report-pro .content-body,
+.ema-report-pro .report-template-column,
+.ema-report-pro .report-config-panel {
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.ema-report-pro .report-workspace-shell {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  overflow: hidden !important;
+  background: #fff !important;
+}
+
+.ema-report-pro .report-toolbar {
+  position: relative !important;
+  z-index: 2;
+  flex: 0 0 auto !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22) !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.ema-report-pro .report-workspace-body {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  padding: 0.85rem !important;
+}
+
+.ema-report-pro .report-builder-grid {
+  height: 100% !important;
+  min-height: 0 !important;
+  align-items: stretch !important;
+  grid-template-columns: minmax(0, 1fr) minmax(315px, 360px) !important;
+  gap: 0.85rem !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .report-template-column,
+.ema-report-pro .report-config-panel {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  contain: layout paint style;
+}
+
+.ema-report-pro .report-config-panel {
+  position: static !important;
+  top: auto !important;
+  align-self: stretch !important;
+  padding-right: 0.25rem !important;
+}
+
+.ema-report-pro .report-template-column {
+  padding-right: 0.25rem !important;
+}
+
+.ema-report-pro .report-template-column::-webkit-scrollbar,
+.ema-report-pro .report-config-panel::-webkit-scrollbar,
+.ema-report-pro .executive-preview-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ema-report-pro .report-template-column::-webkit-scrollbar-thumb,
+.ema-report-pro .report-config-panel::-webkit-scrollbar-thumb,
+.ema-report-pro .executive-preview-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.48);
+}
+
+.ema-report-pro .report-template-column::-webkit-scrollbar-track,
+.ema-report-pro .report-config-panel::-webkit-scrollbar-track,
+.ema-report-pro .executive-preview-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ema-report-pro .report-ai-panel,
+.ema-report-pro .template-card,
+.ema-report-pro .config-card,
+.ema-report-pro .card-meta > div,
+.ema-report-pro .check-grid label,
+.ema-report-pro .report-history-list button,
+.ema-report-pro .report-mini-state,
+.ema-report-pro .report-empty-block {
+  background: #fff !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transition: none !important;
+}
+
+.ema-report-pro .report-ai-panel {
+  gap: 0.7rem !important;
+  padding: 0.9rem !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  border-radius: 1.05rem !important;
+}
+
+.ema-report-pro .report-analysis-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.55rem !important;
+}
+
+.ema-report-pro .report-analysis-grid > div {
+  padding: 0.62rem !important;
+  border-radius: 0.85rem !important;
+  background: #f8fafc !important;
+}
+
+/* Replace the heavy tile feel with a lighter ledger row. */
+.ema-report-pro .template-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 0.55rem !important;
+}
+
+.ema-report-pro .template-card {
+  min-height: unset !important;
+  display: grid !important;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 0.9fr) auto !important;
+  grid-template-areas:
+    "top meta action"
+    "desc meta action" !important;
+  gap: 0.45rem 0.85rem !important;
+  align-items: center !important;
+  padding: 0.8rem 0.9rem !important;
+  border-radius: 0.95rem !important;
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  content-visibility: auto;
+  contain-intrinsic-size: 86px;
+}
+
+.ema-report-pro .template-card::before {
+  width: 3px !important;
+  border-radius: 0.95rem 0 0 0.95rem !important;
+}
+
+.ema-report-pro .template-card:hover,
+.ema-report-pro .template-card.active {
+  transform: none !important;
+  box-shadow: none !important;
+  background: #f8fbff !important;
+}
+
+.ema-report-pro .card-top {
+  grid-area: top !important;
+  min-width: 0 !important;
+  align-items: center !important;
+}
+
+.ema-report-pro .template-card p {
+  grid-area: desc !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  line-height: 1.35 !important;
+}
+
+.ema-report-pro .card-meta {
+  grid-area: meta !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  margin-top: 0 !important;
+  gap: 0.45rem !important;
+}
+
+.ema-report-pro .card-meta > div {
+  padding: 0.5rem 0.55rem !important;
+  border-radius: 0.75rem !important;
+  background: #f8fafc !important;
+}
+
+.ema-report-pro .card-actions {
+  grid-area: action !important;
+  align-self: center !important;
+}
+
+.ema-report-pro .card-select-hint {
+  white-space: nowrap !important;
+  padding: 0.38rem 0.6rem !important;
+  background: #f1f5f9 !important;
+}
+
+.ema-report-pro .config-card {
+  min-height: 100% !important;
+  border-radius: 1.05rem !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  gap: 0.8rem !important;
+}
+
+.ema-report-pro .config-actions {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 3 !important;
+  padding-top: 0.7rem !important;
+  background: #fff !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+.ema-report-pro .report-search,
+.ema-report-pro .report-toolbar-filters select,
+.ema-report-pro .config-form select,
+.ema-report-pro .config-form input[type="date"],
+.ema-report-pro .config-form input[type="time"] {
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+.ema-report-pro .report-toolbar-filters select:focus,
+.ema-report-pro .config-form select:focus,
+.ema-report-pro .config-form input:focus {
+  box-shadow: none !important;
+}
+
+.executive-preview-modal {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.executive-preview-shell,
+.report-schedule-dialog {
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16) !important;
+}
+
+.executive-preview-body {
+  overscroll-behavior: contain !important;
+  contain: layout paint style;
+}
+
+@media (max-width: 1180px) {
+  .ema-report-pro .report-builder-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-report-pro .report-config-panel {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .ema-report-pro .template-card {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "top"
+      "desc"
+      "meta"
+      "action" !important;
+  }
+}
