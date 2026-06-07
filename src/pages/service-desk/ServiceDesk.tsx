@@ -37,7 +37,6 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import "../../styles/service-desk.css";
 
 type AppUser = {
   id?: string | number;
@@ -142,48 +141,67 @@ function getRoleDisplayName(role: any) {
   );
 }
 
+function normalizeSupportLevelName(value: any) {
+  const role = normalizeRoleText(value);
+  const match = role.match(/\bl\s*([123])\s*support\b/i) || role.match(/\bl([123])support\b/i);
+
+  if (match?.[1]) {
+    return `L${match[1]} Support`;
+  }
+
+  return role;
+}
+
 function getUserRoleNames(user: any) {
-  const fromArray = Array.isArray(user?.roles)
-    ? user.roles.map((role: any) => getRoleDisplayName(role))
-    : [];
+  const roleSources: any[] = [];
 
-  const fromString = String(
-    user?.roleName ||
-      user?.RoleName ||
-      user?.role ||
-      user?.Role ||
-      user?.supportLevel ||
-      ''
-  )
-    .split(/[,|;]/)
-    .map((role) => role.trim());
+  if (Array.isArray(user?.roles)) roleSources.push(...user.roles);
+  if (Array.isArray(user?.Roles)) roleSources.push(...user.Roles);
+  if (Array.isArray(user?.userRoles)) roleSources.push(...user.userRoles);
 
-  return [...fromArray, ...fromString].filter(Boolean);
+  roleSources.push(
+    user?.roleName,
+    user?.RoleName,
+    user?.role,
+    user?.Role,
+    user?.role?.name,
+    user?.role?.RoleName,
+    user?.supportLevel,
+    user?.SupportLevel,
+    user?.designation,
+    user?.Designation
+  );
+
+  return roleSources
+    .flatMap((role) => String(getRoleDisplayName(role) || '').split(/[,|;]/))
+    .map((role) => normalizeSupportLevelName(role))
+    .filter(Boolean);
 }
 
 function isSupportRoleName(roleName: any) {
   const role = normalizeRoleText(roleName).toLowerCase();
-  return /\bl[123]\s*support\b/i.test(role) || role.includes('support');
+  return /\bl\s*[123]\s*support\b/i.test(role) || /\bl[123]support\b/i.test(role) || role.includes('support');
 }
 
 function getPrimarySupportLevel(user: any) {
   const roles = getUserRoleNames(user);
+
   return (
     SERVICE_DESK_SUPPORT_LEVELS.find((level) =>
-      roles.some((role) => role.toLowerCase() === level.toLowerCase())
+      roles.some((role) => normalizeSupportLevelName(role).toLowerCase() === level.toLowerCase())
     ) ||
-    roles.find((role) => /\bl[123]\s*support\b/i.test(role)) ||
+    roles.find((role) => /\bl\s*[123]\s*support\b/i.test(role) || /\bl[123]support\b/i.test(role)) ||
     roles.find((role) => /support/i.test(role)) ||
     ''
   );
 }
 
 function userMatchesSupportLevel(user: any, supportLevel: string) {
-  const selectedLevel = normalizeRoleText(supportLevel).toLowerCase();
+  const selectedLevel = normalizeSupportLevelName(supportLevel).toLowerCase();
 
   if (!selectedLevel) return false;
 
-  return getUserRoleNames(user).some((role) => role.toLowerCase() === selectedLevel);
+  return getUserRoleNames(user).some((role) => normalizeSupportLevelName(role).toLowerCase() === selectedLevel);
 }
 
 function getEngineerKey(engineer: EngineerOption) {
@@ -216,6 +234,107 @@ function getEngineerLeaveMessage(engineer: EngineerOption) {
   const reason = engineer.leaveReason ? ` (${engineer.leaveReason})` : '';
 
   return `${name} is ${status}${period}${reason}. You can still assign this ticket if needed.`;
+}
+
+function normalizeLookupKey(value: any) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function getEngineerLookupKeys(engineer: any) {
+  return [
+    engineer?.id,
+    engineer?.ID,
+    engineer?.userID,
+    engineer?.UserID,
+    engineer?.userId,
+    engineer?.UserId,
+    engineer?.emaUserId,
+    engineer?.EMAUserID,
+    engineer?.employeeId,
+    engineer?.EmployeeID,
+    engineer?.email,
+    engineer?.Email,
+    engineer?.name,
+    engineer?.Name,
+    engineer?.username,
+    engineer?.Username,
+    engineer?.engineerName,
+    engineer?.EngineerName,
+  ]
+    .map(normalizeLookupKey)
+    .filter(Boolean);
+}
+
+function mergeEngineerAvailabilityIntoEmaUsers(emaEngineers: EngineerOption[], availabilityRows: EngineerOption[]) {
+  if (!Array.isArray(availabilityRows) || availabilityRows.length === 0) {
+    return emaEngineers;
+  }
+
+  const availabilityByKey = new Map<string, EngineerOption>();
+
+  availabilityRows.forEach((row) => {
+    getEngineerLookupKeys(row).forEach((key) => {
+      availabilityByKey.set(key, row);
+    });
+  });
+
+  return emaEngineers.map((engineer) => {
+    const match = getEngineerLookupKeys(engineer)
+      .map((key) => availabilityByKey.get(key))
+      .find(Boolean);
+
+    if (!match) return engineer;
+
+    return {
+      ...engineer,
+      currentStatus:
+        match.currentStatus ||
+        match.status ||
+        match.leaveStatus ||
+        match.AvailabilityStatus ||
+        match.availabilityStatus ||
+        engineer.currentStatus,
+      status:
+        match.currentStatus ||
+        match.status ||
+        match.leaveStatus ||
+        match.AvailabilityStatus ||
+        match.availabilityStatus ||
+        engineer.status,
+      isOnLeave:
+        Boolean(match.isOnLeave) ||
+        Boolean((match as any).onLeave) ||
+        Boolean((match as any).IsOnLeave) ||
+        Boolean((match as any).OnLeave) ||
+        isEngineerOnLeave(match),
+      leaveStatus:
+        match.leaveStatus ||
+        (match as any).LeaveStatus ||
+        match.currentStatus ||
+        match.status ||
+        engineer.leaveStatus,
+      leaveReason:
+        match.leaveReason ||
+        (match as any).LeaveReason ||
+        (match as any).remarks ||
+        (match as any).Remarks ||
+        engineer.leaveReason,
+      leaveStartDate:
+        match.leaveStartDate ||
+        match.StartDate ||
+        (match as any).startDate ||
+        (match as any).dateFrom ||
+        (match as any).DateFrom ||
+        engineer.leaveStartDate,
+      leaveEndDate:
+        match.leaveEndDate ||
+        match.EndDate ||
+        (match as any).endDate ||
+        (match as any).dateTo ||
+        (match as any).DateTo ||
+        engineer.leaveEndDate,
+    };
+  });
 }
 
 type AdvancedFilters = {
@@ -314,17 +433,56 @@ const emptyAdvancedFilters = (): AdvancedFilters => ({
 });
 
 function getStoredUser(): AppUser {
-  const objectKeys = ['user', 'authUser', 'currentUser', 'emaUser', 'ema-user', 'userData', 'auth', 'ema-auth'];
+  const objectKeys = ['user', 'authUser', 'currentUser', 'emaUser', 'ema-user', 'userData', 'auth', 'ema-auth', 'authData', 'loginUser'];
 
   for (const key of objectKeys) {
     const parsed = readJsonStorage(key);
-    const user = parsed?.user || parsed?.data?.user || parsed?.data || parsed;
+    const user = parsed?.user || parsed?.data?.user || parsed?.data || parsed?.profile || parsed;
 
-    if (user && typeof user === 'object' && (user.name || user.username || user.userID || user.email)) {
+    if (
+      user &&
+      typeof user === 'object' &&
+      (
+        user.name ||
+        user.Name ||
+        user.fullName ||
+        user.FullName ||
+        user.displayName ||
+        user.DisplayName ||
+        user.username ||
+        user.Username ||
+        user.userName ||
+        user.UserName ||
+        user.userID ||
+        user.UserID ||
+        user.email ||
+        user.Email
+      )
+    ) {
+      const displayName =
+        user.name ||
+        user.Name ||
+        user.fullName ||
+        user.FullName ||
+        user.displayName ||
+        user.DisplayName ||
+        user.username ||
+        user.Username ||
+        user.userName ||
+        user.UserName ||
+        user.userID ||
+        user.UserID ||
+        user.email ||
+        user.Email ||
+        'Current User';
+
       return {
         ...user,
-        name: user.name || user.username || user.userID || user.email || 'Current User',
-        role: user.role || user.Role || 'Admin',
+        id: user.id || user.ID || user.userID || user.UserID || user.userId || user.UserId || user.email || user.Email || displayName,
+        name: displayName,
+        username: user.username || user.Username || user.userName || user.UserName || displayName,
+        email: user.email || user.Email || '',
+        role: user.role || user.Role || user.roleName || user.RoleName || 'Admin',
         permissions: user.permissions || {
           incidents: { view: true, create: true, edit: true, delete: true },
         },
@@ -792,7 +950,80 @@ function getAssetSearchText(asset: any) {
 }
 
 function getUserName(user: any) {
-  return user?.name || user?.username || user?.Username || user?.email || '';
+  return (
+    user?.name ||
+    user?.Name ||
+    user?.fullName ||
+    user?.FullName ||
+    user?.displayName ||
+    user?.DisplayName ||
+    user?.username ||
+    user?.Username ||
+    user?.userName ||
+    user?.UserName ||
+    user?.email ||
+    user?.Email ||
+    ''
+  );
+}
+
+function getCurrentLoginName(user: any) {
+  return (
+    getUserName(user) ||
+    user?.userID ||
+    user?.UserID ||
+    user?.id ||
+    user?.ID ||
+    user?.email ||
+    user?.Email ||
+    'Current User'
+  );
+}
+
+function getCurrentLoginId(user: any) {
+  return String(
+    user?.id ||
+      user?.ID ||
+      user?.userID ||
+      user?.UserID ||
+      user?.userId ||
+      user?.UserId ||
+      user?.email ||
+      user?.Email ||
+      getCurrentLoginName(user)
+  );
+}
+
+function normalizeAssetKey(asset: any) {
+  return String(
+    asset?.id ||
+      asset?.ID ||
+      asset?.assetId ||
+      asset?.AssetID ||
+      asset?.assetTag ||
+      asset?.AssetTag ||
+      asset?.computerName ||
+      asset?.ComputerName ||
+      asset?.DeviceID ||
+      asset?.Object_DeviceID ||
+      getAssetValue(asset) ||
+      JSON.stringify(asset)
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function mergeAssetRows(...groups: any[][]) {
+  const map = new Map<string, any>();
+
+  groups.flat().forEach((asset) => {
+    if (!asset || typeof asset !== 'object') return;
+    const key = normalizeAssetKey(asset);
+    if (!key || map.has(key)) return;
+    map.set(key, asset);
+  });
+
+  return Array.from(map.values());
 }
 
 function getCategoryName(row: any) {
@@ -1077,7 +1308,9 @@ export default function ServiceDesk() {
   const [assetSearchTerm, setAssetSearchTerm] = useState('');
   const [showAssetDropdown, setShowAssetDropdown] = useState(false);
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
+  const [assetDropdownStyle, setAssetDropdownStyle] = useState<CSSProperties>({});
   const assetComboRef = useRef<HTMLDivElement>(null);
+  const assetDropdownPortalRef = useRef<HTMLDivElement>(null);
   const detailPanelRef = useRef<HTMLElement>(null);
   const rejectReasonRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1097,17 +1330,27 @@ export default function ServiceDesk() {
   const supportRoles = useMemo(() => {
     const roleNames = new Set<string>();
 
-    SERVICE_DESK_SUPPORT_LEVELS.forEach((level) => roleNames.add(level));
+    users.forEach((user) => {
+      getUserRoleNames(user).forEach((roleName) => {
+        const normalized = normalizeSupportLevelName(roleName);
+        if (SERVICE_DESK_SUPPORT_LEVELS.some((level) => level.toLowerCase() === normalized.toLowerCase())) {
+          roleNames.add(normalized);
+        }
+      });
+    });
 
     roles.forEach((role) => {
-      const roleName = getRoleDisplayName(role);
-      if (isSupportRoleName(roleName)) {
-        roleNames.add(roleName);
+      const normalized = normalizeSupportLevelName(getRoleDisplayName(role));
+      if (SERVICE_DESK_SUPPORT_LEVELS.some((level) => level.toLowerCase() === normalized.toLowerCase())) {
+        roleNames.add(normalized);
       }
     });
 
-    return Array.from(roleNames).map((name) => ({ id: name, name, role: name }));
-  }, [roles]);
+    // Keep the dropdown predictable even if the role API returns no rows yet.
+    SERVICE_DESK_SUPPORT_LEVELS.forEach((level) => roleNames.add(level));
+
+    return SERVICE_DESK_SUPPORT_LEVELS.filter((level) => roleNames.has(level)).map((name) => ({ id: name, name, role: name }));
+  }, [roles, users]);
 
   const engineers = useMemo(() => users.filter(isEngineer), [users]);
 
@@ -1196,6 +1439,16 @@ export default function ServiceDesk() {
         return;
       }
 
+      const emaEngineersForLevel = engineers.filter((engineer) => userMatchesSupportLevel(engineer, selectedLevel));
+
+      // Dropdown source of truth is EMA_User. Resource Planning only adds leave/availability warning metadata.
+      setEngineersForLevel(emaEngineersForLevel);
+
+      if (emaEngineersForLevel.length === 0) {
+        setIsLoadingEngineers(false);
+        return;
+      }
+
       setIsLoadingEngineers(true);
 
       try {
@@ -1204,20 +1457,21 @@ export default function ServiceDesk() {
           new Date().toISOString().slice(0, 10);
 
         const rows = await engineerAvailabilityService.getAvailableEngineers(ticketDate, selectedLevel);
-        const filteredRows = Array.isArray(rows)
-          ? rows.filter((engineer: EngineerOption) => userMatchesSupportLevel(engineer, selectedLevel))
-          : [];
+        const mergedRows = mergeEngineerAvailabilityIntoEmaUsers(
+          emaEngineersForLevel,
+          Array.isArray(rows) ? rows : []
+        );
 
         if (!cancelled) {
-          setEngineersForLevel(filteredRows);
+          setEngineersForLevel(mergedRows);
         }
       } catch (error) {
-        console.error('Failed to load engineers by support level', error);
+        console.error('Failed to load engineer leave schedule from Resource Planning', error);
 
         if (!cancelled) {
-          setEngineersForLevel([]);
+          setEngineersForLevel(emaEngineersForLevel);
           setToast({
-            message: 'Failed to load engineers for the selected support level.',
+            message: 'Engineer list is loaded from EMA_User, but leave schedule could not be checked.',
             type: 'warning',
           });
         }
@@ -1233,7 +1487,7 @@ export default function ServiceDesk() {
     return () => {
       cancelled = true;
     };
-  }, [formData.assignedLevel, formData.createdAt]);
+  }, [formData.assignedLevel, formData.createdAt, engineers]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -1245,14 +1499,31 @@ export default function ServiceDesk() {
     function handleOutsideClick(event: MouseEvent) {
       const target = event.target as Node;
 
-      if (assetComboRef.current && !assetComboRef.current.contains(target)) {
-        setShowAssetDropdown(false);
-      }
+      if (assetComboRef.current?.contains(target)) return;
+      if (assetDropdownPortalRef.current?.contains(target)) return;
+
+      setShowAssetDropdown(false);
     }
 
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
+
+  useEffect(() => {
+    if (!showAssetDropdown) return undefined;
+
+    updateAssetDropdownPosition();
+
+    const handlePositionUpdate = () => updateAssetDropdownPosition();
+
+    window.addEventListener('resize', handlePositionUpdate);
+    window.addEventListener('scroll', handlePositionUpdate, true);
+
+    return () => {
+      window.removeEventListener('resize', handlePositionUpdate);
+      window.removeEventListener('scroll', handlePositionUpdate, true);
+    };
+  }, [showAssetDropdown, assetSearchTerm, clientAssets.length]);
 
   useEffect(() => {
     if (!selectedIncidentId) return undefined;
@@ -1574,27 +1845,75 @@ export default function ServiceDesk() {
     }
   }
 
+  function updateAssetDropdownPosition() {
+    if (typeof window === 'undefined') return;
+
+    const rect = assetComboRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const viewportPadding = 16;
+    const dropdownWidth = Math.max(rect.width, 420);
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding)
+    );
+
+    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const spaceAbove = rect.top - viewportPadding;
+    const openBelow = spaceBelow >= 220 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.max(180, Math.min(360, openBelow ? spaceBelow : spaceAbove));
+    const top = openBelow
+      ? rect.bottom + 8
+      : Math.max(viewportPadding, rect.top - maxHeight - 8);
+
+    setAssetDropdownStyle({
+      position: 'fixed',
+      left,
+      top,
+      width: dropdownWidth,
+      maxHeight,
+      zIndex: 2147483647,
+    });
+  }
+
+  function openAssetDropdown() {
+    if (isRequesterAssetLocked) return;
+
+    setShowAssetDropdown(true);
+
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(updateAssetDropdownPosition);
+    }
+  }
+
   async function loadClientAssets(customerName: string) {
     const queryName = customerName.trim();
 
     setIsLoadingAssets(true);
+    openAssetDropdown();
+
     try {
-      let assetsData: any[] = [];
+      const requests: Promise<any[]>[] = [
+        safeApi('GET /api/assets all', assetsService.getAll(), []),
+      ];
 
-      if (queryName) {
-        assetsData = await safeApi('GET /api/assets by requester', assetsService.getByCustomer(queryName), []);
+      if (queryName && queryName.toLowerCase() !== 'all') {
+        requests.unshift(safeApi('GET /api/assets by requester', assetsService.getByCustomer(queryName), []));
       }
 
-      // Fallback to all assets. This is important because old Service Desk data often stores
-      // username/asset tag independently from CustomerName.
-      if (!Array.isArray(assetsData) || assetsData.length === 0) {
-        assetsData = await safeApi('GET /api/assets all', assetsService.getAll(), []);
-      }
+      const results = await Promise.all(requests);
+      const mergedAssets = mergeAssetRows(...results.filter(Array.isArray));
 
-      setClientAssets(Array.isArray(assetsData) ? assetsData : []);
+      setClientAssets(mergedAssets);
+      openAssetDropdown();
     } catch (error) {
-      console.error('Failed to load assets', error);
+      console.error('Failed to load assets from DB', error);
       setClientAssets([]);
+      openAssetDropdown();
+      setToast({
+        message: 'Asset lookup failed to load from /api/assets.',
+        type: 'warning',
+      });
     } finally {
       setIsLoadingAssets(false);
     }
@@ -1603,30 +1922,38 @@ export default function ServiceDesk() {
   async function searchAssets(keyword: string) {
     const term = keyword.trim();
 
+    openAssetDropdown();
+
     if (term.length < 2) {
       if (clientAssets.length === 0) {
-        void loadClientAssets(formData.customerName || 'all');
+        void loadClientAssets('all');
       }
       return;
     }
 
     setIsLoadingAssets(true);
+
     try {
-      let assetsData = await safeApi(
-        'GET /api/assets search scoped',
-        assetsService.search(term, formData.customerName || ''),
-        []
+      const [globalResults, allAssets] = await Promise.all([
+        safeApi('GET /api/assets search global', assetsService.search(term), []),
+        clientAssets.length > 0 ? Promise.resolve(clientAssets) : safeApi('GET /api/assets all fallback', assetsService.getAll(), []),
+      ]);
+
+      const mergedAssets = mergeAssetRows(
+        Array.isArray(globalResults) ? globalResults : [],
+        Array.isArray(allAssets) ? allAssets.filter((asset) => getAssetSearchText(asset).includes(term.toLowerCase())) : []
       );
 
-      if (!Array.isArray(assetsData) || assetsData.length === 0) {
-        assetsData = await safeApi('GET /api/assets search global', assetsService.search(term), []);
-      }
-
-      setClientAssets(Array.isArray(assetsData) ? assetsData : []);
-      setShowAssetDropdown(true);
+      setClientAssets(mergedAssets);
+      openAssetDropdown();
     } catch (error) {
       console.error('Asset search failed', error);
       setClientAssets([]);
+      openAssetDropdown();
+      setToast({
+        message: 'Asset lookup search failed. Check /api/assets search response.',
+        type: 'warning',
+      });
     } finally {
       setIsLoadingAssets(false);
     }
@@ -1680,8 +2007,16 @@ export default function ServiceDesk() {
       assetOS,
       deviceType: prev.deviceType || asset.deviceType || asset.DeviceType || assetOS || '',
     }));
-    setAssetSearchTerm(assetLabel);
+
+    // Selected asset details already populate Asset Brand / Asset Model / Asset OS below.
+    // Do not keep the search result/card visible under Asset Lookup after selection.
+    setAssetSearchTerm('');
+    setClientAssets([]);
     setShowAssetDropdown(false);
+
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => setShowAssetDropdown(false), 0);
+    }
   }
 
   async function openCreateForm() {
@@ -1692,18 +2027,22 @@ export default function ServiceDesk() {
 
     await ensureLookupsLoaded();
 
-    const currentRequesterName = currentUser?.name || currentUser?.username || currentUser?.userID || '';
+    const currentRequesterName = getCurrentLoginName(currentUser);
+    const currentRequesterId = getCurrentLoginId(currentUser);
+
     setFormMode('create');
     setFormData({
       ...emptyForm(),
-      customerId: currentRequesterName ? String(currentUser?.id || currentRequesterName) : '',
+      customerId: currentRequesterId,
       customerName: currentRequesterName,
+      reporterId: currentRequesterId,
       userType: 'Internal User',
       sector: '',
     });
     setClientAssets([]);
     setAssetSearchTerm('');
     setShowAssetDropdown(false);
+    void loadClientAssets('all');
     setViewMode('form');
   }
 
@@ -1771,6 +2110,11 @@ export default function ServiceDesk() {
       return;
     }
 
+    if (!formData.description?.trim()) {
+      setToast({ message: 'Description is required.', type: 'error' });
+      return;
+    }
+
     if (normalizeStatus(formData.status) === 'rejected' && !getOperationalReason(formData)) {
       rejectReasonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       rejectReasonRef.current?.focus();
@@ -1788,10 +2132,16 @@ export default function ServiceDesk() {
     setIsSaving(true);
     try {
       const operationalReason = getOperationalReason(formData);
+      const currentRequesterName = getCurrentLoginName(currentUser);
+      const currentRequesterId = getCurrentLoginId(currentUser);
+
       const saveData = {
         ...formData,
         userType: 'Internal User',
         sector: '',
+        customerId: formMode === 'create' ? currentRequesterId : formData.customerId,
+        customerName: formMode === 'create' ? currentRequesterName : formData.customerName,
+        reporterId: formMode === 'create' ? currentRequesterId : formData.reporterId,
         id: getId(formData) || makeIncidentId(),
         createdAt: toIsoDateOrEmpty(formData.createdAt) || new Date().toISOString(),
         slaDue: calculateSlaDue(formData),
@@ -3063,11 +3413,15 @@ export default function ServiceDesk() {
         </div>
       )}
 
-      {confirmDialog && (
-        <div
-          className="settings-confirm-backdrop open"
-          onClick={(event) => event.stopPropagation()}
+      {confirmDialog && typeof document !== 'undefined' && createPortal(
+        <main
+          data-section="service-desk"
+          className="settings-module-root ema-settings-pro service-desk-confirm-portal-root"
         >
+          <div
+            className="settings-confirm-backdrop open service-desk-confirm-backdrop"
+            onClick={(event) => event.stopPropagation()}
+          >
           <section
             className={cn('settings-confirm-modal', `is-${confirmDialog.tone || 'danger'}`)}
             role="dialog"
@@ -3150,6 +3504,8 @@ export default function ServiceDesk() {
             </footer>
           </section>
         </div>
+        </main>,
+        document.body
       )}
 
       <div className="settings-layout d-grid gap-3">
@@ -3984,9 +4340,13 @@ export default function ServiceDesk() {
         </aside>
       )}
 
-      {viewMode === 'form' && (
-        <div className="settings-confirm-backdrop open" aria-modal="true" role="dialog">
-          <form className="settings-confirm-modal user-modal" onSubmit={saveIncident} onClick={(event) => event.stopPropagation()}>
+      {viewMode === 'form' && typeof document !== 'undefined' && createPortal(
+        <main
+          data-section="service-desk"
+          className="settings-module-root ema-settings-pro service-desk-modal-portal-root"
+        >
+          <div className="settings-confirm-backdrop open" aria-modal="true" role="dialog">
+          <form className="settings-confirm-modal user-modal service-desk-ticket-modal" onSubmit={saveIncident} onClick={(event) => event.stopPropagation()}>
             <header className="content-head">
               <div>
                 <span>{formMode === 'create' ? 'New Incident' : formData.id || 'Edit Incident'}</span>
@@ -3998,7 +4358,7 @@ export default function ServiceDesk() {
               </button>
             </header>
 
-            <div className="content-body">
+            <div className="content-body service-desk-ticket-form-body">
               {isLoadingLookups && (
                 <div className="settings-inline-alert">
                   <Loader2 size={14} className="ema-spin" />
@@ -4049,19 +4409,17 @@ export default function ServiceDesk() {
                   </p>
                 )}
                 <div className="form-grid">
-                  <label>
+                  <label className="service-desk-created-by-field">
                     <span>Created By</span>
-                    <ServiceDeskSelect
-                      value={formData.customerId || ''}
-                      disabled={isRequesterAssetLocked}
-                      placeholder={isLoadingLookups ? 'Loading creator...' : 'Select Created By'}
-                      onOpen={() => void ensureLookupsLoaded()}
-                      onChange={handleClientSelect}
-                      options={[
-                        { value: '', label: isLoadingLookups ? 'Loading creator...' : 'Select Created By', disabled: true },
-                        ...requesterOptions.map((client) => ({ value: getClientId(client), label: getClientName(client) })),
-                      ]}
+                    <input
+                      value={formData.customerName || getCurrentLoginName(currentUser)}
+                      readOnly
+                      disabled
+                      aria-label="Created by current logged-in user"
                     />
+                    <small className="service-desk-field-hint">
+                      Auto-filled from current login. This field is not manually selectable.
+                    </small>
                   </label>
 
                   <label>
@@ -4080,8 +4438,8 @@ export default function ServiceDesk() {
 
                   <label className="form-field">
                     <span>Asset Lookup</span>
-                    <div className="price-input-shell" ref={assetComboRef}>
-                      <div className="price-input-shell">
+                    <div className="price-input-shell service-desk-asset-lookup" ref={assetComboRef}>
+                      <div className="price-input-shell service-desk-asset-search">
                         <Search size={15} />
                         <input
                           value={assetSearchTerm}
@@ -4090,14 +4448,14 @@ export default function ServiceDesk() {
                             const value = e.target.value;
                             setAssetSearchTerm(value);
                             updateFormField('assetId', value);
-                            setShowAssetDropdown(true);
+                            openAssetDropdown();
                             void searchAssets(value);
                           }}
                           onFocus={() => {
                             if (isRequesterAssetLocked) return;
-                            setShowAssetDropdown(true);
+                            openAssetDropdown();
                             if (clientAssets.length === 0) {
-                              void loadClientAssets(formData.customerName || 'all');
+                              void loadClientAssets('all');
                             }
                           }}
                           placeholder={
@@ -4111,19 +4469,30 @@ export default function ServiceDesk() {
                       </div>
                       <button
                         type="button"
+                        className="service-desk-asset-choose-btn"
                         disabled={isRequesterAssetLocked}
                         onClick={() => {
-                          setShowAssetDropdown((current) => !current);
+                          if (showAssetDropdown) {
+                            setShowAssetDropdown(false);
+                            return;
+                          }
+
+                          openAssetDropdown();
+
                           if (clientAssets.length === 0) {
-                            void loadClientAssets(formData.customerName || 'all');
+                            void loadClientAssets('all');
                           }
                         }}
                       >
                         Choose asset
                       </button>
 
-                      {showAssetDropdown && !isRequesterAssetLocked && (
-                        <div className="setting-select-dropdown">
+                      {showAssetDropdown && !isRequesterAssetLocked && typeof document !== 'undefined' && createPortal(
+                        <div
+                          ref={assetDropdownPortalRef}
+                          className="setting-select-dropdown service-desk-asset-dropdown"
+                          style={assetDropdownStyle}
+                        >
                           {isLoadingAssets ? (
                             <div className="settings-inline-alert">
                               <Loader2 size={14} className="ema-spin" />
@@ -4143,7 +4512,8 @@ export default function ServiceDesk() {
                               );
                             })
                           )}
-                        </div>
+                        </div>,
+                        document.body
                       )}
                     </div>
 
@@ -4241,20 +4611,28 @@ export default function ServiceDesk() {
                   </label>
 
                   <label className="form-field">
-                    <span>Title / Problem Description</span>
+                    <span>
+                      Title / Problem Description
+                      <em className="service-desk-required-mark">*</em>
+                    </span>
                     <input
                       value={formData.title || ''}
                       onChange={(e) => updateFormField('title', e.target.value)}
                       placeholder="Example: Unable to access internal HR portal"
+                      required
                     />
                   </label>
 
                   <label className="form-field">
-                    <span>Description</span>
+                    <span>
+                      Description
+                      <em className="service-desk-required-mark">*</em>
+                    </span>
                     <textarea
                       value={formData.description || ''}
                       onChange={(e) => updateFormField('description', e.target.value)}
                       placeholder="Describe issue, impact, error message and troubleshooting done."
+                      required
                     />
                   </label>
                 </div>
@@ -4292,10 +4670,11 @@ export default function ServiceDesk() {
                     <span>Assigned Level</span>
                     <ServiceDeskSelect
                       value={formData.assignedLevel || ''}
-                      placeholder="Select Support Level"
+                      placeholder={isLoadingLookups ? 'Loading support levels...' : 'Select Support Level'}
+                      onOpen={() => void ensureLookupsLoaded()}
                       onChange={(value) => updateFormField('assignedLevel', value)}
                       options={[
-                        { value: '', label: 'Select Support Level', disabled: true },
+                        { value: '', label: isLoadingLookups ? 'Loading support levels...' : 'Select Support Level', disabled: true },
                         ...supportRoles.map((role) => ({ value: role.name || role.role, label: role.name || role.role })),
                       ]}
                     />
@@ -4330,6 +4709,11 @@ export default function ServiceDesk() {
                         }),
                       ]}
                     />
+                    {formData.assignedLevel && !isLoadingEngineers && assignableEngineers.length === 0 && (
+                      <small className="service-desk-field-hint">
+                        No EMA_User found with role {formData.assignedLevel}.
+                      </small>
+                    )}
                   </label>
 
                   <label>
@@ -4478,6 +4862,8 @@ export default function ServiceDesk() {
             </footer>
           </form>
         </div>
+        </main>,
+        document.body
       )}
 
       {kbFormOpen && (
