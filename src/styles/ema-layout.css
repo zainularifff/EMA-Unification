@@ -7875,3 +7875,57 @@ main[data-section="service-desk"] .service-desk-required-mark {
     max-height: 24rem !important;
   }
 }
+
+/* =========================================================
+   V29 Task List Table Scroll Fix
+   - allow the task registry rows to scroll vertically inside the table card
+   - keep the Settings-style header visible while scrolling
+   - preserve horizontal scroll for smaller screens without breaking the clean table UI
+========================================================= */
+.settings-module-root.task-list-module .task-list-content-body.settings-task-body {
+  min-height: 0 !important;
+}
+
+.settings-module-root.task-list-module .task-standard-table {
+  max-height: clamp(24rem, 52vh, 40rem) !important;
+  min-height: 18rem !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable both-edges !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.settings-module-root.task-list-module .task-standard-table .user-row.head.task-standard-row {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5 !important;
+}
+
+.settings-module-root.task-list-module .task-standard-table .user-row.task-standard-row,
+.settings-module-root.task-list-module .task-standard-table .settings-empty-state.task-empty-state {
+  width: max(100%, 72rem) !important;
+}
+
+.settings-module-root.task-list-module .task-standard-table .user-row:not(.head).task-standard-row:last-child {
+  border-bottom: 0 !important;
+}
+
+.settings-module-root.task-list-module .task-settings-pagination,
+.settings-module-root.task-list-module .uam-pagination.global-style.task-settings-pagination {
+  flex: 0 0 auto !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+@media (min-width: 1440px) {
+  .settings-module-root.task-list-module .task-standard-table {
+    max-height: clamp(28rem, 58vh, 46rem) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-module-root.task-list-module .task-standard-table {
+    max-height: 58vh !important;
+  }
+}

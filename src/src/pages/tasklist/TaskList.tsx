@@ -693,7 +693,7 @@ function getTaskStateInsight(task: TaskItem | null) {
     return task.actionDisabledReason || "This task is already in a final state. Stop and cancel actions are locked.";
   }
 
-  return "Task is still actionable based on the latest state returned by the API.";
+  return "Task is still actionable based on the latest state returned ....";
 }
 
 const TaskList = () => {
