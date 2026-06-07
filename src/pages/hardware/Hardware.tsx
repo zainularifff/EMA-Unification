@@ -1,4 +1,4 @@
-import { Fragment, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle,
@@ -59,7 +59,7 @@ type ToastState = {
   title: string;
   message: string;
 } | null;
-type DetailTab = "overview" | "hardware" | "network" | "user" | "storage" | "timeline" | "raw";
+type DetailTab = "overview" | "hardware" | "network" | "user" | "storage" | "timeline";
 
 type TreeNode = {
   key: string;
@@ -606,6 +606,21 @@ function formatHardwareValue(value: unknown) {
   return String(value);
 }
 
+function formatHardwareLabel(label: string) {
+  return label
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .replace(/\bCnt\b/gi, "Count")
+    .replace(/\bIPAddress\b/g, "IP Address")
+    .replace(/\bIP Address\b/g, "IP Address")
+    .replace(/\bOS\b/g, "Operating System")
+    .replace(/\bCPU\b/g, "Processor")
+    .replace(/\bHDD\b/g, "Storage")
+    .replace(/\bObject\b/gi, "")
+    .trim() || "Details";
+}
+
 function findHardwareRecordValue(row: HardwareApiRow, keys: string[]) {
   const entries = Object.entries(row);
 
@@ -793,11 +808,11 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<A
   try {
     payload = rawBody ? JSON.parse(rawBody) : ({ success: response.ok, data: undefined as T } as ApiEnvelope<T>);
   } catch {
-    throw new Error(`Invalid API response from ${path}`);
+    throw new Error("Unable to read server response.");
   }
 
   if (!response.ok || payload.success === false) {
-    throw new Error(payload.errorMessage || payload.message || `API request failed: ${response.status}`);
+    throw new Error(payload.errorMessage || payload.message || `Request failed: ${response.status}`);
   }
 
   return payload;
@@ -1471,7 +1486,6 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
     { key: "user", label: "User" },
     { key: "storage", label: "Storage" },
     { key: "timeline", label: "Timeline" },
-    { key: "raw", label: "Raw API" },
   ];
 
   return (
@@ -1639,7 +1653,7 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
                 <div>
                   <strong>Last connected</strong>
                   <p>{device.lastConnected}</p>
-                  <small>From API data</small>
+                  <small>Device record</small>
                 </div>
               </div>
               <div className="hardware-timeline-item">
@@ -1647,7 +1661,7 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
                 <div>
                   <strong>Last update</strong>
                   <p>{device.lastUpdate}</p>
-                  <small>From API data</small>
+                  <small>Device record</small>
                 </div>
               </div>
               <div className="hardware-timeline-item">
@@ -1655,16 +1669,9 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
                 <div>
                   <strong>Current status</strong>
                   <p>{device.status}</p>
-                  <small>From API data</small>
+                  <small>Device record</small>
                 </div>
               </div>
-            </div>
-          )}
-
-          {activeTab === "raw" && (
-            <div className="hardware-detail-card hardware-detail-card-wide">
-              <h3>Raw Device Payload</h3>
-              <pre className="hardware-raw-json">{JSON.stringify({ device, apiPayload: device.rawApi }, null, 2)}</pre>
             </div>
           )}
         </div>
@@ -1908,12 +1915,12 @@ export default function HardwareInventory() {
       setShowDeviceDetails(false);
       setDetailDeviceId("NO-DEVICE");
       setActiveModal(null);
-      setNote(`Loaded ${nextDevices.length} devices from EMA API. Select a device row to enable endpoint actions.`);
+      setNote(`Loaded ${nextDevices.length} devices. Select a device row to view available actions.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load hardware inventory.";
       setApiError(message);
       setApiDevices([]);
-      setNote(`API load failed. ${message}`);
+      setNote(`Unable to load devices. ${message}`);
       showToast("error", "Hardware inventory failed", message);
     } finally {
       setInventoryLoading(false);
@@ -1931,7 +1938,7 @@ export default function HardwareInventory() {
       setNote(`${device.name} live details loaded.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load device details.";
-      setNote(`${device.name} selected. Detail API failed: ${message}`);
+      setNote(`${device.name} selected. Some details could not be loaded.`);
     }
   }, []);
 
@@ -2289,37 +2296,37 @@ export default function HardwareInventory() {
       if (selectedStatistic === "conn-summary") {
         const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/connection-summary`);
         rows = normalizeHardwareRows(response);
-        description = "Connection period summary from backend API";
+        description = "Connection period summary";
       } else if (selectedStatistic === "conn-list") {
         const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/connection-list`);
         rows = normalizeHardwareRows(response);
-        description = "Client connection list from backend API";
+        description = "Client connection list";
       } else if (selectedStatistic === "client-version") {
         const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/client-version`);
         rows = normalizeHardwareRows(response);
-        description = "Client version distribution from backend API";
+        description = "Client version distribution";
       } else if (selectedStatistic === "changed-items") {
         const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-management/${relationID}/changed-items`);
         rows = normalizeHardwareRows(response);
-        description = "Changed hardware item statistics from backend API";
+        description = "Changed hardware item statistics";
       } else if (selectedStatistic === "duplicated-ip") {
         const response = await apiRequest<HardwareApiRow[]>("/api/hardware-management/duplicate-ips");
         rows = normalizeHardwareRows(response);
-        description = "Duplicated IP list from backend API";
+        description = "Duplicated IP list";
       } else if (selectedStatistic.startsWith("stat-")) {
         const categoryKey = STATISTIC_CATEGORY_KEY_MAP[selectedStatistic];
         const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/category/${categoryKey}`);
         rows = normalizeHardwareRows(response);
-        description = `${title} distribution from backend API`;
+        description = `${title} distribution`;
       } else if (selectedStatistic === "report-inventory") {
         const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-reports/${relationID}/client-list`);
         rows = normalizeHardwareRows(response);
-        description = "Hardware inventory report list from backend API";
+        description = "Hardware inventory report list";
       } else if (selectedStatistic.startsWith("report-")) {
         const reportKey = REPORT_KEY_MAP[selectedStatistic];
         const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-reports/${relationID}/${reportKey}`);
         rows = normalizeHardwareRows(response);
-        description = `${title} generated from backend report API`;
+        description = `${title} report`;
       }
 
       setStatisticApiData({
@@ -2363,12 +2370,12 @@ export default function HardwareInventory() {
   const handleScanHardware = async (mode: HardwareScanMode) => {
     if (mode === "device") {
       if (!hasSelectedDevice || selectedDevice.id === "NO-DEVICE") {
-        showToast("info", "Select a device first", "Select one EM/Windows device before creating a scan job.");
+        showToast("info", "Select a device first", "Select one Windows device before refreshing inventory.");
         return;
       }
 
       if (String(selectedDevice.objectAgent || "EM").toUpperCase() !== "EM") {
-        showToast("error", "Scan unavailable", "Hardware inventory scan jobs can only be created for EM/Windows agent devices.");
+        showToast("error", "Inventory refresh unavailable", "This action is only available for supported Windows devices.");
         return;
       }
     }
@@ -2387,11 +2394,11 @@ export default function HardwareInventory() {
           ? `${selectedFolderLabel} and child folders`
           : selectedDevice.name;
 
-    const confirmed = window.confirm(`Create a hardware inventory scan job for ${targetLabel}?`);
+    const confirmed = window.confirm(`Refresh hardware inventory for ${targetLabel}?`);
     if (!confirmed) return;
 
     setHardwareScanLoading(true);
-    setNote(`Creating hardware inventory scan job for ${targetLabel}...`);
+    setNote(`Refreshing hardware inventory for ${targetLabel}...`);
 
     try {
       const response = await apiRequest<HardwareScanResult>("/api/hardware-inventory/scan", {
@@ -2408,21 +2415,21 @@ export default function HardwareInventory() {
           jobPriority: 0,
           description:
             mode === "all"
-              ? "Hardware inventory scan - all devices"
+              ? "Hardware inventory refresh - all devices"
               : mode === "folder"
-                ? `Hardware inventory scan - ${selectedFolderLabel}`
-                : `Hardware inventory scan - ${selectedDevice.name}`,
+                ? `Hardware inventory refresh - ${selectedFolderLabel}`
+                : `Hardware inventory refresh - ${selectedDevice.name}`,
         }),
       });
 
       const jobId = response.data?.Job_Idn ? ` Job ID: ${response.data.Job_Idn}.` : "";
       const targetCount = response.data?.targetCount ? ` Target: ${response.data.targetCount}.` : "";
-      showToast("success", "Hardware scan queued", `${response.message || "Hardware inventory scan job created."}${jobId}${targetCount}`);
-      setNote(`Hardware inventory scan queued.${jobId}${targetCount}`);
+      showToast("success", "Inventory refresh started", `Hardware inventory refresh has started.${targetCount}`);
+      setNote(`Hardware inventory refresh started.${targetCount}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create hardware scan job.";
-      showToast("error", "Hardware scan failed", message);
-      setNote(`Hardware scan failed. ${message}`);
+      const message = error instanceof Error ? error.message : "Failed to refresh hardware inventory.";
+      showToast("error", "Inventory refresh failed", message);
+      setNote(`Inventory refresh failed. ${message}`);
     } finally {
       setHardwareScanLoading(false);
     }
@@ -2435,7 +2442,7 @@ export default function HardwareInventory() {
 
   const openMoveDepartmentModal = () => {
     if (!hasSelectedDevice) {
-      showToast("info", "Select a device first", "Click a device row before running endpoint actions.");
+      showToast("info", "Select a device first", "Click a device row before using device actions.");
       return;
     }
 
@@ -2448,7 +2455,7 @@ export default function HardwareInventory() {
   const handleMoveDepartmentSubmit = async () => {
     const targetDepartment = departmentOptions.find((department) => department.key === moveTargetKey);
     if (!selectedDevice.assetId || !selectedDevice.objectAgent) {
-      showToast("error", "Move failed", `${selectedDevice.name} has no API asset id.`);
+      showToast("error", "Move failed", `${selectedDevice.name} cannot be moved right now.`);
       return;
     }
     if (!targetDepartment) {
@@ -2543,7 +2550,7 @@ export default function HardwareInventory() {
       const apiMessage = normalizeApiMessage(response.message, "Success");
       const message = broadcastMessage
         ? `Broadcast message sent to ${successCount}/${total} ${selectedDevice.os || "platform"} device(s).`
-        : `${selectedDevice.name} message job returned ${apiMessage}.`;
+        : `${selectedDevice.name} message response: ${apiMessage}.`;
 
       setActiveModal(null);
       setNote(message);
@@ -2828,7 +2835,7 @@ export default function HardwareInventory() {
         popup.document.body.innerHTML = `
           <div style="font-family: Inter, Segoe UI, Arial, sans-serif; padding: 32px; color: #102a5a;">
             <h2 style="margin: 0 0 8px; font-size: 18px;">Starting remote control session...</h2>
-            <p style="margin: 0; color: #6079a6; font-size: 13px;">Please wait while EMA requests a temporary SureMDM remote support token.</p>
+            <p style="margin: 0; color: #6079a6; font-size: 13px;">Please wait while EMA prepares the remote support session.</p>
           </div>
         `;
       } catch {
@@ -2846,7 +2853,7 @@ export default function HardwareInventory() {
     }
 
     if (!selectedDevice.assetId || !selectedDevice.objectAgent) {
-      showToast("error", "Remote control unavailable", `${selectedDevice.name} has no API asset id.`);
+      showToast("error", "Remote control unavailable", `${selectedDevice.name} cannot start a remote session right now.`);
       return;
     }
 
@@ -2869,7 +2876,7 @@ export default function HardwareInventory() {
       const remoteUrl = response.data?.[0]?.url;
 
       if (!remoteUrl) {
-        throw new Error("Remote control URL was not returned.");
+        throw new Error("Remote session could not be opened.");
       }
 
       if (popup && !popup.closed) {
@@ -2898,7 +2905,7 @@ export default function HardwareInventory() {
     }
 
     if (!selectedDevice.assetId || !selectedDevice.objectAgent) {
-      showToast("error", "Action unavailable", `${selectedDevice.name} has no API asset id.`);
+      showToast("error", "Action unavailable", `${selectedDevice.name} cannot be updated right now.`);
       return;
     }
 
@@ -3024,108 +3031,181 @@ export default function HardwareInventory() {
     const rows = statisticApiData?.rows || [];
     const columns = statisticApiData?.columns || [];
     const totalCount = getTotalFromStatisticRows(rows);
+    const selectedTitle = statisticApiData?.title || STATISTIC_TITLE_MAP[selectedStatistic] || "Hardware Statistics";
+    const selectedDescription = statisticApiData?.description || "Select a statistics category from the left panel.";
+    const scopeText = selectedFolderLabel || "Organization";
+    const visibleColumns = (columns.length ? columns : ["Items", "Count"]).slice(0, 8);
+    const detailColumns = visibleColumns
+      .filter((column) => {
+        const normalized = column.replace(/[\s_\-()/.]+/g, "").toLowerCase();
+        return ![
+          "no",
+          "items",
+          "item",
+          "name",
+          "category",
+          "value",
+          "count",
+          "cnt",
+          "total",
+          "totalcount",
+          "totaldevice",
+          "column1",
+          "column2",
+        ].includes(normalized);
+      })
+      .slice(0, 4);
+
     const topRows = rows
       .map((row) => ({ row, label: getStatisticItemLabel(row), count: getStatisticCount(row) }))
       .filter((item) => item.label !== "-" || item.count > 0)
       .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+      .slice(0, 4);
+
+    const getPrimaryValue = (row: HardwareApiRow) => {
+      const count = getStatisticCount(row);
+      if (count > 0) return String(count);
+      const firstReadableColumn = visibleColumns.find((column) => {
+        const value = formatHardwareValue(row[column]);
+        return value !== "-";
+      });
+      return firstReadableColumn ? formatHardwareValue(row[firstReadableColumn]) : "-";
+    };
 
     return (
-      <div className="hardware-stat-workbench">
-        <div className="hardware-registry-head">
+      <div className="hardware-stat-workbench hardware-stat-workbench-clean">
+        <div className="hardware-stat-commandbar">
           <div>
-            <h3>{statisticApiData?.title || STATISTIC_TITLE_MAP[selectedStatistic] || "Hardware Statistics"}</h3>
-            <p>{statisticApiData?.description || "Select a statistic category from the left panel."}</p>
+            <span className="section-tag">Statistics View</span>
+            <h3>{selectedTitle}</h3>
+            <p>{selectedDescription}</p>
           </div>
 
-          <div className="hardware-registry-tools">
-            <button type="button" className="hardware-icon-btn labeled" onClick={() => void loadSelectedStatisticData()} disabled={statisticLoading}>
-              <RefreshCw size={16} />
-              {statisticLoading ? "Loading..." : "Refresh"}
-            </button>
-          </div>
+          <button type="button" className="hardware-stat-refresh-btn" onClick={() => void loadSelectedStatisticData()} disabled={statisticLoading}>
+            <RefreshCw size={16} />
+            {statisticLoading ? "Loading" : "Refresh"}
+          </button>
         </div>
 
-        <div className="hardware-stat-summary-grid">
-          <div className="hardware-stat-summary-card">
-            <span>Selected Statistic</span>
-            <strong>{STATISTIC_TITLE_MAP[selectedStatistic] || selectedStatistic}</strong>
+        <div className="hardware-stat-metric-row">
+          <div className="hardware-stat-metric-card is-primary">
+            <span>Current View</span>
+            <strong>{selectedTitle}</strong>
+            <small>{scopeText}</small>
           </div>
-          <div className="hardware-stat-summary-card">
-            <span>Total Rows</span>
+          <div className="hardware-stat-metric-card">
+            <span>Total Records</span>
             <strong>{rows.length}</strong>
+            <small>available result</small>
           </div>
-          <div className="hardware-stat-summary-card">
+          <div className="hardware-stat-metric-card">
             <span>Total Count</span>
             <strong>{Number.isFinite(totalCount) ? totalCount : 0}</strong>
+            <small>summarized value</small>
           </div>
-          <div className="hardware-stat-summary-card">
+          <div className="hardware-stat-metric-card">
             <span>Scope</span>
-            <strong>{selectedFolderLabel}</strong>
+            <strong>{scopeText}</strong>
+            <small>{getSelectedRelationID() === -1 ? "All departments" : "Selected folder"}</small>
           </div>
         </div>
 
         {statisticError && (
-          <div className="hardware-stat-error">
+          <div className="hardware-stat-alert">
             <AlertCircle size={16} />
             <span>{statisticError}</span>
           </div>
         )}
 
         {topRows.length > 0 && (
-          <div className="hardware-stat-top-list">
-            <div className="hardware-stat-section-title">
-              <strong>Top Items</strong>
-              <span>Fast view from current statistic result</span>
-            </div>
-            <div className="hardware-stat-top-grid">
-              {topRows.map((item) => (
-                <div key={`${item.label}-${item.count}`} className="hardware-stat-top-card">
-                  <span>{item.label}</span>
-                  <strong>{item.count}</strong>
-                </div>
-              ))}
-            </div>
+          <div className="hardware-stat-highlight-grid">
+            {topRows.map((item, index) => (
+              <div key={`${item.label}-${item.count}-${index}`} className="hardware-stat-highlight-card">
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <strong>{item.label}</strong>
+                <small>{item.count > 0 ? `${item.count} devices` : "Available"}</small>
+              </div>
+            ))}
           </div>
         )}
 
-        <div className="hardware-table-wrap hardware-stat-table-wrap">
-          <table className="hardware-table hardware-stat-table">
-            <thead>
-              <tr>
-                <th>No</th>
-                {(columns.length ? columns : ["Items", "Count"]).map((column) => (
-                  <th key={column}>{column}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={`stat-${selectedStatistic}-${index}`}>
-                  <td><span className="ema-row-no">{String(index + 1).padStart(2, "0")}</span></td>
-                  {(columns.length ? columns : ["Items", "Count"]).map((column) => (
-                    <td key={`${column}-${index}`}>{formatHardwareValue(row[column])}</td>
-                  ))}
-                </tr>
-              ))}
+        <div className="hardware-stat-table-card">
+          <div className="hardware-stat-table-head">
+            <div>
+              <strong>Result Table</strong>
+              <span>{rows.length ? `Showing ${rows.length} record${rows.length === 1 ? "" : "s"}` : "No records to display"}</span>
+            </div>
+          </div>
 
-              {!statisticLoading && rows.length === 0 && (
+          <div className="hardware-stat-table-scroll">
+            <table className="hardware-stat-clean-table">
+              <thead>
                 <tr>
-                  <td colSpan={(columns.length ? columns.length : 2) + 1}>
-                    <div className="hardware-empty-state">No statistic data returned for this selection.</div>
-                  </td>
+                  <th>No</th>
+                  <th>Statistic</th>
+                  <th>Value</th>
+                  <th>Details</th>
                 </tr>
-              )}
+              </thead>
+              <tbody>
+                {rows.map((row, index) => {
+                  const label = getStatisticItemLabel(row);
+                  const primaryLabel = label === "-" ? selectedTitle : label;
+                  const primaryValue = getPrimaryValue(row);
+                  const details = detailColumns
+                    .map((column) => ({ label: formatHardwareLabel(column), value: formatHardwareValue(row[column]) }))
+                    .filter((item) => item.value !== "-");
 
-              {statisticLoading && (
-                <tr>
-                  <td colSpan={(columns.length ? columns.length : 2) + 1}>
-                    <div className="hardware-empty-state">Loading statistic data from API...</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  return (
+                    <tr key={`stat-${selectedStatistic}-${index}`}>
+                      <td>
+                        <span className="row-index-pill">{String(index + 1).padStart(2, "0")}</span>
+                      </td>
+                      <td>
+                        <div className="hardware-stat-name-cell">
+                          <strong>{primaryLabel}</strong>
+                          <small>{selectedTitle}</small>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="hardware-stat-value-pill">{primaryValue}</span>
+                      </td>
+                      <td>
+                        {details.length ? (
+                          <div className="hardware-stat-detail-chips">
+                            {details.map((item) => (
+                              <span key={`${item.label}-${item.value}-${index}`}>
+                                <b>{item.label}</b>
+                                {item.value}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="hardware-stat-muted">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {!statisticLoading && rows.length === 0 && (
+                  <tr>
+                    <td colSpan={4}>
+                      <div className="hardware-empty-state">No statistics available for this selection.</div>
+                    </td>
+                  </tr>
+                )}
+
+                {statisticLoading && (
+                  <tr>
+                    <td colSpan={4}>
+                      <div className="hardware-empty-state">Loading statistics...</div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
@@ -3133,7 +3213,7 @@ export default function HardwareInventory() {
 
   const kpiCards = [
     { key: "all" as KpiFilter, title: "Total Devices", value: totalAvailable, subtitle: "inventory scope", icon: <Monitor size={17} />, color: "is-total" },
-    { key: "recent" as KpiFilter, title: "Recently Connected", value: recentCount, subtitle: "active endpoints", icon: <CheckCircle size={17} />, color: "is-connected" },
+    { key: "recent" as KpiFilter, title: "Recently Connected", value: recentCount, subtitle: "online devices", icon: <CheckCircle size={17} />, color: "is-connected" },
     { key: "stale" as KpiFilter, title: "Stale Sync", value: staleCount, subtitle: "needs attention", icon: <AlertCircle size={17} />, color: "is-stale" },
     { key: "locked" as KpiFilter, title: "Locked Devices", value: lockedCount, subtitle: "security state", icon: <Lock size={17} />, color: "is-locked" },
     { key: "running" as KpiFilter, title: "Online Devices", value: onlineDeviceCount, subtitle: "currently online", icon: <RefreshCw size={17} />, color: "is-online" },
@@ -3201,7 +3281,7 @@ export default function HardwareInventory() {
             <div className="hardware-stat-scope">
               <span>Current Scope</span>
               <strong>{selectedFolderLabel}</strong>
-              <small>{getSelectedRelationID() === -1 ? "All departments" : `Relation ID: ${getSelectedRelationID()}`}</small>
+              <small>{getSelectedRelationID() === -1 ? "All departments" : "Selected folder"}</small>
             </div>
 
             <div className="hardware-stat-tree">
@@ -3216,7 +3296,7 @@ export default function HardwareInventory() {
             <div>
               <span className="eyebrow">ENDPOINT OPERATIONS</span>
               <h2>{activeTab === "statistics" ? "Hardware Statistics" : "Device Registry"}</h2>
-              <p>Live hardware inventory, department scope, MDM actions, geolocation, remote control and scan operations.</p>
+              <p>Live hardware inventory with device actions, location view, remote support and security controls.</p>
             </div>
             <div className="hardware-hero-score">
               {kpiCards.map((card) => (
@@ -3324,8 +3404,8 @@ export default function HardwareInventory() {
                 {activeKpiFilter !== "all" ? ` • KPI filter: ${activeKpiLabel}` : ""}
                 {activeTableFilterCount ? ` • Table filters: ${activeTableFilterCount}` : ""}
                 {searchDevices ? ` • Search: ${searchDevices}` : ""}
-                {inventoryLoading ? " • Loading live API data..." : ""}
-                {apiError ? ` • API notice: ${apiError}` : ""}
+                {inventoryLoading ? " • Loading device data..." : ""}
+                {apiError ? ` • Notice: ${apiError}` : ""}
               </span>
             </div>
           </div>
@@ -3407,7 +3487,7 @@ export default function HardwareInventory() {
             ))}
 
             {pagedDevices.length === 0 && (
-              <div className="settings-empty-state hardware-empty-state">{inventoryLoading ? "Loading hardware inventory from API..." : "No device found for current filter/search."}</div>
+              <div className="settings-empty-state hardware-empty-state">{inventoryLoading ? "Loading hardware inventory..." : "No device found for current filter/search."}</div>
             )}
           </div>
 
@@ -3458,38 +3538,6 @@ export default function HardwareInventory() {
             </button>
           </div>
 
-          <div className="hardware-right-info">
-            <div>
-              <span>Department</span>
-              <strong>{selectedDevice.department}</strong>
-            </div>
-            {/* <div>
-              <span>User</span>
-              <strong>{selectedDevice.owner}</strong>
-            </div>
-            <div>
-              <span>OS</span>
-              <strong>{selectedDevice.os}</strong>
-            </div>
-            <div>
-              <span>Processor</span>
-              <strong>{selectedDevice.processor}</strong>
-            </div>
-            <div>
-              <span>Memory</span>
-              <strong>{selectedDevice.memory}</strong>
-            </div>
-            <div>
-              <span>Storage</span>
-              <strong>{selectedDevice.storage}</strong>
-            </div> */}
-          </div>
-
-          <div className="hardware-note-box">
-            <h4>Operational Note</h4>
-            <p>{note}</p>
-          </div>
-
           <div className="hardware-action-list">
             <button type="button" className="hardware-action-item is-action-message" onClick={() => setActiveModal("message")} disabled={messageLoading}>
               <div className="hardware-action-icon">
@@ -3497,7 +3545,7 @@ export default function HardwareInventory() {
               </div>
               <div>
                 <strong>Send Message</strong>
-                <span>Send direct message to device user</span>
+                <span>Notify the device user</span>
               </div>
             </button>
 
@@ -3507,7 +3555,7 @@ export default function HardwareInventory() {
               </div>
               <div>
                 <strong>Advanced Remote Control</strong>
-                <span>Open managed remote support session</span>
+                <span>Start a secure support session</span>
               </div>
             </button>
 
@@ -3517,7 +3565,7 @@ export default function HardwareInventory() {
               </div>
               <div>
                 <strong>Device Geolocation</strong>
-                <span>Map, latitude, longitude and timestamp</span>
+                <span>View latest location and movement history</span>
               </div>
             </button>
 
@@ -3528,7 +3576,7 @@ export default function HardwareInventory() {
                 </div>
                 <div>
                   <strong>{lockActionLoading ? "Unlocking..." : "Unlock Device"}</strong>
-                  <span>Release device lock state</span>
+                  <span>Restore access for this device</span>
                 </div>
               </button>
             ) : (
@@ -3538,7 +3586,7 @@ export default function HardwareInventory() {
                 </div>
                 <div>
                   <strong>Lock Device</strong>
-                  <span>Restrict access and user interaction</span>
+                  <span>Temporarily restrict this device</span>
                 </div>
               </button>
             )}
@@ -3548,8 +3596,8 @@ export default function HardwareInventory() {
                 <RefreshCw size={16} />
               </div>
               <div>
-                <strong>{hardwareScanLoading ? "Queueing Scan..." : "Scan Hardware Inventory"}</strong>
-                <span>Create hardware inventory scan job for this EM device</span>
+                <strong>{hardwareScanLoading ? "Refreshing..." : "Refresh Inventory"}</strong>
+                <span>Refresh hardware inventory for this device</span>
               </div>
             </button>
 
@@ -3559,7 +3607,7 @@ export default function HardwareInventory() {
               </div>
               <div>
                 <strong>Move Department</strong>
-                <span>Move this device to another department</span>
+                <span>Move this device to another folder</span>
               </div>
             </button>
           </div>
@@ -3712,47 +3760,42 @@ export default function HardwareInventory() {
 
       {hasSelectedDevice && activeModal === "move" && (
         <div className="hardware-modal-overlay" onClick={closeModal}>
-          <div className="hardware-modal hardware-modal-colored" onClick={(event) => event.stopPropagation()}>
+          <div className="hardware-modal hardware-modal-colored hardware-move-modal" onClick={(event) => event.stopPropagation()}>
             <div className="hardware-modal-header blue">
               <div className="hardware-modal-title">
                 <Database size={20} />
                 <div>
                   <strong>MOVE DEPARTMENT</strong>
-                  <span>Move selected device to another organization folder</span>
+                  <span>Move selected device to another folder</span>
                 </div>
               </div>
               <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={moveLoading}>
                 <X size={18} />
               </button>
             </div>
-            <div className="hardware-modal-body">
-              <div className="hardware-info-banner blue">
+            <div className="hardware-modal-body hardware-move-modal-body">
+              <div className="hardware-info-banner blue hardware-move-current-card">
                 <AlertCircle size={16} />
                 <div>
                   <strong>{selectedDevice.name}</strong>
-                  <span>Current department: {selectedDevice.groupPath || selectedDevice.department || "-"}</span>
+                  <span>Current location: {selectedDevice.groupPath || selectedDevice.department || "-"}</span>
                 </div>
               </div>
-              <div className="hardware-form-group">
-                <label>Destination Department</label>
+              <div className="hardware-form-group hardware-move-select-group">
+                <label>Destination Folder</label>
                 <HardwareDropdown
-                  label="Destination department"
+                  label="Destination folder"
                   value={moveTargetKey}
                   onChange={setMoveTargetKey}
                   disabled={moveLoading || departmentOptions.length === 0}
-                  placeholder="No department available"
+                  placeholder="No folder available"
                   options={
                     departmentOptions.length === 0
-                      ? [{ value: "", label: "No department available" }]
+                      ? [{ value: "", label: "No folder available" }]
                       : departmentOptions.map((department) => ({ value: department.key, label: department.groupPath }))
                   }
                 />
-              </div>
-              <div className="hardware-last-update-box">
-                <span>Path Location</span>
-                <strong>
-                  Path :/{selectedDevice.objectAgent || "AGENT"}/{selectedDevice.assetId || "ASSET_ID"}/department
-                </strong>
+                <p className="hardware-move-helper">Choose the folder where this device should be placed.</p>
               </div>
             </div>
             <div className="hardware-modal-footer">
@@ -3801,7 +3844,7 @@ export default function HardwareInventory() {
                   <AlertCircle size={16} />
                   <div>
                     <strong>Platform broadcast</strong>
-                    <span>This will send the message to all SureMDM assets with platform type: {selectedDevice.os || "-"}.</span>
+                    <span>This will send the message to all matching devices for this platform.</span>
                   </div>
                 </div>
               )}
@@ -3850,8 +3893,8 @@ export default function HardwareInventory() {
               <div className="hardware-info-banner blue">
                 <AlertCircle size={16} />
                 <div>
-                  <strong>SureMDM iframe remote support</strong>
-                  <span>EMA will request a temporary AuthToken URL from the backend, then open the remote support session in a new tab.</span>
+                  <strong>Remote assistance</strong>
+                  <span>Choose a support mode and start a secure remote session for this device.</span>
                 </div>
               </div>
 
@@ -3870,23 +3913,16 @@ export default function HardwareInventory() {
                 <input type="checkbox" checked={notifyUser} onChange={(event) => setNotifyUser(event.target.checked)} disabled={remoteLoading} />
                 <div>
                   <strong>Notify User</strong>
-                  <span>Send notification to device user about remote session</span>
+                  <span>Notify the user before the support session starts</span>
                 </div>
               </label>
               <label className="hardware-option-card">
                 <input type="checkbox" checked={recordSession} onChange={(event) => setRecordSession(event.target.checked)} disabled={remoteLoading} />
                 <div>
                   <strong>Record Session</strong>
-                  <span>Record the session for audit trail</span>
+                  <span>Keep a session recording for review</span>
                 </div>
               </label>
-              <div className="hardware-info-banner blue">
-                <AlertCircle size={16} />
-                <div>
-                  <strong>Session Information</strong>
-                  <span>POST /api/mdm/remote-control • ShowOnlyRemoteScreen: {sessionType === "view" ? "true" : "false"}</span>
-                </div>
-              </div>
             </div>
             <div className="hardware-modal-footer">
               <button type="button" className="hardware-btn link" onClick={closeModal} disabled={remoteLoading}>
@@ -3908,7 +3944,7 @@ export default function HardwareInventory() {
                 <MapPin size={20} />
                 <div>
                   <strong>DEVICE GEOLOCATION</strong>
-                  <span>{selectedDevice.name} • {selectedDevice.department || selectedDevice.groupPath || "Inventory device"}</span>
+                  <span>{selectedDevice.name} • Location history</span>
                 </div>
               </div>
               <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={geoLoading}>
@@ -3976,7 +4012,7 @@ export default function HardwareInventory() {
                   <div className="hardware-geo-map-frame">
                     {geoMeta.hasLocation ? (
                       <>
-                        <iframe title={`Map location for ${selectedDevice.name}`} src={geoMeta.mapEmbedUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+                        <iframe title={`Map for ${selectedDevice.name}`} src={geoMeta.mapEmbedUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
                         <div className="hardware-geo-floating-marker">
                           <MapPin size={15} />
                           <div>
@@ -3989,7 +4025,7 @@ export default function HardwareInventory() {
                       <div className="hardware-geo-empty hardware-geo-empty-redesign">
                         <MapPin size={28} />
                         <strong>No coordinate available</strong>
-                        <span>{geoLoading ? "Loading saved geolocation automatically..." : "No saved coordinate returned for this device yet."}</span>
+                        <span>{geoLoading ? "Loading current location..." : "No location has been recorded for this device yet."}</span>
                       </div>
                     )}
                   </div>
@@ -4038,43 +4074,45 @@ export default function HardwareInventory() {
                       })}
                     </div>
 
-                    <div className="hardware-geo-history-pagination-modern">
-                      <span>
-                        Showing {geoHistoryRangeStart}-{geoHistoryRangeEnd} of {geoHistory.length}
-                      </span>
-                      <div>
+                    <div className="uam-pagination global-style hardware-geo-pagination">
+                      <div className="uam-page-summary hardware-geo-page-summary">Page {geoHistoryCurrentPage} of {geoHistoryTotalPages}</div>
+                      <div className="uam-pagination-controls global-style hardware-geo-pagination-actions" aria-label="Device location history pagination">
                         <button
+                          className="uam-page-icon"
+                          type="button"
+                          onClick={() => setGeoHistoryPage(1)}
+                          disabled={geoHistoryCurrentPage <= 1}
+                          aria-label="First location history page"
+                        >
+                          «
+                        </button>
+                        <button
+                          className="uam-page-icon"
                           type="button"
                           onClick={() => setGeoHistoryPage((current) => Math.max(1, current - 1))}
                           disabled={geoHistoryCurrentPage <= 1}
-                          aria-label="Previous geolocation history page"
+                          aria-label="Previous location history page"
                         >
-                          <ChevronLeft size={14} />
+                          ‹
                         </button>
-                        {geoHistoryPageNumbers.map((pageNumber, index) => {
-                          const previousPageNumber = geoHistoryPageNumbers[index - 1];
-                          const showGap = previousPageNumber !== undefined && pageNumber - previousPageNumber > 1;
-                          return (
-                            <Fragment key={pageNumber}>
-                              {showGap && <span className="hardware-geo-pagination-gap">…</span>}
-                              <button
-                                type="button"
-                                className={pageNumber === geoHistoryCurrentPage ? "is-active" : ""}
-                                onClick={() => setGeoHistoryPage(pageNumber)}
-                                aria-label={`Go to geolocation history page ${pageNumber}`}
-                              >
-                                {pageNumber}
-                              </button>
-                            </Fragment>
-                          );
-                        })}
+                        <span className="uam-page-current hardware-geo-pagination-current">{geoHistoryCurrentPage}</span>
                         <button
+                          className="uam-page-icon"
                           type="button"
                           onClick={() => setGeoHistoryPage((current) => Math.min(geoHistoryTotalPages, current + 1))}
                           disabled={geoHistoryCurrentPage >= geoHistoryTotalPages}
-                          aria-label="Next geolocation history page"
+                          aria-label="Next location history page"
                         >
-                          <ChevronRight size={14} />
+                          ›
+                        </button>
+                        <button
+                          className="uam-page-icon"
+                          type="button"
+                          onClick={() => setGeoHistoryPage(geoHistoryTotalPages)}
+                          disabled={geoHistoryCurrentPage >= geoHistoryTotalPages}
+                          aria-label="Last location history page"
+                        >
+                          »
                         </button>
                       </div>
                     </div>
@@ -4083,7 +4121,7 @@ export default function HardwareInventory() {
                   <div className="hardware-geo-history-empty-modern">
                     <MapPin size={24} />
                     <strong>{geoLoading ? "Loading location history..." : "No location history"}</strong>
-                    <span>{geoLoading ? "The latest records will appear here automatically." : "No geolocation history returned for this device yet."}</span>
+                    <span>{geoLoading ? "The latest records will appear here automatically." : "No location history is available for this device yet."}</span>
                   </div>
                 )}
               </section>
