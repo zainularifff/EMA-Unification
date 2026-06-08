@@ -21124,3 +21124,571 @@ button.ema-sidebar-tree-node {
     justify-content: flex-start !important;
   }
 }
+
+/* =========================================================
+   V38 App / Web Restriction scroll comfort
+   Main content scrolls vertically; left policy scope stays fixed.
+   Keep this in global ema-layout.css, no page-specific stylesheet.
+========================================================= */
+
+.settings-module-root.appweb-scroll-module,
+.settings-module-root.appwebrestriction-module.appweb-scroll-module {
+  --appweb-blue: #2558e8;
+  --appweb-cyan: #087ea4;
+  --appweb-green: #059669;
+  --appweb-amber: #d97706;
+  --appweb-red: #dc2626;
+  --appweb-purple: #7c3aed;
+  --appweb-ink: var(--ema-control-text, #173154);
+  --appweb-strong: var(--ema-control-text-strong, #0f2746);
+  --appweb-muted: var(--ema-control-muted, #64748b);
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Keep the module frame locked, but release the right side as the scroll area. */
+.settings-module-root.appweb-scroll-module .settings-layout {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  grid-template-columns: 248px minmax(0, 1fr) !important;
+  gap: 1rem !important;
+  overflow: hidden !important;
+  padding: 1rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-menu {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-menu > .ema-sidebar-content {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0.82rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .ema-sidebar-subpanel {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 0.78rem !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appweb-scroll-module .ema-sidebar-tree {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: auto !important;
+  scrollbar-gutter: stable !important;
+}
+
+/* This is the requested change: the main content scrolls up/down instead of being squeezed. */
+.settings-module-root.appweb-scroll-module .settings-content {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding-right: 0.16rem !important;
+  scrollbar-gutter: stable !important;
+  overscroll-behavior: contain !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-content > * {
+  flex: 0 0 auto !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-content::-webkit-scrollbar,
+.settings-module-root.appweb-scroll-module .ema-sidebar-tree::-webkit-scrollbar,
+.settings-module-root.appweb-scroll-module .table-responsive::-webkit-scrollbar,
+.settings-module-root.appweb-scroll-module .appweb-list-scroll::-webkit-scrollbar,
+.settings-module-root.appweb-scroll-module .appweb-url-list::-webkit-scrollbar,
+.settings-module-root.appweb-scroll-module .appweb-group-url-list::-webkit-scrollbar {
+  width: 7px !important;
+  height: 7px !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-content::-webkit-scrollbar-thumb,
+.settings-module-root.appweb-scroll-module .ema-sidebar-tree::-webkit-scrollbar-thumb,
+.settings-module-root.appweb-scroll-module .table-responsive::-webkit-scrollbar-thumb,
+.settings-module-root.appweb-scroll-module .appweb-list-scroll::-webkit-scrollbar-thumb,
+.settings-module-root.appweb-scroll-module .appweb-url-list::-webkit-scrollbar-thumb,
+.settings-module-root.appweb-scroll-module .appweb-group-url-list::-webkit-scrollbar-thumb {
+  border-radius: 999px !important;
+  background: rgba(100, 116, 139, 0.34) !important;
+}
+
+/* More breathing room on the top header; no clipped selected-target text. */
+.settings-module-root.appweb-scroll-module .appweb-hero-section,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-section {
+  min-height: auto !important;
+  max-height: none !important;
+  padding: 1.18rem 1.25rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 1.1rem !important;
+  overflow: visible !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-hero-section h1 {
+  margin: 0.35rem 0 0.42rem !important;
+  color: var(--appweb-strong) !important;
+  font-size: clamp(1.85rem, 2.4vw, 2.55rem) !important;
+  line-height: 1.02 !important;
+  letter-spacing: -0.065em !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-hero-section .settings-helper-card {
+  width: fit-content !important;
+  max-width: 100% !important;
+  display: inline-flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.3rem !important;
+  padding: 0.58rem 0.72rem !important;
+  border-radius: 0.95rem !important;
+  background: rgba(248, 251, 255, 0.94) !important;
+}
+
+/* KPI cards: comfortable height and aligned icons. */
+.settings-module-root.appweb-scroll-module .appweb-summary-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.82rem !important;
+  overflow: visible !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-summary-grid .score-box,
+.settings-module-root.appweb-scroll-module .appweb-summary-grid .ema-kpi-card {
+  min-height: 5.75rem !important;
+  height: auto !important;
+  max-height: none !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 2.35rem !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  padding: 0.86rem 0.9rem !important;
+  border-radius: 1.08rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-summary-grid .score-box strong,
+.settings-module-root.appweb-scroll-module .appweb-summary-grid .ema-kpi-card strong {
+  font-size: clamp(1.25rem, 1.45vw, 1.62rem) !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-summary-grid .ema-kpi-icon {
+  width: 2.35rem !important;
+  height: 2.35rem !important;
+  border-radius: 0.9rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  align-self: center !important;
+  justify-self: end !important;
+}
+
+/* Module tabs below KPI should feel like cards, not cramped sidebar buttons. */
+.settings-module-root.appweb-scroll-module .appweb-module-switcher {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0.82rem !important;
+  overflow: visible !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-module-switcher .setting-btn {
+  min-height: 4.35rem !important;
+  grid-template-columns: 2.45rem minmax(0, 1fr) !important;
+  padding: 0.72rem 0.82rem !important;
+  border: 1px solid rgba(203, 213, 225, 0.82) !important;
+  border-radius: 1.05rem !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.035) !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-module-switcher .setting-btn.active {
+  color: #ffffff !important;
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--appweb-blue), var(--appweb-cyan)) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.18) !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-module-switcher .setting-btn.active strong,
+.settings-module-root.appweb-scroll-module .appweb-module-switcher .setting-btn.active small {
+  color: #ffffff !important;
+}
+
+/* The lower work area should grow naturally; scrolling is handled by settings-content. */
+.settings-module-root.appweb-scroll-module .appweb-main-card,
+.settings-module-root.appweb-scroll-module .content-shell.appweb-main-card {
+  width: 100% !important;
+  min-height: 28rem !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: visible !important;
+  border-radius: 1.35rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-card > .content-head {
+  min-height: 4.8rem !important;
+  padding: 1rem 1.05rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.82rem !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.56) !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-card > .appweb-main-body,
+.settings-module-root.appweb-scroll-module .content-body.appweb-main-body {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 1rem 1.05rem 1.15rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body .content-toolbar {
+  padding: 0 0 0.88rem !important;
+  display: block !important;
+  border-bottom: 0 !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body .pricing-table-card {
+  overflow: hidden !important;
+  border-radius: 1.18rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body .pricing-table-card > .content-head {
+  min-height: 4.2rem !important;
+  padding: 0.9rem 1rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body .table-responsive {
+  width: 100% !important;
+  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body .table-responsive table {
+  min-width: 760px !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body .uam-pagination {
+  margin: 0 !important;
+  padding: 0.75rem 1rem !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.58) !important;
+}
+
+/* Clean up action buttons without changing component logic. */
+.settings-module-root.appweb-scroll-module .appweb-main-card .soft-btn.is-active {
+  color: #ffffff !important;
+  border-color: transparent !important;
+  background: linear-gradient(135deg, var(--appweb-blue), var(--appweb-cyan)) !important;
+  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.16) !important;
+}
+
+@media (max-width: 1280px) {
+  .settings-module-root.appweb-scroll-module .appweb-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .settings-module-root.appweb-scroll-module,
+  .settings-module-root.appwebrestriction-module.appweb-scroll-module {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+    padding: 0.75rem !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .settings-layout {
+    height: auto !important;
+    max-height: none !important;
+    grid-template-columns: 1fr !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .settings-menu,
+  .settings-module-root.appweb-scroll-module .settings-content,
+  .settings-module-root.appweb-scroll-module .appweb-main-card {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .ema-sidebar-tree {
+    max-height: 18rem !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-module-root.appweb-scroll-module .appweb-hero-section,
+  .settings-module-root.appweb-scroll-module .appweb-summary-grid,
+  .settings-module-root.appweb-scroll-module .appweb-module-switcher {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .appweb-main-card > .content-head {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .appweb-main-card > .content-head .content-actions {
+    justify-content: flex-start !important;
+  }
+}
+
+/* =========================================================
+   V39 App / Web Restriction larger lower data workspace
+   Purpose:
+   - Keep the right side scrollable.
+   - Give the status/policy table a proper working height.
+   - Avoid the lower data area looking compressed on desktop.
+========================================================= */
+
+.settings-module-root.appweb-scroll-module .appweb-main-card,
+.settings-module-root.appweb-scroll-module .content-shell.appweb-main-card {
+  min-height: clamp(44rem, 82dvh, 58rem) !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-card > .appweb-main-body,
+.settings-module-root.appweb-scroll-module .content-body.appweb-main-body {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body > .d-grid.gap-3 {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.9rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-main-body .content-toolbar {
+  flex: 0 0 auto !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-large-data-card,
+.settings-module-root.appweb-scroll-module .appweb-status-table,
+.settings-module-root.appweb-scroll-module .appweb-policy-status-table {
+  flex: 1 1 auto !important;
+  min-height: clamp(32rem, 58dvh, 44rem) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-large-data-card > .content-head,
+.settings-module-root.appweb-scroll-module .appweb-status-table > .content-head,
+.settings-module-root.appweb-scroll-module .appweb-policy-status-table > .content-head {
+  flex: 0 0 auto !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-large-data-card > .table-responsive,
+.settings-module-root.appweb-scroll-module .appweb-status-table > .table-responsive,
+.settings-module-root.appweb-scroll-module .appweb-policy-status-table > .table-responsive {
+  flex: 1 1 auto !important;
+  min-height: clamp(24rem, 46dvh, 34rem) !important;
+  overflow: auto !important;
+  background: #ffffff !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-large-data-card tbody td[colspan],
+.settings-module-root.appweb-scroll-module .appweb-status-table tbody td[colspan],
+.settings-module-root.appweb-scroll-module .appweb-policy-status-table tbody td[colspan] {
+  height: clamp(18rem, 34dvh, 26rem) !important;
+  vertical-align: middle !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-large-data-card tbody tr:not(:last-child) td,
+.settings-module-root.appweb-scroll-module .appweb-status-table tbody tr:not(:last-child) td,
+.settings-module-root.appweb-scroll-module .appweb-policy-status-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+@media (max-width: 1100px) {
+  .settings-module-root.appweb-scroll-module .appweb-main-card,
+  .settings-module-root.appweb-scroll-module .content-shell.appweb-main-card,
+  .settings-module-root.appweb-scroll-module .appweb-large-data-card,
+  .settings-module-root.appweb-scroll-module .appweb-status-table,
+  .settings-module-root.appweb-scroll-module .appweb-policy-status-table,
+  .settings-module-root.appweb-scroll-module .appweb-large-data-card > .table-responsive,
+  .settings-module-root.appweb-scroll-module .appweb-status-table > .table-responsive,
+  .settings-module-root.appweb-scroll-module .appweb-policy-status-table > .table-responsive {
+    min-height: auto !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .appweb-large-data-card tbody td[colspan],
+  .settings-module-root.appweb-scroll-module .appweb-status-table tbody td[colspan],
+  .settings-module-root.appweb-scroll-module .appweb-policy-status-table tbody td[colspan] {
+    height: 14rem !important;
+  }
+}
+
+/* =========================================================
+   V40 App / Web Restriction hero KPI placement
+   Purpose:
+   - Move the KPI cards into the top hero area like other modules.
+   - Free vertical space below for the data/work table.
+   - Keep global CSS only; no page-specific stylesheet.
+========================================================= */
+
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi,
+.settings-module-root.appweb-scroll-module .appweb-hero-section.appweb-hero-with-kpi {
+  min-height: 7.1rem !important;
+  max-height: none !important;
+  padding: 1rem 1.1rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(34rem, 44rem) !important;
+  align-items: center !important;
+  gap: 1rem !important;
+  overflow: visible !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-hero-copy {
+  min-width: 0 !important;
+  display: grid !important;
+  align-content: center !important;
+  gap: 0.58rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-hero-copy h1 {
+  margin-bottom: 0.34rem !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-hero-alert {
+  width: fit-content !important;
+  max-width: 100% !important;
+  padding: 0.58rem 0.72rem !important;
+  border-radius: 0.92rem !important;
+  font-size: 0.72rem !important;
+  line-height: 1.35 !important;
+}
+
+.settings-module-root.appweb-scroll-module .appweb-hero-section .appweb-summary-grid,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-hero-score {
+  width: min(100%, 44rem) !important;
+  max-width: 44rem !important;
+  justify-self: end !important;
+  align-self: center !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(7.2rem, 1fr)) !important;
+  gap: 0.62rem !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .score-box,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .ema-kpi-card,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-hero-score .score-box,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-hero-score .ema-kpi-card {
+  min-height: 4.35rem !important;
+  height: 4.35rem !important;
+  max-height: 4.35rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 2.1rem !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  padding: 0.58rem 0.66rem !important;
+  border-radius: 0.95rem !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .score-box span:not(.ema-kpi-icon),
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .ema-kpi-card span:not(.ema-kpi-icon) {
+  font-size: 0.52rem !important;
+  line-height: 1.08 !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .score-box strong,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .ema-kpi-card strong {
+  margin-top: 0.22rem !important;
+  font-size: clamp(1.05rem, 1.18vw, 1.28rem) !important;
+  line-height: 1 !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .score-box small,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .ema-kpi-card small {
+  margin-top: 0.2rem !important;
+  font-size: 0.54rem !important;
+  line-height: 1.1 !important;
+}
+
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .ema-kpi-icon,
+.settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-hero-score .ema-kpi-icon {
+  width: 2.1rem !important;
+  height: 2.1rem !important;
+  border-radius: 0.82rem !important;
+}
+
+@media (max-width: 1360px) and (min-width: 1101px) {
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi,
+  .settings-module-root.appweb-scroll-module .appweb-hero-section.appweb-hero-with-kpi {
+    grid-template-columns: minmax(0, 1fr) minmax(31rem, 39rem) !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid,
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-hero-score {
+    max-width: 39rem !important;
+    grid-template-columns: repeat(4, minmax(6.6rem, 1fr)) !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .score-box,
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .ema-kpi-card {
+    padding-inline: 0.56rem !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi,
+  .settings-module-root.appweb-scroll-module .appweb-hero-section.appweb-hero-with-kpi {
+    grid-template-columns: 1fr !important;
+    min-height: auto !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid,
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-hero-score {
+    width: 100% !important;
+    max-width: none !important;
+    justify-self: stretch !important;
+    grid-template-columns: repeat(4, minmax(7rem, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid,
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-hero-score {
+    display: flex !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 0.58rem !important;
+    padding-bottom: 0.15rem !important;
+  }
+
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .score-box,
+  .settings-module-root.appweb-scroll-module .settings-hero.appweb-hero-with-kpi .appweb-summary-grid .ema-kpi-card {
+    min-width: 9.5rem !important;
+    max-width: 9.5rem !important;
+    flex: 0 0 9.5rem !important;
+  }
+}

@@ -616,7 +616,6 @@ export default function AppWebRestriction() {
 
   const moduleConfig = modules.find((module) => module.id === activeModule) || modules[0];
   const filteredTreeNodes = useMemo(() => filterRestrictionTree(treeNodes, targetTreeSearch), [treeNodes, targetTreeSearch]);
-  const ModuleIcon = moduleConfig.icon;
   const tone = colorClasses[moduleConfig.color];
   // App Whitelist must stay editable even when the displayed effective policy is inherited.
   // Saving App Whitelist for a selected device/department should create/update a policy
@@ -657,12 +656,12 @@ export default function AppWebRestriction() {
   };
 
   useEffect(() => {
-    document.documentElement.classList.add('ema-settings-page-active');
-    document.body.classList.add('ema-settings-page-active');
+    document.documentElement.classList.add('ema-settings-page-active', 'ema-appwebrestriction-page-active');
+    document.body.classList.add('ema-settings-page-active', 'ema-appwebrestriction-page-active');
 
     return () => {
-      document.documentElement.classList.remove('ema-settings-page-active');
-      document.body.classList.remove('ema-settings-page-active');
+      document.documentElement.classList.remove('ema-settings-page-active', 'ema-appwebrestriction-page-active');
+      document.body.classList.remove('ema-settings-page-active', 'ema-appwebrestriction-page-active');
     };
   }, []);
 
@@ -1503,7 +1502,7 @@ export default function AppWebRestriction() {
 
 
   return (
-    <main className="settings-module-root ema-module-root ema-settings-pro" data-section="appwebrestriction">
+    <main className="settings-module-root ema-module-root ema-settings-pro appwebrestriction-module appweb-scroll-module" data-section="appwebrestriction">
       {notice && (
         <div className="settings-toast-layer">
           <div className={clsx('settings-toast', `settings-toast-${notice.tone}`)}>
@@ -1557,62 +1556,37 @@ export default function AppWebRestriction() {
         </aside>
 
         <section className="settings-content">
-          <div className="settings-hero ema-panel-surface">
+          <div className="settings-hero ema-hero-kpi-right ema-panel-surface">
             <div>
-              <div>
-                <div className="eyebrow d-inline-flex align-items-center gap-1 mb-2">
-                  <span>Policy Management</span>
-                  <ChevronRight size={12} />
-                  <span>{moduleConfig.label}</span>
-                </div>
-                <h1 className="ema-title mb-2 d-flex align-items-center gap-2">
-                  <span className="setting-icon">
-                    <ModuleIcon size={19} />
-                  </span>
-                  App / Web Restriction
-                </h1>
-                <p className="settings-helper-card m-0">
-                  Selected target: <span>{selectedTarget?.label || 'None'}</span>
-                  {selectedTarget?.Object_Full_Name && <span> ({selectedTarget.Object_Full_Name})</span>}
-                </p>
+              <div className="eyebrow d-inline-flex align-items-center gap-1 mb-2">
+                <span>Policy Management</span>
+                <ChevronRight size={12} />
+                <span>{moduleConfig.label}</span>
               </div>
+              <h2>App / Web Restriction</h2>
+              <p>
+                Selected target: {selectedTarget?.label || 'None'}
+                {selectedTarget?.Object_Full_Name ? ` (${selectedTarget.Object_Full_Name})` : ''}
+              </p>
+              {message && (
+                <div className="settings-inline-alert d-inline-flex gap-2 align-items-start mt-2">
+                  <Info size={14} className="mt-0.5 shrink-0" /> {message}
+                </div>
+              )}
             </div>
 
-            {message && (
-              <div className="settings-inline-alert d-inline-flex gap-2 align-items-start">
-                <Info size={14} className="mt-0.5 shrink-0" /> {message}
-              </div>
-            )}
+            <div className="settings-score ema-kpi-right-pair">
+              {summaryCards.map((card) => (
+                <button key={card.label} className="score-box text-start" type="button">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <small>{card.helper}</small>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="settings-score users-hero-score">
-            {summaryCards.map((card) => {
-              const Icon = card.icon;
-              return (
-                <div
-                  key={card.label}
-                  className={clsx(
-                    'score-box ema-kpi-card',
-                    card.tone === 'rose' ? 'is-danger' :
-                    card.tone === 'amber' ? 'is-warning' :
-                    card.tone === 'emerald' ? 'is-success' :
-                    'is-info'
-                  )}
-                >
-                  <div>
-                    <span>{card.label}</span>
-                    <strong>{card.value}</strong>
-                    <small>{card.helper}</small>
-                  </div>
-                  <span className="ema-kpi-icon">
-                    <Icon size={17} />
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="settings-score">
+          <div className="settings-score appweb-module-switcher">
             {modules.map((item) => {
               const Icon = item.icon;
               const selected = item.id === activeModule;
@@ -1640,7 +1614,7 @@ export default function AppWebRestriction() {
             })}
           </div>
 
-          <div className="content-shell ema-panel-surface">
+          <div className="content-shell ema-panel-surface appweb-main-card">
             <div className="content-head">
               <div className="content-actions">
                 {moduleConfig.tabs.map((tab) => (
@@ -1668,7 +1642,7 @@ export default function AppWebRestriction() {
               )}
             </div>
 
-            <div className="content-body">
+            <div className="content-body appweb-main-body">
               {activeTab === 'status' && activeModule !== 'webRestriction' && renderRestrictionStatus()}
               {activeTab === 'settings' && renderPolicySettings()}
               {activeTab === 'policyStatus' && renderPolicyStatus()}
@@ -1774,6 +1748,7 @@ export default function AppWebRestriction() {
         </div>
 
         <AppTable<StatusTableRow>
+          className="appweb-large-data-card appweb-status-table"
           columns={appBlacklistMode ? appColumns : whitelistColumns}
           rows={tableRows}
           rowKey="__rowKey"
@@ -2186,7 +2161,7 @@ export default function AppWebRestriction() {
         </div>
 
         <AppTable<PolicyTableRow>
-          className="pricing-table-card"
+          className="appweb-large-data-card appweb-policy-status-table"
           columns={columns}
           rows={tableRows}
           rowKey="__rowKey"
