@@ -990,12 +990,6 @@ export default function Software() {
     setPage(1);
   };
 
-  const resetToRegistry = () => {
-    setSelected({ mode: "registry", tableKey: "registry", label: "Software", relationId: currentRelationId });
-    setSelectedDevice(null);
-    resetFilters();
-  };
-
   const activateView = (view: ActiveView) => {
     setSelected({ mode: "registry", tableKey: "registry", label: "Software", relationId: currentRelationId });
     setActiveView(view);
@@ -1099,7 +1093,7 @@ export default function Software() {
   );
 
   const renderTree = (nodes: TreeNode[], depth = 0, mode: "organization" | "statistic" = "organization") => (
-    <div className={cx("software-tree-level", depth > 0 && "is-nested")}>
+    <div className={cx("ema-sidebar-tree-children", depth > 0 && "is-nested")}>
       {nodes.map((node) => {
         const hasChildren = Boolean(node.children?.length);
         const isExpanded = expandedGroups.has(node.id);
@@ -1117,8 +1111,7 @@ export default function Software() {
           <div key={node.id}>
             <button
               type="button"
-              className={cx("software-tree-row", isActive && "is-active", isDevice && "is-device", isExpandable && "is-expandable")}
-              style={{ paddingLeft: 10 + depth * 12 }}
+              className={cx("ema-sidebar-tree-node", `depth-${Math.min(depth, 8)}`, isActive && "is-selected", isDevice && "is-device", isExpandable && "is-expandable")}
               onClick={() => {
                 if (mode === "statistic") {
                   void selectStatistic(node);
@@ -1128,10 +1121,10 @@ export default function Software() {
                 else void handleFolderClick(node, isExpandable);
               }}
             >
-              <span className="software-tree-chevron">
-                {isExpandable ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : isDevice ? <MonitorSmartphone size={13} /> : <FolderOpen size={13} />}
+              <span className="ema-sidebar-tree-node-chevron">
+                {isExpandable ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span aria-hidden="true" />}
               </span>
-              <span className="software-tree-label">{node.label}</span>
+              <span className="ema-sidebar-tree-node-main"><span className="ema-sidebar-tree-node-icon">{isDevice ? <MonitorSmartphone size={13} /> : mode === "statistic" ? <Database size={13} /> : <FolderOpen size={13} />}</span><span className="ema-sidebar-tree-label">{node.label}</span></span>
               {node.devicesLoading && <RefreshCw size={12} className="spin" />}
             </button>
             {hasChildren && isExpanded && renderTree(node.children || [], depth + 1, mode)}
@@ -1142,7 +1135,6 @@ export default function Software() {
   );
 
   const filtersActive = searchTerm || categoryFilter !== "all" || typeFilter !== "all" || osFilter !== "all" || activeView !== "all";
-  const canResetCurrentView = Boolean(filtersActive) || selected.tableKey !== "registry";
   const visibleStart = activeRowsCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const visibleEnd = Math.min(page * PAGE_SIZE, activeRowsCount);
   const tableTitle = selected.tableKey === "registry" ? "Software" : selected.label;
@@ -1153,7 +1145,7 @@ export default function Software() {
       : `Scope: ${selectedFolder?.label || "Organisation"}`;
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root software-module software-inventory-module" data-section="software">
+    <main className="settings-module-root ema-settings-pro ema-module-root software-inventory-module" data-section="software">
       {toast && (
         <div className="settings-toast-layer software-toast-layer">
           <div className={cx("settings-toast software-toast", toast.type === "error" ? "settings-toast-error" : toast.type === "info" ? "settings-toast-info" : "settings-toast-success")}>
@@ -1164,40 +1156,56 @@ export default function Software() {
         </div>
       )}
 
-      <div className="settings-layout software-settings-layout d-grid gap-3">
-        <aside className="settings-menu ema-panel-surface software-left-panel">
-          <div className="panel-head software-panel-head">
+      <div className="settings-layout">
+        <aside className="settings-menu ema-panel-surface">
+          <div className="panel-head">
             <span>SOFTWARE</span>
             <strong>Software</strong>
             <small>Software list, statistics and scan scope</small>
           </div>
 
-          <div className="software-sidebar-tabs">
-            <button type="button" className={sidebarTab === "organization" ? "is-active" : ""} onClick={() => setSidebarTab("organization")}>Organization</button>
-            <button type="button" className={sidebarTab === "statistic" ? "is-active" : ""} onClick={() => setSidebarTab("statistic")}>Statistic</button>
-          </div>
+          <nav className="settings-menu-list ema-module-sidebar-nav" id="softwareMenu" role="tablist" aria-label="Software navigation">
+            <button
+              type="button"
+              className={cx("setting-btn", sidebarTab === "organization" && "active")}
+              onClick={() => setSidebarTab("organization")}
+            >
+              <span className="setting-icon"><FolderOpen size={16} /></span>
+              <span><strong>Organization</strong><small>Folders and endpoint scope</small></span>
+            </button>
+            <button
+              type="button"
+              className={cx("setting-btn", sidebarTab === "statistic" && "active")}
+              onClick={() => setSidebarTab("statistic")}
+            >
+              <span className="setting-icon"><Database size={16} /></span>
+              <span><strong>Statistic</strong><small>Software evidence views</small></span>
+            </button>
+          </nav>
 
-          <div className="section-search software-left-search">
-            <Search size={15} />
-            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software..." />
-            {searchTerm && <button type="button" onClick={() => setSearchTerm("")}><X size={14} /></button>}
-          </div>
+          <div className="ema-sidebar-content">
+            <div className="ema-sidebar-subpanel">
+              <div className="section-search ema-sidebar-field">
+                <Search size={15} />
+                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software..." />
+                {searchTerm && <button type="button" className="ema-sidebar-search-clear" onClick={() => setSearchTerm("")}><X size={14} /></button>}
+              </div>
 
-          {sidebarTab === "organization" && (
-            <div className="software-scope-block software-tree-block">
-              <div className="software-scope-title"><FolderOpen size={15} /><span>Organization</span></div>
-              {treeLoading && <div className="software-empty-mini">Loading organization...</div>}
-              {treeError && <div className="software-empty-mini is-error">{treeError}</div>}
-              {renderTree(deviceTree, 0, "organization")}
+              {sidebarTab === "organization" ? (
+                <div className="ema-sidebar-tree" aria-label="Software organization tree">
+                  <div className="ema-sidebar-section-title"><FolderOpen size={15} /><span>Organization</span></div>
+                  {treeLoading && <div className="ema-sidebar-empty">Loading organization...</div>}
+                  {treeError && <div className="ema-sidebar-empty is-error">{treeError}</div>}
+                  {renderTree(deviceTree, 0, "organization")}
+                </div>
+              ) : (
+                <div className="ema-sidebar-tree" aria-label="Software statistics tree">
+                  <div className="ema-sidebar-section-title"><Database size={15} /><span>Statistics</span></div>
+                  {renderTree(statisticTree, 0, "statistic")}
+                </div>
+              )}
             </div>
-          )}
-
-          {sidebarTab === "statistic" && (
-            <div className="software-scope-block software-tree-block">
-              <div className="software-scope-title"><Database size={15} /><span>Statistics</span></div>
-              {renderTree(statisticTree, 0, "statistic")}
-            </div>
-          )}
+          </div>
 
         </aside>
 
@@ -1231,13 +1239,12 @@ export default function Software() {
             <div className="software-registry-head">
               <div><h3>{tableTitle}</h3><p>{tableSubtitle}</p></div>
               <div className="software-registry-tools">
-                <div className="section-search software-search-box"><Search size={15} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software records..." />{searchTerm && <button type="button" onClick={() => setSearchTerm("")}><X size={14} /></button>}</div>
+                <div className="section-search software-search-box"><Search size={15} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software records..." />{searchTerm && <button type="button" className="ema-sidebar-search-clear" onClick={() => setSearchTerm("")}><X size={14} /></button>}</div>
                 <button type="button" className="soft-btn software-insights-toggle" onClick={() => setShowInsightsModal(true)}><FileText size={15} />Insights <span>{classificationCoverage}%</span></button>
                 <button type="button" className="soft-btn software-scan-btn" onClick={() => void handleSoftwareScan("device")} disabled={!selectedDevice || scanLoading}><MonitorSmartphone size={15} className={scanLoading ? "spin" : ""} />Scan Device</button>
                 <button type="button" className="soft-btn software-scan-btn" onClick={() => void handleSoftwareScan("folder")} disabled={!selectedFolder || scanLoading}><FolderOpen size={15} className={scanLoading ? "spin" : ""} />Scan Folder</button>
                 <button type="button" className="soft-btn software-scan-btn" onClick={() => void handleSoftwareScan("all")} disabled={scanLoading}><RefreshCw size={15} className={scanLoading ? "spin" : ""} />Scan All</button>
                 <button type="button" className="icon-action-btn software-icon-btn" onClick={() => void refreshCurrentView()} title="Refresh"><RefreshCw size={15} /></button>
-                <button type="button" className="soft-btn software-reset-btn software-header-reset-btn" onClick={selected.tableKey === "registry" ? resetFilters : resetToRegistry} disabled={!canResetCurrentView}><X size={14} />Reset</button>
                 <button type="button" className="primary-btn software-export-btn software-header-export-btn" onClick={exportCurrentView} disabled={isDataLoading || activeRowsCount === 0}><Download size={15} />Export</button>
               </div>
             </div>

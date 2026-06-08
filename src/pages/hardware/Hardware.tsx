@@ -1725,29 +1725,26 @@ function FolderTree({
   const isSelected = selectedKey === node.key;
 
   return (
-    <div className="hardware-tree-branch ema-sidebar-tree-branch">
-      <div
-        className={`hardware-tree-node ema-sidebar-tree-node ${isSelected ? "is-selected is-active" : ""}`}
-        style={{ paddingLeft: `${Math.max(0, depth) * 12 + 8}px` }}
-      >
-        <button type="button" className="hardware-tree-node-chevron ema-sidebar-tree-toggle" onClick={() => hasChildren && onToggle(node.key)}>
+    <div className="ema-sidebar-tree-branch">
+      <div className={`ema-sidebar-tree-node depth-${Math.min(depth, 8)} ${isSelected ? "is-selected is-active" : ""}`}>
+        <button type="button" className="ema-sidebar-tree-toggle" onClick={() => hasChildren && onToggle(node.key)}>
           {hasChildren ? isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} /> : <span />}
         </button>
 
-        <button type="button" className="hardware-tree-node-main ema-sidebar-tree-main" onClick={() => onSelect(node.key)}>
-          <span className="hardware-tree-node-icon ema-sidebar-tree-icon">
+        <button type="button" className="ema-sidebar-tree-main" onClick={() => onSelect(node.key)}>
+          <span className="ema-sidebar-tree-icon">
             {hasChildren && isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
           </span>
-          <span className="hardware-tree-node-label ema-sidebar-tree-label">{node.label}</span>
+          <span className="ema-sidebar-tree-label">{node.label}</span>
         </button>
 
-        <span className="hardware-tree-node-count ema-sidebar-tree-count">{countForNode(node.key)}</span>
+        <span className="ema-sidebar-tree-count">{countForNode(node.key)}</span>
 
         {node.key !== "organization" && (
-          <div className="hardware-tree-menu-wrap ema-sidebar-tree-menu-wrap">
+          <div className="ema-sidebar-tree-menu-wrap">
             <button
               type="button"
-              className="hardware-tree-menu-btn ema-sidebar-tree-menu-btn"
+              className="ema-sidebar-tree-menu-btn"
               onClick={(event) => {
                 event.stopPropagation();
                 onMenu(folderMenuKey === node.key ? null : node.key);
@@ -1757,7 +1754,7 @@ function FolderTree({
             </button>
 
             {folderMenuKey === node.key && (
-              <div className="hardware-tree-menu ema-sidebar-tree-menu">
+              <div className="ema-sidebar-tree-menu">
                 <button type="button" onClick={() => onAdd(node.key)}>
                   Add subfolder
                 </button>
@@ -1774,7 +1771,7 @@ function FolderTree({
       </div>
 
       {hasChildren && isExpanded && (
-        <div className="hardware-tree-children ema-sidebar-tree-children">
+        <div className="ema-sidebar-tree-children">
           {node.children!.map((child) => (
             <FolderTree
               key={child.key}
@@ -3002,24 +2999,21 @@ export default function HardwareInventory() {
     const isSelected = selectedStatistic === node.id;
 
     return (
-      <div key={node.id} className="hardware-stat-tree-branch">
-        <div
-          className={`hardware-stat-tree-node ${isSelected ? "is-selected" : ""} ${hasChildren ? "has-children" : ""}`}
-          style={{ paddingLeft: `${Math.max(depth, 0) * 12 + 8}px` }}
-        >
-          <button type="button" className="hardware-stat-tree-toggle" onClick={() => (hasChildren ? toggleStatisticGroup(node.id) : handleStatisticSelect(node))}>
+      <div key={node.id} className="ema-sidebar-tree-branch">
+        <div className={`ema-sidebar-tree-node depth-${Math.min(depth, 8)} ${isSelected ? "is-selected is-active" : ""} ${hasChildren ? "is-expandable" : ""}`}>
+          <button type="button" className="ema-sidebar-tree-toggle" onClick={() => (hasChildren ? toggleStatisticGroup(node.id) : handleStatisticSelect(node))}>
             {hasChildren ? isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} /> : <span />}
           </button>
-          <button type="button" className="hardware-stat-tree-main" onClick={() => handleStatisticSelect(node)}>
-            <span className="hardware-stat-tree-icon">
+          <button type="button" className="ema-sidebar-tree-main" onClick={() => handleStatisticSelect(node)}>
+            <span className="ema-sidebar-tree-icon">
               {hasChildren ? isExpanded ? <FolderOpen size={15} /> : <Folder size={15} /> : <Database size={15} />}
             </span>
-            <span>{node.name}</span>
+            <span className="ema-sidebar-tree-label">{node.name}</span>
           </button>
         </div>
 
         {hasChildren && isExpanded && (
-          <div className="hardware-stat-tree-children">
+          <div className="ema-sidebar-tree-children">
             {node.children!.map((child) => renderStatisticTreeNode(child, depth + 1))}
           </div>
         )}
@@ -3226,69 +3220,82 @@ export default function HardwareInventory() {
         <span id="themeLabel">Dark Mode</span>
       </button>
 
-      <div className="settings-layout hardware-settings-layout d-grid gap-3">
-        <aside className="settings-menu hardware-left-panel ema-panel-surface">
-        <div className="panel-head hardware-panel-head">
-          <span>HARDWARE COMMAND CENTER</span>
-          <strong>Hardware Inventory</strong>
-          <small>Endpoint hierarchy and synchronized device records.</small>
-        </div>
+      <div className="settings-layout d-grid gap-3">
+        <aside className="settings-menu ema-panel-surface">
+          <div className="panel-head">
+            <span>HARDWARE</span>
+            <strong>Hardware Inventory</strong>
+            <small>Endpoint hierarchy and synchronized device records.</small>
+          </div>
 
-        <div className="hardware-segmented ema-sidebar-tabs">
-          <button type="button" className={activeTab === "organization" ? "is-active" : ""} onClick={() => setActiveTab("organization")}>
-            Organization
-          </button>
-          <button type="button" className={activeTab === "statistics" ? "is-active" : ""} onClick={() => setActiveTab("statistics")}>
-            Statistics
-          </button>
-        </div>
-
-        {activeTab === "organization" ? (
-          <>
-            <div className="hardware-search-box ema-sidebar-field">
-              <Search size={15} />
-              <input value={searchHierarchy} onChange={(event) => setSearchHierarchy(event.target.value)} placeholder="Search folder hierarchy..." />
-            </div>
-
-            <button type="button" className="hardware-add-folder-btn ema-sidebar-action-btn" onClick={() => handleAddFolder()}>
-              <FolderPlus size={15} />
-              New Main Folder
+          <nav className="settings-menu-list ema-module-sidebar-nav" id="hardwareMenu" role="tablist" aria-label="Hardware navigation">
+            <button
+              type="button"
+              className={`setting-btn ${activeTab === "organization" ? "active" : ""}`}
+              onClick={() => setActiveTab("organization")}
+            >
+              <span className="setting-icon"><FolderOpen size={16} /></span>
+              <span><strong>Organization</strong><small>Folders and endpoint scope</small></span>
             </button>
+            <button
+              type="button"
+              className={`setting-btn ${activeTab === "statistics" ? "active" : ""}`}
+              onClick={() => setActiveTab("statistics")}
+            >
+              <span className="setting-icon"><Database size={16} /></span>
+              <span><strong>Statistics</strong><small>Hardware operational views</small></span>
+            </button>
+          </nav>
 
-            <div className="hardware-tree ema-sidebar-tree">
-              {treeNodes.map((node) => (
-                <FolderTree
-                  key={node.key}
-                  node={node}
-                  depth={0}
-                  selectedKey={selectedFolderKey}
-                  expandedKeys={expandedKeys}
-                  folderMenuKey={folderMenuKey}
-                  search={searchHierarchy}
-                  countForNode={countForNode}
-                  onSelect={handleFolderSelect}
-                  onToggle={handleFolderToggle}
-                  onMenu={setFolderMenuKey}
-                  onAdd={handleAddFolder}
-                  onRename={handleRenameFolder}
-                  onDelete={handleDeleteFolder}
-                />
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="hardware-stat-panel">
-            <div className="hardware-stat-scope">
-              <span>Current Scope</span>
-              <strong>{selectedFolderLabel}</strong>
-              <small>{getSelectedRelationID() === -1 ? "All departments" : "Selected folder"}</small>
-            </div>
+          <div className="ema-sidebar-content">
+            <div className="ema-sidebar-subpanel">
+              {activeTab === "organization" ? (
+                <>
+                  <div className="section-search ema-sidebar-field">
+                    <Search size={15} />
+                    <input value={searchHierarchy} onChange={(event) => setSearchHierarchy(event.target.value)} placeholder="Search folder hierarchy..." />
+                  </div>
 
-            <div className="hardware-stat-tree">
-              {statisticTree.map((node) => renderStatisticTreeNode(node))}
+                  <button type="button" className="soft-btn ema-sidebar-action-btn" onClick={() => handleAddFolder()}>
+                    <FolderPlus size={15} />
+                    New Main Folder
+                  </button>
+
+                  <div className="ema-sidebar-tree" aria-label="Hardware organization tree">
+                    {treeNodes.map((node) => (
+                      <FolderTree
+                        key={node.key}
+                        node={node}
+                        depth={0}
+                        selectedKey={selectedFolderKey}
+                        expandedKeys={expandedKeys}
+                        folderMenuKey={folderMenuKey}
+                        search={searchHierarchy}
+                        countForNode={countForNode}
+                        onSelect={handleFolderSelect}
+                        onToggle={handleFolderToggle}
+                        onMenu={setFolderMenuKey}
+                        onAdd={handleAddFolder}
+                        onRename={handleRenameFolder}
+                        onDelete={handleDeleteFolder}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="settings-helper-card ema-sidebar-scope-card">
+                    <strong>{selectedFolderLabel}</strong>
+                    <span>{getSelectedRelationID() === -1 ? "All departments" : "Selected folder"}</span>
+                  </div>
+
+                  <div className="ema-sidebar-tree" aria-label="Hardware statistics tree">
+                    {statisticTree.map((node) => renderStatisticTreeNode(node))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
-        )}
         </aside>
 
         <section className="settings-content hardware-settings-content d-grid gap-3">

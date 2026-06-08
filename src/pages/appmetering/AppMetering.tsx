@@ -867,40 +867,48 @@ function AppMeteringTree({ nodes, selectedId, onSelect }: { nodes: TreeNode[]; s
     const isOpen = open[node.id] ?? depth < 1;
     const Icon = node.type === "package" ? Package : node.type === "device" ? UserRound : Folder;
     const isSelected = selectedId === node.id;
-    const nodeMeta = node.type === "device" ? node.subLabel || "Endpoint" : `${node.count ?? 0} item${(node.count ?? 0) === 1 ? "" : "s"}`;
+    const nodeMeta = node.type === "device" ? node.status || "Endpoint" : String(node.count ?? 0);
 
     return (
-      <div key={node.id} className="d-grid gap-1">
-        <div className={cx("d-flex align-items-center gap-2", getTreeDepthClass(depth))}>
-          <button className={cx("setting-btn flex-grow-1", isSelected && "active")} type="button" onClick={() => onSelect(node)}>
-            <span className="setting-icon"><Icon size={17} /></span>
-            <span>
-              <strong>{node.label}</strong>
-              <small>{nodeMeta}</small>
-            </span>
-          </button>
-
-          {hasChildren ? (
-            <button
-              className="mini-btn icon-only"
-              type="button"
-              aria-label={isOpen ? `Collapse ${node.label}` : `Expand ${node.label}`}
-              onClick={() => setOpen((prev) => ({ ...prev, [node.id]: !isOpen }))}
-            >
-              {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-          ) : node.type === "device" ? (
-            <span className={getTreeStatusPillClass(node.status)}>{node.status || "-"}</span>
+      <div key={node.id} className="ema-sidebar-tree-branch">
+        <button
+          className={cx("ema-sidebar-tree-node", isSelected && "is-selected")}
+          type="button"
+          title={node.subLabel ? `${node.label} · ${node.subLabel}` : node.label}
+          onClick={() => onSelect(node)}
+        >
+          <span
+            className="ema-sidebar-tree-node-chevron"
+            role="button"
+            tabIndex={-1}
+            aria-hidden={!hasChildren}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (hasChildren) setOpen((prev) => ({ ...prev, [node.id]: !isOpen }));
+            }}
+          >
+            {hasChildren ? (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span />}
+          </span>
+          <span className="ema-sidebar-tree-main">
+            <span className="ema-sidebar-tree-icon"><Icon size={14} /></span>
+            <span className="ema-sidebar-tree-label">{node.label}</span>
+          </span>
+          {node.type === "device" ? (
+            <span className={getTreeStatusPillClass(node.status)}>{nodeMeta}</span>
           ) : (
-            <span className="user-pill info">{node.count ?? 0}</span>
+            <span className="ema-sidebar-tree-count">{nodeMeta}</span>
           )}
-        </div>
-        {hasChildren && isOpen ? node.children?.map((child) => renderNode(child, depth + 1)) : null}
+        </button>
+        {hasChildren && isOpen ? (
+          <div className="ema-sidebar-tree-children is-nested">
+            {node.children?.map((child) => renderNode(child, depth + 1))}
+          </div>
+        ) : null}
       </div>
     );
   };
 
-  return <div className="d-grid gap-1">{nodes.map((node) => renderNode(node))}</div>;
+  return <div className="ema-sidebar-tree-level">{nodes.map((node) => renderNode(node))}</div>;
 }
 
 export default function AppMetering() {
@@ -1363,7 +1371,7 @@ export default function AppMetering() {
   }, []);
 
   return (
-    <main className="settings-module-root ema-settings-pro" data-section="application-metering">
+    <main className="settings-module-root ema-module-root ema-settings-pro" data-section="application-metering">
       <input aria-hidden="true" id="globalSearch" type="hidden" />
       <button hidden id="themeBtn" type="button">
         <span id="themeLabel">Dark Mode</span>
@@ -1377,7 +1385,7 @@ export default function AppMetering() {
             <small>Browse organization, endpoint and package targets.</small>
           </div>
 
-          <div className="d-grid gap-2 p-2 border-bottom">
+          <div className="ema-module-sidebar-nav">
             <button type="button" className={cx("setting-btn", viewMode === "device" && "active")} onClick={() => setViewMode("device")}>
               <span className="setting-icon"><UserRound size={18} /></span>
               <span><strong>Devices</strong><small>Folder and endpoint scope</small></span>
@@ -1388,19 +1396,27 @@ export default function AppMetering() {
             </button>
           </div>
 
-          <div className="p-2 border-bottom">
-            <label className="section-search" htmlFor="appmSidebarSearch">
-              <Search size={15} />
-              <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder="Search folders, devices..." />
-            </label>
-          </div>
+          <div className="ema-sidebar-content">
+            <div className="ema-sidebar-subpanel">
+              <label className="section-search ema-sidebar-field" htmlFor="appmSidebarSearch">
+                <Search size={15} />
+                <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder="Search folders, devices..." />
+              </label>
 
-          <div className="settings-menu-list" id="appmeteringMenu" role="tree" aria-label="Application metering target tree">
-            {loading.hierarchy || loading.packages ? (
-              <div className="settings-helper-card"><strong>Loading hierarchy...</strong><span>Please wait while the metering scope is prepared.</span></div>
-            ) : (
-              <AppMeteringTree nodes={activeTree} selectedId={selectedNode.id} onSelect={handleNodeSelect} />
-            )}
+              <div className="ema-sidebar-tree" id="appmeteringMenu" role="tree" aria-label="Application metering target tree">
+                <div className="ema-sidebar-section-title">
+                  {viewMode === "device" ? <Folder size={14} /> : <Package size={14} />}
+                  <span>{viewMode === "device" ? "Organization" : "Packages"}</span>
+                </div>
+                {loading.hierarchy || loading.packages ? (
+                  <div className="ema-sidebar-empty"><strong>Loading hierarchy...</strong></div>
+                ) : activeTree.length > 0 ? (
+                  <AppMeteringTree nodes={activeTree} selectedId={selectedNode.id} onSelect={handleNodeSelect} />
+                ) : (
+                  <div className="ema-sidebar-empty">No metering targets found.</div>
+                )}
+              </div>
+            </div>
           </div>
         </aside>
 

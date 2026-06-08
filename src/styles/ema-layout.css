@@ -20449,3 +20449,451 @@ body.ema-report-page-active .main-content {
   min-height: 2.42rem !important;
   height: 2.42rem !important;
 }
+
+/* =========================================================
+   V25 Shared module sidebar pattern fix
+   Match Settings, Service Desk and Report left panel rhythm.
+   Used by Hardware, Software, App Metering and App/Web Restriction.
+   Global shared selectors only; no separate page CSS file.
+========================================================= */
+
+.settings-module-root .settings-menu > .ema-module-sidebar-nav,
+.ema-module-root .settings-menu > .ema-module-sidebar-nav {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  align-content: start !important;
+  gap: 0.42rem !important;
+  padding: 0.65rem !important;
+  border-bottom: 1px solid var(--ema-control-line-soft, rgba(203, 213, 225, 0.58)) !important;
+}
+
+.settings-module-root .settings-menu > .ema-module-sidebar-nav .setting-btn,
+.ema-module-root .settings-menu > .ema-module-sidebar-nav .setting-btn {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 3.36rem !important;
+  grid-template-columns: 38px minmax(0, 1fr) !important;
+}
+
+.settings-module-root .settings-menu > .ema-module-sidebar-nav .setting-btn .setting-icon,
+.ema-module-root .settings-menu > .ema-module-sidebar-nav .setting-btn .setting-icon {
+  flex: 0 0 38px !important;
+}
+
+.settings-module-root .settings-menu > .ema-sidebar-content,
+.ema-module-root .settings-menu > .ema-sidebar-content {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  padding: 0.65rem 0.65rem 0.75rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.settings-module-root .ema-sidebar-subpanel,
+.ema-module-root .ema-sidebar-subpanel {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.65rem !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root .ema-sidebar-field,
+.ema-module-root .ema-sidebar-field {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-field .ema-sidebar-search-clear,
+.ema-module-root .ema-sidebar-field .ema-sidebar-search-clear,
+.settings-module-root .ema-sidebar-search-clear,
+.ema-module-root .ema-sidebar-search-clear {
+  width: 1.72rem !important;
+  height: 1.72rem !important;
+  min-width: 1.72rem !important;
+  border: 0 !important;
+  border-radius: 0.62rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: transparent !important;
+}
+
+.settings-module-root .ema-sidebar-search-clear:hover,
+.ema-module-root .ema-sidebar-search-clear:hover {
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: color-mix(in srgb, var(--ema-control-primary, #2558e8) 8%, transparent) !important;
+}
+
+.settings-module-root .ema-sidebar-action-btn,
+.ema-module-root .ema-sidebar-action-btn {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  min-height: 2.35rem !important;
+  justify-content: center !important;
+}
+
+.settings-module-root .ema-sidebar-scope-card,
+.ema-module-root .ema-sidebar-scope-card {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-tree,
+.ema-module-root .ema-sidebar-tree {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  overflow: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  display: grid !important;
+  align-content: start !important;
+  gap: 0.28rem !important;
+  padding: 0.72rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.86) !important;
+  border-radius: 1rem !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.045), transparent 9rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.84)) !important;
+}
+
+.settings-module-root .ema-sidebar-section-title,
+.ema-module-root .ema-sidebar-section-title {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  min-height: 2.05rem !important;
+  margin: 0 0 0.34rem !important;
+  padding: 0 0.24rem 0.46rem !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.58) !important;
+  color: var(--ema-control-text-strong, #0f2746) !important;
+  font-size: 0.74rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.settings-module-root .ema-sidebar-section-title svg,
+.ema-module-root .ema-sidebar-section-title svg {
+  flex: 0 0 auto !important;
+  color: var(--ema-control-primary, #2558e8) !important;
+}
+
+.settings-module-root .ema-sidebar-empty,
+.ema-module-root .ema-sidebar-empty {
+  min-height: 2.55rem !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0.65rem 0.72rem !important;
+  border: 1px solid rgba(226, 232, 240, 0.88) !important;
+  border-radius: 0.86rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  font-size: 0.72rem !important;
+  font-weight: 760 !important;
+}
+
+.settings-module-root .ema-sidebar-empty.is-error,
+.ema-module-root .ema-sidebar-empty.is-error {
+  color: #dc2626 !important;
+  border-color: rgba(239, 68, 68, 0.22) !important;
+  background: rgba(239, 68, 68, 0.075) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-children,
+.ema-module-root .ema-sidebar-tree-children,
+.settings-module-root .ema-sidebar-tree-level,
+.ema-module-root .ema-sidebar-tree-level {
+  min-width: 0 !important;
+  display: grid !important;
+  align-content: start !important;
+  gap: 0.18rem !important;
+}
+
+.settings-module-root .ema-sidebar-tree-children.is-nested,
+.ema-module-root .ema-sidebar-tree-children.is-nested,
+.settings-module-root .ema-sidebar-tree-branch > .ema-sidebar-tree-children,
+.ema-module-root .ema-sidebar-tree-branch > .ema-sidebar-tree-children {
+  margin-left: 0.78rem !important;
+  padding-left: 0.42rem !important;
+  border-left: 1px solid rgba(203, 213, 225, 0.62) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-branch,
+.ema-module-root .ema-sidebar-tree-branch {
+  min-width: 0 !important;
+  position: relative !important;
+}
+
+.settings-module-root .ema-sidebar-tree-node,
+.ema-module-root .ema-sidebar-tree-node {
+  min-width: 0 !important;
+  min-height: 2.18rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.82rem !important;
+  color: var(--ema-control-text, #173154) !important;
+  background: transparent !important;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease !important;
+}
+
+button.ema-sidebar-tree-node {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 1.38rem minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.34rem !important;
+  padding: 0.34rem 0.46rem !important;
+  text-align: left !important;
+}
+
+.settings-module-root .ema-sidebar-tree-node:not(button),
+.ema-module-root .ema-sidebar-tree-node:not(button) {
+  display: grid !important;
+  grid-template-columns: 1.38rem minmax(0, 1fr) auto auto !important;
+  align-items: center !important;
+  gap: 0.3rem !important;
+  padding: 0.24rem 0.36rem !important;
+}
+
+.settings-module-root .ema-sidebar-tree-node:hover,
+.settings-module-root .ema-sidebar-tree-node.is-selected,
+.settings-module-root .ema-sidebar-tree-node.is-active,
+.ema-module-root .ema-sidebar-tree-node:hover,
+.ema-module-root .ema-sidebar-tree-node.is-selected,
+.ema-module-root .ema-sidebar-tree-node.is-active {
+  border-color: color-mix(in srgb, var(--ema-control-primary, #2558e8) 20%, transparent) !important;
+  background: color-mix(in srgb, var(--ema-control-primary, #2558e8) 8%, transparent) !important;
+  color: var(--ema-control-primary, #2558e8) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-node-chevron,
+.ema-module-root .ema-sidebar-tree-node-chevron,
+.settings-module-root .ema-sidebar-tree-toggle,
+.ema-module-root .ema-sidebar-tree-toggle {
+  width: 1.18rem !important;
+  height: 1.18rem !important;
+  min-width: 1.18rem !important;
+  border: 0 !important;
+  border-radius: 0.48rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  color: inherit !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-tree-toggle:hover,
+.ema-module-root .ema-sidebar-tree-toggle:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-node-main,
+.ema-module-root .ema-sidebar-tree-node-main,
+.settings-module-root .ema-sidebar-tree-main,
+.ema-module-root .ema-sidebar-tree-main {
+  min-width: 0 !important;
+  border: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.46rem !important;
+  padding: 0 !important;
+  color: inherit !important;
+  background: transparent !important;
+  text-align: left !important;
+}
+
+.settings-module-root .ema-sidebar-tree-node-icon,
+.ema-module-root .ema-sidebar-tree-node-icon,
+.settings-module-root .ema-sidebar-tree-icon,
+.ema-module-root .ema-sidebar-tree-icon {
+  width: 1.36rem !important;
+  height: 1.36rem !important;
+  flex: 0 0 1.36rem !important;
+  border-radius: 0.52rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: color-mix(in srgb, var(--ema-control-primary, #2558e8) 9%, transparent) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-label,
+.ema-module-root .ema-sidebar-tree-label {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  color: inherit !important;
+  font-size: 0.74rem !important;
+  font-weight: 820 !important;
+  line-height: 1.15 !important;
+}
+
+.settings-module-root .ema-sidebar-tree-count,
+.ema-module-root .ema-sidebar-tree-count {
+  min-width: 1.65rem !important;
+  min-height: 1.38rem !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 0.42rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: rgba(100, 116, 139, 0.08) !important;
+  font-size: 0.62rem !important;
+  font-weight: 850 !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu-wrap,
+.ema-module-root .ema-sidebar-tree-menu-wrap {
+  position: relative !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu-btn,
+.ema-module-root .ema-sidebar-tree-menu-btn {
+  width: 1.72rem !important;
+  height: 1.72rem !important;
+  border: 0 !important;
+  border-radius: 0.58rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: transparent !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu-btn:hover,
+.ema-module-root .ema-sidebar-tree-menu-btn:hover {
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu,
+.ema-module-root .ema-sidebar-tree-menu {
+  position: absolute !important;
+  top: calc(100% + 0.28rem) !important;
+  right: 0 !important;
+  z-index: 80 !important;
+  min-width: 10.5rem !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(203, 213, 225, 0.86) !important;
+  border-radius: 0.85rem !important;
+  background: #fff !important;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu button,
+.ema-module-root .ema-sidebar-tree-menu button {
+  width: 100% !important;
+  min-height: 2.1rem !important;
+  border: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 0.75rem !important;
+  color: var(--ema-control-text, #173154) !important;
+  background: transparent !important;
+  font-size: 0.7rem !important;
+  font-weight: 780 !important;
+  text-align: left !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu button:hover,
+.ema-module-root .ema-sidebar-tree-menu button:hover {
+  background: rgba(37, 99, 235, 0.07) !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu button.danger,
+.ema-module-root .ema-sidebar-tree-menu button.danger {
+  color: #dc2626 !important;
+}
+
+.settings-module-root .ema-sidebar-tree::-webkit-scrollbar,
+.ema-module-root .ema-sidebar-tree::-webkit-scrollbar {
+  width: 7px !important;
+  height: 7px !important;
+}
+
+.settings-module-root .ema-sidebar-tree::-webkit-scrollbar-thumb,
+.ema-module-root .ema-sidebar-tree::-webkit-scrollbar-thumb {
+  border-radius: 999px !important;
+  background: color-mix(in srgb, var(--ema-control-muted, #64748b) 36%, transparent) !important;
+}
+
+/* Guard against old Software segmented sidebar markup if an older TSX is still cached. */
+.software-inventory-module .software-sidebar-tabs,
+.software-inventory-module .software-left-panel .software-sidebar-tabs {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 0.42rem !important;
+  margin: 0 !important;
+  padding: 0.65rem !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--ema-control-line-soft, rgba(203, 213, 225, 0.58)) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.software-inventory-module .software-sidebar-tabs button {
+  width: 100% !important;
+  min-height: 3.1rem !important;
+  height: auto !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.96rem !important;
+  color: var(--ema-control-text, #173154) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 0.77rem !important;
+  font-weight: 820 !important;
+  text-align: left !important;
+}
+
+.software-inventory-module .software-sidebar-tabs button.is-active,
+.software-inventory-module .software-sidebar-tabs button:hover {
+  color: #fff !important;
+  border-color: transparent !important;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.22), transparent 9rem),
+    linear-gradient(135deg, #2558e8 0%, #087ea4 100%) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.18) !important;
+}
+
+@media (max-width: 1100px) {
+  .settings-module-root .settings-menu > .ema-module-sidebar-nav,
+  .ema-module-root .settings-menu > .ema-module-sidebar-nav {
+    display: flex !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    border-bottom: 0 !important;
+  }
+
+  .settings-module-root .settings-menu > .ema-module-sidebar-nav .setting-btn,
+  .ema-module-root .settings-menu > .ema-module-sidebar-nav .setting-btn {
+    min-width: 220px !important;
+  }
+
+  .settings-module-root .settings-menu > .ema-sidebar-content,
+  .ema-module-root .settings-menu > .ema-sidebar-content {
+    overflow: visible !important;
+  }
+
+  .settings-module-root .ema-sidebar-tree,
+  .ema-module-root .ema-sidebar-tree {
+    max-height: 24rem !important;
+  }
+}
+

@@ -1436,7 +1436,7 @@ export default function AppWebRestriction() {
   };
 
   const renderTree = (nodes: RestrictionTreeNode[], depth = 0) => (
-    <div className={clsx(depth > 0 && 'ml-3 border-l border-slate-100 pl-2')}>
+    <div className={clsx('ema-sidebar-tree-level', depth > 0 && 'ema-sidebar-tree-children is-nested')}>
       {nodes.map((node) => {
         const hasChildren = Boolean(node.children?.length);
         const isOpen = expandedGroups.has(node.id);
@@ -1445,36 +1445,35 @@ export default function AppWebRestriction() {
         const Icon = node.type === 'org' ? Server : node.type === 'root' ? Layers : node.type === 'department' ? (isOpen ? FolderOpen : Folder) : Laptop;
 
         return (
-          <div key={node.id}>
-            <div
-              className={clsx(
-                'group flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition',
-                isSelected ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100',
-              )}
+          <div key={node.id} className="ema-sidebar-tree-branch">
+            <button
+              type="button"
+              className={clsx('ema-sidebar-tree-node', isSelected && 'is-selected')}
+              title={node.label}
               onClick={() => {
                 if (hasChildren) toggleExpand(node.id);
                 if (target) handleTargetClick(node);
               }}
             >
-              <button
-                type="button"
-                className="flex h-4 w-4 items-center justify-center"
+              <span
+                className="ema-sidebar-tree-node-chevron"
+                role="button"
+                tabIndex={-1}
+                aria-hidden={!hasChildren}
                 onClick={(event) => {
                   event.stopPropagation();
                   if (hasChildren) toggleExpand(node.id);
                 }}
               >
-                {hasChildren ? (isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : <span className="w-3" />}
-              </button>
-              <Icon size={14} className={isSelected ? 'text-white' : 'text-slate-400'} />
-              <span className="min-w-0 flex-1 truncate">{node.label}</span>
-              {node.badge && (
-                <span className={clsx('rounded-full px-1.5 py-0.5 text-[8px] font-black', isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500')}>
-                  {node.badge}
-                </span>
-              )}
-            </div>
-            {hasChildren && isOpen && renderTree(node.children || [], depth + 1)}
+                {hasChildren ? (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span />}
+              </span>
+              <span className="ema-sidebar-tree-main">
+                <span className="ema-sidebar-tree-icon"><Icon size={14} /></span>
+                <span className="ema-sidebar-tree-label">{node.label}</span>
+              </span>
+              {node.badge ? <span className="ema-sidebar-tree-count">{node.badge}</span> : <span />}
+            </button>
+            {hasChildren && isOpen ? renderTree(node.children || [], depth + 1) : null}
           </div>
         );
       })}
@@ -1503,21 +1502,27 @@ export default function AppWebRestriction() {
       <div className="settings-layout">
         <aside className="settings-menu ema-panel-surface">
           <div className="panel-head">
-            <p>Restriction Target</p>
-            <h2>
-              <Building2 size={16} className="text-blue-600" /> Organization Tree
-            </h2>
+            <span>RESTRICTION TARGET</span>
+            <strong>Organization Tree</strong>
+            <small>Browse organization, endpoint and policy targets.</small>
           </div>
-          <div className="settings-menu-list">
-            {loading && treeNodes.length === 0 ? (
-              <div className="flex h-32 items-center justify-center gap-2 text-[11px] font-bold text-slate-400">
-                <Loader2 size={14} className="animate-spin" /> Loading targets
+
+          <div className="ema-sidebar-content">
+            <div className="ema-sidebar-subpanel">
+              <div className="ema-sidebar-tree" role="tree" aria-label="App and web restriction organization tree">
+                <div className="ema-sidebar-section-title">
+                  <Building2 size={14} />
+                  <span>Organization</span>
+                </div>
+                {loading && treeNodes.length === 0 ? (
+                  <div className="ema-sidebar-empty">
+                    <Loader2 size={14} className="animate-spin" /> Loading targets
+                  </div>
+                ) : treeNodes.length > 0 ? renderTree(treeNodes) : (
+                  <div className="ema-sidebar-empty">No restriction targets found.</div>
+                )}
               </div>
-            ) : treeNodes.length > 0 ? renderTree(treeNodes) : (
-              <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-[11px] font-bold text-slate-400">
-                No restriction targets found.
-              </div>
-            )}
+            </div>
           </div>
         </aside>
 
