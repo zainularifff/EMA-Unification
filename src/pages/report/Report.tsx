@@ -2589,11 +2589,11 @@ function buildReportAnalysis(report: ReportTemplate | null, filters: ReportFilte
   if (!report) {
     return {
       title: "Report readiness analysis",
-      summary: "Pilih satu template report untuk lihat data source, output dan komponen PDF yang boleh dijana.",
+      summary: "Select a report template to view the data source, output format and PDF components that can be generated.",
       bullets: [
-        "Catalog report akan datang dari API /api/reports/catalog.",
-        "Filter site, device group, status dan date range akan digunakan semasa preview/generate.",
-        "PDF boleh dikawal melalui pilihan Summary, Chart, Detail Table dan Recommendation."
+        "The report catalog will come from the /api/reports/catalog API.",
+        "Site, device group, status and date range filters will be applied during preview and generation.",
+        "PDF content can be controlled through the Summary, Chart, Detail Table and Recommendation options."
       ],
       sources: ["Endpoint inventory", "Service desk", "Software", "Task/job", "Geolocation"]
     };
@@ -2608,25 +2608,25 @@ function buildReportAnalysis(report: ReportTemplate | null, filters: ReportFilte
   ];
 
   const bullets = [
-    `${report.title} boleh dijana sebagai ${allowedOutputs(report).join(" / ")}.`,
-    `PDF layout akan bawa ${pdfParts.join(", ")}.`,
-    `Scope semasa: ${filters.relationID ? `site ID ${filters.relationID}` : "all sites"}, ${filters.deviceGroup === "all" ? "all device groups" : filters.deviceGroup.toUpperCase()}, status ${filters.status}.`
+    `${report.title} can be generated as ${allowedOutputs(report).join(" / ")}.`,
+    `The PDF layout will include ${pdfParts.join(", ")}.`,
+    `Current scope: ${filters.relationID ? `site ID ${filters.relationID}` : "all sites"}, ${filters.deviceGroup === "all" ? "all device groups" : filters.deviceGroup.toUpperCase()}, status ${filters.status}.`
   ];
 
   if (id.includes("ticket") || id.includes("sla") || id.includes("incident") || id.includes("support")) {
-    bullets.push("Analisis yang sesuai: volume ticket, status queue, SLA breach candidate, priority dan assignment workload.");
+    bullets.push("Recommended analysis: ticket volume, queue status, SLA breach candidates, priority and assignment workload.");
   } else if (id.includes("software") || id.includes("application") || id.includes("metering")) {
-    bullets.push("Analisis yang sesuai: software coverage, category distribution, unauthorized/outdated candidate dan deployment/metering evidence.");
+    bullets.push("Recommended analysis: software coverage, category distribution, unauthorized or outdated candidates and deployment or metering evidence.");
   } else if (id.includes("geo") || id.includes("location")) {
-    bullets.push("Analisis yang sesuai: geolocation coverage, abnormal/missing location evidence dan latest location history.");
+    bullets.push("Recommended analysis: geolocation coverage, abnormal or missing location evidence and latest location history.");
   } else if (id.includes("risk") || id.includes("security") || id.includes("duplicate") || id.includes("compliance")) {
-    bullets.push("Analisis yang sesuai: high-risk endpoint, duplicate IP, stale/offline exposure, SLA risk dan data quality issue.");
+    bullets.push("Recommended analysis: high-risk endpoints, duplicate IPs, stale or offline exposure, SLA risk and data-quality issues.");
   } else {
-    bullets.push("Analisis yang sesuai: endpoint health, inventory completeness, lifecycle candidate, telemetry freshness dan management score.");
+    bullets.push("Recommended analysis: endpoint health, inventory completeness, lifecycle candidates, telemetry freshness and management score.");
   }
 
   if (payload) {
-    bullets.push(`Preview semasa ada ${payload.sections.length} section, ${payload.dataSources.reduce((sum, item) => sum + Number(item.rows || 0), 0)} row sumber data dan operational score ${payload.metrics.operationalScore || 0}%.`);
+    bullets.push(`The current preview contains ${payload.sections.length} section(s), ${payload.dataSources.reduce((sum, item) => sum + Number(item.rows || 0), 0)} source data row(s) and an operational score of ${payload.metrics.operationalScore || 0}%.`);
   }
 
   return {
@@ -2878,13 +2878,13 @@ export default function Report() {
 
   return (
     <>
-      <main className="settings-module-root ema-settings-pro ema-report-pro container-fluid p-3 p-xl-4" data-section="report">
+      <main className="settings-module-root ema-settings-pro ema-report-pro ema-report-module-root report-module-root" data-section="report">
         <input aria-hidden="true" id="globalSearch" type="hidden" />
         <button hidden id="themeBtn" type="button">
           <span id="themeLabel">Dark Mode</span>
         </button>
 
-        <div className="settings-layout report-settings-layout d-grid gap-3">
+        <div className="settings-layout report-settings-layout">
           <aside className="settings-menu report-category-panel ema-panel-surface">
             <div className="panel-head">
               <span>REPORT CENTER</span>
@@ -2897,7 +2897,7 @@ export default function Report() {
               {categories.map((category) => (
                 <button
                   key={category.name}
-                  className={`setting-btn ${category.name === activeCategory ? "active" : ""}`}
+                  className={`setting-btn report-category-btn ${category.name === activeCategory ? "active" : ""}`}
                   type="button"
                   onClick={() => selectCategory(category.name)}
                 >
@@ -2912,7 +2912,7 @@ export default function Report() {
             </div>
           </aside>
 
-          <section className="settings-content d-grid gap-3 report-main-content">
+          <section className="settings-content report-main-content">
             <div className="settings-hero ema-panel-surface users-hero">
               <div>
                 <span className="eyebrow">REPORT GENERATOR WORKSPACE</span>
@@ -2955,7 +2955,7 @@ export default function Report() {
                 </label>
 
                 <div className="report-toolbar-filters">
-                  <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Report type filter">
+                  <select className="form-select setting-select report-type-select" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Report type filter">
                     <option value="all">All Types</option>
                     {Array.from(new Set((activeReportGroup?.items || []).map((item) => item.type))).map((type) => (
                       <option key={type} value={type}>{type}</option>
@@ -2963,11 +2963,11 @@ export default function Report() {
                   </select>
                 </div>
 
-                <div className="content-actions toolbar-actions report-toolbar-actions">
-                  <button className="soft-btn" id="refreshBtn" type="button" onClick={handleRefresh} disabled={loading}>
+                <div className="content-actions toolbar-actions report-toolbar-actions d-flex align-items-center justify-content-end gap-2">
+                  <button className="btn soft-btn" id="refreshBtn" type="button" onClick={handleRefresh} disabled={loading}>
                     Refresh
                   </button>
-                  <button className="primary-btn" id="scheduleBtn" type="button" onClick={() => setIsScheduleOpen(true)} disabled={!selectedReport}>
+                  <button className="btn primary-btn" id="scheduleBtn" type="button" onClick={() => setIsScheduleOpen(true)} disabled={!selectedReport}>
                     New Schedule
                   </button>
                 </div>
@@ -3051,7 +3051,7 @@ export default function Report() {
                       <div className="config-form">
                         <label>
                           Date Range
-                          <select value={filters.dateRange} onChange={(event) => updateFilter("dateRange", event.target.value)}>
+                          <select className="form-select setting-select" value={filters.dateRange} onChange={(event) => updateFilter("dateRange", event.target.value)}>
                             {selectedDateRangeOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
                           </select>
                         </label>
@@ -3059,54 +3059,54 @@ export default function Report() {
                           <div className="date-range-grid">
                             <label>
                               Start Date
-                              <input type="date" value={filters.startDate || ""} onChange={(event) => updateFilter("startDate", event.target.value)} />
+                              <input className="form-control setting-input" type="date" value={filters.startDate || ""} onChange={(event) => updateFilter("startDate", event.target.value)} />
                             </label>
                             <label>
                               End Date
-                              <input type="date" value={filters.endDate || ""} onChange={(event) => updateFilter("endDate", event.target.value)} />
+                              <input className="form-control setting-input" type="date" value={filters.endDate || ""} onChange={(event) => updateFilter("endDate", event.target.value)} />
                             </label>
                           </div>
                         )}
                         <label>
                           Site / Branch
-                          <select value={filters.relationID} onChange={(event) => updateFilter("relationID", Number(event.target.value))}>
+                          <select className="form-select setting-select" value={filters.relationID} onChange={(event) => updateFilter("relationID", Number(event.target.value))}>
                             <option value={0}>All Sites</option>
                             {options.sites.map((site) => <option value={site.id} key={site.id}>{site.name}</option>)}
                           </select>
                         </label>
                         <label>
                           Device Group
-                          <select value={filters.deviceGroup} onChange={(event) => updateFilter("deviceGroup", event.target.value)}>
+                          <select className="form-select setting-select" value={filters.deviceGroup} onChange={(event) => updateFilter("deviceGroup", event.target.value)}>
                             {selectedGroupOptions.map((group) => <option value={group.value} key={group.value}>{group.label}</option>)}
                           </select>
                         </label>
                         <label>
                           Endpoint Status
-                          <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>
+                          <select className="form-select setting-select" value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>
                             {selectedStatusOptions.map((status) => <option value={status.value} key={status.value}>{status.label}</option>)}
                           </select>
                         </label>
 
                         <div className="check-grid">
-                          <label><input checked={filters.includeChart} type="checkbox" onChange={(event) => updateFilter("includeChart", event.target.checked)} /> Include Chart</label>
-                          <label><input checked={filters.includeSummary} type="checkbox" onChange={(event) => updateFilter("includeSummary", event.target.checked)} /> Include Summary</label>
-                          <label><input checked={filters.includeTable} type="checkbox" onChange={(event) => updateFilter("includeTable", event.target.checked)} /> Detail Table</label>
-                          <label><input checked={filters.includeRecommendation} type="checkbox" onChange={(event) => updateFilter("includeRecommendation", event.target.checked)} /> Recommendation</label>
+                          <label className="inline-check"><input checked={filters.includeChart} type="checkbox" onChange={(event) => updateFilter("includeChart", event.target.checked)} /> Include Chart</label>
+                          <label className="inline-check"><input checked={filters.includeSummary} type="checkbox" onChange={(event) => updateFilter("includeSummary", event.target.checked)} /> Include Summary</label>
+                          <label className="inline-check"><input checked={filters.includeTable} type="checkbox" onChange={(event) => updateFilter("includeTable", event.target.checked)} /> Detail Table</label>
+                          <label className="inline-check"><input checked={filters.includeRecommendation} type="checkbox" onChange={(event) => updateFilter("includeRecommendation", event.target.checked)} /> Recommendation</label>
                         </div>
 
                         <label>
                           Output Format
-                          <select id="outputFormat" value={filters.outputFormat} onChange={(event) => updateFilter("outputFormat", event.target.value)}>
+                          <select className="form-select setting-select" id="outputFormat" value={filters.outputFormat} onChange={(event) => updateFilter("outputFormat", event.target.value)}>
                             {selectedOutputs.map((output) => <option key={output} value={output}>{outputLabel(output)}</option>)}
                           </select>
                         </label>
                       </div>
 
-                      <div className="config-actions">
-                        <button className="soft" id="previewBtn" type="button" onClick={() => requestReport("preview")} disabled={!selectedReport || loading}>
+                      <div className="config-actions d-flex align-items-center gap-2">
+                        <button className="btn soft-btn" id="previewBtn" type="button" onClick={() => requestReport("preview")} disabled={!selectedReport || loading}>
                           {loading ? "Loading..." : "Preview"}
                         </button>
-                        <button className="primary" id="generateBtn" type="button" onClick={() => requestReport("generate")} disabled={!selectedReport || loading}>
+                        <button className="btn primary-btn" id="generateBtn" type="button" onClick={() => requestReport("generate")} disabled={!selectedReport || loading}>
                           Generate
                         </button>
                       </div>
@@ -3152,12 +3152,12 @@ export default function Report() {
               <strong>{payload?.report.title || selectedReport?.title || "Report Preview"}</strong>
               <span>{payload ? `Prepared on ${formatDateTime(payload.generatedAt)}` : "Preview will appear after the report is prepared."}</span>
             </div>
-            <div className="executive-preview-actions">
-              <button type="button" onClick={() => setIsPreviewOpen(false)}>Close</button>
-              <button type="button" onClick={() => payload && downloadCsv(payload)} disabled={!payload}><DownloadIcon /> Excel/CSV</button>
-              <button type="button" onClick={() => payload && downloadPowerPoint(payload)} disabled={!payload}>PowerPoint</button>
-              <button type="button" onClick={handleExportPdf} disabled={!payload}>Export PDF</button>
-              <button className="primary" type="button" onClick={() => requestReport("generate")} disabled={!selectedReport || loading}>Generate Report</button>
+            <div className="executive-preview-actions d-flex align-items-center justify-content-end gap-2">
+              <button className="btn soft-btn" type="button" onClick={() => setIsPreviewOpen(false)}>Close</button>
+              <button className="btn soft-btn" type="button" onClick={() => payload && downloadCsv(payload)} disabled={!payload}><DownloadIcon /> Excel/CSV</button>
+              <button className="btn soft-btn" type="button" onClick={() => payload && downloadPowerPoint(payload)} disabled={!payload}>PowerPoint</button>
+              <button className="btn soft-btn" type="button" onClick={handleExportPdf} disabled={!payload}>Export PDF</button>
+              <button className="btn primary-btn" type="button" onClick={() => requestReport("generate")} disabled={!selectedReport || loading}>Generate Report</button>
             </div>
           </div>
           <div className="executive-preview-body">
@@ -3176,7 +3176,7 @@ export default function Report() {
           <div className="config-form">
             <label>
               Frequency
-              <select value={scheduleDraft.frequency} onChange={(event) => setScheduleDraft((current) => ({ ...current, frequency: event.target.value }))}>
+              <select className="form-select setting-select" value={scheduleDraft.frequency} onChange={(event) => setScheduleDraft((current) => ({ ...current, frequency: event.target.value }))}>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
@@ -3186,7 +3186,7 @@ export default function Report() {
             {scheduleDraft.frequency === "weekly" && (
               <label>
                 Day of Week
-                <select value={scheduleDraft.dayOfWeek} onChange={(event) => setScheduleDraft((current) => ({ ...current, dayOfWeek: event.target.value }))}>
+                <select className="form-select setting-select" value={scheduleDraft.dayOfWeek} onChange={(event) => setScheduleDraft((current) => ({ ...current, dayOfWeek: event.target.value }))}>
                   <option value="monday">Monday</option>
                   <option value="tuesday">Tuesday</option>
                   <option value="wednesday">Wednesday</option>
@@ -3198,18 +3198,18 @@ export default function Report() {
             {(scheduleDraft.frequency === "monthly" || scheduleDraft.frequency === "quarterly") && (
               <label>
                 Day of Month
-                <select value={scheduleDraft.dayOfMonth} onChange={(event) => setScheduleDraft((current) => ({ ...current, dayOfMonth: event.target.value }))}>
+                <select className="form-select setting-select" value={scheduleDraft.dayOfMonth} onChange={(event) => setScheduleDraft((current) => ({ ...current, dayOfMonth: event.target.value }))}>
                   {Array.from({ length: 28 }, (_, index) => String(index + 1)).map((day) => <option value={day} key={day}>{day}</option>)}
                 </select>
               </label>
             )}
             <label>
               Time
-              <input type="time" value={scheduleDraft.time} onChange={(event) => setScheduleDraft((current) => ({ ...current, time: event.target.value }))} />
+              <input className="form-control setting-input" type="time" value={scheduleDraft.time} onChange={(event) => setScheduleDraft((current) => ({ ...current, time: event.target.value }))} />
             </label>
             <label>
               Delivery
-              <select value={scheduleDraft.delivery} onChange={(event) => setScheduleDraft((current) => ({ ...current, delivery: event.target.value }))}>
+              <select className="form-select setting-select" value={scheduleDraft.delivery} onChange={(event) => setScheduleDraft((current) => ({ ...current, delivery: event.target.value }))}>
                 <option value="download">Manual Download</option>
                 <option value="email-draft">Email Draft</option>
                 <option value="management-pack">Management Pack</option>
@@ -3217,7 +3217,7 @@ export default function Report() {
             </label>
             <label>
               Output
-              <select value={scheduleDraft.outputFormat} onChange={(event) => setScheduleDraft((current) => ({ ...current, outputFormat: event.target.value }))}>
+              <select className="form-select setting-select" value={scheduleDraft.outputFormat} onChange={(event) => setScheduleDraft((current) => ({ ...current, outputFormat: event.target.value }))}>
                 {selectedOutputs.map((output) => <option key={output} value={output}>{outputLabel(output)}</option>)}
               </select>
             </label>
@@ -3228,9 +3228,9 @@ export default function Report() {
               </div>
             )}
           </div>
-          <div className="config-actions">
-            <button className="soft" type="button" onClick={() => setIsScheduleOpen(false)}>Cancel</button>
-            <button className="primary" type="button" onClick={handleScheduleSave}>Save Draft</button>
+          <div className="config-actions d-flex align-items-center gap-2">
+            <button className="btn soft-btn" type="button" onClick={() => setIsScheduleOpen(false)}>Cancel</button>
+            <button className="btn primary-btn" type="button" onClick={handleScheduleSave}>Save Draft</button>
           </div>
         </div>
       </div>

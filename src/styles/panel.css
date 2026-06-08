@@ -1,6 +1,11 @@
 /* =========================================================
    EMA Shared Panel Touch-up
-   Global layout/card polish used by Settings-style modules.
+   Panel/card styling only.
+
+   Important:
+   Search, filter, dropdown and toolbar control styling belongs
+   in filter.css. Do not style .section-search or its input here,
+   otherwise Settings and Report will show double search borders.
 ========================================================= */
 
 .content-panel,
@@ -43,6 +48,7 @@
 }
 
 .content-actions {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -50,57 +56,12 @@
   flex-wrap: wrap;
 }
 
-.content-toolbar.users-toolbar,
-.content-toolbar {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.72rem;
-  flex-wrap: wrap;
-}
-
-.section-search {
-  position: relative;
-  min-width: min(100%, 20rem);
-  flex: 1 1 18rem;
-}
-
-.section-search svg {
-  position: absolute;
-  left: 0.92rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #7890ae;
-  pointer-events: none;
-}
-
-.section-search input {
-  width: 100%;
-  min-height: 2.58rem;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  border-radius: 0.95rem;
-  padding: 0 0.95rem 0 2.65rem;
-  color: #10233f;
-  background: #ffffff;
-  font-size: 0.82rem;
-  font-weight: 680;
-  outline: none;
-}
-
-.section-search input:focus {
-  border-color: rgba(37, 99, 235, 0.52);
-  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.10);
-}
-
 @media (max-width: 900px) {
-  .content-actions,
-  .content-toolbar.users-toolbar,
-  .content-toolbar {
+  .content-actions {
     align-items: stretch;
   }
 
-  .content-actions > *,
-  .section-search {
+  .content-actions > * {
     width: 100%;
   }
 }

@@ -19515,3 +19515,547 @@ main[data-section="service-desk"] .service-desk-kb-table .settings-empty-state {
     flex-direction: column !important;
   }
 }
+
+/* =========================================================
+   V38 Report Center Settings Parity + Bootstrap Foundation
+   Scope: Report page only. Keeps Settings page unchanged.
+   - Report uses the same shell rhythm as Settings.
+   - Bootstrap utility/classes can be used in TSX; EMA classes own visual style.
+   - filter.css remains the single owner for search/filter controls.
+========================================================= */
+
+html.ema-report-page-active,
+body.ema-report-page-active,
+html.ema-report-page-active body,
+body.ema-report-page-active #root {
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+body.ema-report-page-active .ema-shell,
+body.ema-report-page-active .ema-main,
+body.ema-report-page-active .ema-page,
+body.ema-report-page-active .app-shell,
+body.ema-report-page-active .app-main,
+body.ema-report-page-active .app-content,
+body.ema-report-page-active .main-content {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+body.ema-report-page-active .ema-page,
+body.ema-report-page-active .app-content,
+body.ema-report-page-active .main-content {
+  height: calc(100dvh - 76px) !important;
+  max-height: calc(100dvh - 76px) !important;
+  padding: 0.9rem !important;
+  background: var(--ema-module-page-bg) !important;
+}
+
+.settings-module-root.ema-report-pro,
+.ema-report-pro.report-module-root {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border: 1px solid rgba(124, 139, 161, 0.22) !important;
+  border-radius: 1.5rem !important;
+  background: var(--ema-module-page-bg) !important;
+  color: var(--ema-control-text, #173154) !important;
+  box-shadow:
+    0 24px 70px rgba(15, 23, 42, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.80) !important;
+}
+
+.ema-report-pro .settings-layout.report-settings-layout {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 248px minmax(0, 1fr) !important;
+  gap: 0.9rem !important;
+  padding: 0.9rem !important;
+  overflow: hidden !important;
+  align-items: stretch !important;
+}
+
+.ema-report-pro .settings-menu.report-category-panel {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  position: relative !important;
+  top: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border-radius: var(--ema-control-radius-lg, 1.28rem) !important;
+}
+
+.ema-report-pro .settings-menu.report-category-panel .panel-head {
+  flex: 0 0 auto !important;
+  min-height: 6.05rem !important;
+  padding: 1rem 1rem 0.85rem !important;
+  border-bottom: 1px solid rgba(156, 171, 190, 0.34) !important;
+}
+
+.ema-report-pro .settings-menu-list.category-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  display: grid !important;
+  align-content: start !important;
+  gap: 0.42rem !important;
+  overflow: auto !important;
+  padding: 0.65rem !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+}
+
+.ema-report-pro .setting-btn.report-category-btn {
+  min-height: 3.36rem !important;
+  grid-template-columns: 38px minmax(0, 1fr) !important;
+  padding: 0.55rem !important;
+  border-radius: 0.96rem !important;
+}
+
+.ema-report-pro .setting-btn.report-category-btn b {
+  display: none !important;
+}
+
+.ema-report-pro .settings-content.report-main-content {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 0.85rem !important;
+  overflow: hidden !important;
+  padding-right: 0 !important;
+}
+
+.ema-report-pro .settings-hero.users-hero {
+  min-width: 0 !important;
+  min-height: 6.35rem !important;
+  max-height: 7.45rem !important;
+  padding: 0.95rem 1.05rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 1rem !important;
+  overflow: hidden !important;
+  border-radius: 1.35rem !important;
+}
+
+.ema-report-pro .settings-hero.users-hero > div:first-child {
+  min-width: 0 !important;
+}
+
+.ema-report-pro .settings-hero.users-hero .settings-score.users-hero-score {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 44rem !important;
+  justify-self: end !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(8.2rem, 1fr)) !important;
+  gap: 0.7rem !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.ema-report-pro .settings-hero.users-hero .score-box {
+  min-height: 4.75rem !important;
+  height: auto !important;
+  max-height: none !important;
+  padding: 0.78rem 0.86rem !important;
+  border-radius: 1rem !important;
+}
+
+.ema-report-pro .content-shell.report-workspace-shell {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  overflow: hidden !important;
+  border-radius: 1.35rem !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 251, 255, 0.97)) !important;
+}
+
+.ema-report-pro .content-toolbar.report-toolbar {
+  min-height: 0 !important;
+  padding: 0.82rem 1rem 0.72rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(360px, 1fr) minmax(165px, 190px) auto !important;
+  align-items: center !important;
+  gap: 0.64rem !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ema-report-pro .report-toolbar .report-search {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  flex: initial !important;
+}
+
+.ema-report-pro .report-toolbar-filters,
+.ema-report-pro .report-toolbar-filters .report-type-select {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.ema-report-pro .report-toolbar-actions {
+  justify-self: end !important;
+  flex-wrap: nowrap !important;
+  min-width: max-content !important;
+}
+
+.ema-report-pro .report-workspace-body {
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  padding: 0.82rem 1rem 1rem !important;
+  contain: layout style paint !important;
+}
+
+.ema-report-pro .report-builder-grid {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px) !important;
+  gap: 0.85rem !important;
+  align-items: stretch !important;
+  overflow: hidden !important;
+}
+
+.ema-report-pro .report-template-column,
+.ema-report-pro .report-config-panel {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  padding-right: 0.22rem !important;
+  contain: layout style paint !important;
+}
+
+.ema-report-pro .report-ai-panel,
+.ema-report-pro .template-card,
+.ema-report-pro .config-card,
+.ema-report-pro .card-meta > div,
+.ema-report-pro .check-grid label,
+.ema-report-pro .report-history-list button,
+.ema-report-pro .report-preview-map {
+  border: 1px solid rgba(148, 163, 184, 0.18) !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.ema-report-pro .report-ai-panel {
+  margin: 0 0 0.78rem !important;
+  padding: 0.82rem !important;
+  border-radius: 1rem !important;
+}
+
+.ema-report-pro .report-analysis-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.55rem !important;
+}
+
+.ema-report-pro .report-analysis-grid > div {
+  min-height: 3.2rem !important;
+  padding: 0.58rem !important;
+  border-radius: 0.86rem !important;
+  background: #f8fafc !important;
+}
+
+.ema-report-pro .template-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 0.55rem !important;
+}
+
+.ema-report-pro .template-card {
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(230px, 1.15fr) minmax(180px, 0.86fr) auto !important;
+  grid-template-areas:
+    "top meta action"
+    "desc meta action" !important;
+  align-items: center !important;
+  gap: 0.46rem 0.82rem !important;
+  padding: 0.78rem 0.88rem !important;
+  border-radius: 0.96rem !important;
+  cursor: pointer !important;
+  transition: none !important;
+  content-visibility: auto;
+  contain-intrinsic-size: 86px;
+}
+
+.ema-report-pro .template-card:hover,
+.ema-report-pro .template-card.active {
+  transform: none !important;
+  border-color: rgba(37, 99, 235, 0.30) !important;
+  background: #f8fbff !important;
+}
+
+.ema-report-pro .template-card::before {
+  width: 3px !important;
+  border-radius: 0.96rem 0 0 0.96rem !important;
+}
+
+.ema-report-pro .template-card .card-top {
+  grid-area: top !important;
+  min-width: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.7rem !important;
+}
+
+.ema-report-pro .template-card .card-top h4 {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.ema-report-pro .template-card > p {
+  grid-area: desc !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  line-height: 1.34 !important;
+}
+
+.ema-report-pro .template-card .card-meta {
+  grid-area: meta !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.45rem !important;
+  margin: 0 !important;
+}
+
+.ema-report-pro .template-card .card-actions {
+  grid-area: action !important;
+  align-self: center !important;
+}
+
+.ema-report-pro .template-card .card-select-hint {
+  min-height: 2.15rem !important;
+  padding: 0.38rem 0.6rem !important;
+  white-space: nowrap !important;
+  background: #f1f5f9 !important;
+}
+
+.ema-report-pro .report-config-panel {
+  position: static !important;
+  top: auto !important;
+}
+
+.ema-report-pro .report-config-panel .config-card {
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.78rem !important;
+  padding: 1rem !important;
+  border-radius: 1.05rem !important;
+}
+
+.ema-report-pro .report-config-panel .config-form {
+  display: grid !important;
+  gap: 0.62rem !important;
+}
+
+.ema-report-pro .report-config-panel .config-form label,
+.report-schedule-dialog .config-form label {
+  display: grid !important;
+  gap: 0.36rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.64rem !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.ema-report-pro .report-config-panel .check-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.48rem !important;
+}
+
+.ema-report-pro .report-config-panel .check-grid .inline-check {
+  min-height: 2.5rem !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.52rem !important;
+  padding: 0.55rem 0.62rem !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.ema-report-pro .report-config-panel .config-actions {
+  margin-top: auto !important;
+  padding-top: 0.74rem !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.18) !important;
+  background: #ffffff !important;
+}
+
+.ema-report-pro .report-config-panel .config-actions .btn {
+  flex: 1 1 0 !important;
+  min-height: 2.4rem !important;
+}
+
+.executive-preview-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147482500 !important;
+  display: none !important;
+  place-items: center !important;
+  padding: 1.25rem !important;
+  background: rgba(15, 23, 42, 0.58) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.executive-preview-modal.open {
+  display: grid !important;
+}
+
+.executive-preview-shell,
+.report-schedule-dialog {
+  width: min(1180px, calc(100vw - 2rem)) !important;
+  max-height: calc(100dvh - 2rem) !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(203, 213, 225, 0.78) !important;
+  border-radius: 1.25rem !important;
+  background: #f7faff !important;
+  box-shadow: 0 22px 64px rgba(15, 23, 42, 0.22) !important;
+}
+
+.report-schedule-dialog {
+  width: min(520px, calc(100vw - 2rem)) !important;
+  padding: 1.15rem !important;
+  overflow: auto !important;
+}
+
+@media (max-width: 1280px) {
+  .ema-report-pro .settings-hero.users-hero {
+    max-height: none !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-report-pro .settings-hero.users-hero .settings-score.users-hero-score {
+    width: 100% !important;
+    max-width: none !important;
+    justify-self: stretch !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(8rem, 1fr)) !important;
+  }
+
+  .ema-report-pro .report-builder-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px) !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  html.ema-report-page-active,
+  body.ema-report-page-active,
+  html.ema-report-page-active body,
+  body.ema-report-page-active #root {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: auto !important;
+  }
+
+  body.ema-report-page-active .ema-page,
+  body.ema-report-page-active .app-content,
+  body.ema-report-page-active .main-content {
+    height: auto !important;
+    max-height: none !important;
+    overflow: auto !important;
+    padding: 0.75rem !important;
+  }
+
+  .settings-module-root.ema-report-pro,
+  .ema-report-pro.report-module-root,
+  .ema-report-pro .settings-layout.report-settings-layout,
+  .ema-report-pro .settings-content.report-main-content,
+  .ema-report-pro .content-shell.report-workspace-shell,
+  .ema-report-pro .report-workspace-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .ema-report-pro .settings-layout.report-settings-layout,
+  .ema-report-pro .report-toolbar,
+  .ema-report-pro .report-builder-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-report-pro .settings-menu-list.category-list {
+    display: flex !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+
+  .ema-report-pro .setting-btn.report-category-btn {
+    min-width: 220px !important;
+  }
+
+  .ema-report-pro .report-template-column,
+  .ema-report-pro .report-config-panel {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .ema-report-pro .report-toolbar-actions {
+    justify-self: start !important;
+    flex-wrap: wrap !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .ema-report-pro .settings-hero.users-hero .settings-score.users-hero-score {
+    display: flex !important;
+    overflow-x: auto !important;
+    gap: 0.65rem !important;
+    padding-bottom: 0.2rem !important;
+  }
+
+  .ema-report-pro .settings-hero.users-hero .score-box {
+    min-width: 10rem !important;
+    flex: 0 0 10rem !important;
+  }
+
+  .ema-report-pro .template-card {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      "top"
+      "desc"
+      "meta"
+      "action" !important;
+  }
+
+  .ema-report-pro .template-card .card-meta,
+  .ema-report-pro .report-config-panel .check-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
