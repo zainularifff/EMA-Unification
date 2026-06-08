@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CheckCircle2,
   ChevronDown,
@@ -910,9 +911,20 @@ function DeployPackageModal({
 
   const hasDeployedPackage = packages.some((item) => item.status === "Deployed");
 
-  return (
-    <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <div className="user-modal advanced" onMouseDown={(event) => event.stopPropagation()}>
+  const deployModalNode = (
+    <div
+      className="user-modal-backdrop open"
+      style={{ position: "fixed", inset: 0, zIndex: 2147483647 }}
+      onMouseDown={onClose}
+    >
+      <div
+        className="user-modal advanced"
+        style={{
+          width: "min(1500px, calc(100vw - 96px))",
+          maxHeight: "min(90vh, 900px)",
+        }}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <div className="user-modal-head">
           <div>
             <h3>{packages.length > 1 ? "Deploy Packages" : "Deploy Package"}</h3>
@@ -969,295 +981,305 @@ function DeployPackageModal({
               <span className="user-pill info">{finalTargetCount} final target(s)</span>
             </div>
 
-            <div className="resource-workbench gap-3 align-items-start">
-              <section className="resource-form-card p-4">
-                <div className="resource-card-head mb-3">
-                  <div>
-                    <h4>Scope Selection</h4>
-                    <p>Choose the grouping method and target scope.</p>
-                  </div>
-                </div>
-
-                <div className="content-actions mb-3">
-                  <button
-                    type="button"
-                    className={cx("soft-btn", targetView === "organization" && "active")}
-                    onClick={() => switchTargetView("organization")}
-                  >
-                    Organization
-                  </button>
-                  <button
-                    type="button"
-                    className={cx("soft-btn", targetView === "os" && "active")}
-                    onClick={() => switchTargetView("os")}
-                  >
-                    Operating System
-                  </button>
-                </div>
-
-                {targetView === "organization" && (
-                  <label className="inline-check">
-                    <input
-                      type="checkbox"
-                      checked={includeLowerDepartment}
-                      onChange={(event) => {
-                        setIncludeLowerDepartment(event.target.checked);
-                        setTargetPage(1);
-                      }}
-                    />
-                    <span>Include Lower Department</span>
-                  </label>
-                )}
-
-                <div className="policy-list gap-3">
-                  {scopeGroups.length > 0 ? (
-                    scopeGroups.map((scope) => (
-                      <label key={scope.id} className="inline-check">
-                        <input
-                          type="checkbox"
-                          checked={selectedScopes.has(scope.id)}
-                          onChange={() => toggleScope(scope.id)}
-                        />
-                        <div>
-                          <strong>{scope.name}</strong>
-                          <span>{scope.type}</span>
-                        </div>
-                        <em className="user-pill info">{scope.count}</em>
-                      </label>
-                    ))
-                  ) : (
-                    <div className="settings-helper-card">
-                      <Search size={20} />
-                      <strong>No target scope</strong>
-                      <span>No devices are available for this scope.</span>
+            <div className="row g-3 align-items-stretch">
+              <div className="col-12 col-xl-3">
+                <section className="resource-form-card p-4 h-100">
+                  <div className="resource-card-head mb-3">
+                    <div>
+                      <h4>Scope Selection</h4>
+                      <p>Choose the grouping method and target scope.</p>
                     </div>
+                  </div>
+
+                  <div className="content-actions mb-3 justify-content-start">
+                    <button
+                      type="button"
+                      className={cx("soft-btn", targetView === "organization" && "active")}
+                      onClick={() => switchTargetView("organization")}
+                    >
+                      Organization
+                    </button>
+                    <button
+                      type="button"
+                      className={cx("soft-btn", targetView === "os" && "active")}
+                      onClick={() => switchTargetView("os")}
+                    >
+                      Operating System
+                    </button>
+                  </div>
+
+                  {targetView === "organization" && (
+                    <label className="inline-check">
+                      <input
+                        type="checkbox"
+                        checked={includeLowerDepartment}
+                        onChange={(event) => {
+                          setIncludeLowerDepartment(event.target.checked);
+                          setTargetPage(1);
+                        }}
+                      />
+                      <span>Include Lower Department</span>
+                    </label>
                   )}
-                </div>
-              </section>
 
-              <section className="resource-table-card p-4">
-                <div className="resource-card-head mb-3">
-                  <div>
-                    <h4>Endpoint Targets</h4>
-                    <p>Refine devices before deployment.</p>
-                  </div>
-                  <button type="button" className="soft-btn" onClick={clearTargetSelection}>
-                    Clear Selection
-                  </button>
-                </div>
-
-                <div className="policy-list gap-3 mb-3">
-                  <label className="section-search">
-                    <Search size={15} />
-                    <input
-                      value={targetSearch}
-                      onChange={(event) => {
-                        setTargetSearch(event.target.value);
-                        setTargetPage(1);
-                      }}
-                      placeholder="Search user, IP, department"
-                    />
-                    {targetSearch && (
-                      <button type="button" className="mini-btn icon-only" onClick={() => setTargetSearch("")}>
-                        <X size={13} />
-                      </button>
-                    )}
-                  </label>
-
-                  <div className="uam-filter-grid clean compact">
-                    <select
-                      className="setting-select"
-                      value={targetStatusFilter}
-                      onChange={(event) => {
-                        setTargetStatusFilter(event.target.value as "All" | "Online" | "Offline");
-                        setTargetPage(1);
-                      }}
-                    >
-                      <option value="All">All status</option>
-                      <option value="Online">Online</option>
-                      <option value="Offline">Offline</option>
-                    </select>
-
-                    <select
-                      className="setting-select"
-                      value={targetOsFilter}
-                      onChange={(event) => {
-                        setTargetOsFilter(event.target.value);
-                        setTargetPage(1);
-                      }}
-                    >
-                      <option value="All">All OS</option>
-                      {osOptions.map((os) => (
-                        <option key={os} value={os}>
-                          {os}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="resource-table-wrap">
-                  <table className="resource-table">
-                    <thead>
-                      <tr>
-                        <th>
+                  <div className="policy-list gap-3 mt-3">
+                    {scopeGroups.length > 0 ? (
+                      scopeGroups.map((scope) => (
+                        <label key={scope.id} className="inline-check">
                           <input
                             type="checkbox"
-                            checked={allTargetPageSelected}
-                            onChange={toggleSelectTargetPage}
+                            checked={selectedScopes.has(scope.id)}
+                            onChange={() => toggleScope(scope.id)}
                           />
-                        </th>
-                        <th>User / Device</th>
-                        <th>Department</th>
-                        <th>IP Address</th>
-                        <th>OS</th>
-                        <th>Status</th>
-                        <th>Exclude</th>
-                      </tr>
-                    </thead>
+                          <div className="flex-grow-1">
+                            <strong>{scope.name}</strong>
+                            <span>{scope.type}</span>
+                          </div>
+                          <em className="user-pill info">{scope.count}</em>
+                        </label>
+                      ))
+                    ) : (
+                      <div className="settings-helper-card">
+                        <Search size={20} />
+                        <strong>No target scope</strong>
+                        <span>No devices are available for this scope.</span>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </div>
 
-                    <tbody>
-                      {targetPageRows.map((device) => (
-                        <tr key={device.id} className={includedTargetIds.has(device.id) ? "included" : ""}>
-                          <td>
+              <div className="col-12 col-xl-6">
+                <section className="resource-table-card p-4 h-100">
+                  <div className="resource-card-head mb-3">
+                    <div>
+                      <h4>Endpoint Targets</h4>
+                      <p>Refine devices before deployment.</p>
+                    </div>
+                    <button type="button" className="soft-btn" onClick={clearTargetSelection}>
+                      Clear Selection
+                    </button>
+                  </div>
+
+                  <div className="policy-list gap-3 mb-3">
+                    <label className="section-search">
+                      <Search size={15} />
+                      <input
+                        value={targetSearch}
+                        onChange={(event) => {
+                          setTargetSearch(event.target.value);
+                          setTargetPage(1);
+                        }}
+                        placeholder="Search user, IP, department"
+                      />
+                      {targetSearch && (
+                        <button type="button" className="mini-btn icon-only" onClick={() => setTargetSearch("")}>
+                          <X size={13} />
+                        </button>
+                      )}
+                    </label>
+
+                    <div className="uam-filter-grid clean compact">
+                      <select
+                        className="setting-select"
+                        value={targetStatusFilter}
+                        onChange={(event) => {
+                          setTargetStatusFilter(event.target.value as "All" | "Online" | "Offline");
+                          setTargetPage(1);
+                        }}
+                      >
+                        <option value="All">All status</option>
+                        <option value="Online">Online</option>
+                        <option value="Offline">Offline</option>
+                      </select>
+
+                      <select
+                        className="setting-select"
+                        value={targetOsFilter}
+                        onChange={(event) => {
+                          setTargetOsFilter(event.target.value);
+                          setTargetPage(1);
+                        }}
+                      >
+                        <option value="All">All OS</option>
+                        {osOptions.map((os) => (
+                          <option key={os} value={os}>
+                            {os}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="resource-table-wrap">
+                    <table className="resource-table">
+                      <thead>
+                        <tr>
+                          <th>
                             <input
                               type="checkbox"
-                              checked={selectedDevices.has(device.id)}
-                              onChange={() => toggleManualUser(device.id)}
+                              checked={allTargetPageSelected}
+                              onChange={toggleSelectTargetPage}
                             />
-                          </td>
-                          <td>
-                            <strong>{device.name}</strong>
-                            <small>{device.id} • {device.objectAgent || "-"}</small>
-                          </td>
-                          <td>{device.department}</td>
-                          <td>{device.ip}</td>
-                          <td>{device.os}</td>
-                          <td>
-                            <span className={cx("user-pill", device.status === "Online" ? "active" : "inactive")}>
-                              {device.status}
-                            </span>
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              className={cx("mini-btn", excludedDevices.has(device.id) && "active")}
-                              onClick={() => toggleExcludedUser(device.id)}
-                            >
-                              {excludedDevices.has(device.id) ? "Excluded" : "Exclude"}
-                            </button>
-                          </td>
+                          </th>
+                          <th>User / Device</th>
+                          <th>Department</th>
+                          <th>IP Address</th>
+                          <th>OS</th>
+                          <th>Status</th>
+                          <th>Exclude</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
 
-                <CompactPagination
-                  currentPage={targetPage}
-                  totalPages={targetTotalPages}
-                  className="resource-pagination"
-                  ariaLabel="Target device pagination"
-                  onPageChange={setTargetPage}
-                />
-              </section>
-            </div>
-          </section>
+                      <tbody>
+                        {targetPageRows.map((device) => (
+                          <tr key={device.id} className={includedTargetIds.has(device.id) ? "included" : ""}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={selectedDevices.has(device.id)}
+                                onChange={() => toggleManualUser(device.id)}
+                              />
+                            </td>
+                            <td>
+                              <strong>{device.name}</strong>
+                              <small>{device.id} • {device.objectAgent || "-"}</small>
+                            </td>
+                            <td>{device.department}</td>
+                            <td>{device.ip}</td>
+                            <td>{device.os}</td>
+                            <td>
+                              <span className={cx("user-pill", device.status === "Online" ? "active" : "inactive")}>
+                                {device.status}
+                              </span>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className={cx("mini-btn", excludedDevices.has(device.id) && "active")}
+                                onClick={() => toggleExcludedUser(device.id)}
+                              >
+                                {excludedDevices.has(device.id) ? "Excluded" : "Exclude"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-          <section className="policy-card wide p-4">
-            <div className="policy-top">
-              <div>
-                <strong>Deployment Review</strong>
-                <p>Confirm target count, delivery timing and deployment options.</p>
-              </div>
-            </div>
-
-            <div className="audit-kpi-strip gap-3">
-              <div>
-                <span>Final Target</span>
-                <strong>{finalTargetCount}</strong>
-              </div>
-              <div>
-                <span>Scopes</span>
-                <strong>{selectedScopeCount}</strong>
-              </div>
-              <div>
-                <span>Manual</span>
-                <strong>{manualUserCount}</strong>
-              </div>
-              <div>
-                <span>Excluded</span>
-                <strong>{excludedUserCount}</strong>
-              </div>
-            </div>
-
-            <div className="pricing-grid gap-3">
-              <div className="settings-helper-card">
-                <strong>Included Preview</strong>
-                <span>
-                  {includedTargetList.slice(0, 4).map((device) => device.name).join(", ") ||
-                    "No users selected"}
-                  {includedTargetList.length > 4 ? ` +${includedTargetList.length - 4} more` : ""}
-                </span>
+                  <CompactPagination
+                    currentPage={targetPage}
+                    totalPages={targetTotalPages}
+                    className="resource-pagination"
+                    ariaLabel="Target device pagination"
+                    onPageChange={setTargetPage}
+                  />
+                </section>
               </div>
 
-              <div className="settings-helper-card">
-                <strong>Excluded Preview</strong>
-                <span>
-                  {excludedTargetList.slice(0, 4).map((device) => device.name).join(", ") ||
-                    "No excluded users"}
-                  {excludedTargetList.length > 4 ? ` +${excludedTargetList.length - 4} more` : ""}
-                </span>
+              <div className="col-12 col-xl-3">
+                <section className="policy-card p-4 h-100">
+                  <div className="policy-top">
+                    <div>
+                      <strong>Deployment Review</strong>
+                      <p>Confirm targets and deployment options.</p>
+                    </div>
+                  </div>
+
+                  <div className="pricing-grid gap-3">
+                    <div className="score-box is-compact">
+                      <span>Final Target</span>
+                      <strong>{finalTargetCount}</strong>
+                      <small>Ready to receive package</small>
+                    </div>
+                    <div className="score-box is-compact">
+                      <span>Scopes</span>
+                      <strong>{selectedScopeCount}</strong>
+                      <small>Selected groups</small>
+                    </div>
+                    <div className="score-box is-compact">
+                      <span>Manual</span>
+                      <strong>{manualUserCount}</strong>
+                      <small>Direct devices</small>
+                    </div>
+                    <div className="score-box is-compact">
+                      <span>Excluded</span>
+                      <strong>{excludedUserCount}</strong>
+                      <small>Skipped targets</small>
+                    </div>
+                  </div>
+
+                  <div className="pricing-grid gap-3 mt-3">
+                    <div className="settings-helper-card">
+                      <strong>Included Preview</strong>
+                      <span>
+                        {includedTargetList.slice(0, 3).map((device) => device.name).join(", ") ||
+                          "No users selected"}
+                        {includedTargetList.length > 3 ? ` +${includedTargetList.length - 3} more` : ""}
+                      </span>
+                    </div>
+
+                    <div className="settings-helper-card">
+                      <strong>Excluded Preview</strong>
+                      <span>
+                        {excludedTargetList.slice(0, 3).map((device) => device.name).join(", ") ||
+                          "No excluded users"}
+                        {excludedTargetList.length > 3 ? ` +${excludedTargetList.length - 3} more` : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="content-actions justify-content-start gap-2 mt-3">
+                    <button
+                      type="button"
+                      className={cx("soft-btn", scheduleType === "now" && "active")}
+                      onClick={() => setScheduleType("now")}
+                    >
+                      Send Now
+                    </button>
+                    <button
+                      type="button"
+                      className={cx("soft-btn", scheduleType === "schedule" && "active")}
+                      onClick={() => setScheduleType("schedule")}
+                    >
+                      Schedule
+                    </button>
+                  </div>
+
+                  {scheduleType === "schedule" && (
+                    <label className="form-field mt-3">
+                      <span>Schedule Time</span>
+                      <input className="setting-input" type="datetime-local" />
+                    </label>
+                  )}
+
+                  <div className="policy-list gap-3 mt-3">
+                    <label className="inline-check">
+                      <input type="checkbox" defaultChecked />
+                      <span>Force installation</span>
+                    </label>
+                    <label className="inline-check">
+                      <input type="checkbox" />
+                      <span>Reboot after installation</span>
+                    </label>
+                    <label className="inline-check">
+                      <input type="checkbox" defaultChecked />
+                      <span>Notify user</span>
+                    </label>
+                  </div>
+
+                  <div className="settings-helper-card p-3 mt-3">
+                    <span>Deployment Summary</span>
+                    <strong>
+                      {packages.length} package(s) • {finalTargetCount} target(s)
+                    </strong>
+                    <p>
+                      Excluded: {excludedUserCount} • {totalTargetCount} available target(s)
+                    </p>
+                  </div>
+                </section>
               </div>
-            </div>
-
-            <div className="content-actions wide gap-2 mt-3">
-              <button
-                type="button"
-                className={cx("soft-btn", scheduleType === "now" && "active")}
-                onClick={() => setScheduleType("now")}
-              >
-                Send Now
-              </button>
-              <button
-                type="button"
-                className={cx("soft-btn", scheduleType === "schedule" && "active")}
-                onClick={() => setScheduleType("schedule")}
-              >
-                Schedule
-              </button>
-            </div>
-
-            {scheduleType === "schedule" && (
-              <label className="form-field">
-                <span>Schedule Time</span>
-                <input className="setting-input" type="datetime-local" />
-              </label>
-            )}
-
-            <div className="form-grid wide gap-3">
-              <label className="inline-check">
-                <input type="checkbox" defaultChecked />
-                <span>Force installation</span>
-              </label>
-              <label className="inline-check">
-                <input type="checkbox" />
-                <span>Reboot after installation</span>
-              </label>
-              <label className="inline-check">
-                <input type="checkbox" defaultChecked />
-                <span>Notify user</span>
-              </label>
-            </div>
-
-            <div className="settings-helper-card wide p-3">
-              <span>Deployment Summary</span>
-              <strong>
-                {packages.length} package(s) • {finalTargetCount} target(s)
-              </strong>
-              <p>
-                Excluded: {excludedUserCount} • {totalTargetCount} available target(s)
-              </p>
             </div>
           </section>
         </div>
@@ -1278,6 +1300,9 @@ function DeployPackageModal({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return deployModalNode;
+  return createPortal(deployModalNode, document.body);
 }
 
 function DeletePackageModal({
@@ -2230,7 +2255,7 @@ export default function SoftwareDistribution() {
 
       {selectedPackage && (
         <div className="user-modal-backdrop open" onMouseDown={() => setSelectedPackageId(null)}>
-          <aside className="user-modal advanced" onMouseDown={(event) => event.stopPropagation()}>
+          <aside className="user-modal advanced w-75" onMouseDown={(event) => event.stopPropagation()}>
             <div className="user-modal-head">
               <div className="user-name">
                 <span className="user-mini-avatar"><Package size={18} /></span>
@@ -2245,17 +2270,17 @@ export default function SoftwareDistribution() {
               </button>
             </div>
 
-            <div className="user-modal-body content-body">
-              <section className="wide audit-kpi-strip">
+            <div className="user-modal-body content-body gap-3">
+              <section className="wide audit-kpi-strip gap-3">
                 <div className="score-box"><span>Status:</span><strong>{selectedPackage.status}</strong><small>Current package state</small></div>
                 <div className="score-box"><span>Delivery Method:</span><strong>{deliveryMethodLabels[selectedPackage.lastDeliveryMethod]}</strong><small>Last selected channel</small></div>
                 <div className="score-box"><span>Targets:</span><strong>{selectedPackage.targetCount}</strong><small>Total assigned devices</small></div>
                 <div className="score-box"><span>Package Size:</span><strong>{selectedPackage.sizeAfterCompression}</strong><small>After compression</small></div>
               </section>
 
-              <section className="pricing-card wide">
+              <section className="policy-card wide p-4">
                 <div className="pricing-top"><div><h4>Basic Information</h4><p>Package identity and ownership details</p></div></div>
-                <div className="pricing-grid">
+                <div className="pricing-grid gap-3">
                   <label className="form-field"><span>Package Name:</span><strong>{selectedPackage.name}</strong></label>
                   <label className="form-field"><span>Version:</span><strong>{selectedPackage.version}</strong></label>
                   <label className="form-field"><span>Owner:</span><strong>{selectedPackage.owner}</strong></label>
@@ -2265,9 +2290,9 @@ export default function SoftwareDistribution() {
                 </div>
               </section>
 
-              <section className="pricing-card wide">
+              <section className="policy-card wide p-4">
                 <div className="pricing-top"><div><h4>Package Details</h4><p>Files, compression and execution scope</p></div></div>
-                <div className="pricing-grid">
+                <div className="pricing-grid gap-3">
                   <label className="form-field"><span>Files:</span><strong>{selectedPackage.fileCount}</strong></label>
                   <label className="form-field"><span>Versions:</span><strong>{selectedPackage.versions.join(", ")}</strong></label>
                   <label className="form-field"><span>Before Compression:</span><strong>{selectedPackage.sizeBeforeCompression}</strong></label>
@@ -2277,13 +2302,32 @@ export default function SoftwareDistribution() {
                 </div>
               </section>
 
-              <section className="pricing-card wide">
+              <section className="policy-card wide p-4">
                 <div className="pricing-top"><div><h4>Last Deployment</h4><p>Read-only deployment reference</p></div></div>
-                <div className="pricing-grid">
+                <div className="pricing-grid gap-3">
                   <label className="form-field"><span>Last Method:</span><strong>{deliveryMethodLabels[selectedPackage.lastDeliveryMethod]}</strong></label>
                   <label className="form-field"><span>Last Deployment:</span><strong>{formatDate(selectedPackage.lastDeployment)}</strong></label>
                 </div>
               </section>
+            </div>
+
+            <div className="user-modal-foot">
+              <button type="button" className="soft-btn" onClick={() => setSelectedPackageId(null)}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="primary-btn"
+                disabled={!isDeployable(selectedPackage)}
+                onClick={() => {
+                  const packageId = selectedPackage.id;
+                  setSelectedPackageId(null);
+                  setModal({ type: "send", packageIds: [packageId] });
+                }}
+              >
+                <Send size={14} />
+                Deploy Package
+              </button>
             </div>
           </aside>
         </div>
