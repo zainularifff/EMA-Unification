@@ -6,11 +6,11 @@ import {
   incidents as incidentsService,
   incidentConfig as incidentConfigService,
   incidentCategories as incidentCategoriesService,
-} from '../../services/IncidentService';
-import { users as usersService, roles as rolesService } from '../../services/UserService';
-import { assets as assetsService } from '../../services/AssetService';
-import { knowledgeBase as knowledgeBaseService } from '../../services/KnowledgeBaseService';
-import { engineerAvailability as engineerAvailabilityService } from '../../services/EngineerAvailabilityService';
+} from '../services/IncidentService';
+import { users as usersService, roles as rolesService } from '../services/UserService';
+import { assets as assetsService } from '../services/AssetService';
+import { knowledgeBase as knowledgeBaseService } from '../services/KnowledgeBaseService';
+import { engineerAvailability as engineerAvailabilityService } from '../services/EngineerAvailabilityService';
 
 import {
   ArrowRightLeft,

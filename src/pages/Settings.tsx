@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import "../../styles/resource-planning.css";
+import "../styles/resource-planning.css";
 
 type SectionKey = "roles" | "users" | "modules" | "access" | "audit" | "pricing" | "aging" | "risk" | "resources";
 type RoleStatus = "Active" | "Review" | "Locked" | "Inactive";

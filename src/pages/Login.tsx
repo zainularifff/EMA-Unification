@@ -15,9 +15,9 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { API_BASE_URL } from "../../config/api";
-import { useAuth } from "../../context/AuthContext";
-import "../../styles/2fa.css";
+import { API_BASE_URL } from "../config/api";
+import { useAuth } from "../context/AuthContext";
+import "../styles/2fa.css";
 
 type AnyUser = Record<string, any>;
 

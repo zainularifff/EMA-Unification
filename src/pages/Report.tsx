@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import "../../styles/ema-layout.css";
+import "../styles/ema-layout.css";
 
 type ReportType = "Summary" | "Detail" | "Audit" | "Compliance" | "Risk" | string;
 

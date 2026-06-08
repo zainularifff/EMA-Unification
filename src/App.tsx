@@ -1,17 +1,20 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./components/layout/AppShell";
-import Login from "./pages/auth/Login";
-import Dashboard from "./pages/dashboard/Dashboard";
-import Hardware from "./pages/hardware/Hardware";
-import Settings from "./pages/settings/Settings";
-import ServiceDesk from "./pages/service-desk/ServiceDesk";
-import TaskList from "./pages/tasklist/TaskList";
-import Report from "./pages/report/Report";
-import Software from "./pages/software/Software";
-import AppMetering from "./pages/appmetering/AppMetering";
-import AppWebRestriction from "./pages/apprestriction/AppWebRestriction";
-import SoftwareDistribution from "./pages/software-distribution/SoftwareDistribution";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import Hardware from "./pages/Hardware";
+import Settings from "./pages/Settings";
+import ServiceDesk from "./pages/ServiceDesk";
+import TaskList from "./pages/TaskList";
+import Report from "./pages/Report";
+import Software from "./pages/Software";
+import AppMetering from "./pages/AppMetering";
+import AppWebRestriction from "./pages/AppWebRestriction";
+import SoftwareDistribution from "./pages/SoftwareDistribution";
+import PatchManagement from "./pages/PatchManagement";
+import InternetMetering from "./pages/InternetMetering";
+import NetworkInventory from "./pages/NetworkInventory";
 
 
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -38,6 +41,10 @@ export default function App() {
         <Route path="/appmetering" element={<AppMetering />} />
         <Route path="/app-restriction" element={<AppWebRestriction />} />
         <Route path="/software-distribution" element={<SoftwareDistribution />} />
+        <Route path="/patch-management" element={<PatchManagement />} />
+        <Route path="/internet-metering" element={<InternetMetering />} />
+        <Route path="/network-metering" element={<NetworkInventory />} />
+        <Route path="/network-inventory" element={<NetworkInventory />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

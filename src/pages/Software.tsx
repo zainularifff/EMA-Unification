@@ -1,21 +1,3 @@
-import "../../styles/theme.css";
-import "../../styles/typography.css";
-import "../../styles/ema-font-system.css";
-import "../../styles/app-global.css";
-import "../../styles/button.css";
-import "../../styles/form.css";
-import "../../styles/filter.css";
-import "../../styles/kpi.css";
-import "../../styles/panel.css";
-import "../../styles/table.css";
-import "../../styles/pagination.css";
-import "../../styles/modal.css";
-import "../../styles/toast.css";
-import "../../styles/settings-layout.css";
-import "../../styles/settings-widgets.css";
-import "../../styles/resource-planning.css";
-import "../../styles/2fa.css";
-import "../../styles/ema-layout.css";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,

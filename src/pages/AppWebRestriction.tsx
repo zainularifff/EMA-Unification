@@ -30,24 +30,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import '../../styles/theme.css';
-import '../../styles/ema-font-system.css';
-import '../../styles/typography.css';
-import '../../styles/app-global.css';
-import '../../styles/settings-layout.css';
-import '../../styles/ema-layout.css';
-import '../../styles/panel.css';
-import '../../styles/button.css';
-import '../../styles/form.css';
-import '../../styles/filter.css';
-import '../../styles/table.css';
-import '../../styles/pagination.css';
-import '../../styles/kpi.css';
-import '../../styles/modal.css';
-import '../../styles/toast.css';
-import '../../styles/settings-widgets.css';
-import '../../styles/resource-planning.css';
-import '../../styles/2fa.css';
+
 
 import restrictionService, {
   getCurrentLoginId,
@@ -63,7 +46,7 @@ import restrictionService, {
   WebGroup,
   WebGroupUrl,
   WhitelistSoftware,
-} from '../../services/restrictionService';
+} from '../services/restrictionService';
 
 type SubTab = 'status' | 'settings' | 'policyStatus';
 type NoticeTone = 'success' | 'warning' | 'error' | 'info';
