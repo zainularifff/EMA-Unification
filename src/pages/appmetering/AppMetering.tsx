@@ -867,7 +867,7 @@ function AppMeteringTree({ nodes, selectedId, onSelect }: { nodes: TreeNode[]; s
   return <div className="appm-tree">{nodes.map((node) => renderNode(node))}</div>;
 }
 
-export default function ApplicationMetering() {
+export default function AppMetering() {
   const [viewMode, setViewMode] = useState<ViewMode>("device");
   const [departmentTree, setDepartmentTree] = useState<TreeNode[]>([emptyNode]);
   const [packages, setPackages] = useState<PackageRow[]>([]);
@@ -1354,7 +1354,7 @@ export default function ApplicationMetering() {
 
           <label className="section-search appm-sidebar-search" htmlFor="appmSidebarSearch">
             <Search size={15} />
-            <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder="Search folders, devices or packages..." />
+            <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder="Search folders, devices..." />
           </label>
 
           <div className="settings-menu-list appm-tree-scroll" id="appmeteringMenu" role="tree" aria-label="Application metering target tree">
@@ -1500,99 +1500,93 @@ export default function ApplicationMetering() {
             {error ? <div className="appm-api-error"><AlertCircle size={15} /> {error}</div> : null}
 
             <div className="content-body appm-content-body">
-              <div className="appm-table-frame">
+              <div className={cx("appm-table-frame appm-standard-table", showDeviceRegistry ? "appm-device-table" : "appm-usage-table")}>
                 {showDeviceRegistry ? (
-                  <table className="appm-table">
-                    <thead>
-                      <tr>
-                        <th>No</th>
-                        <th>Device Name</th>
-                        <th>Platform / Model</th>
-                        <th>Status</th>
-                        <th>Last Connected</th>
-                        <th>Group Path</th>
-                        <th>Device ID</th>
-                        <th>IP Address</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading.assets ? (
-                        <tr><td colSpan={8}><div className="appm-empty-state"><RefreshCw size={15} className="appm-spin" /> Loading devices from /api/assets/{selectedNode.relationID}...</div></td></tr>
-                      ) : pagedDeviceRows.length === 0 ? (
-                        <tr><td colSpan={8}><div className="appm-empty-state">{selectedNode.id === "organization" ? "Company scope selected. Choose a department to browse device targets, or run Metering Company directly." : "No devices found in this folder scope."}</div></td></tr>
-                      ) : pagedDeviceRows.map((device, index) => {
-                        const raw = device.raw || {};
-                        const isSelected = selectedNode.id === device.id;
-                        return (
-                          <tr key={device.id} className={cx(isSelected && "is-selected")} onClick={() => handleNodeSelect(device)}>
-                            <td><span className="appm-row-number">{String((safePage - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td>
-                            <td>
-                              <div className="appm-user-cell">
-                                <strong>{device.label}</strong>
-                                <small>{device.subLabel || getTreeNodeValue(device, ["Object_Full_Name"], "-")}</small>
-                              </div>
-                            </td>
-                            <td><strong>{getTreeNodeValue(device, ["PlatformType"], "-")}</strong><small>{getTreeNodeValue(device, ["Model"], "-")}</small></td>
-                            <td><span className={cx("appm-tree-status", `is-${getTreeStatusClass(device.status)}`)}>{device.status || "-"}</span></td>
-                            <td>{formatApiDate(String(raw.ConnectionTime || ""))}</td>
-                            <td>{getTreeNodeValue(device, ["Object_Full_Name", "Department", "Site", "GroupName"], "-")}</td>
-                            <td><span className="appm-mono">{getTreeNodeValue(device, ["Object_DeviceID", "DeviceID", "MDM_DeviceID"], "-")}</span></td>
-                            <td>{getTreeNodeValue(device, ["IP", "IPAddress", "DeviceIPAddress", "DeviceLocalIPAddress"], "-")}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <>
+                    <div className="appm-standard-row head" role="row">
+                      <div className="user-cell row-number" role="columnheader">No</div>
+                      <div className="user-cell" role="columnheader">Device Name</div>
+                      <div className="user-cell" role="columnheader">Platform / Model</div>
+                      <div className="user-cell" role="columnheader">Status</div>
+                      <div className="user-cell" role="columnheader">Last Connected</div>
+                      <div className="user-cell" role="columnheader">Group Path</div>
+                      <div className="user-cell" role="columnheader">Device ID</div>
+                      <div className="user-cell" role="columnheader">IP Address</div>
+                    </div>
+                    {loading.assets ? (
+                      <div className="appm-standard-row appm-empty-row" role="row">
+                        <div className="appm-standard-empty"><RefreshCw size={15} className="appm-spin" /> Loading devices from /api/assets/{selectedNode.relationID}...</div>
+                      </div>
+                    ) : pagedDeviceRows.length === 0 ? (
+                      <div className="appm-standard-row appm-empty-row" role="row">
+                        <div className="appm-standard-empty">{selectedNode.id === "organization" ? "Company scope selected. Choose a department to browse device targets, or run Metering Company directly." : "No devices found in this folder scope."}</div>
+                      </div>
+                    ) : pagedDeviceRows.map((device, index) => {
+                      const raw = device.raw || {};
+                      const isSelected = selectedNode.id === device.id;
+                      return (
+                        <div key={device.id} className={cx("appm-standard-row appm-data-row", isSelected && "is-selected")} onClick={() => handleNodeSelect(device)} role="row">
+                          <div className="user-cell row-number"><span className="row-index-pill">{String((safePage - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></div>
+                          <div className="user-cell"><div className="appm-user-cell"><strong>{device.label}</strong><small>{device.subLabel || getTreeNodeValue(device, ["Object_Full_Name"], "-")}</small></div></div>
+                          <div className="user-cell"><strong className="appm-cell-main">{getTreeNodeValue(device, ["PlatformType"], "-")}</strong><small className="appm-cell-muted">{getTreeNodeValue(device, ["Model"], "-")}</small></div>
+                          <div className="user-cell"><span className={cx("appm-tree-status", `is-${getTreeStatusClass(device.status)}`)}>{device.status || "-"}</span></div>
+                          <div className="user-cell"><span className="appm-cell-main">{formatApiDate(String(raw.ConnectionTime || ""))}</span></div>
+                          <div className="user-cell"><span className="appm-cell-muted appm-truncate">{getTreeNodeValue(device, ["Object_Full_Name", "Department", "Site", "GroupName"], "-")}</span></div>
+                          <div className="user-cell"><span className="appm-mono appm-truncate">{getTreeNodeValue(device, ["Object_DeviceID", "DeviceID", "MDM_DeviceID"], "-")}</span></div>
+                          <div className="user-cell"><span className="appm-cell-main appm-truncate">{getTreeNodeValue(device, ["IP", "IPAddress", "DeviceIPAddress", "DeviceLocalIPAddress"], "-")}</span></div>
+                        </div>
+                      );
+                    })}
+                  </>
                 ) : (
-                  <table className="appm-table">
-                    <thead>
-                      <tr>
-                        <th>Application</th>
-                        <th>Executable</th>
-                        <th>Device / Name</th>
-                        <th>Usage</th>
-                        <th>Launch</th>
-                        <th>Last Used</th>
-                        <th>Status</th>
-                        <th>Risk</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loading.usage ? (
-                        <tr><td colSpan={9}><div className="appm-empty-state"><RefreshCw size={15} className="appm-spin" /> Loading usage records...</div></td></tr>
-                      ) : pagedRows.length === 0 ? (
-                        <tr><td colSpan={9}><div className="appm-empty-state">No application metering records found for current filter.</div></td></tr>
-                      ) : pagedRows.map((row) => (
-                        <tr key={`${row.id}-${row.application}-${row.device}`} className={cx(row.id === selectedRow.id && "is-selected")} onClick={() => setSelectedRowId(row.id)}>
-                          <td><div className="appm-app-cell"><button type="button" className="appm-app-link" onClick={(event) => { event.stopPropagation(); setDrawerRow(row); }}>{row.application}</button><small>{row.publisher} · {row.licenseType}</small></div></td>
-                          <td><span className="appm-mono">{row.fileName}</span><small>{row.version}</small></td>
-                          <td><div className="appm-user-cell"><strong>{row.device}</strong><small>Name: {row.user || "-"}</small></div></td>
-                          <td>{row.usedTimeHours.toFixed(1)}h</td>
-                          <td>{row.launchCount}</td>
-                          <td>{row.lastUsed}</td>
-                          <td><span className={cx("appm-status-pill", `is-${statusClass(row.status)}`)}>{row.status}</span></td>
-                          <td><span className={cx("appm-risk-pill", `is-${riskClass(row.risk)}`)}>{row.risk}</span></td>
-                          <td><button type="button" className="soft-btn appm-row-action" onClick={(event) => { event.stopPropagation(); setDrawerRow(row); }}>Details</button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <>
+                    <div className="appm-standard-row head" role="row">
+                      <div className="user-cell" role="columnheader">Application</div>
+                      <div className="user-cell" role="columnheader">Executable</div>
+                      <div className="user-cell" role="columnheader">Device / Name</div>
+                      <div className="user-cell" role="columnheader">Usage</div>
+                      <div className="user-cell" role="columnheader">Launch</div>
+                      <div className="user-cell" role="columnheader">Last Used</div>
+                      <div className="user-cell" role="columnheader">Status</div>
+                      <div className="user-cell" role="columnheader">Risk</div>
+                      <div className="user-cell" role="columnheader">Action</div>
+                    </div>
+                    {loading.usage ? (
+                      <div className="appm-standard-row appm-empty-row" role="row">
+                        <div className="appm-standard-empty"><RefreshCw size={15} className="appm-spin" /> Loading usage records...</div>
+                      </div>
+                    ) : pagedRows.length === 0 ? (
+                      <div className="appm-standard-row appm-empty-row" role="row">
+                        <div className="appm-standard-empty">No application metering records found for current filter.</div>
+                      </div>
+                    ) : pagedRows.map((row) => (
+                      <div key={`${row.id}-${row.application}-${row.device}`} className={cx("appm-standard-row appm-data-row", row.id === selectedRow.id && "is-selected")} onClick={() => setSelectedRowId(row.id)} role="row">
+                        <div className="user-cell"><div className="appm-app-cell"><button type="button" className="appm-app-link" onClick={(event) => { event.stopPropagation(); setDrawerRow(row); }}>{row.application}</button><small>{row.publisher} · {row.licenseType}</small></div></div>
+                        <div className="user-cell"><span className="appm-mono appm-truncate">{row.fileName}</span><small className="appm-cell-muted">{row.version}</small></div>
+                        <div className="user-cell"><div className="appm-user-cell"><strong>{row.device}</strong><small>Name: {row.user || "-"}</small></div></div>
+                        <div className="user-cell"><span className="appm-cell-main">{row.usedTimeHours.toFixed(1)}h</span></div>
+                        <div className="user-cell"><span className="appm-cell-main">{row.launchCount}</span></div>
+                        <div className="user-cell"><span className="appm-cell-main appm-truncate">{row.lastUsed}</span></div>
+                        <div className="user-cell"><span className={cx("appm-status-pill", `is-${statusClass(row.status)}`)}>{row.status}</span></div>
+                        <div className="user-cell"><span className={cx("appm-risk-pill", `is-${riskClass(row.risk)}`)}>{row.risk}</span></div>
+                        <div className="user-cell"><button type="button" className="soft-btn appm-row-action" onClick={(event) => { event.stopPropagation(); setDrawerRow(row); }}>Details</button></div>
+                      </div>
+                    ))}
+                  </>
                 )}
               </div>
+            </div>
 
-              <div className="appm-pagination" aria-label="Application metering pagination">
-                <div className="appm-pagination-info">
-                  <span>Showing {showDeviceRegistry ? pagedDeviceRows.length : pagedRows.length} of {showDeviceRegistry ? filteredDeviceRows.length : filteredRows.length}</span>
-                  <strong>Page {safePage} of {pageCount}</strong>
-                </div>
-                <div className="appm-pagination-actions" aria-label="Pagination controls">
-                  <button type="button" aria-label="First page" title="First page" disabled={safePage <= 1} onClick={() => setPage(1)}><ChevronsLeft size={14} /></button>
-                  <button type="button" aria-label="Previous page" title="Previous page" disabled={safePage <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}><ChevronLeft size={14} /></button>
-                  <b aria-current="page">{safePage}</b>
-                  <button type="button" aria-label="Next page" title="Next page" disabled={safePage >= pageCount} onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}><ChevronRight size={14} /></button>
-                  <button type="button" aria-label="Last page" title="Last page" disabled={safePage >= pageCount} onClick={() => setPage(pageCount)}><ChevronsRight size={14} /></button>
-                </div>
+            <div className="appm-pagination uam-pagination global-style" aria-label="Application metering pagination">
+              <div className="appm-pagination-info uam-page-summary">
+                <strong>Page {safePage} of {pageCount}</strong>
+              </div>
+              <div className="appm-pagination-actions uam-pagination-controls global-style" aria-label="Pagination controls">
+                <button className="uam-page-icon" type="button" aria-label="First page" title="First page" disabled={safePage <= 1} onClick={() => setPage(1)}><ChevronsLeft size={14} /></button>
+                <button className="uam-page-icon" type="button" aria-label="Previous page" title="Previous page" disabled={safePage <= 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}><ChevronLeft size={14} /></button>
+                <b className="uam-page-current" aria-current="page">{safePage}</b>
+                <button className="uam-page-icon" type="button" aria-label="Next page" title="Next page" disabled={safePage >= pageCount} onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}><ChevronRight size={14} /></button>
+                <button className="uam-page-icon" type="button" aria-label="Last page" title="Last page" disabled={safePage >= pageCount} onClick={() => setPage(pageCount)}><ChevronsRight size={14} /></button>
               </div>
             </div>
           </div>

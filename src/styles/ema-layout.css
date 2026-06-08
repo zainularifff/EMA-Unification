@@ -17109,733 +17109,6 @@ body[data-theme="dark"] .software-insights-modal,
 }
 
 /* =========================================================
-   Software v6 - Hardware pagination parity
-   Match Device Registry pagination exactly and do not show
-   a fake Page 1 of 1 while the registry is loading/empty.
-========================================================= */
-.software-inventory-module .software-page-pagination.uam-pagination.global-style {
-  margin: 0 !important;
-  width: 100% !important;
-  padding: 0.85rem 1.05rem !important;
-  border: 0 !important;
-  border-top: 1px solid rgba(148, 163, 184, 0.14) !important;
-  border-radius: 0 !important;
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  gap: 0.75rem !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  min-height: auto !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-page-summary {
-  justify-self: start !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-pagination-controls.global-style {
-  grid-column: 3 !important;
-  justify-self: end !important;
-  width: fit-content !important;
-  max-width: fit-content !important;
-}
-
-@media (max-width: 760px) {
-  .software-inventory-module .software-page-pagination.uam-pagination.global-style {
-    grid-template-columns: 1fr !important;
-    justify-items: start !important;
-  }
-
-  .software-inventory-module .software-page-pagination .uam-pagination-controls.global-style,
-  .software-inventory-module .software-page-pagination .uam-page-summary {
-    grid-column: auto !important;
-    justify-self: start !important;
-  }
-}
-
-/* =========================================================
-   Software v7 - force Global Pagination UI parity
-   Mirrors styles/pagination.css because Software uses ema-layout.css here.
-========================================================= */
-.software-inventory-module .software-page-pagination.uam-pagination.global-style {
-  width: 100% !important;
-  min-height: 3.85rem !important;
-  margin: 0 !important;
-  padding: 0.62rem 0.95rem 0.78rem 0.12rem !important;
-  border: 0 !important;
-  border-top: 0 !important;
-  border-radius: 0 !important;
-  display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) auto !important;
-  align-items: center !important;
-  gap: 0.75rem !important;
-  color: var(--ema-control-muted, #64748b) !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  font-size: 0.72rem !important;
-  font-weight: 720 !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-page-summary {
-  min-height: 2.25rem !important;
-  justify-self: start !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0 0.95rem !important;
-  border: 1px solid var(--ema-control-border, #d9e5f2) !important;
-  border-radius: 999px !important;
-  color: var(--ema-control-text, #173154) !important;
-  background: var(--ema-control-surface, #fff) !important;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04) !important;
-  font-size: 0.72rem !important;
-  line-height: 1 !important;
-  font-weight: 850 !important;
-  letter-spacing: 0 !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-pagination-controls.global-style {
-  grid-column: 3 !important;
-  min-height: 2.25rem !important;
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: max-content !important;
-  justify-self: end !important;
-  flex: 0 0 auto !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 0.42rem !important;
-  padding: 0.22rem 0.45rem !important;
-  border: 1px solid var(--ema-control-border, #d9e5f2) !important;
-  border-radius: 999px !important;
-  color: var(--ema-control-text, #173154) !important;
-  background: var(--ema-control-surface, #fff) !important;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04) !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-page-icon {
-  width: 1.82rem !important;
-  min-width: 1.82rem !important;
-  height: 1.82rem !important;
-  min-height: 1.82rem !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 999px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: var(--ema-control-muted, #64748b) !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  font-size: 1rem !important;
-  line-height: 1 !important;
-  font-weight: 850 !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-page-icon:hover:not(:disabled) {
-  color: #2558e8 !important;
-  background: rgba(37, 99, 235, 0.09) !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-page-icon:disabled {
-  opacity: 0.38 !important;
-  cursor: not-allowed !important;
-}
-
-.software-inventory-module .software-page-pagination .uam-page-current {
-  width: 1.95rem !important;
-  min-width: 1.95rem !important;
-  height: 1.95rem !important;
-  min-height: 1.95rem !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 999px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: #fff !important;
-  background: linear-gradient(135deg, #2558e8, #087ea4) !important;
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.17) !important;
-  font-size: 0.76rem !important;
-  line-height: 1 !important;
-  font-weight: 900 !important;
-}
-
-@media (max-width: 760px) {
-  .software-inventory-module .software-page-pagination.uam-pagination.global-style {
-    grid-template-columns: 1fr !important;
-    justify-items: start !important;
-    padding-left: 0.75rem !important;
-  }
-
-  .software-inventory-module .software-page-pagination .uam-page-summary,
-  .software-inventory-module .software-page-pagination .uam-pagination-controls.global-style {
-    grid-column: auto !important;
-    justify-self: start !important;
-  }
-}
-
-/* =========================================================
-   Software v8 - clean loading state
-   Remove the oversized blue loading block and render a table
-   skeleton that follows the Hardware/Settings table UI.
-========================================================= */
-.software-inventory-module .software-loading-banner {
-  display: none !important;
-}
-
-.software-inventory-module .software-registry-card {
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
-}
-
-.software-inventory-module .software-table-status-row {
-  padding: 0.7rem 1.05rem 0.72rem !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 0.75rem !important;
-}
-
-.software-inventory-module .software-standard-table.is-loading {
-  overflow: hidden !important;
-  background: #ffffff !important;
-  border-color: rgba(190, 205, 228, 0.82) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.88) !important;
-}
-
-.software-inventory-module .software-registry-row {
-  grid-template-columns: 4.2rem minmax(17rem, 1.45fr) minmax(9.5rem, 0.74fr) minmax(14rem, 1.08fr) minmax(7rem, 0.62fr) minmax(9.4rem, 0.82fr) minmax(10rem, 0.8fr) !important;
-}
-
-.software-inventory-module .software-loading-table-state {
-  width: 100% !important;
-  min-width: 0 !important;
-  padding: 0.9rem 0.95rem 1rem !important;
-  display: grid !important;
-  gap: 0.62rem !important;
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,255,0.98)) !important;
-}
-
-.software-inventory-module .software-loading-copy {
-  min-height: 2.75rem !important;
-  padding: 0.52rem 0.7rem !important;
-  border: 1px solid rgba(190, 205, 228, 0.72) !important;
-  border-radius: 0.95rem !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-self: start !important;
-  gap: 0.62rem !important;
-  color: #2558e8 !important;
-  background: linear-gradient(180deg, #ffffff, #f7faff) !important;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045) !important;
-}
-
-.software-inventory-module .software-loading-copy strong {
-  display: block !important;
-  margin: 0 !important;
-  color: #0b2545 !important;
-  font-size: 0.78rem !important;
-  line-height: 1.05 !important;
-  font-weight: 900 !important;
-}
-
-.software-inventory-module .software-loading-copy span {
-  display: block !important;
-  margin-top: 0.16rem !important;
-  color: #64748b !important;
-  font-size: 0.66rem !important;
-  line-height: 1.1 !important;
-  font-weight: 720 !important;
-}
-
-.software-inventory-module .software-loading-skeleton-row {
-  min-height: 3.35rem !important;
-  display: grid !important;
-  grid-template-columns: 4.2rem minmax(17rem, 1.45fr) minmax(9.5rem, 0.74fr) minmax(14rem, 1.08fr) minmax(7rem, 0.62fr) minmax(9.4rem, 0.82fr) minmax(10rem, 0.8fr) !important;
-  align-items: center !important;
-  gap: 0.72rem !important;
-  padding: 0 0.72rem !important;
-  border: 1px solid rgba(226, 232, 240, 0.74) !important;
-  border-radius: 0.88rem !important;
-  background: #fff !important;
-}
-
-.software-inventory-module .software-dynamic-loading .software-loading-skeleton-row {
-  grid-template-columns: 4.2rem minmax(17rem, 1.35fr) minmax(11rem, 1fr) minmax(10rem, 0.85fr) minmax(10rem, 0.85fr) !important;
-}
-
-.software-inventory-module .software-skeleton-pill,
-.software-inventory-module .software-skeleton-line {
-  position: relative !important;
-  overflow: hidden !important;
-  display: block !important;
-  background: linear-gradient(90deg, rgba(226,232,240,0.72), rgba(241,245,249,0.95), rgba(226,232,240,0.72)) !important;
-  background-size: 220% 100% !important;
-  animation: softwareSkeletonSweep 1.15s ease-in-out infinite !important;
-}
-
-.software-inventory-module .software-skeleton-pill {
-  width: 2.35rem !important;
-  height: 1.92rem !important;
-  border-radius: 999px !important;
-}
-
-.software-inventory-module .software-skeleton-line {
-  width: 78% !important;
-  height: 0.78rem !important;
-  border-radius: 999px !important;
-}
-
-.software-inventory-module .software-skeleton-line.is-wide {
-  width: 92% !important;
-}
-
-.software-inventory-module .software-skeleton-line.is-mid {
-  width: 66% !important;
-}
-
-.software-inventory-module .software-skeleton-line.is-short {
-  width: 48% !important;
-}
-
-@keyframes softwareSkeletonSweep {
-  0% { background-position: 180% 0; }
-  100% { background-position: -180% 0; }
-}
-
-@media (max-width: 1100px) {
-  .software-inventory-module .software-loading-skeleton-row,
-  .software-inventory-module .software-dynamic-loading .software-loading-skeleton-row {
-    min-width: 980px !important;
-  }
-}
-
-/* ============================================================
-   SOFTWARE MODULE - ACTION BUTTON CSS FIX (v9)
-   Force all Software action buttons to use the same soft global
-   control styling as Hardware/Settings instead of browser/default
-   black bordered buttons.
-   ============================================================ */
-.software-inventory-module .software-registry-tools button,
-.software-inventory-module .software-filter-row > button,
-.software-inventory-module .software-stat-summary-row > button,
-.software-inventory-module .software-insights-modal-actions button,
-.software-inventory-module .software-insights-modal-close {
-  -webkit-appearance: none !important;
-  appearance: none !important;
-  min-height: 2.42rem !important;
-  height: 2.42rem !important;
-  border: 1px solid rgba(142, 160, 186, 0.34) !important;
-  border-radius: 0.9rem !important;
-  padding: 0 0.9rem !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 0.38rem !important;
-  color: var(--software-text, #173154) !important;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.90), rgba(242, 246, 251, 0.98)) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    0 8px 18px rgba(15, 23, 42, 0.035) !important;
-  font-size: 0.74rem !important;
-  line-height: 1 !important;
-  font-weight: 850 !important;
-  letter-spacing: -0.015em !important;
-  text-decoration: none !important;
-  white-space: nowrap !important;
-  cursor: pointer !important;
-  transition:
-    border-color 0.16s ease,
-    background 0.16s ease,
-    color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease !important;
-}
-
-.software-inventory-module .software-registry-tools button:hover:not(:disabled),
-.software-inventory-module .software-filter-row > button:hover:not(:disabled),
-.software-inventory-module .software-stat-summary-row > button:hover:not(:disabled),
-.software-inventory-module .software-insights-modal-actions button:hover:not(:disabled),
-.software-inventory-module .software-insights-modal-close:hover:not(:disabled) {
-  border-color: rgba(37, 99, 235, 0.38) !important;
-  color: var(--software-primary, #2558e8) !important;
-  background:
-    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.08), transparent 5.5rem),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(239, 246, 255, 0.98)) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 10px 22px rgba(37, 99, 235, 0.10) !important;
-}
-
-.software-inventory-module .software-registry-tools button svg,
-.software-inventory-module .software-filter-row > button svg,
-.software-inventory-module .software-stat-summary-row > button svg,
-.software-inventory-module .software-insights-modal-actions button svg,
-.software-inventory-module .software-insights-modal-close svg {
-  width: 0.96rem !important;
-  height: 0.96rem !important;
-  stroke-width: 2.35 !important;
-  flex: 0 0 auto !important;
-}
-
-.software-inventory-module .software-registry-tools .ema-icon-button,
-.software-inventory-module .software-insights-modal-close {
-  width: 2.42rem !important;
-  min-width: 2.42rem !important;
-  padding: 0 !important;
-  border-color: rgba(37, 99, 235, 0.30) !important;
-  color: var(--software-primary, #2558e8) !important;
-  background: rgba(239, 246, 255, 0.92) !important;
-}
-
-.software-inventory-module .software-insights-toggle,
-.software-inventory-module .software-statistics-toggle,
-.software-inventory-module .software-scan-btn {
-  min-width: max-content !important;
-}
-
-.software-inventory-module .software-insights-toggle span {
-  min-width: 2rem !important;
-  height: 1.32rem !important;
-  padding: 0 0.45rem !important;
-  border: 1px solid rgba(37, 99, 235, 0.14) !important;
-  border-radius: 999px !important;
-  display: inline-grid !important;
-  place-items: center !important;
-  color: var(--software-primary, #2558e8) !important;
-  background: rgba(37, 99, 235, 0.10) !important;
-  font-size: 0.66rem !important;
-  font-weight: 900 !important;
-  line-height: 1 !important;
-}
-
-.software-inventory-module .software-export-btn,
-.software-inventory-module .software-insights-modal-actions .ema-primary-btn {
-  border-color: rgba(37, 99, 235, 0.34) !important;
-  color: #fff !important;
-  background: linear-gradient(135deg, #2558e8 0%, #087ea4 100%) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.20),
-    0 12px 22px rgba(37, 99, 235, 0.16) !important;
-}
-
-.software-inventory-module .software-export-btn:hover:not(:disabled),
-.software-inventory-module .software-insights-modal-actions .ema-primary-btn:hover:not(:disabled) {
-  color: #fff !important;
-  border-color: rgba(37, 99, 235, 0.46) !important;
-  background: linear-gradient(135deg, #1d4ed8 0%, #0369a1 100%) !important;
-}
-
-.software-inventory-module .software-reset-btn,
-.software-inventory-module .software-insights-modal-actions .ema-ghost-btn {
-  color: var(--software-primary, #2558e8) !important;
-  border-color: rgba(37, 99, 235, 0.24) !important;
-  background: rgba(239, 246, 255, 0.72) !important;
-}
-
-.software-inventory-module .software-registry-tools button:disabled,
-.software-inventory-module .software-filter-row > button:disabled,
-.software-inventory-module .software-stat-summary-row > button:disabled,
-.software-inventory-module .software-insights-modal-actions button:disabled {
-  opacity: 1 !important;
-  color: rgba(100, 116, 139, 0.44) !important;
-  border-color: rgba(148, 163, 184, 0.22) !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(248, 250, 252, 0.84)) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
-  cursor: not-allowed !important;
-  transform: none !important;
-}
-
-.software-inventory-module .software-filter-row .software-reset-btn:disabled {
-  color: rgba(100, 116, 139, 0.36) !important;
-  border-color: rgba(148, 163, 184, 0.20) !important;
-  background: rgba(248, 250, 252, 0.68) !important;
-}
-
-.software-inventory-module .software-registry-tools .software-search-box button {
-  min-height: 1.8rem !important;
-  height: 1.8rem !important;
-  width: 1.8rem !important;
-  min-width: 1.8rem !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0.65rem !important;
-  color: var(--software-muted, #64748b) !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.software-inventory-module .software-registry-tools .software-search-box button:hover:not(:disabled) {
-  color: var(--software-primary, #2558e8) !important;
-  background: rgba(37, 99, 235, 0.08) !important;
-  box-shadow: none !important;
-}
-
-.software-inventory-module .software-stat-summary-row {
-  align-items: end !important;
-}
-
-.software-inventory-module .software-stat-summary-row > div {
-  min-height: 5.35rem !important;
-}
-
-/* ============================================================
-   SOFTWARE MODULE - TOOLBAR + LOADING FIX (v10)
-   Keep all Software action buttons on the top toolbar and prevent
-   stale table loading from hiding the registry list.
-   ============================================================ */
-.software-inventory-module .software-registry-head {
-  grid-template-columns: minmax(13rem, 17.5rem) minmax(0, 1fr) !important;
-  align-items: center !important;
-  min-height: 4.1rem !important;
-  padding: 0.9rem 1.05rem 0.72rem !important;
-}
-
-.software-inventory-module .software-registry-tools {
-  width: 100% !important;
-  min-width: 0 !important;
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  gap: 0.48rem !important;
-}
-
-.software-inventory-module .software-registry-tools .software-search-box {
-  flex: 1 1 17rem !important;
-  width: auto !important;
-  max-width: 21rem !important;
-  min-width: 13.5rem !important;
-  height: 2.42rem !important;
-  margin: 0 !important;
-}
-
-.software-inventory-module .software-registry-tools .software-header-reset-btn,
-.software-inventory-module .software-registry-tools .software-header-export-btn {
-  align-self: center !important;
-  margin: 0 !important;
-}
-
-.software-inventory-module .software-statistics-toggle {
-  display: none !important;
-}
-
-.software-inventory-module .software-filter-row {
-  grid-template-columns: minmax(10rem, 13rem) minmax(10rem, 13rem) minmax(10rem, 13rem) !important;
-  justify-content: start !important;
-  align-items: end !important;
-}
-
-.software-inventory-module .software-stat-summary-row {
-  grid-template-columns: repeat(3, minmax(10rem, 1fr)) !important;
-  align-items: stretch !important;
-  padding-bottom: 0.85rem !important;
-}
-
-.software-inventory-module .software-stat-summary-row > button {
-  display: none !important;
-}
-
-@media (max-width: 1320px) {
-  .software-inventory-module .software-registry-head {
-    grid-template-columns: 1fr !important;
-    align-items: stretch !important;
-  }
-
-  .software-inventory-module .software-registry-tools {
-    justify-content: flex-start !important;
-    flex-wrap: wrap !important;
-  }
-
-  .software-inventory-module .software-registry-tools .software-search-box {
-    flex: 1 1 18rem !important;
-    max-width: 100% !important;
-  }
-}
-
-/* ============================================================
-   SOFTWARE MODULE - LOADING SCREEN FIX (v11)
-   The loading container must not inherit table row grid columns.
-   Keep it as a full-width body area with clean skeleton rows.
-   ============================================================ */
-.software-inventory-module .software-standard-table.is-loading {
-  min-height: 22rem !important;
-  overflow: hidden !important;
-  background: #ffffff !important;
-  border: 1px solid rgba(190, 205, 228, 0.72) !important;
-}
-
-.software-inventory-module .software-loading-table-state,
-.software-inventory-module .software-loading-table-state.software-registry-loading-state,
-.software-inventory-module .software-loading-table-state.software-dynamic-loading-state {
-  width: 100% !important;
-  min-width: 0 !important;
-  grid-column: 1 / -1 !important;
-  grid-template-columns: 1fr !important;
-  display: block !important;
-  padding: 0 !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: #ffffff !important;
-  box-shadow: none !important;
-}
-
-.software-inventory-module .software-loading-copy {
-  width: max-content !important;
-  max-width: calc(100% - 1.8rem) !important;
-  min-height: 2.45rem !important;
-  margin: 0.82rem 0.9rem 0.42rem !important;
-  padding: 0.5rem 0.72rem !important;
-  border: 1px solid rgba(190, 205, 228, 0.68) !important;
-  border-radius: 999px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 0.58rem !important;
-  color: #2563eb !important;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.045) !important;
-}
-
-.software-inventory-module .software-loading-copy div {
-  min-width: 0 !important;
-}
-
-.software-inventory-module .software-loading-copy strong {
-  display: block !important;
-  max-width: 28rem !important;
-  overflow: hidden !important;
-  color: #0f2746 !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  font-size: 0.78rem !important;
-  line-height: 1.08 !important;
-  font-weight: 900 !important;
-}
-
-.software-inventory-module .software-loading-copy span {
-  display: block !important;
-  max-width: 28rem !important;
-  margin-top: 0.12rem !important;
-  overflow: hidden !important;
-  color: #64748b !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  font-size: 0.65rem !important;
-  line-height: 1.08 !important;
-  font-weight: 720 !important;
-}
-
-.software-inventory-module .software-loading-skeleton-row,
-.software-inventory-module .software-dynamic-loading-state .software-loading-skeleton-row,
-.software-inventory-module .software-dynamic-loading .software-loading-skeleton-row {
-  width: calc(100% - 1.8rem) !important;
-  min-width: 0 !important;
-  min-height: 3.35rem !important;
-  margin: 0 0.9rem !important;
-  display: grid !important;
-  grid-template-columns: 4.2rem minmax(15rem, 1.65fr) minmax(8.4rem, 0.8fr) minmax(12.5rem, 1.05fr) minmax(6.8rem, 0.62fr) minmax(9rem, 0.78fr) minmax(9.5rem, 0.78fr) !important;
-  align-items: center !important;
-  gap: 0.72rem !important;
-  padding: 0 0.72rem !important;
-  border: 0 !important;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.82) !important;
-  border-radius: 0 !important;
-  background: #ffffff !important;
-  box-shadow: none !important;
-}
-
-.software-inventory-module .software-loading-skeleton-row:first-of-type {
-  border-top: 1px solid rgba(226, 232, 240, 0.82) !important;
-}
-
-.software-inventory-module .software-skeleton-pill {
-  width: 2.55rem !important;
-  height: 1.86rem !important;
-  border-radius: 999px !important;
-}
-
-.software-inventory-module .software-skeleton-line {
-  height: 0.72rem !important;
-  border-radius: 999px !important;
-}
-
-.software-inventory-module .software-table-status-row strong {
-  white-space: nowrap !important;
-}
-
-@media (max-width: 1180px) {
-  .software-inventory-module .software-standard-table.is-loading {
-    overflow-x: auto !important;
-  }
-
-  .software-inventory-module .software-loading-table-state,
-  .software-inventory-module .software-loading-table-state.software-registry-loading-state,
-  .software-inventory-module .software-loading-table-state.software-dynamic-loading-state {
-    min-width: 980px !important;
-  }
-}
-
-/* ============================================================
-   SOFTWARE MODULE - CENTERED LOADING STATE (v12)
-   Put the loading badge in the middle of the table body instead
-   of floating at the top-left of the skeleton rows.
-   ============================================================ */
-.software-inventory-module .software-standard-table.is-loading {
-  position: relative !important;
-  min-height: 25rem !important;
-}
-
-.software-inventory-module .software-loading-table-state,
-.software-inventory-module .software-loading-table-state.software-registry-loading-state,
-.software-inventory-module .software-loading-table-state.software-dynamic-loading-state {
-  position: relative !important;
-  min-height: 21.5rem !important;
-  padding: 0.9rem 0 !important;
-}
-
-.software-inventory-module .software-loading-copy {
-  position: absolute !important;
-  top: 50% !important;
-  left: 50% !important;
-  z-index: 4 !important;
-  width: fit-content !important;
-  max-width: min(92%, 28rem) !important;
-  margin: 0 !important;
-  padding: 0.78rem 1.05rem !important;
-  transform: translate(-50%, -50%) !important;
-  justify-content: center !important;
-  border-color: rgba(117, 159, 247, 0.38) !important;
-  background: rgba(255, 255, 255, 0.96) !important;
-  backdrop-filter: blur(12px) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12) !important;
-}
-
-.software-inventory-module .software-loading-copy div {
-  text-align: left !important;
-}
-
-.software-inventory-module .software-loading-skeleton-row,
-.software-inventory-module .software-dynamic-loading-state .software-loading-skeleton-row,
-.software-inventory-module .software-dynamic-loading .software-loading-skeleton-row {
-  opacity: 0.72 !important;
-}
-
-.software-inventory-module .software-standard-table.is-loading .head {
-  position: relative !important;
-  z-index: 1 !important;
-}
-
-@media (max-width: 760px) {
-  .software-inventory-module .software-loading-copy {
-    width: calc(100% - 2rem) !important;
-    max-width: calc(100% - 2rem) !important;
-  }
-}
-
-/* =========================================================
    Application Metering - Settings-based rebuild
    Keep app metering additions here instead of local component CSS.
 ========================================================= */
@@ -18895,25 +18168,25 @@ html[data-theme="dark"] .appmetering-module .appm-toast,
   }
 }
 
+
 /* =========================================================
-   Application Metering - Redone Critical Overrides
-   This block is appended inside ema-layout.css so AppMetering
-   works even when no separate component CSS is imported.
+   Application Metering - Final path/layout fix
+   Path: src/pages/appmetering/AppMetering.tsx
+   This block must stay at the end of ema-layout.css.
 ========================================================= */
 
 .settings-module-root.appmetering-module {
-  width: 100% !important;
-  height: 100% !important;
+  padding: 0.75rem 0.95rem !important;
+  height: calc(100vh - var(--topbar-height, 72px)) !important;
   min-height: 0 !important;
   overflow: hidden !important;
 }
 
 .settings-module-root.appmetering-module .appm-settings-layout {
+  grid-template-columns: 250px minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
   height: 100% !important;
   min-height: 0 !important;
-  display: grid !important;
-  grid-template-columns: 280px minmax(0, 1fr) !important;
-  gap: 14px !important;
   overflow: hidden !important;
 }
 
@@ -18921,592 +18194,1091 @@ html[data-theme="dark"] .appmetering-module .appm-toast,
   height: 100% !important;
   min-height: 0 !important;
   overflow: hidden !important;
-  display: grid !important;
-  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
-  gap: 0.68rem !important;
-  padding: 0.9rem !important;
-}
-
-.settings-module-root.appmetering-module .appm-settings-content {
-  height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  display: grid !important;
-  grid-template-rows: auto minmax(0, 1fr) !important;
-  gap: 14px !important;
-}
-
-.settings-module-root.appmetering-module .appm-tree-scroll {
-  height: auto !important;
-  min-height: 0 !important;
-  overflow: auto !important;
-  overscroll-behavior: contain !important;
-}
-
-/* Hero must not inherit the Service Desk 2x2 KPI restriction. */
-.settings-module-root.appmetering-module .settings-hero.appm-hero {
-  min-height: 7.2rem !important;
-  max-height: 7.9rem !important;
-  padding: 0.95rem 1.05rem !important;
-  display: grid !important;
-  grid-template-columns: minmax(18rem, 0.72fr) minmax(40rem, 1fr) !important;
-  align-items: center !important;
-  overflow: hidden !important;
-}
-
-.settings-module-root.appmetering-module .settings-hero.appm-hero > div:first-child {
-  min-width: 0 !important;
-  align-self: center !important;
-}
-
-.settings-module-root.appmetering-module .settings-hero.appm-hero h2 {
-  margin: 0.28rem 0 0.25rem !important;
-  color: var(--ema-control-text-strong, #0f2746) !important;
-  font-size: 1.32rem !important;
-  line-height: 1.08 !important;
-  font-weight: 920 !important;
-  letter-spacing: -0.045em !important;
-}
-
-.settings-module-root.appmetering-module .settings-hero.appm-hero p {
-  margin: 0 !important;
-  max-width: 38rem !important;
-  color: var(--ema-control-muted, #64748b) !important;
-  font-size: 0.78rem !important;
-  line-height: 1.45 !important;
-  font-weight: 720 !important;
-}
-
-.settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score {
-  width: 100% !important;
-  max-width: none !important;
-  min-width: 0 !important;
-  height: auto !important;
-  display: grid !important;
-  grid-template-columns: repeat(5, minmax(7.7rem, 1fr)) !important;
-  grid-auto-rows: 4.2rem !important;
+  padding: 0.72rem !important;
   gap: 0.52rem !important;
-  justify-self: stretch !important;
-  align-self: center !important;
-  overflow: visible !important;
-  padding: 0 !important;
+  border-radius: 1.05rem !important;
 }
 
-.settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score > .score-box:nth-child(n + 5) {
-  display: grid !important;
+.settings-module-root.appmetering-module .appm-settings-menu .panel-head {
+  padding-bottom: 0.65rem !important;
 }
 
-.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box.appm-score-box {
-  min-width: 0 !important;
-  width: 100% !important;
-  min-height: 4.2rem !important;
-  height: 4.2rem !important;
-  max-height: 4.2rem !important;
-  padding: 0.55rem 0.65rem !important;
-  border-radius: 0.9rem !important;
-  display: grid !important;
-  grid-template-rows: auto 1fr auto !important;
-  align-content: center !important;
-  text-align: center !important;
-  overflow: hidden !important;
+.settings-module-root.appmetering-module .appm-settings-menu .panel-head strong {
+  font-size: 0.98rem !important;
+  line-height: 1.1 !important;
 }
 
-.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box span {
-  font-size: 0.5rem !important;
-  letter-spacing: 0.08em !important;
+.settings-module-root.appmetering-module .appm-settings-menu .panel-head small {
+  font-size: 0.72rem !important;
+  line-height: 1.32 !important;
+}
+
+.settings-module-root.appmetering-module .appm-mode-btn {
+  min-height: 3.3rem !important;
+  padding: 0.48rem 0.58rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-mode-btn .setting-icon {
+  width: 2.05rem !important;
+  height: 2.05rem !important;
+  min-width: 2.05rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-mode-btn strong {
+  font-size: 0.78rem !important;
   line-height: 1.05 !important;
 }
 
+.settings-module-root.appmetering-module .appm-mode-btn small {
+  font-size: 0.63rem !important;
+  line-height: 1.1 !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search input {
+  height: 2.2rem !important;
+  min-height: 2.2rem !important;
+  border-radius: 0.8rem !important;
+  font-size: 0.72rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-scroll {
+  min-height: 0 !important;
+  overflow: auto !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-content {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 0.68rem !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero {
+  min-height: 4.45rem !important;
+  max-height: 4.45rem !important;
+  padding: 0.52rem 0.72rem !important;
+  grid-template-columns: minmax(16rem, 0.72fr) minmax(31rem, 1fr) !important;
+  gap: 0.62rem !important;
+  border-radius: 1rem !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .eyebrow,
+.settings-module-root.appmetering-module .settings-hero.appm-hero .section-tag {
+  font-size: 0.56rem !important;
+  line-height: 1 !important;
+  letter-spacing: 0.11em !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero h2 {
+  margin: 0.16rem 0 0.1rem !important;
+  font-size: 1.03rem !important;
+  line-height: 1.05 !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero p {
+  max-width: none !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 0.67rem !important;
+  line-height: 1.18 !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score {
+  grid-template-columns: repeat(5, minmax(5.7rem, 1fr)) !important;
+  grid-auto-rows: 3.05rem !important;
+  gap: 0.4rem !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box.appm-score-box {
+  height: 3.05rem !important;
+  min-height: 3.05rem !important;
+  max-height: 3.05rem !important;
+  border-radius: 0.78rem !important;
+  padding: 0.34rem 0.4rem !important;
+  grid-template-rows: auto auto !important;
+  align-content: center !important;
+  gap: 0.1rem !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box span {
+  font-size: 0.45rem !important;
+  line-height: 1 !important;
+  letter-spacing: 0.075em !important;
+}
+
 .settings-module-root.appmetering-module .settings-hero.appm-hero .score-box strong {
-  font-size: 1.25rem !important;
+  font-size: 1rem !important;
   line-height: 1 !important;
 }
 
 .settings-module-root.appmetering-module .settings-hero.appm-hero .score-box small {
-  font-size: 0.55rem !important;
-  line-height: 1.1 !important;
+  display: none !important;
 }
 
-/* Content shell is a locked flex column: header, toolbar, filter, table area. */
+/* Important fix: appm-content-shell has 5 children (head, toolbar, filter, error optional, body).
+   The old 3-row grid pushed the table to the bottom. Flex keeps the table directly below the filters. */
 .settings-module-root.appmetering-module .appm-content-shell {
+  display: flex !important;
+  flex-direction: column !important;
   height: 100% !important;
   min-height: 0 !important;
   overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-.settings-module-root.appmetering-module .appm-content-head,
-.settings-module-root.appmetering-module .appm-content-toolbar,
-.settings-module-root.appmetering-module .appm-filter-panel,
-.settings-module-root.appmetering-module .appm-api-error {
-  flex: 0 0 auto !important;
+  border-radius: 1.05rem !important;
 }
 
 .settings-module-root.appmetering-module .appm-content-head {
-  min-height: 4.85rem !important;
-  padding: 0.9rem 1rem !important;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.62) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 0.8rem !important;
+  flex: 0 0 auto !important;
+  min-height: 2.9rem !important;
+  padding: 0.46rem 0.68rem !important;
+  gap: 0.5rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-head .section-tag {
+  font-size: 0.56rem !important;
+  line-height: 1 !important;
 }
 
 .settings-module-root.appmetering-module .appm-content-head h3 {
-  margin: 0.18rem 0 0.12rem !important;
-  color: var(--ema-control-text-strong, #0f2746) !important;
-  font-size: 1.05rem !important;
-  line-height: 1.15 !important;
-  font-weight: 920 !important;
-  letter-spacing: -0.035em !important;
+  margin: 0.08rem 0 0.04rem !important;
+  font-size: 0.92rem !important;
+  line-height: 1.05 !important;
 }
 
 .settings-module-root.appmetering-module .appm-content-head p {
-  margin: 0 !important;
-  color: var(--ema-control-muted, #64748b) !important;
-  font-size: 0.76rem !important;
-  line-height: 1.3 !important;
-  font-weight: 720 !important;
-}
-
-.settings-module-root.appmetering-module .appm-head-actions,
-.settings-module-root.appmetering-module .appm-toolbar-actions {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  gap: 0.48rem !important;
-  flex-wrap: wrap !important;
+  font-size: 0.66rem !important;
+  line-height: 1.08 !important;
 }
 
 .settings-module-root.appmetering-module .appm-content-toolbar {
-  padding: 0.72rem 0.95rem !important;
-  display: grid !important;
+  flex: 0 0 auto !important;
+  padding: 0.42rem 0.68rem !important;
+  gap: 0.48rem !important;
   grid-template-columns: minmax(18rem, 1fr) auto !important;
-  gap: 0.72rem !important;
-  align-items: center !important;
-  overflow: visible !important;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.58) !important;
-  background: rgba(248, 251, 255, 0.62) !important;
 }
 
-.settings-module-root.appmetering-module .appm-filter-panel {
-  padding: 0.72rem 0.95rem 0.82rem !important;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.58) !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 251, 255, 0.66)) !important;
-  overflow: visible !important;
-}
-
-.settings-module-root.appmetering-module .appm-filter-strip {
-  width: 100% !important;
-  min-width: 0 !important;
-  display: grid !important;
-  grid-template-columns: repeat(7, minmax(8.2rem, 1fr)) !important;
-  gap: 0.56rem !important;
-  align-items: end !important;
-}
-
-.settings-module-root.appmetering-module .appm-filter-control-wide {
-  grid-column: span 2 !important;
-}
-
-.settings-module-root.appmetering-module .appm-sidebar-search,
-.settings-module-root.appmetering-module .appm-registry-search {
-  position: relative !important;
-  width: 100% !important;
-  min-width: 0 !important;
-}
-
-.settings-module-root.appmetering-module .appm-filter-control {
-  min-width: 0 !important;
-  display: grid !important;
-  gap: 0.26rem !important;
-}
-
-.settings-module-root.appmetering-module .appm-filter-control span,
-.settings-module-root.appmetering-module .appm-form-group label {
-  color: var(--ema-control-muted, #64748b) !important;
-  font-size: 0.62rem !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.065em !important;
-  text-transform: uppercase !important;
-  white-space: nowrap !important;
-}
-
-.settings-module-root.appmetering-module .appm-sidebar-search input,
 .settings-module-root.appmetering-module .appm-registry-search input,
 .settings-module-root.appmetering-module .appm-filter-control input,
 .settings-module-root.appmetering-module .appm-filter-control select,
 .settings-module-root.appmetering-module .appm-form-group input,
 .settings-module-root.appmetering-module .appm-form-group select {
-  width: 100% !important;
-  min-width: 0 !important;
-  height: 2.42rem !important;
-  min-height: 2.42rem !important;
-  border: 1px solid rgba(190, 205, 228, 0.96) !important;
-  border-radius: 0.86rem !important;
-  background-color: #fff !important;
-  color: var(--ema-control-text, #173154) !important;
-  font-size: 0.74rem !important;
-  font-weight: 800 !important;
-  line-height: 1 !important;
-  outline: 0 !important;
-}
-
-.settings-module-root.appmetering-module .appm-sidebar-search input,
-.settings-module-root.appmetering-module .appm-registry-search input {
-  padding: 0 2.35rem 0 2.7rem !important;
-}
-
-.settings-module-root.appmetering-module .appm-filter-control input,
-.settings-module-root.appmetering-module .appm-filter-control select,
-.settings-module-root.appmetering-module .appm-form-group input,
-.settings-module-root.appmetering-module .appm-form-group select {
-  padding: 0 0.72rem !important;
-}
-
-.settings-module-root.appmetering-module .appm-filter-control select,
-.settings-module-root.appmetering-module .appm-form-group select {
-  appearance: none !important;
-  padding-right: 2.05rem !important;
-  background-image: linear-gradient(180deg, #ffffff, #f8fbff), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
-  background-repeat: no-repeat, no-repeat !important;
-  background-position: 0 0, right 0.68rem center !important;
-  background-size: 100% 100%, 1rem 1rem !important;
-}
-
-.settings-module-root.appmetering-module .appm-sidebar-search svg,
-.settings-module-root.appmetering-module .appm-registry-search > svg {
-  position: absolute !important;
-  left: 0.9rem !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  z-index: 2 !important;
-  color: var(--ema-control-muted, #64748b) !important;
-  pointer-events: none !important;
-}
-
-.settings-module-root.appmetering-module .appm-search-clear {
-  position: absolute !important;
-  right: 0.45rem !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  width: 1.8rem !important;
-  height: 1.8rem !important;
-  border: 0 !important;
-  border-radius: 0.64rem !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: var(--ema-control-muted, #64748b) !important;
-  background: rgba(226, 232, 240, 0.7) !important;
+  height: 2rem !important;
+  min-height: 2rem !important;
+  border-radius: 0.7rem !important;
+  font-size: 0.7rem !important;
 }
 
 .settings-module-root.appmetering-module .soft-btn,
 .settings-module-root.appmetering-module .primary-btn,
-.settings-module-root.appmetering-module .danger-btn {
-  min-height: 2.42rem !important;
-  border-radius: 0.86rem !important;
-  border: 1px solid rgba(190, 205, 228, 0.86) !important;
-  padding: 0 0.86rem !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 0.42rem !important;
-  font-size: 0.74rem !important;
-  font-weight: 850 !important;
-  line-height: 1 !important;
-  white-space: nowrap !important;
-  cursor: pointer !important;
-}
-
-.settings-module-root.appmetering-module .soft-btn {
-  color: var(--ema-control-text, #173154) !important;
-  background: linear-gradient(180deg, #ffffff, #f7faff) !important;
-}
-
-.settings-module-root.appmetering-module .primary-btn {
-  color: #ffffff !important;
-  border-color: rgba(37, 99, 235, 0.78) !important;
-  background: linear-gradient(135deg, #2563eb, #087ea4) !important;
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18) !important;
-}
-
 .settings-module-root.appmetering-module .danger-btn,
-.settings-module-root.appmetering-module .appm-danger-action {
-  color: #ffffff !important;
-  border-color: rgba(220, 38, 38, 0.74) !important;
-  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
-  box-shadow: 0 10px 24px rgba(220, 38, 38, 0.18) !important;
+.settings-module-root.appmetering-module .appm-scope-action-btn,
+.settings-module-root.appmetering-module .appm-collect-result-btn,
+.settings-module-root.appmetering-module .appm-clear-filters-btn {
+  min-height: 2rem !important;
+  height: 2rem !important;
+  border-radius: 0.7rem !important;
+  padding: 0 0.66rem !important;
+  font-size: 0.69rem !important;
 }
 
 .settings-module-root.appmetering-module .icon-only {
-  width: 2.42rem !important;
-  min-width: 2.42rem !important;
-  padding: 0 !important;
+  width: 2rem !important;
+  min-width: 2rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-panel {
+  flex: 0 0 auto !important;
+  padding: 0.36rem 0.68rem 0.4rem !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-strip {
+  width: 100% !important;
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 0.42rem !important;
+  align-items: end !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  padding-bottom: 0.05rem !important;
+  scrollbar-gutter: stable !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control {
+  flex: 0 0 8.45rem !important;
+  min-width: 8.45rem !important;
+  gap: 0.1rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control-wide {
+  flex-basis: 14.8rem !important;
+  min-width: 14.8rem !important;
+  grid-column: auto !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control span,
+.settings-module-root.appmetering-module .appm-form-group label {
+  font-size: 0.5rem !important;
+  line-height: 1 !important;
+  letter-spacing: 0.06em !important;
+}
+
+.settings-module-root.appmetering-module .appm-api-error {
+  flex: 0 0 auto !important;
+  margin: 0.45rem 0.68rem 0 !important;
 }
 
 .settings-module-root.appmetering-module .appm-content-body {
   flex: 1 1 auto !important;
   min-height: 0 !important;
   overflow: hidden !important;
-  padding: 0.95rem !important;
-  display: grid !important;
-  grid-template-rows: minmax(0, 1fr) auto !important;
-  gap: 0.78rem !important;
+  padding: 0.52rem 0.68rem 0.6rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.5rem !important;
 }
 
 .settings-module-root.appmetering-module .appm-table-frame {
+  flex: 1 1 auto !important;
   min-height: 0 !important;
-  width: 100% !important;
   overflow: auto !important;
-  border: 1px solid rgba(203, 213, 225, 0.72) !important;
-  border-radius: 1.05rem !important;
-  background: rgba(255, 255, 255, 0.96) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82) !important;
+  border-radius: 0.9rem !important;
 }
 
 .settings-module-root.appmetering-module .appm-table {
-  width: 100% !important;
-  min-width: 980px !important;
-  border-collapse: separate !important;
-  border-spacing: 0 !important;
-  color: var(--ema-control-text, #173154) !important;
+  min-width: 1040px !important;
 }
 
 .settings-module-root.appmetering-module .appm-table thead th {
-  position: sticky !important;
-  top: 0 !important;
-  z-index: 3 !important;
-  padding: 0.72rem 0.86rem !important;
-  border-bottom: 1px solid rgba(203, 213, 225, 0.82) !important;
-  background: linear-gradient(180deg, #f8fbff, #eef4fb) !important;
-  color: #475569 !important;
-  font-size: 0.66rem !important;
-  line-height: 1.15 !important;
-  font-weight: 950 !important;
-  letter-spacing: 0.055em !important;
-  text-transform: uppercase !important;
-  white-space: nowrap !important;
+  padding: 0.48rem 0.66rem !important;
+  font-size: 0.61rem !important;
 }
 
 .settings-module-root.appmetering-module .appm-table tbody td {
-  padding: 0.7rem 0.86rem !important;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.72) !important;
-  background: #fff !important;
-  vertical-align: middle !important;
-  font-size: 0.77rem !important;
-  line-height: 1.3 !important;
-  font-weight: 760 !important;
-  white-space: nowrap !important;
-}
-
-.settings-module-root.appmetering-module .appm-table tbody tr:hover td,
-.settings-module-root.appmetering-module .appm-table tbody tr.is-selected td {
-  background: rgba(37, 99, 235, 0.055) !important;
+  padding: 0.5rem 0.66rem !important;
+  font-size: 0.73rem !important;
 }
 
 .settings-module-root.appmetering-module .appm-table td small,
 .settings-module-root.appmetering-module .appm-app-cell small,
 .settings-module-root.appmetering-module .appm-user-cell small {
-  display: block !important;
-  margin-top: 0.18rem !important;
-  color: var(--ema-control-muted, #64748b) !important;
+  margin-top: 0.12rem !important;
+  font-size: 0.62rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-empty-state,
+.settings-module-root.appmetering-module .appm-loading-state,
+.settings-module-root.appmetering-module .appm-api-error {
+  padding: 0.62rem 0.72rem !important;
+  border-radius: 0.82rem !important;
+  font-size: 0.72rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination {
+  flex: 0 0 auto !important;
+  min-height: 2.34rem !important;
+  border-radius: 0.86rem !important;
+  padding: 0.33rem 0.52rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-info {
+  font-size: 0.67rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions button,
+.settings-module-root.appmetering-module .appm-pagination-actions b {
+  width: 1.8rem !important;
+  height: 1.8rem !important;
+  border-radius: 0.6rem !important;
+  font-size: 0.7rem !important;
+}
+
+@media (max-width: 1440px) {
+  .settings-module-root.appmetering-module {
+    padding: 0.65rem 0.8rem !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-settings-layout {
+    grid-template-columns: 240px minmax(0, 1fr) !important;
+    gap: 0.62rem !important;
+  }
+
+  .settings-module-root.appmetering-module .settings-hero.appm-hero {
+    min-height: 4.25rem !important;
+    max-height: 4.25rem !important;
+    grid-template-columns: minmax(14.8rem, 0.7fr) minmax(28rem, 1fr) !important;
+  }
+
+  .settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score {
+    grid-template-columns: repeat(5, minmax(5.25rem, 1fr)) !important;
+    grid-auto-rows: 2.95rem !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-filter-control {
+    flex-basis: 8rem !important;
+    min-width: 8rem !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-filter-control-wide {
+    flex-basis: 13rem !important;
+    min-width: 13rem !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-module-root.appmetering-module {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-settings-layout {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-settings-menu,
+  .settings-module-root.appmetering-module .appm-settings-content,
+  .settings-module-root.appmetering-module .appm-content-shell,
+  .settings-module-root.appmetering-module .appm-content-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+
+/* =========================================================
+   Application Metering - Sidebar + Pagination parity fix
+   Path: src/pages/appmetering/AppMetering.tsx
+   Keep this block at the very end of ema-layout.css.
+========================================================= */
+
+.settings-module-root.appmetering-module .appm-settings-layout {
+  grid-template-columns: 286px minmax(0, 1fr) !important;
+  gap: 0.86rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-menu {
+  padding: 1rem !important;
+  gap: 0.78rem !important;
+  border-radius: 1.15rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-menu .panel-head {
+  margin: 0 !important;
+  padding: 0.95rem 0.95rem 0.9rem !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.74) !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-menu .panel-head span {
+  font-size: 0.64rem !important;
+  line-height: 1 !important;
+  letter-spacing: 0.13em !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-menu .panel-head strong {
+  margin-top: 0.44rem !important;
+  font-size: 1.02rem !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-menu .panel-head small {
+  margin-top: 0.32rem !important;
+  font-size: 0.74rem !important;
+  line-height: 1.28 !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-mode-row {
+  gap: 0.64rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-mode-btn {
+  min-height: 3.9rem !important;
+  padding: 0.58rem 0.66rem !important;
+  border-radius: 0.95rem !important;
+  grid-template-columns: 2.45rem minmax(0, 1fr) !important;
+}
+
+.settings-module-root.appmetering-module .appm-mode-btn .setting-icon {
+  width: 2.35rem !important;
+  height: 2.35rem !important;
+  min-width: 2.35rem !important;
+  border-radius: 0.82rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-mode-btn strong {
+  font-size: 0.82rem !important;
+  line-height: 1.08 !important;
+}
+
+.settings-module-root.appmetering-module .appm-mode-btn small {
   font-size: 0.66rem !important;
-  line-height: 1.18 !important;
-  font-weight: 720 !important;
+  line-height: 1.16 !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search {
+  flex: 0 0 auto !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search input {
+  height: 2.45rem !important;
+  min-height: 2.45rem !important;
+  border-radius: 0.88rem !important;
+  padding-left: 2.6rem !important;
+  padding-right: 0.78rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 760 !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: hidden auto !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-scroll .appm-loading-state,
+.settings-module-root.appmetering-module .appm-tree-scroll .appm-empty-state {
+  width: 100% !important;
+  min-height: 2.7rem !important;
+  justify-content: flex-start !important;
+  border-radius: 0.9rem !important;
+  padding: 0.72rem 0.82rem !important;
+  font-size: 0.74rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-shell {
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-body {
+  padding-bottom: 0 !important;
+  gap: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-table-frame {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination.uam-pagination.global-style {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  min-height: 4.05rem !important;
+  margin: 0 !important;
+  padding: 0.72rem 1.05rem !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(203, 213, 225, 0.66) !important;
+  border-radius: 0 !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-info.uam-page-summary {
+  justify-self: start !important;
+  min-height: 2.25rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 0 0.92rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.96) !important;
+  border-radius: 999px !important;
+  color: #0f2746 !important;
+  background: #fff !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04) !important;
+  font-size: 0.72rem !important;
+  font-weight: 850 !important;
+  letter-spacing: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-info.uam-page-summary strong {
+  margin: 0 !important;
+  color: #0f2746 !important;
+  font-size: 0.72rem !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions.uam-pagination-controls.global-style {
+  grid-column: 3 !important;
+  width: fit-content !important;
+  max-width: fit-content !important;
+  justify-self: end !important;
+  min-height: 2.25rem !important;
+  padding: 0.22rem 0.45rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.96) !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.42rem !important;
+  background: #fff !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04) !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions .uam-page-icon {
+  width: 1.82rem !important;
+  height: 1.82rem !important;
+  min-width: 1.82rem !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #64748b !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 1rem !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions .uam-page-icon:hover:not(:disabled) {
+  color: #2558e8 !important;
+  background: rgba(37, 99, 235, 0.09) !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions .uam-page-icon:disabled {
+  opacity: 0.38 !important;
+  cursor: not-allowed !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions .uam-page-current {
+  width: 1.95rem !important;
+  height: 1.95rem !important;
+  min-width: 1.95rem !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #2558e8, #087ea4) !important;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22) !important;
+  font-size: 0.76rem !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+}
+
+@media (max-width: 1440px) {
+  .settings-module-root.appmetering-module .appm-settings-layout {
+    grid-template-columns: 278px minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-module-root.appmetering-module .appm-pagination.uam-pagination.global-style {
+    grid-template-columns: 1fr !important;
+    justify-items: stretch !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-pagination-info.uam-page-summary,
+  .settings-module-root.appmetering-module .appm-pagination-actions.uam-pagination-controls.global-style {
+    grid-column: auto !important;
+    justify-self: stretch !important;
+    justify-content: center !important;
+  }
+}
+
+/* =========================================================
+   Application Metering - table parity with EMA layout
+   Uses the same grid-table language as Hardware/Settings.
+========================================================= */
+.settings-module-root.appmetering-module .appm-content-shell {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-body {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0.95rem 1.05rem 0 !important;
+  display: block !important;
+}
+
+.settings-module-root.appmetering-module .appm-table-frame.appm-standard-table {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  display: block !important;
+  overflow: auto !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  border-radius: 1.05rem !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  scrollbar-gutter: stable !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row {
+  min-width: 980px !important;
+  width: 100% !important;
+  display: grid !important;
+  align-items: center !important;
+  gap: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16) !important;
+  background: #ffffff !important;
+  color: var(--ema-control-text, #173154) !important;
+}
+
+.settings-module-root.appmetering-module .appm-device-table .appm-standard-row {
+  grid-template-columns:
+    4.25rem
+    minmax(15.5rem, 1.55fr)
+    minmax(13rem, 1.08fr)
+    minmax(7rem, 0.62fr)
+    minmax(11rem, 0.9fr)
+    minmax(13rem, 1fr)
+    minmax(10rem, 0.86fr)
+    minmax(9rem, 0.72fr) !important;
+}
+
+.settings-module-root.appmetering-module .appm-usage-table .appm-standard-row {
+  min-width: 1120px !important;
+  grid-template-columns:
+    minmax(18rem, 1.5fr)
+    minmax(13rem, 1fr)
+    minmax(14rem, 1fr)
+    minmax(6rem, 0.48fr)
+    minmax(6rem, 0.48fr)
+    minmax(10rem, 0.78fr)
+    minmax(8rem, 0.62fr)
+    minmax(6.5rem, 0.52fr)
+    minmax(6.5rem, 0.52fr) !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row.head {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5 !important;
+  min-height: 2.85rem !important;
+  background: rgba(241, 245, 251, 0.82) !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row.head .user-cell {
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.64rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row:not(.head) {
+  min-height: 4.05rem !important;
+  cursor: pointer !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row:not(.head):hover,
+.settings-module-root.appmetering-module .appm-standard-row.is-selected {
+  background: rgba(239, 246, 255, 0.48) !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row .user-cell {
+  min-width: 0 !important;
+  padding: 0.66rem 0.72rem !important;
+  color: var(--ema-control-text, #173154) !important;
+  font-size: 0.76rem !important;
+  font-weight: 760 !important;
+  line-height: 1.25 !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row .user-cell.row-number {
+  display: flex !important;
+  justify-content: center !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-row .row-index-pill {
+  min-width: 2.42rem !important;
+  height: 2rem !important;
+  border-radius: 0.78rem !important;
+  font-size: 0.72rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-empty-row {
+  cursor: default !important;
+  min-height: 4.05rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-empty {
+  grid-column: 1 / -1 !important;
+  min-height: 4.05rem !important;
+  width: 100% !important;
+  padding: 0.66rem 1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: transparent !important;
+  font-size: 0.78rem !important;
+  font-weight: 800 !important;
+}
+
+.settings-module-root.appmetering-module .appm-standard-table .appm-empty-state,
+.settings-module-root.appmetering-module .appm-standard-table .appm-loading-state {
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
 }
 
 .settings-module-root.appmetering-module .appm-app-cell,
 .settings-module-root.appmetering-module .appm-user-cell {
   min-width: 0 !important;
   display: grid !important;
-  gap: 0.1rem !important;
+  gap: 0.12rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-user-cell strong,
+.settings-module-root.appmetering-module .appm-cell-main,
+.settings-module-root.appmetering-module .appm-app-link {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: var(--ema-control-text-strong, #0f2746) !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 0.8rem !important;
+  font-weight: 850 !important;
 }
 
 .settings-module-root.appmetering-module .appm-app-link {
-  border: 0 !important;
-  padding: 0 !important;
   color: #1d4ed8 !important;
-  background: transparent !important;
-  font-size: 0.8rem !important;
-  font-weight: 930 !important;
-  text-align: left !important;
+  cursor: pointer !important;
 }
 
-.settings-module-root.appmetering-module .appm-row-number,
-.settings-module-root.appmetering-module .appm-status-pill,
-.settings-module-root.appmetering-module .appm-risk-pill,
-.settings-module-root.appmetering-module .appm-tree-status {
-  border-radius: 999px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 0.28rem 0.62rem !important;
-  line-height: 1 !important;
+.settings-module-root.appmetering-module .appm-user-cell small,
+.settings-module-root.appmetering-module .appm-app-cell small,
+.settings-module-root.appmetering-module .appm-cell-muted {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
   font-size: 0.66rem !important;
-  font-weight: 930 !important;
+  font-weight: 720 !important;
+}
+
+.settings-module-root.appmetering-module .appm-truncate {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
 
-.settings-module-root.appmetering-module .appm-row-number {
-  color: #1d4ed8 !important;
-  background: rgba(37, 99, 235, 0.10) !important;
+.settings-module-root.appmetering-module .appm-standard-table .appm-mono {
+  max-width: 100% !important;
+  color: var(--ema-control-text, #173154) !important;
+  font-size: 0.71rem !important;
+  font-weight: 800 !important;
 }
 
-.settings-module-root.appmetering-module .appm-status-pill.is-productive,
-.settings-module-root.appmetering-module .appm-tree-status.is-online,
-.settings-module-root.appmetering-module .appm-tree-status.is-active {
-  color: #047857 !important;
-  background: rgba(16, 185, 129, 0.12) !important;
+.settings-module-root.appmetering-module .appm-standard-table .appm-status-pill,
+.settings-module-root.appmetering-module .appm-standard-table .appm-risk-pill,
+.settings-module-root.appmetering-module .appm-standard-table .appm-tree-status {
+  min-height: 1.65rem !important;
+  width: max-content !important;
+  padding: 0 0.62rem !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  border-radius: 999px !important;
+  font-size: 0.67rem !important;
+  font-weight: 900 !important;
 }
 
-.settings-module-root.appmetering-module .appm-status-pill.is-review {
-  color: #b45309 !important;
-  background: rgba(245, 158, 11, 0.14) !important;
+.settings-module-root.appmetering-module .appm-standard-table .appm-row-action {
+  min-height: 2.08rem !important;
+  padding-inline: 0.72rem !important;
 }
 
-.settings-module-root.appmetering-module .appm-status-pill.is-restricted,
-.settings-module-root.appmetering-module .appm-risk-pill.is-high,
-.settings-module-root.appmetering-module .appm-tree-status.is-offline {
-  color: #b91c1c !important;
-  background: rgba(239, 68, 68, 0.13) !important;
+.settings-module-root.appmetering-module .appm-pagination.uam-pagination {
+  margin: 0 !important;
+  width: 100% !important;
+  padding: 0.72rem 1.05rem !important;
+  border: 0 !important;
+  border-top: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
-.settings-module-root.appmetering-module .appm-status-pill.is-unused,
-.settings-module-root.appmetering-module .appm-risk-pill.is-low,
-.settings-module-root.appmetering-module .appm-tree-status.is-unknown {
-  color: #475569 !important;
-  background: rgba(100, 116, 139, 0.12) !important;
-}
-
-.settings-module-root.appmetering-module .appm-risk-pill.is-medium {
-  color: #92400e !important;
-  background: rgba(251, 191, 36, 0.16) !important;
-}
-
-.settings-module-root.appmetering-module .appm-mono,
-.settings-module-root.appmetering-module .is-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
-  font-size: 0.72rem !important;
-}
-
-.settings-module-root.appmetering-module .appm-pagination {
-  min-height: 3rem !important;
-  border: 1px solid rgba(203, 213, 225, 0.72) !important;
-  border-radius: 1rem !important;
-  padding: 0.5rem 0.68rem !important;
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto !important;
+/* =========================================================
+   Application Metering - search and sidebar alignment fix
+   Keep all AppMetering styling inside ema-layout.css only.
+========================================================= */
+.settings-module-root.appmetering-module .appm-content-toolbar {
+  grid-template-columns: minmax(18rem, 1fr) auto !important;
+  padding: 0.66rem 0.95rem !important;
+  gap: 0.56rem !important;
   align-items: center !important;
-  gap: 0.7rem !important;
-  background: linear-gradient(180deg, #ffffff, #f8fbff) !important;
 }
 
-.settings-module-root.appmetering-module .appm-pagination-info {
+.settings-module-root.appmetering-module .appm-sidebar-search,
+.settings-module-root.appmetering-module .appm-registry-search {
+  position: relative !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  min-height: 2.42rem !important;
+  border: 1px solid rgba(142, 160, 186, 0.34) !important;
+  border-radius: 0.9rem !important;
+  padding: 0 0.75rem !important;
   display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 0.4rem 0.72rem !important;
   align-items: center !important;
+  gap: 0.58rem !important;
   color: var(--ema-control-muted, #64748b) !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(242,246,251,0.97)) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.86), 0 8px 18px rgba(15,23,42,0.035) !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search {
+  margin: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-registry-search {
+  max-width: none !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search svg,
+.settings-module-root.appmetering-module .appm-registry-search > svg {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  flex: 0 0 auto !important;
+  width: 0.96rem !important;
+  height: 0.96rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  pointer-events: none !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search input,
+.settings-module-root.appmetering-module .appm-registry-search input {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 2.38rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  color: var(--ema-control-text, #173154) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
   font-size: 0.74rem !important;
   font-weight: 780 !important;
 }
 
-.settings-module-root.appmetering-module .appm-pagination-info strong {
-  color: var(--ema-control-text-strong, #0f2746) !important;
+.settings-module-root.appmetering-module .appm-sidebar-search input::placeholder,
+.settings-module-root.appmetering-module .appm-registry-search input::placeholder {
+  color: var(--ema-control-muted, #64748b) !important;
+  opacity: 0.88 !important;
 }
 
-.settings-module-root.appmetering-module .appm-pagination-actions {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 0.36rem !important;
+.settings-module-root.appmetering-module .appm-sidebar-search:focus-within,
+.settings-module-root.appmetering-module .appm-registry-search:focus-within {
+  border-color: rgba(37, 99, 235, 0.45) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.86), 0 0 0 3px rgba(37, 99, 235, 0.10) !important;
 }
 
-.settings-module-root.appmetering-module .appm-pagination-actions button,
-.settings-module-root.appmetering-module .appm-pagination-actions b {
-  width: 2.1rem !important;
-  height: 2.1rem !important;
-  border: 1px solid rgba(190, 205, 228, 0.86) !important;
-  border-radius: 0.72rem !important;
+.settings-module-root.appmetering-module .appm-registry-search .appm-search-clear {
+  position: static !important;
+  transform: none !important;
+  right: auto !important;
+  top: auto !important;
+  flex: 0 0 1.75rem !important;
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  border: 0 !important;
+  border-radius: 999px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: transparent !important;
+}
+
+.settings-module-root.appmetering-module .appm-registry-search .appm-search-clear:hover {
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.settings-module-root.appmetering-module .appm-toolbar-actions {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.45rem !important;
+  min-width: max-content !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-menu {
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+  padding: 0.9rem !important;
+  gap: 0.72rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-scroll {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: auto !important;
+  padding: 0.15rem 0.08rem 0.6rem !important;
+  margin: 0 !important;
+  scrollbar-gutter: stable !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree {
+  display: grid !important;
+  gap: 0.18rem !important;
+  min-width: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-node-wrap {
+  display: grid !important;
+  gap: 0.12rem !important;
+  min-width: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-node {
+  min-width: 0 !important;
+  min-height: 2.58rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.92rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.34rem !important;
   color: var(--ema-control-text, #173154) !important;
-  background: #fff !important;
-  font-size: 0.78rem !important;
-  font-weight: 900 !important;
+  background: transparent !important;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease !important;
 }
 
-.settings-module-root.appmetering-module .appm-pagination-actions b {
-  color: #fff !important;
-  border-color: #2563eb !important;
-  background: linear-gradient(135deg, #2563eb, #087ea4) !important;
+.settings-module-root.appmetering-module .appm-tree-node:hover {
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  background: rgba(239, 246, 255, 0.45) !important;
 }
 
-.settings-module-root.appmetering-module button:disabled,
-.settings-module-root.appmetering-module select:disabled {
-  cursor: not-allowed !important;
-  opacity: 0.56 !important;
+.settings-module-root.appmetering-module .appm-tree-node.is-selected {
+  border-color: rgba(37, 99, 235, 0.28) !important;
+  background: rgba(37, 99, 235, 0.10) !important;
+  box-shadow: none !important;
 }
 
-@media (max-width: 1440px) {
-  .settings-module-root.appmetering-module .settings-hero.appm-hero {
-    grid-template-columns: minmax(0, 1fr) !important;
-    max-height: none !important;
-  }
-
-  .settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score {
-    grid-template-columns: repeat(3, minmax(8.4rem, 1fr)) !important;
-  }
-
-  .settings-module-root.appmetering-module .appm-filter-strip {
-    grid-template-columns: repeat(4, minmax(8.2rem, 1fr)) !important;
-  }
+.settings-module-root.appmetering-module .appm-tree-node-main {
+  min-width: 0 !important;
+  width: auto !important;
+  min-height: 2.44rem !important;
+  border: 0 !important;
+  border-radius: 0.82rem !important;
+  padding: 0.36rem 0.42rem !important;
+  display: grid !important;
+  grid-template-columns: 1.45rem 1.65rem minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 0.42rem !important;
+  color: inherit !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-align: left !important;
 }
 
-@media (max-width: 1100px) {
-  .settings-module-root.appmetering-module .appm-settings-layout {
-    grid-template-columns: 1fr !important;
-    overflow: auto !important;
-  }
+.settings-module-root.appmetering-module .appm-tree-node-main:hover,
+.settings-module-root.appmetering-module .appm-tree-node-main.is-selected {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
 
-  .settings-module-root.appmetering-module .appm-settings-content,
-  .settings-module-root.appmetering-module .appm-settings-menu,
-  .settings-module-root.appmetering-module .appm-content-shell {
-    height: auto !important;
-    max-height: none !important;
-  }
+.settings-module-root.appmetering-module .appm-tree-chevron {
+  width: 1.45rem !important;
+  height: 1.45rem !important;
+  border-radius: 0.56rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  color: var(--ema-control-muted, #64748b) !important;
+}
 
+.settings-module-root.appmetering-module .appm-tree-chevron:hover {
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-node-main > svg:not(.appm-spin) {
+  width: 1.65rem !important;
+  height: 1.65rem !important;
+  padding: 0.38rem !important;
+  border-radius: 0.62rem !important;
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: rgba(37, 99, 235, 0.10) !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-text {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.08rem !important;
+  justify-items: start !important;
+  text-align: left !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-label {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: var(--ema-control-text-strong, #0f2746) !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 0.77rem !important;
+  font-weight: 880 !important;
+  line-height: 1.15 !important;
+  text-align: left !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-sub-label {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 0.66rem !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
+  text-align: left !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-count,
+.settings-module-root.appmetering-module .appm-tree-status {
+  justify-self: end !important;
+  margin-right: 0.42rem !important;
+  min-width: 1.72rem !important;
+  height: 1.72rem !important;
+  padding: 0 0.45rem !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.68rem !important;
+  font-weight: 880 !important;
+  line-height: 1 !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-count {
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: rgba(37, 99, 235, 0.10) !important;
+}
+
+@media (max-width: 1180px) {
   .settings-module-root.appmetering-module .appm-content-toolbar {
     grid-template-columns: 1fr !important;
   }
 
   .settings-module-root.appmetering-module .appm-toolbar-actions {
+    width: 100% !important;
     justify-content: flex-start !important;
-  }
-
-  .settings-module-root.appmetering-module .appm-filter-strip {
-    grid-template-columns: repeat(2, minmax(8rem, 1fr)) !important;
+    overflow-x: auto !important;
+    padding-bottom: 0.1rem !important;
   }
 }
-
-@media (max-width: 760px) {
-  .settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score,
-  .settings-module-root.appmetering-module .appm-filter-strip,
-  .settings-module-root.appmetering-module .appm-form-grid.two,
-  .settings-module-root.appmetering-module .appm-detail-section-grid,
-  .settings-module-root.appmetering-module .appm-detail-summary-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .settings-module-root.appmetering-module .appm-filter-control-wide {
-    grid-column: auto !important;
-  }
-
-  .settings-module-root.appmetering-module .appm-pagination {
-    grid-template-columns: 1fr !important;
-    justify-items: start !important;
-  }
-}
-
