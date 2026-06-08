@@ -17834,3 +17834,1679 @@ body[data-theme="dark"] .software-insights-modal,
     max-width: calc(100% - 2rem) !important;
   }
 }
+
+/* =========================================================
+   Application Metering - Settings-based rebuild
+   Keep app metering additions here instead of local component CSS.
+========================================================= */
+
+.settings-module-root.appmetering-module {
+  --appm-blue: #2563eb;
+  --appm-green: #059669;
+  --appm-orange: #d97706;
+  --appm-red: #dc2626;
+  --appm-purple: #7c3aed;
+  --appm-ink: var(--ema-control-text, #173154);
+  --appm-strong: var(--ema-control-text-strong, #0f2746);
+  --appm-muted: var(--ema-control-muted, #64748b);
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.appmetering-module .appm-settings-layout {
+  grid-template-columns: 280px minmax(0, 1fr) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.appmetering-module .appm-settings-menu,
+.appmetering-module .appm-settings-content,
+.appmetering-module .appm-content-shell {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+.appmetering-module .appm-settings-menu {
+  display: grid !important;
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+  gap: 0.72rem !important;
+  padding: 0.9rem !important;
+}
+
+.appmetering-module .appm-settings-content {
+  grid-template-rows: auto minmax(0, 1fr) !important;
+}
+
+.appmetering-module .appm-content-shell {
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+}
+
+.appmetering-module .appm-content-body {
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 0.95rem !important;
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  gap: 0.78rem !important;
+}
+
+.appmetering-module .appm-sidebar-mode-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+}
+
+.appmetering-module .appm-mode-btn {
+  width: 100%;
+  min-height: 4.1rem !important;
+  text-align: left;
+}
+
+.appmetering-module .appm-sidebar-search,
+.appmetering-module .appm-registry-search {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.appmetering-module .appm-sidebar-search svg,
+.appmetering-module .appm-registry-search > svg {
+  position: absolute !important;
+  left: 0.9rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  color: var(--appm-muted) !important;
+  z-index: 2 !important;
+  pointer-events: none !important;
+}
+
+.appmetering-module .appm-sidebar-search input,
+.appmetering-module .appm-registry-search input {
+  width: 100% !important;
+  height: 2.62rem !important;
+  min-height: 2.62rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.96) !important;
+  border-radius: 0.95rem !important;
+  padding: 0 2.35rem 0 2.72rem !important;
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,251,255,0.96)) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78) !important;
+  color: var(--appm-ink) !important;
+  font-size: 0.8rem !important;
+  font-weight: 760 !important;
+  outline: none !important;
+}
+
+.appmetering-module .appm-sidebar-search input:focus,
+.appmetering-module .appm-registry-search input:focus,
+.appmetering-module .appm-filter-control input:focus,
+.appmetering-module .appm-filter-control select:focus,
+.appmetering-module .appm-form-group input:focus,
+.appmetering-module .appm-form-group select:focus {
+  border-color: rgba(37, 99, 235, 0.52) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10) !important;
+}
+
+.appmetering-module .appm-tree-scroll {
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 0.12rem 0.15rem 0.35rem 0 !important;
+  margin: 0 !important;
+  scrollbar-gutter: stable;
+}
+
+.appmetering-module .appm-tree {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.appmetering-module .appm-tree-node-wrap {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.appmetering-module .appm-tree-node-main {
+  width: 100%;
+  min-height: 2.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.92rem;
+  padding: 0.42rem 0.58rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.44rem;
+  align-items: center;
+  background: transparent;
+  color: var(--appm-ink);
+  text-align: left;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.appmetering-module .appm-tree-node-main:hover {
+  border-color: rgba(148, 163, 184, 0.30);
+  background: rgba(37, 99, 235, 0.055);
+}
+
+.appmetering-module .appm-tree-node-main.is-selected {
+  border-color: rgba(37, 99, 235, 0.26);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(14, 165, 233, 0.07));
+  box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.88);
+}
+
+.appmetering-module .appm-tree-chevron {
+  width: 1.18rem;
+  height: 1.18rem;
+  border: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--appm-muted);
+  background: transparent;
+}
+
+.appmetering-module .appm-tree-chevron-empty {
+  opacity: 0.32;
+}
+
+.appmetering-module .appm-tree-text {
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.appmetering-module .appm-tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  font-weight: 840;
+  color: var(--appm-strong);
+}
+
+.appmetering-module .appm-tree-sub-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: var(--appm-muted);
+}
+
+.appmetering-module .appm-tree-count {
+  min-width: 1.65rem;
+  border-radius: 999px;
+  padding: 0.16rem 0.42rem;
+  text-align: center;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.10);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.appmetering-module .appm-loading-state,
+.appmetering-module .appm-empty-state,
+.appmetering-module .appm-api-error {
+  border: 1px solid rgba(190, 205, 228, 0.76);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--appm-muted);
+  background: rgba(248, 251, 255, 0.88);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.appmetering-module .appm-api-error {
+  margin: 0.78rem 0.95rem 0;
+  color: #991b1b;
+  background: rgba(254, 242, 242, 0.95);
+  border-color: rgba(248, 113, 113, 0.34);
+}
+
+.appmetering-module .appm-spin {
+  animation: appm-spin 0.8s linear infinite;
+}
+
+@keyframes appm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.appmetering-module .appm-hero {
+  grid-template-columns: minmax(18rem, 0.68fr) minmax(38rem, 1fr) !important;
+}
+
+.appmetering-module .appm-hero-score {
+  grid-template-columns: repeat(5, minmax(7.8rem, 1fr)) !important;
+}
+
+.appmetering-module .appm-score-box {
+  appearance: none;
+  border: 1px solid rgba(203, 213, 225, 0.72) !important;
+  cursor: pointer;
+  text-align: left;
+  color: var(--appm-ink);
+}
+
+.appmetering-module .appm-score-box:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.26) !important;
+}
+
+.appmetering-module .appm-content-head {
+  padding: 0.95rem 1.05rem !important;
+  min-height: 5.35rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.8rem !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.62) !important;
+}
+
+.appmetering-module .appm-content-head h3 {
+  margin: 0.14rem 0 0.12rem;
+  color: var(--appm-strong);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.appmetering-module .appm-content-head p {
+  margin: 0;
+  color: var(--appm-muted);
+  font-size: 0.78rem;
+  font-weight: 740;
+}
+
+.appmetering-module .appm-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.appmetering-module .soft-btn,
+.appmetering-module .primary-btn,
+.appmetering-module .danger-btn {
+  min-height: 2.46rem;
+  border-radius: 0.9rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.86);
+  padding: 0 0.88rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.44rem;
+  font-size: 0.76rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.appmetering-module .soft-btn {
+  color: var(--appm-ink);
+  background: linear-gradient(180deg, #ffffff, #f7faff);
+}
+
+.appmetering-module .primary-btn {
+  color: #ffffff;
+  border-color: rgba(37, 99, 235, 0.78);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
+}
+
+.appmetering-module .danger-btn,
+.appmetering-module .appm-danger-action {
+  color: #ffffff !important;
+  border-color: rgba(220, 38, 38, 0.74) !important;
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  box-shadow: 0 10px 24px rgba(220, 38, 38, 0.18) !important;
+}
+
+.appmetering-module button:disabled,
+.appmetering-module select:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.56 !important;
+}
+
+.appmetering-module .icon-only {
+  width: 2.46rem;
+  min-width: 2.46rem;
+  padding: 0 !important;
+}
+
+.appmetering-module .appm-content-toolbar {
+  padding: 0.78rem 0.95rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(16rem, 0.65fr) minmax(34rem, 1fr) auto !important;
+  gap: 0.72rem !important;
+  align-items: center !important;
+  overflow: visible !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.62) !important;
+}
+
+.appmetering-module .appm-search-clear {
+  position: absolute;
+  right: 0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 0.64rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--appm-muted);
+  background: rgba(226, 232, 240, 0.7);
+}
+
+.appmetering-module .appm-filter-strip {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(8rem, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.appmetering-module .appm-filter-control {
+  min-width: 0;
+  display: grid;
+  gap: 0.26rem;
+}
+
+.appmetering-module .appm-filter-control span,
+.appmetering-module .appm-form-group label {
+  color: var(--appm-muted);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.appmetering-module .appm-filter-control input,
+.appmetering-module .appm-filter-control select,
+.appmetering-module .appm-form-group input,
+.appmetering-module .appm-form-group select {
+  width: 100% !important;
+  height: 2.42rem !important;
+  min-height: 2.42rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.96) !important;
+  border-radius: 0.86rem !important;
+  padding: 0 0.72rem !important;
+  background: linear-gradient(180deg, #ffffff, #f8fbff) !important;
+  color: var(--appm-ink) !important;
+  font-size: 0.75rem !important;
+  font-weight: 800 !important;
+  outline: none !important;
+}
+
+.appmetering-module .appm-filter-control select,
+.appmetering-module .appm-form-group select {
+  appearance: none;
+  padding-right: 2rem !important;
+  background-image:
+    linear-gradient(180deg, #ffffff, #f8fbff),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-position: 0 0, right 0.68rem center !important;
+  background-size: 100% 100%, 1rem 1rem !important;
+}
+
+.appmetering-module .appm-toolbar-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: 0.48rem;
+  align-items: center;
+}
+
+.appmetering-module .appm-scope-action-btn,
+.appmetering-module .appm-collect-result-btn,
+.appmetering-module .appm-clear-filters-btn {
+  height: 2.42rem;
+  min-height: 2.42rem;
+}
+
+.appmetering-module .appm-table-frame {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 1.05rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.appmetering-module .appm-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--appm-ink);
+}
+
+.appmetering-module .appm-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.72rem 0.86rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.82);
+  background: linear-gradient(180deg, #f8fbff, #eef4fb);
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.appmetering-module .appm-table tbody td {
+  padding: 0.72rem 0.86rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.72);
+  vertical-align: middle;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.appmetering-module .appm-table tbody tr {
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.appmetering-module .appm-table tbody tr:hover td,
+.appmetering-module .appm-table tbody tr.is-selected td {
+  background: rgba(37, 99, 235, 0.055);
+}
+
+.appmetering-module .appm-table td small,
+.appmetering-module .appm-app-cell small,
+.appmetering-module .appm-user-cell small {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--appm-muted);
+  font-size: 0.68rem;
+  font-weight: 720;
+}
+
+.appmetering-module .appm-app-cell,
+.appmetering-module .appm-user-cell {
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.appmetering-module .appm-app-link {
+  border: 0;
+  padding: 0;
+  color: #1d4ed8;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 930;
+  text-align: left;
+}
+
+.appmetering-module .appm-mono,
+.appmetering-module .is-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.73rem;
+}
+
+.appmetering-module .appm-row-number,
+.appmetering-module .appm-status-pill,
+.appmetering-module .appm-risk-pill,
+.appmetering-module .appm-tree-status {
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.62rem;
+  line-height: 1;
+  font-size: 0.68rem;
+  font-weight: 930;
+  white-space: nowrap;
+}
+
+.appmetering-module .appm-row-number {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.10);
+}
+
+.appmetering-module .appm-status-pill.is-productive,
+.appmetering-module .appm-tree-status.is-online,
+.appmetering-module .appm-tree-status.is-active {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.appmetering-module .appm-status-pill.is-review {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.appmetering-module .appm-status-pill.is-restricted,
+.appmetering-module .appm-risk-pill.is-high,
+.appmetering-module .appm-tree-status.is-offline {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.13);
+}
+
+.appmetering-module .appm-status-pill.is-unused,
+.appmetering-module .appm-risk-pill.is-low,
+.appmetering-module .appm-tree-status.is-unknown {
+  color: #475569;
+  background: rgba(100, 116, 139, 0.12);
+}
+
+.appmetering-module .appm-risk-pill.is-medium {
+  color: #92400e;
+  background: rgba(251, 191, 36, 0.16);
+}
+
+.appmetering-module .appm-row-action {
+  min-height: 2.12rem;
+  padding-inline: 0.72rem;
+}
+
+.appmetering-module .appm-pagination {
+  min-height: 3.15rem;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 1rem;
+  padding: 0.56rem 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+}
+
+.appmetering-module .appm-pagination-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.72rem;
+  align-items: center;
+  color: var(--appm-muted);
+  font-size: 0.76rem;
+  font-weight: 780;
+}
+
+.appmetering-module .appm-pagination-info strong {
+  color: var(--appm-strong);
+}
+
+.appmetering-module .appm-pagination-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+}
+
+.appmetering-module .appm-pagination-actions button,
+.appmetering-module .appm-pagination-actions b {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid rgba(190, 205, 228, 0.86);
+  border-radius: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--appm-ink);
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.appmetering-module .appm-pagination-actions b {
+  color: #fff;
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.appm-detail-drawer-overlay,
+.appmetering-module .appm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.appm-detail-drawer {
+  width: min(720px, 92vw);
+  height: 100%;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  background: #f8fbff;
+  box-shadow: -24px 0 55px rgba(15, 23, 42, 0.22);
+}
+
+.appm-detail-drawer-header,
+.appm-modal-header {
+  padding: 1rem 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.78);
+  background: #ffffff;
+}
+
+.appm-detail-title-wrap,
+.appm-detail-header-actions,
+.appm-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.appm-detail-device-icon {
+  width: 2.65rem;
+  height: 2.65rem;
+  border-radius: 0.92rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
+}
+
+.appm-detail-eyebrow {
+  color: #2563eb;
+  font-size: 0.67rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.appm-detail-drawer h2,
+.appm-detail-drawer h3,
+.appm-modal-title strong {
+  margin: 0;
+  color: #0f2746;
+  font-weight: 950;
+  letter-spacing: -0.035em;
+}
+
+.appm-detail-drawer p,
+.appm-modal-title span {
+  margin: 0.14rem 0 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.appm-detail-close,
+.appm-modal-close {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  background: #fff;
+}
+
+.appm-detail-action-bar {
+  padding: 0.76rem 1.1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.48rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.62);
+  background: rgba(248, 251, 255, 0.86);
+}
+
+.appm-detail-action-bar button {
+  min-height: 2.32rem;
+  border: 1px solid rgba(190, 205, 228, 0.88);
+  border-radius: 0.8rem;
+  padding: 0 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: #173154;
+  background: #fff;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.appm-detail-action-bar button.is-primary {
+  color: #fff;
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.appm-detail-action-bar button.is-danger {
+  color: #fff;
+  border-color: #dc2626;
+  background: #dc2626;
+}
+
+.appm-detail-action-bar button.is-success {
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.34);
+  background: rgba(16, 185, 129, 0.10);
+}
+
+.appm-detail-summary-grid {
+  padding: 0.82rem 1.1rem;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.62rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.62);
+}
+
+.appm-detail-summary-grid div,
+.appm-detail-card,
+.appm-option-card {
+  border: 1px solid rgba(203, 213, 225, 0.76);
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.appm-detail-summary-grid div {
+  padding: 0.82rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.appm-detail-summary-grid span,
+.appm-detail-item span {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.appm-detail-summary-grid strong,
+.appm-detail-item strong {
+  color: #0f2746;
+  font-size: 0.88rem;
+  font-weight: 920;
+  overflow-wrap: anywhere;
+}
+
+.appm-detail-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1.1rem;
+}
+
+.appm-detail-section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.72rem;
+}
+
+.appm-detail-card {
+  padding: 0.95rem;
+}
+
+.appm-detail-card-wide {
+  grid-column: 1 / -1;
+}
+
+.appm-detail-card h3 {
+  margin-bottom: 0.72rem;
+  font-size: 0.92rem;
+}
+
+.appm-detail-item {
+  padding: 0.58rem 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.72);
+}
+
+.appm-detail-card h3 + .appm-detail-item {
+  border-top: 0;
+}
+
+.appm-package-file-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.appm-recommendation-box {
+  border-radius: 0.95rem;
+  padding: 0.9rem;
+  display: flex;
+  gap: 0.62rem;
+  color: #92400e;
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.appmetering-module .appm-modal-overlay {
+  align-items: center;
+  justify-content: center;
+}
+
+.appmetering-module .appm-modal {
+  width: min(620px, calc(100vw - 2rem));
+  border-radius: 1.2rem;
+  overflow: hidden;
+  border: 1px solid rgba(203, 213, 225, 0.78);
+  background: #fff;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
+}
+
+.appmetering-module .appm-modal-header.blue {
+  color: #fff;
+  border-bottom: 0;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+}
+
+.appmetering-module .appm-modal-header.blue strong,
+.appmetering-module .appm-modal-header.blue span,
+.appmetering-module .appm-modal-header.blue .appm-modal-title {
+  color: #fff;
+}
+
+.appmetering-module .appm-modal-close.inverse {
+  color: #fff;
+  border-color: rgba(255,255,255,0.32);
+  background: rgba(255,255,255,0.16);
+}
+
+.appmetering-module .appm-modal-body {
+  padding: 1.05rem;
+  display: grid;
+  gap: 0.72rem;
+}
+
+.appmetering-module .appm-form-grid.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.72rem;
+}
+
+.appmetering-module .appm-form-group {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.appmetering-module .appm-option-card {
+  padding: 0.85rem;
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+}
+
+.appmetering-module .appm-option-card input {
+  margin-top: 0.1rem;
+  accent-color: #2563eb;
+}
+
+.appmetering-module .appm-option-card strong,
+.appmetering-module .appm-option-card span {
+  display: block;
+}
+
+.appmetering-module .appm-option-card strong {
+  color: #0f2746;
+  font-size: 0.82rem;
+  font-weight: 920;
+}
+
+.appmetering-module .appm-option-card span {
+  margin-top: 0.18rem;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 720;
+}
+
+.appmetering-module .appm-modal-footer {
+  padding: 0.9rem 1.05rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  border-top: 1px solid rgba(203, 213, 225, 0.72);
+  background: #f8fbff;
+}
+
+.appmetering-module .appm-toast {
+  position: fixed;
+  right: 1.1rem;
+  bottom: 1.1rem;
+  z-index: 1300;
+  width: min(390px, calc(100vw - 2rem));
+  border: 1px solid rgba(203, 213, 225, 0.86);
+  border-radius: 1rem;
+  padding: 0.78rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.72rem;
+  align-items: center;
+  background: #fff;
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.18);
+}
+
+.appmetering-module .appm-toast-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #2563eb;
+}
+
+.appmetering-module .appm-toast-success .appm-toast-icon { background: #059669; }
+.appmetering-module .appm-toast-error .appm-toast-icon { background: #dc2626; }
+
+.appmetering-module .appm-toast strong,
+.appmetering-module .appm-toast span {
+  display: block;
+}
+
+.appmetering-module .appm-toast strong {
+  color: #0f2746;
+  font-size: 0.83rem;
+  font-weight: 920;
+}
+
+.appmetering-module .appm-toast span {
+  margin-top: 0.14rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 720;
+}
+
+.appmetering-module .appm-toast button {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.7rem;
+  color: #64748b;
+  background: rgba(226, 232, 240, 0.72);
+}
+
+html[data-theme="dark"] .appmetering-module .appm-table-frame,
+html[data-theme="dark"] .appmetering-module .appm-table tbody td,
+html[data-theme="dark"] .appmetering-module .appm-pagination,
+html[data-theme="dark"] .appmetering-module .appm-detail-card,
+html[data-theme="dark"] .appmetering-module .appm-detail-summary-grid div,
+html[data-theme="dark"] .appmetering-module .appm-option-card,
+html[data-theme="dark"] .appmetering-module .appm-toast,
+.dark .appmetering-module .appm-table-frame,
+.dark .appmetering-module .appm-pagination,
+.dark .appmetering-module .appm-detail-card,
+.dark .appmetering-module .appm-detail-summary-grid div,
+.dark .appmetering-module .appm-option-card,
+.dark .appmetering-module .appm-toast {
+  background: rgba(15, 23, 42, 0.94) !important;
+}
+
+@media (max-width: 1280px) {
+  .appmetering-module .appm-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .appmetering-module .appm-content-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .appmetering-module .appm-filter-strip {
+    grid-template-columns: repeat(3, minmax(8rem, 1fr));
+  }
+
+  .appmetering-module .appm-toolbar-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
+  .appmetering-module .appm-settings-layout {
+    grid-template-columns: 1fr !important;
+    overflow: visible !important;
+  }
+
+  .appmetering-module .appm-settings-menu,
+  .appmetering-module .appm-content-shell,
+  .appmetering-module .appm-content-body {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .appmetering-module .appm-hero-score,
+  .appmetering-module .appm-filter-strip,
+  .appm-detail-summary-grid,
+  .appm-detail-section-grid,
+  .appmetering-module .appm-form-grid.two {
+    grid-template-columns: 1fr !important;
+  }
+
+  .appmetering-module .appm-toolbar-actions,
+  .appmetering-module .appm-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* =========================================================
+   Application Metering - Redone Critical Overrides
+   This block is appended inside ema-layout.css so AppMetering
+   works even when no separate component CSS is imported.
+========================================================= */
+
+.settings-module-root.appmetering-module {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-layout {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 280px minmax(0, 1fr) !important;
+  gap: 14px !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-menu {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+  gap: 0.68rem !important;
+  padding: 0.9rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-settings-content {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 14px !important;
+}
+
+.settings-module-root.appmetering-module .appm-tree-scroll {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  overscroll-behavior: contain !important;
+}
+
+/* Hero must not inherit the Service Desk 2x2 KPI restriction. */
+.settings-module-root.appmetering-module .settings-hero.appm-hero {
+  min-height: 7.2rem !important;
+  max-height: 7.9rem !important;
+  padding: 0.95rem 1.05rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(18rem, 0.72fr) minmax(40rem, 1fr) !important;
+  align-items: center !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero > div:first-child {
+  min-width: 0 !important;
+  align-self: center !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero h2 {
+  margin: 0.28rem 0 0.25rem !important;
+  color: var(--ema-control-text-strong, #0f2746) !important;
+  font-size: 1.32rem !important;
+  line-height: 1.08 !important;
+  font-weight: 920 !important;
+  letter-spacing: -0.045em !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero p {
+  margin: 0 !important;
+  max-width: 38rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.78rem !important;
+  line-height: 1.45 !important;
+  font-weight: 720 !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(7.7rem, 1fr)) !important;
+  grid-auto-rows: 4.2rem !important;
+  gap: 0.52rem !important;
+  justify-self: stretch !important;
+  align-self: center !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score > .score-box:nth-child(n + 5) {
+  display: grid !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box.appm-score-box {
+  min-width: 0 !important;
+  width: 100% !important;
+  min-height: 4.2rem !important;
+  height: 4.2rem !important;
+  max-height: 4.2rem !important;
+  padding: 0.55rem 0.65rem !important;
+  border-radius: 0.9rem !important;
+  display: grid !important;
+  grid-template-rows: auto 1fr auto !important;
+  align-content: center !important;
+  text-align: center !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box span {
+  font-size: 0.5rem !important;
+  letter-spacing: 0.08em !important;
+  line-height: 1.05 !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box strong {
+  font-size: 1.25rem !important;
+  line-height: 1 !important;
+}
+
+.settings-module-root.appmetering-module .settings-hero.appm-hero .score-box small {
+  font-size: 0.55rem !important;
+  line-height: 1.1 !important;
+}
+
+/* Content shell is a locked flex column: header, toolbar, filter, table area. */
+.settings-module-root.appmetering-module .appm-content-shell {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-head,
+.settings-module-root.appmetering-module .appm-content-toolbar,
+.settings-module-root.appmetering-module .appm-filter-panel,
+.settings-module-root.appmetering-module .appm-api-error {
+  flex: 0 0 auto !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-head {
+  min-height: 4.85rem !important;
+  padding: 0.9rem 1rem !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.62) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.8rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-head h3 {
+  margin: 0.18rem 0 0.12rem !important;
+  color: var(--ema-control-text-strong, #0f2746) !important;
+  font-size: 1.05rem !important;
+  line-height: 1.15 !important;
+  font-weight: 920 !important;
+  letter-spacing: -0.035em !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-head p {
+  margin: 0 !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.76rem !important;
+  line-height: 1.3 !important;
+  font-weight: 720 !important;
+}
+
+.settings-module-root.appmetering-module .appm-head-actions,
+.settings-module-root.appmetering-module .appm-toolbar-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.48rem !important;
+  flex-wrap: wrap !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-toolbar {
+  padding: 0.72rem 0.95rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(18rem, 1fr) auto !important;
+  gap: 0.72rem !important;
+  align-items: center !important;
+  overflow: visible !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.58) !important;
+  background: rgba(248, 251, 255, 0.62) !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-panel {
+  padding: 0.72rem 0.95rem 0.82rem !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.58) !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 251, 255, 0.66)) !important;
+  overflow: visible !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-strip {
+  width: 100% !important;
+  min-width: 0 !important;
+  display: grid !important;
+  grid-template-columns: repeat(7, minmax(8.2rem, 1fr)) !important;
+  gap: 0.56rem !important;
+  align-items: end !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control-wide {
+  grid-column: span 2 !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search,
+.settings-module-root.appmetering-module .appm-registry-search {
+  position: relative !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.26rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control span,
+.settings-module-root.appmetering-module .appm-form-group label {
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.62rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.065em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search input,
+.settings-module-root.appmetering-module .appm-registry-search input,
+.settings-module-root.appmetering-module .appm-filter-control input,
+.settings-module-root.appmetering-module .appm-filter-control select,
+.settings-module-root.appmetering-module .appm-form-group input,
+.settings-module-root.appmetering-module .appm-form-group select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 2.42rem !important;
+  min-height: 2.42rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.96) !important;
+  border-radius: 0.86rem !important;
+  background-color: #fff !important;
+  color: var(--ema-control-text, #173154) !important;
+  font-size: 0.74rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  outline: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search input,
+.settings-module-root.appmetering-module .appm-registry-search input {
+  padding: 0 2.35rem 0 2.7rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control input,
+.settings-module-root.appmetering-module .appm-filter-control select,
+.settings-module-root.appmetering-module .appm-form-group input,
+.settings-module-root.appmetering-module .appm-form-group select {
+  padding: 0 0.72rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-filter-control select,
+.settings-module-root.appmetering-module .appm-form-group select {
+  appearance: none !important;
+  padding-right: 2.05rem !important;
+  background-image: linear-gradient(180deg, #ffffff, #f8fbff), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat, no-repeat !important;
+  background-position: 0 0, right 0.68rem center !important;
+  background-size: 100% 100%, 1rem 1rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-sidebar-search svg,
+.settings-module-root.appmetering-module .appm-registry-search > svg {
+  position: absolute !important;
+  left: 0.9rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 2 !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  pointer-events: none !important;
+}
+
+.settings-module-root.appmetering-module .appm-search-clear {
+  position: absolute !important;
+  right: 0.45rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 1.8rem !important;
+  height: 1.8rem !important;
+  border: 0 !important;
+  border-radius: 0.64rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: rgba(226, 232, 240, 0.7) !important;
+}
+
+.settings-module-root.appmetering-module .soft-btn,
+.settings-module-root.appmetering-module .primary-btn,
+.settings-module-root.appmetering-module .danger-btn {
+  min-height: 2.42rem !important;
+  border-radius: 0.86rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.86) !important;
+  padding: 0 0.86rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.42rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  cursor: pointer !important;
+}
+
+.settings-module-root.appmetering-module .soft-btn {
+  color: var(--ema-control-text, #173154) !important;
+  background: linear-gradient(180deg, #ffffff, #f7faff) !important;
+}
+
+.settings-module-root.appmetering-module .primary-btn {
+  color: #ffffff !important;
+  border-color: rgba(37, 99, 235, 0.78) !important;
+  background: linear-gradient(135deg, #2563eb, #087ea4) !important;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18) !important;
+}
+
+.settings-module-root.appmetering-module .danger-btn,
+.settings-module-root.appmetering-module .appm-danger-action {
+  color: #ffffff !important;
+  border-color: rgba(220, 38, 38, 0.74) !important;
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  box-shadow: 0 10px 24px rgba(220, 38, 38, 0.18) !important;
+}
+
+.settings-module-root.appmetering-module .icon-only {
+  width: 2.42rem !important;
+  min-width: 2.42rem !important;
+  padding: 0 !important;
+}
+
+.settings-module-root.appmetering-module .appm-content-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0.95rem !important;
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  gap: 0.78rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-table-frame {
+  min-height: 0 !important;
+  width: 100% !important;
+  overflow: auto !important;
+  border: 1px solid rgba(203, 213, 225, 0.72) !important;
+  border-radius: 1.05rem !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82) !important;
+}
+
+.settings-module-root.appmetering-module .appm-table {
+  width: 100% !important;
+  min-width: 980px !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  color: var(--ema-control-text, #173154) !important;
+}
+
+.settings-module-root.appmetering-module .appm-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3 !important;
+  padding: 0.72rem 0.86rem !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.82) !important;
+  background: linear-gradient(180deg, #f8fbff, #eef4fb) !important;
+  color: #475569 !important;
+  font-size: 0.66rem !important;
+  line-height: 1.15 !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.055em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.settings-module-root.appmetering-module .appm-table tbody td {
+  padding: 0.7rem 0.86rem !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.72) !important;
+  background: #fff !important;
+  vertical-align: middle !important;
+  font-size: 0.77rem !important;
+  line-height: 1.3 !important;
+  font-weight: 760 !important;
+  white-space: nowrap !important;
+}
+
+.settings-module-root.appmetering-module .appm-table tbody tr:hover td,
+.settings-module-root.appmetering-module .appm-table tbody tr.is-selected td {
+  background: rgba(37, 99, 235, 0.055) !important;
+}
+
+.settings-module-root.appmetering-module .appm-table td small,
+.settings-module-root.appmetering-module .appm-app-cell small,
+.settings-module-root.appmetering-module .appm-user-cell small {
+  display: block !important;
+  margin-top: 0.18rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.66rem !important;
+  line-height: 1.18 !important;
+  font-weight: 720 !important;
+}
+
+.settings-module-root.appmetering-module .appm-app-cell,
+.settings-module-root.appmetering-module .appm-user-cell {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.1rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-app-link {
+  border: 0 !important;
+  padding: 0 !important;
+  color: #1d4ed8 !important;
+  background: transparent !important;
+  font-size: 0.8rem !important;
+  font-weight: 930 !important;
+  text-align: left !important;
+}
+
+.settings-module-root.appmetering-module .appm-row-number,
+.settings-module-root.appmetering-module .appm-status-pill,
+.settings-module-root.appmetering-module .appm-risk-pill,
+.settings-module-root.appmetering-module .appm-tree-status {
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0.28rem 0.62rem !important;
+  line-height: 1 !important;
+  font-size: 0.66rem !important;
+  font-weight: 930 !important;
+  white-space: nowrap !important;
+}
+
+.settings-module-root.appmetering-module .appm-row-number {
+  color: #1d4ed8 !important;
+  background: rgba(37, 99, 235, 0.10) !important;
+}
+
+.settings-module-root.appmetering-module .appm-status-pill.is-productive,
+.settings-module-root.appmetering-module .appm-tree-status.is-online,
+.settings-module-root.appmetering-module .appm-tree-status.is-active {
+  color: #047857 !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+}
+
+.settings-module-root.appmetering-module .appm-status-pill.is-review {
+  color: #b45309 !important;
+  background: rgba(245, 158, 11, 0.14) !important;
+}
+
+.settings-module-root.appmetering-module .appm-status-pill.is-restricted,
+.settings-module-root.appmetering-module .appm-risk-pill.is-high,
+.settings-module-root.appmetering-module .appm-tree-status.is-offline {
+  color: #b91c1c !important;
+  background: rgba(239, 68, 68, 0.13) !important;
+}
+
+.settings-module-root.appmetering-module .appm-status-pill.is-unused,
+.settings-module-root.appmetering-module .appm-risk-pill.is-low,
+.settings-module-root.appmetering-module .appm-tree-status.is-unknown {
+  color: #475569 !important;
+  background: rgba(100, 116, 139, 0.12) !important;
+}
+
+.settings-module-root.appmetering-module .appm-risk-pill.is-medium {
+  color: #92400e !important;
+  background: rgba(251, 191, 36, 0.16) !important;
+}
+
+.settings-module-root.appmetering-module .appm-mono,
+.settings-module-root.appmetering-module .is-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace !important;
+  font-size: 0.72rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination {
+  min-height: 3rem !important;
+  border: 1px solid rgba(203, 213, 225, 0.72) !important;
+  border-radius: 1rem !important;
+  padding: 0.5rem 0.68rem !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.7rem !important;
+  background: linear-gradient(180deg, #ffffff, #f8fbff) !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-info {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.4rem 0.72rem !important;
+  align-items: center !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.74rem !important;
+  font-weight: 780 !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-info strong {
+  color: var(--ema-control-text-strong, #0f2746) !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.36rem !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions button,
+.settings-module-root.appmetering-module .appm-pagination-actions b {
+  width: 2.1rem !important;
+  height: 2.1rem !important;
+  border: 1px solid rgba(190, 205, 228, 0.86) !important;
+  border-radius: 0.72rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ema-control-text, #173154) !important;
+  background: #fff !important;
+  font-size: 0.78rem !important;
+  font-weight: 900 !important;
+}
+
+.settings-module-root.appmetering-module .appm-pagination-actions b {
+  color: #fff !important;
+  border-color: #2563eb !important;
+  background: linear-gradient(135deg, #2563eb, #087ea4) !important;
+}
+
+.settings-module-root.appmetering-module button:disabled,
+.settings-module-root.appmetering-module select:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.56 !important;
+}
+
+@media (max-width: 1440px) {
+  .settings-module-root.appmetering-module .settings-hero.appm-hero {
+    grid-template-columns: minmax(0, 1fr) !important;
+    max-height: none !important;
+  }
+
+  .settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score {
+    grid-template-columns: repeat(3, minmax(8.4rem, 1fr)) !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-filter-strip {
+    grid-template-columns: repeat(4, minmax(8.2rem, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .settings-module-root.appmetering-module .appm-settings-layout {
+    grid-template-columns: 1fr !important;
+    overflow: auto !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-settings-content,
+  .settings-module-root.appmetering-module .appm-settings-menu,
+  .settings-module-root.appmetering-module .appm-content-shell {
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-content-toolbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-toolbar-actions {
+    justify-content: flex-start !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-filter-strip {
+    grid-template-columns: repeat(2, minmax(8rem, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-module-root.appmetering-module .settings-hero.appm-hero .appm-hero-score,
+  .settings-module-root.appmetering-module .appm-filter-strip,
+  .settings-module-root.appmetering-module .appm-form-grid.two,
+  .settings-module-root.appmetering-module .appm-detail-section-grid,
+  .settings-module-root.appmetering-module .appm-detail-summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-filter-control-wide {
+    grid-column: auto !important;
+  }
+
+  .settings-module-root.appmetering-module .appm-pagination {
+    grid-template-columns: 1fr !important;
+    justify-items: start !important;
+  }
+}
+

@@ -610,6 +610,16 @@ function collectFolderRelationIds(node: TreeNode | null): Set<number> {
   return ids;
 }
 
+function departmentPathFromNode(node: TreeNode): DepartmentPath {
+  return {
+    key: node.id,
+    relationID: node.relationID ?? -1,
+    label: node.label || "Organization",
+    pathKeys: [node.id],
+    groupPath: node.subLabel || node.label || "Organization",
+  };
+}
+
 function getTreeNodeValue(node: TreeNode, keys: string[], fallback = "-") {
   return pickValue(node.raw || {}, keys, fallback);
 }
@@ -883,6 +893,8 @@ export default function ApplicationMetering() {
   const [loading, setLoading] = useState({ hierarchy: false, packages: false, usage: false, action: false, assets: false, packageFiles: false });
   const [error, setError] = useState("");
   const [appMeteringDevices, setAppMeteringDevices] = useState<TreeNode[]>([]);
+  const [scopeDeviceRows, setScopeDeviceRows] = useState<TreeNode[]>([]);
+  const [assetCache, setAssetCache] = useState<Record<string, TreeNode[]>>({});
   const [activeMeteringScopes, setActiveMeteringScopes] = useState<MeteringActiveMap>(() => readMeteringActiveMap());
 
   const packageTree = useMemo(() => buildPackageTree(packages), [packages]);
@@ -924,37 +936,67 @@ export default function ApplicationMetering() {
   }, []);
 
   const loadHierarchy = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, hierarchy: true, assets: true }));
+    setLoading((prev) => ({ ...prev, hierarchy: true }));
     try {
       const payload = await apiRequest<unknown>("/api/departments");
       const departments = getDataArray<ApiDepartment>(payload);
       const baseTree = buildDepartmentTree(departments);
-      const departmentPaths = collectDepartmentPaths(baseTree);
 
-      const assetResults = await Promise.allSettled(
-        departmentPaths.map(async (department) => {
-          const response = await apiRequest<unknown>(`/api/assets/${department.relationID}`);
-          return getDataArray<ApiAsset>(response)
-            .map((asset, index) => normalizeAssetNode(asset, department, index))
-            .filter((node): node is TreeNode => Boolean(node));
-        })
-      );
-
-      const deviceNodes = assetResults
-        .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
-        .sort((a, b) => a.label.localeCompare(b.label));
-
-      const treeWithDevices = attachDeviceInventoryToTree(baseTree, deviceNodes);
-      setAppMeteringDevices(deviceNodes);
-      setDepartmentTree(treeWithDevices);
-      setSelectedNode((prev) => findTreeNodeById(treeWithDevices, prev.id) || treeWithDevices[0] || emptyNode);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load department and device hierarchy.");
+      // Do not load every /api/assets/:relationID record during initial render.
+      // Device targets are loaded on demand when a folder is selected so the page stays fast.
+      setDepartmentTree(baseTree);
+      setSelectedNode((prev) => findTreeNodeById(baseTree, prev.id) || baseTree[0] || emptyNode);
       setAppMeteringDevices([]);
+      setScopeDeviceRows([]);
+      setAssetCache({});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load department hierarchy.");
+      setAppMeteringDevices([]);
+      setScopeDeviceRows([]);
     } finally {
       setLoading((prev) => ({ ...prev, hierarchy: false, assets: false }));
     }
   }, []);
+
+
+  const loadAssetsForScope = useCallback(async (node: TreeNode) => {
+    if (viewMode !== "device" || node.type !== "folder") {
+      setScopeDeviceRows([]);
+      return;
+    }
+
+    if (node.id === "organization" || !node.relationID || node.relationID <= 0) {
+      setScopeDeviceRows([]);
+      setLoading((prev) => ({ ...prev, assets: false }));
+      return;
+    }
+
+    const cacheKey = String(node.relationID);
+    const cachedRows = assetCache[cacheKey];
+    if (cachedRows) {
+      setScopeDeviceRows(cachedRows);
+      return;
+    }
+
+    setLoading((prev) => ({ ...prev, assets: true }));
+    try {
+      const response = await apiRequest<unknown>(`/api/assets/${node.relationID}`);
+      const department = departmentPathFromNode(node);
+      const rows = getDataArray<ApiAsset>(response)
+        .map((asset, index) => normalizeAssetNode(asset, department, index))
+        .filter((item): item is TreeNode => Boolean(item))
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+      setScopeDeviceRows(rows);
+      setAppMeteringDevices(rows);
+      setAssetCache((prev) => ({ ...prev, [cacheKey]: rows }));
+    } catch (err) {
+      setScopeDeviceRows([]);
+      setError(err instanceof Error ? err.message : "Failed to load device targets for the selected folder.");
+    } finally {
+      setLoading((prev) => ({ ...prev, assets: false }));
+    }
+  }, [assetCache, viewMode]);
 
   const loadPackages = useCallback(async () => {
     setLoading((prev) => ({ ...prev, packages: true }));
@@ -1046,6 +1088,16 @@ export default function ApplicationMetering() {
   }, [departmentTree, viewMode]);
 
   useEffect(() => {
+    if (viewMode !== "device") {
+      setScopeDeviceRows([]);
+      return;
+    }
+    if (selectedNode.type === "folder") {
+      loadAssetsForScope(selectedNode);
+    }
+  }, [loadAssetsForScope, selectedNode.id, selectedNode.relationID, selectedNode.type, viewMode]);
+
+  useEffect(() => {
     const packageId = selectedPackageId || (selectedNode.type === "package" ? selectedNode.packageId || 0 : 0);
     loadPackageFiles(packageId);
   }, [selectedPackageId, selectedNode.packageId, selectedNode.type, loadPackageFiles]);
@@ -1074,16 +1126,10 @@ export default function ApplicationMetering() {
   const selectedRow = filteredRows.find((row) => row.id === selectedRowId) ?? filteredRows[0] ?? emptyUsageRow;
   const showDeviceRegistry = viewMode === "device" && selectedNode.type !== "device";
   const selectedFolderNode = showDeviceRegistry ? findTreeNodeById(departmentTree, selectedNode.id) || selectedNode : null;
-  const selectedFolderRelationIds = useMemo(() => {
-    if (!showDeviceRegistry) return new Set<number>();
-    if (selectedNode.id === "organization") return new Set(appMeteringDevices.map((device) => device.relationID || 0).filter(Boolean));
-    return collectFolderRelationIds(selectedFolderNode);
-  }, [appMeteringDevices, selectedFolderNode, selectedNode.id, showDeviceRegistry]);
   const filteredDeviceRows = useMemo(() => {
     if (!showDeviceRegistry) return [];
     const text = searchTerm.trim().toLowerCase();
-    return appMeteringDevices.filter((device) => {
-      const relationMatch = selectedNode.id === "organization" || selectedFolderRelationIds.has(device.relationID || 0);
+    return scopeDeviceRows.filter((device) => {
       const raw = device.raw || {};
       const searchable = [
         device.label,
@@ -1095,9 +1141,9 @@ export default function ApplicationMetering() {
         getTreeNodeValue(device, ["Object_DeviceID", "DeviceID", "MDM_DeviceID"], ""),
         String(raw.Object_Agent || ""),
       ].join(" ").toLowerCase();
-      return relationMatch && (!text || searchable.includes(text));
+      return !text || searchable.includes(text);
     });
-  }, [appMeteringDevices, searchTerm, selectedFolderRelationIds, selectedNode.id, showDeviceRegistry]);
+  }, [scopeDeviceRows, searchTerm, showDeviceRegistry]);
   const devicePageCount = Math.max(1, Math.ceil(filteredDeviceRows.length / PAGE_SIZE));
   const pageCount = showDeviceRegistry ? devicePageCount : usagePageCount;
   const safePage = Math.min(Math.max(1, page), pageCount);
@@ -1380,7 +1426,28 @@ export default function ApplicationMetering() {
                 {searchTerm ? <button className="appm-search-clear" type="button" onClick={() => setSearchTerm("")}><X size={14} /></button> : null}
               </label>
 
-              <div className="appm-filter-strip" aria-label="Application metering filters">
+              <div className="appm-toolbar-actions">
+                <button className="soft-btn appm-clear-filters-btn" type="button" onClick={() => { setFilters({ status: "all", license: "all" }); setSelectedPackageId(0); setSearchTerm(""); setOneYearMode(false); setNextPageMode(false); }}>
+                  <Filter size={14} /> Clear
+                </button>
+                <button
+                  className={cx("primary-btn appm-scope-action-btn", isCurrentMeteringScopeActive && "danger-btn appm-danger-action")}
+                  type="button"
+                  onClick={() => handleScopeMeteringToggle(currentMeteringScopeNode)}
+                  disabled={loading.action}
+                  title={currentMeteringButtonTitle}
+                >
+                  {isCurrentMeteringScopeActive ? <StopCircle size={14} /> : <Play size={14} />}
+                  <span>{currentMeteringButtonLabel}</span>
+                </button>
+                <button className="soft-btn appm-collect-result-btn" type="button" onClick={() => runMeteringAction("collect", activePackageId, selectedNode)} disabled={loading.action}>
+                  <RefreshCw size={14} /> Collect
+                </button>
+              </div>
+            </div>
+
+            <div className="appm-filter-panel" aria-label="Application metering filters">
+              <div className="appm-filter-strip">
                 <label className="appm-filter-control">
                   <span>Start Date</span>
                   <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
@@ -1428,25 +1495,6 @@ export default function ApplicationMetering() {
                   </select>
                 </label>
               </div>
-
-              <div className="appm-toolbar-actions">
-                <button className="soft-btn appm-clear-filters-btn" type="button" onClick={() => { setFilters({ status: "all", license: "all" }); setSelectedPackageId(0); setSearchTerm(""); setOneYearMode(false); setNextPageMode(false); }}>
-                  <Filter size={14} /> Clear
-                </button>
-                <button
-                  className={cx("primary-btn appm-scope-action-btn", isCurrentMeteringScopeActive && "danger-btn appm-danger-action")}
-                  type="button"
-                  onClick={() => handleScopeMeteringToggle(currentMeteringScopeNode)}
-                  disabled={loading.action}
-                  title={currentMeteringButtonTitle}
-                >
-                  {isCurrentMeteringScopeActive ? <StopCircle size={14} /> : <Play size={14} />}
-                  <span>{currentMeteringButtonLabel}</span>
-                </button>
-                <button className="soft-btn appm-collect-result-btn" type="button" onClick={() => runMeteringAction("collect", activePackageId, selectedNode)} disabled={loading.action}>
-                  <RefreshCw size={14} /> Collect
-                </button>
-              </div>
             </div>
 
             {error ? <div className="appm-api-error"><AlertCircle size={15} /> {error}</div> : null}
@@ -1469,9 +1517,9 @@ export default function ApplicationMetering() {
                     </thead>
                     <tbody>
                       {loading.assets ? (
-                        <tr><td colSpan={8}><div className="appm-empty-state"><RefreshCw size={15} className="appm-spin" /> Loading devices from /api/assets/:relationID...</div></td></tr>
+                        <tr><td colSpan={8}><div className="appm-empty-state"><RefreshCw size={15} className="appm-spin" /> Loading devices from /api/assets/{selectedNode.relationID}...</div></td></tr>
                       ) : pagedDeviceRows.length === 0 ? (
-                        <tr><td colSpan={8}><div className="appm-empty-state">No devices found in this folder scope.</div></td></tr>
+                        <tr><td colSpan={8}><div className="appm-empty-state">{selectedNode.id === "organization" ? "Company scope selected. Choose a department to browse device targets, or run Metering Company directly." : "No devices found in this folder scope."}</div></td></tr>
                       ) : pagedDeviceRows.map((device, index) => {
                         const raw = device.raw || {};
                         const isSelected = selectedNode.id === device.id;
