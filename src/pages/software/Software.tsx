@@ -649,26 +649,32 @@ export default function Software() {
   const loadSoftwareInventory = async () => {
     setLoading(true);
     setApiError("");
-    try {
-      const [softwareResponse, categoriesResponse] = await Promise.all([
-        apiGet<ApiSoftwareRecord[] | { data?: ApiSoftwareRecord[] }>("/api/software"),
-        apiGet<string[] | { data?: string[] }>("/api/software/categories"),
-      ]);
 
+    const [softwareResult, categoriesResult] = await Promise.allSettled([
+      apiGet<ApiSoftwareRecord[] | { data?: ApiSoftwareRecord[] }>("/api/software"),
+      apiGet<string[] | { data?: string[] }>("/api/software/categories"),
+    ]);
+
+    if (softwareResult.status === "fulfilled") {
+      const softwareResponse = softwareResult.value;
       const softwarePayload = Array.isArray(softwareResponse) ? softwareResponse : Array.isArray(softwareResponse.data) ? softwareResponse.data : [];
-      const categoryPayload = Array.isArray(categoriesResponse) ? categoriesResponse : Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [];
-
       setSoftwareRecords(softwarePayload.map(normalizeSoftwareRecord));
-      setCategoriesFromApi(categoryPayload.map((item) => cleanCategory(item)).filter(Boolean));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to load software data.";
+    } else {
+      const message = softwareResult.reason instanceof Error ? softwareResult.reason.message : "Unable to load software data.";
       setApiError(message);
       setSoftwareRecords([]);
-      setCategoriesFromApi([]);
       showToast({ type: "error", title: "Software API failed", message });
-    } finally {
-      setLoading(false);
     }
+
+    if (categoriesResult.status === "fulfilled") {
+      const categoriesResponse = categoriesResult.value;
+      const categoryPayload = Array.isArray(categoriesResponse) ? categoriesResponse : Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [];
+      setCategoriesFromApi(categoryPayload.map((item) => cleanCategory(item)).filter(Boolean));
+    } else {
+      setCategoriesFromApi([]);
+    }
+
+    setLoading(false);
   };
 
   const loadDepartmentTree = async () => {
@@ -754,6 +760,7 @@ export default function Software() {
   }, [selected.tableKey, tableRows, searchTerm, tableSort]);
 
   const activeRowsCount = selected.tableKey === "registry" ? filteredRecords.length : filteredTableRows.length;
+  const isDataLoading = selected.tableKey === "registry" ? loading : tableLoading;
   const totalPages = Math.max(1, Math.ceil(activeRowsCount / PAGE_SIZE));
   const pageRegistryRecords = selected.tableKey === "registry" ? filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : [];
   const pageTableRows = selected.tableKey !== "registry" ? filteredTableRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : [];
@@ -883,12 +890,26 @@ export default function Software() {
   const handleFolderClick = async (node: TreeNode, canExpand: boolean) => {
     setSidebarTab("organization");
     setSelectedDevice(null);
+
     if (node.relationId !== undefined) {
       setCurrentRelationId(node.relationId);
       setSelectedFolder({ id: node.relationId, label: node.label });
+
+      if (node.relationId === -1) {
+        setSelected({ mode: "registry", tableKey: "registry", label: "Software", relationId: -1 });
+        setTableLoading(false);
+        setTableError("");
+        setTableSort(null);
+        setActiveView("all");
+        setPage(1);
+        if (canExpand) toggleGroup(node.id);
+        return;
+      }
+
       setSelected({ mode: "folder", tableKey: "installedSoftware", label: node.label, relationId: node.relationId });
       void loadRowsForTable("installedSoftware", node.relationId);
     }
+
     if (canExpand) toggleGroup(node.id);
     if ((node.type === "dept" || node.type === "branch") && !node.devicesLoaded) {
       await loadDepartmentDevices(node);
@@ -1192,11 +1213,12 @@ export default function Software() {
               <div className="software-registry-tools">
                 <div className="ema-search-field software-search-box"><Search size={15} /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software records..." />{searchTerm && <button type="button" onClick={() => setSearchTerm("")}><X size={14} /></button>}</div>
                 <button type="button" className="ema-secondary-btn software-insights-toggle" onClick={() => setShowInsightsModal(true)}><FileText size={15} />Insights <span>{classificationCoverage}%</span></button>
-                <button type="button" className="ema-secondary-btn software-statistics-toggle" onClick={() => setSidebarTab("statistic")}><Database size={15} />Statistics</button>
                 <button type="button" className="ema-secondary-btn software-scan-btn" onClick={() => void handleSoftwareScan("device")} disabled={!selectedDevice || scanLoading}><MonitorSmartphone size={15} className={scanLoading ? "spin" : ""} />Scan Device</button>
                 <button type="button" className="ema-secondary-btn software-scan-btn" onClick={() => void handleSoftwareScan("folder")} disabled={!selectedFolder || scanLoading}><FolderOpen size={15} className={scanLoading ? "spin" : ""} />Scan Folder</button>
                 <button type="button" className="ema-secondary-btn software-scan-btn" onClick={() => void handleSoftwareScan("all")} disabled={scanLoading}><RefreshCw size={15} className={scanLoading ? "spin" : ""} />Scan All</button>
                 <button type="button" className="ema-icon-button" onClick={() => void refreshCurrentView()} title="Refresh"><RefreshCw size={15} /></button>
+                <button type="button" className="ema-ghost-btn software-reset-btn software-header-reset-btn" onClick={selected.tableKey === "registry" ? resetFilters : resetToRegistry} disabled={!canResetCurrentView}><X size={14} />Reset</button>
+                <button type="button" className="ema-primary-btn software-export-btn software-header-export-btn" onClick={exportCurrentView} disabled={isDataLoading || activeRowsCount === 0}><Download size={15} />Export</button>
               </div>
             </div>
 
@@ -1205,8 +1227,6 @@ export default function Software() {
                 <FilterSelect selectKey="category" label="Category" value={categoryFilter} options={categoryOptions} allLabel="All category" onChange={(value) => { setCategoryFilter(value); setActiveView(value === "Unclassified" ? "unclassified" : "all"); }} />
                 <FilterSelect selectKey="type" label="Device Type" value={typeFilter} options={typeOptions} allLabel="All type" onChange={setTypeFilter} />
                 <FilterSelect selectKey="os" label="Operating System" value={osFilter} options={osOptions} allLabel="All OS" onChange={setOsFilter} />
-                <button type="button" className="ema-ghost-btn software-reset-btn" onClick={resetFilters} disabled={!filtersActive}><X size={14} />Reset</button>
-                <button type="button" className="ema-primary-btn software-export-btn" onClick={exportCurrentView}><Download size={15} />Export</button>
               </div>
             )}
 
@@ -1233,18 +1253,18 @@ export default function Software() {
                     <div><span>Scope</span><strong>{selectedFolder?.label || "All"}</strong><small>selected folder</small></div>
                   </>
                 )}
-                <button type="button" className="ema-ghost-btn software-reset-btn software-stat-reset-btn" onClick={resetToRegistry} disabled={!canResetCurrentView}><X size={14} />Reset</button>
-                <button type="button" className="ema-primary-btn software-export-btn" onClick={exportCurrentView}><Download size={15} />Export</button>
               </div>
             )}
 
-            <div className="software-table-status-row"><strong>Showing {visibleStart}-{visibleEnd} of {activeRowsCount} software records</strong><span>View: {selected.label}</span></div>
+            <div className="software-table-status-row">
+              <strong>{isDataLoading ? "Loading software records..." : `Showing ${visibleStart}-${visibleEnd} of ${activeRowsCount} software records`}</strong>
+              {!isDataLoading && <span>View: {selected.label}</span>}
+            </div>
 
             {apiError && selected.tableKey === "registry" && <div className="software-error-banner"><AlertTriangle size={16} /><div><strong>Software API failed</strong><span>{apiError}</span></div></div>}
             {tableError && selected.tableKey !== "registry" && <div className="software-error-banner"><AlertTriangle size={16} /><div><strong>View failed</strong><span>{tableError}</span></div></div>}
-            {(loading || tableLoading) && <div className="software-loading-banner"><RefreshCw size={16} className="spin" />Loading software...</div>}
 
-            <div className="software-standard-table" role="table" aria-label={tableTitle}>
+            <div className={cx("software-standard-table", isDataLoading && "is-loading")} role="table" aria-label={tableTitle}>
               {selected.tableKey === "registry" ? (
                 <>
                   <div className="software-standard-row head software-registry-row" role="row">
@@ -1256,7 +1276,25 @@ export default function Software() {
                     <div className="user-cell"><SortButton label="Type" columnKey="machineType" /></div>
                     <div className="user-cell"><SortButton label="Last Updated" columnKey="lastUpdated" /></div>
                   </div>
-                  {pageRegistryRecords.map((record, index) => (
+                  {isDataLoading ? (
+                    <div className="software-loading-table-state software-registry-loading-state" role="row">
+                      <div className="software-loading-copy">
+                        <RefreshCw size={18} className="spin" />
+                        <div><strong>Loading software inventory</strong><span>Preparing records, categories and device links...</span></div>
+                      </div>
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <div className="software-loading-skeleton-row" key={`software-skeleton-${index}`}>
+                          <span className="software-skeleton-pill" />
+                          <span className="software-skeleton-line is-wide" />
+                          <span className="software-skeleton-line" />
+                          <span className="software-skeleton-line is-mid" />
+                          <span className="software-skeleton-line is-short" />
+                          <span className="software-skeleton-line" />
+                          <span className="software-skeleton-line is-mid" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : pageRegistryRecords.map((record, index) => (
                     <div className="software-standard-row software-registry-row" role="row" key={record.id}>
                       <div className="user-cell row-number"><span className="row-index-pill software-row-no">{(page - 1) * PAGE_SIZE + index + 1}</span></div>
                       <div className="user-cell"><div className="software-name-cell"><span className="software-status-dot" /><div><strong title={record.softwareName}>{record.softwareName}</strong><small>{record.publisher || record.assetTag || "-"}</small></div></div></div>
@@ -1267,7 +1305,7 @@ export default function Software() {
                       <div className="user-cell software-text-cell">{formatDateTime(record.lastUpdated)}</div>
                     </div>
                   ))}
-                  {!pageRegistryRecords.length && !loading && <div className="software-empty-state"><Package size={24} /><strong>No software records found</strong><span>No records match the current filter/search.</span></div>}
+                  {!pageRegistryRecords.length && !isDataLoading && <div className="software-empty-state"><Package size={24} /><strong>No software records found</strong><span>No records match the current filter/search.</span></div>}
                 </>
               ) : (
                 <>
@@ -1275,27 +1313,45 @@ export default function Software() {
                     <div className="user-cell">#</div>
                     {tableColumns[selected.tableKey].map((column, index) => <div className="user-cell" key={column}><TableSortButton label={column} index={index} /></div>)}
                   </div>
-                  {pageTableRows.map((row, rowIndex) => (
+                  {isDataLoading ? (
+                    <div className="software-loading-table-state software-dynamic-loading-state" role="row">
+                      <div className="software-loading-copy">
+                        <RefreshCw size={18} className="spin" />
+                        <div><strong>Loading selected software view</strong><span>Fetching records for {selected.label}...</span></div>
+                      </div>
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <div className="software-loading-skeleton-row" key={`software-table-skeleton-${index}`}>
+                          <span className="software-skeleton-pill" />
+                          <span className="software-skeleton-line is-wide" />
+                          <span className="software-skeleton-line" />
+                          <span className="software-skeleton-line is-mid" />
+                          <span className="software-skeleton-line" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : pageTableRows.map((row, rowIndex) => (
                     <div className="software-standard-row software-dynamic-row" role="row" key={`${selected.tableKey}-${rowIndex}`} style={{ gridTemplateColumns: `4.2rem repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))` }}>
                       <div className="user-cell row-number"><span className="row-index-pill software-row-no">{(page - 1) * PAGE_SIZE + rowIndex + 1}</span></div>
                       {row.map((cell, cellIndex) => <div className="user-cell software-text-cell" key={cellIndex}>{cell}</div>)}
                     </div>
                   ))}
-                  {!pageTableRows.length && !tableLoading && <div className="software-empty-state"><Database size={24} /><strong>No software records loaded</strong><span>Choose a folder, device or statistic view to load data.</span></div>}
+                  {!pageTableRows.length && !isDataLoading && <div className="software-empty-state"><Database size={24} /><strong>No software records loaded</strong><span>Choose a folder, device or statistic view to load data.</span></div>}
                 </>
               )}
             </div>
 
-            <div className="software-page-pagination" aria-label="Software pagination">
-              <div className="software-page-pill">Page {page} of {totalPages}</div>
-              <div className="software-page-nav">
-                <button type="button" onClick={() => setPage(1)} disabled={page <= 1} aria-label="First page">&laquo;</button>
-                <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} aria-label="Previous page">&lsaquo;</button>
-                <strong>{page}</strong>
-                <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} aria-label="Next page">&rsaquo;</button>
-                <button type="button" onClick={() => setPage(totalPages)} disabled={page >= totalPages} aria-label="Last page">&raquo;</button>
+            {!isDataLoading && activeRowsCount > 0 && (
+              <div className="software-page-pagination uam-pagination global-style" aria-label="Software pagination">
+                <div className="uam-page-summary">Page {page} of {totalPages}</div>
+                <div className="uam-pagination-controls global-style">
+                  <button className="uam-page-icon" type="button" onClick={() => setPage(1)} disabled={page <= 1} aria-label="First page">&laquo;</button>
+                  <button className="uam-page-icon" type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1} aria-label="Previous page">&lsaquo;</button>
+                  <span className="uam-page-current">{page}</span>
+                  <button className="uam-page-icon" type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages} aria-label="Next page">&rsaquo;</button>
+                  <button className="uam-page-icon" type="button" onClick={() => setPage(totalPages)} disabled={page >= totalPages} aria-label="Last page">&raquo;</button>
+                </div>
               </div>
-            </div>
+            )}
           </section>
         </section>
       </div>
