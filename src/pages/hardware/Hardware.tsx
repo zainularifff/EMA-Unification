@@ -1696,7 +1696,6 @@ function FolderTree({
   expandedKeys,
   folderMenuKey,
   search,
-  countForNode,
   onSelect,
   onToggle,
   onMenu,
@@ -1710,7 +1709,6 @@ function FolderTree({
   expandedKeys: Record<string, boolean>;
   folderMenuKey: string | null;
   search: string;
-  countForNode: (key: string) => number;
   onSelect: (key: string) => void;
   onToggle: (key: string) => void;
   onMenu: (key: string | null) => void;
@@ -1737,8 +1735,6 @@ function FolderTree({
           </span>
           <span className="ema-sidebar-tree-label">{node.label}</span>
         </button>
-
-        <span className="ema-sidebar-tree-count">{countForNode(node.key)}</span>
 
         {node.key !== "organization" && (
           <div className="ema-sidebar-tree-menu-wrap">
@@ -1781,7 +1777,6 @@ function FolderTree({
               expandedKeys={expandedKeys}
               folderMenuKey={folderMenuKey}
               search={search}
-              countForNode={countForNode}
               onSelect={onSelect}
               onToggle={onToggle}
               onMenu={onMenu}
@@ -2046,10 +2041,6 @@ export default function HardwareInventory() {
     if (page > pageCount) setPage(1);
   }, [page, pageCount]);
 
-  const countForNode = (key: string) => {
-    const descendants = descendantMap.get(key) ?? [key];
-    return allDevices.filter((device) => device.pathKeys.some((item) => descendants.includes(item))).length;
-  };
 
   const closeModal = () => {
     setActiveModal(null);
@@ -3272,7 +3263,6 @@ export default function HardwareInventory() {
                         expandedKeys={expandedKeys}
                         folderMenuKey={folderMenuKey}
                         search={searchHierarchy}
-                        countForNode={countForNode}
                         onSelect={handleFolderSelect}
                         onToggle={handleFolderToggle}
                         onMenu={setFolderMenuKey}
@@ -3330,7 +3320,7 @@ export default function HardwareInventory() {
           </div>
 
           <div className={`hardware-main-grid ${hasSelectedDevice && !showDeviceDetails ? "has-inspector" : ""}`}>
-      <section className="content-shell hardware-card hardware-registry-card ema-panel-surface">
+        <section className="content-shell hardware-card hardware-registry-card ema-panel-surface">
         {activeTab === "statistics" ? renderStatisticsWorkbench() : (
           <>
 

@@ -4180,7 +4180,7 @@ export default function ServiceDesk() {
                               Loading assets...
                             </div>
                           ) : filteredClientAssets.length === 0 ? (
-                            <div className="settings-inline-alert">No asset found from API. Check /api/assets response or try another keyword.</div>
+                            <div className="settings-inline-alert">No assets found.</div>
                           ) : (
                             filteredClientAssets.map((asset) => {
                               const value = getAssetValue(asset);

@@ -1418,14 +1418,14 @@ export default function AppMetering() {
         </aside>
 
         <section className="settings-content">
-          <div className="settings-hero ema-panel-surface">
+          <div className="settings-hero ema-hero-kpi-right ema-panel-surface">
             <div>
               <span className="eyebrow">APPLICATION COMMAND CENTER</span>
               <h2>Application Metering</h2>
               <p>{kpiScopeType}: {kpiScopeLabel} · {kpiPeriodLabel} · {kpiFilterLabel}</p>
               {selectedScopeMetering ? <p>Active metering started {formatMeteringStartedAt(selectedScopeMetering.startedAt)} · {selectedScopeMetering.scopeLabel}</p> : null}
             </div>
-            <div className="settings-score users-hero-score">
+            <div className="settings-score ema-kpi-right-pair">
               <button className="score-box text-start" type="button" onClick={loadUsage}>
                 <span>Apps in Scope</span>
                 <strong>{summary.uniqueApplications}</strong>
@@ -1534,13 +1534,13 @@ export default function AppMetering() {
                     <option value="oneYear">One Year</option>
                   </select>
                 </label>
-                <label className="form-field col-12 col-md-6 col-xl">
+                {/* <label className="form-field col-12 col-md-6 col-xl">
                   <span>Page Mode</span>
                   <select className="setting-select" value={nextPageMode ? "nextpage" : "first"} onChange={(event) => setNextPageMode(event.target.value === "nextpage")} disabled={!oneYearMode}>
                     <option value="first">First Page</option>
                     <option value="nextpage">Next Page</option>
                   </select>
-                </label>
+                </label> */}
               </div>
 
               {error ? <div className="settings-inline-alert mb-3"><AlertCircle size={15} /> {error}</div> : null}
@@ -1562,7 +1562,7 @@ export default function AppMetering() {
                     </thead>
                     <tbody>
                       {loading.assets ? (
-                        <tr><td colSpan={8}><div className="settings-helper-card"><strong>Loading devices</strong><span>Loading devices from /api/assets/{selectedNode.relationID}...</span></div></td></tr>
+                        <tr><td colSpan={8}><div className="settings-helper-card"><strong>Loading devices</strong><span>Loading devices from {selectedNode.relationID}...</span></div></td></tr>
                       ) : pagedDeviceRows.length === 0 ? (
                         <tr><td colSpan={8}><div className="settings-helper-card"><strong>No devices found</strong><span>{selectedNode.id === "organization" ? "Company scope selected. Choose a department to browse devices, or run Metering Company directly." : "No devices found in this folder scope."}</span></div></td></tr>
                       ) : pagedDeviceRows.map((device, index) => {
@@ -1675,7 +1675,7 @@ export default function AppMetering() {
               <div className="modal-section-title">Package File Group</div>
               <div className="settings-helper-card wide">
                 {packageFiles.length === 0 ? (
-                  <><strong>No package file group loaded</strong><span>Choose a package filter to call /api/application-metering/packages/:packageId/files.</span></>
+                  <><strong>No package file group loaded</strong><span>Choose a package filter to call for a package file group.</span></>
                 ) : (
                   <div className="row g-2">
                     {packageFiles.slice(0, 8).map((file) => (
