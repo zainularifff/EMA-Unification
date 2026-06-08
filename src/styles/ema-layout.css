@@ -8380,7 +8380,7 @@ body.ema-report-page-active {
 }
 
 .ema-report-pro .report-category-panel .panel-head {
-  border-bottom: 1px solid var(--report-line);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.26);
 }
 
 .ema-report-pro .category-list {
@@ -20100,4 +20100,352 @@ body.ema-report-page-active .main-content {
 
 .settings-module-root.task-list-module .task-progress-bar .task-progress-native::-moz-progress-bar {
   background: linear-gradient(90deg, var(--ema-control-primary), var(--ema-control-cyan)) !important;
+}
+/* =========================================================
+   V23 Hardware global CSS coverage patch
+   Append-only. Keeps Hardware.tsx using global CSS only.
+   No per-page Hardware.css required.
+========================================================= */
+
+.hardware-module-root.has-selected-device,
+.hardware-module-root.no-selected-device {
+  min-width: 0 !important;
+}
+
+.hardware-module-root .hardware-card {
+  min-width: 0 !important;
+  border: 1px solid var(--ema-control-border, rgba(203, 213, 225, 0.84)) !important;
+  border-radius: 1.35rem !important;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.985), rgba(248, 251, 255, 0.965)) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+}
+
+.hardware-module-root .hardware-device-row {
+  cursor: pointer !important;
+  transition: background 140ms ease, box-shadow 140ms ease, border-color 140ms ease !important;
+}
+
+.hardware-module-root .hardware-device-row:hover,
+.hardware-module-root .hardware-device-row.is-selected {
+  background: rgba(239, 246, 255, 0.72) !important;
+}
+
+.hardware-module-root .hardware-device-row.is-selected {
+  box-shadow: inset 3px 0 0 var(--ema-control-primary, #2558e8) !important;
+}
+
+.hardware-module-root .hardware-device-main-cell,
+.hardware-module-root .hardware-right-device,
+.hardware-module-root .hardware-stat-workbench {
+  min-width: 0 !important;
+}
+
+.hardware-module-root .hardware-empty-state {
+  min-height: 8rem !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 1rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.78rem !important;
+  font-weight: 760 !important;
+  text-align: center !important;
+}
+
+.hardware-module-root .hardware-detail-header-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.55rem !important;
+  flex-wrap: wrap !important;
+}
+
+.hardware-module-root .hardware-detail-status {
+  min-height: 1.8rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0.28rem 0.68rem !important;
+  border: 1px solid rgba(100, 116, 139, 0.22) !important;
+  border-radius: 999px !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  background: rgba(100, 116, 139, 0.08) !important;
+  font-size: 0.66rem !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+}
+
+.hardware-module-root .hardware-detail-status.is-online {
+  color: #047857 !important;
+  border-color: rgba(16, 185, 129, 0.24) !important;
+  background: rgba(16, 185, 129, 0.10) !important;
+}
+
+.hardware-module-root .hardware-detail-status.is-locked,
+.hardware-module-root .hardware-detail-status.is-stale,
+.hardware-module-root .hardware-detail-status.is-offline {
+  color: #b45309 !important;
+  border-color: rgba(245, 158, 11, 0.24) !important;
+  background: rgba(245, 158, 11, 0.11) !important;
+}
+
+.hardware-module-root .hardware-detail-card-wide {
+  grid-column: 1 / -1 !important;
+}
+
+.hardware-module-root .hardware-detail-form-overlay {
+  z-index: 2147483000 !important;
+}
+
+.hardware-module-root .hardware-detail-form-footer {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 0.6rem !important;
+  padding: 0.86rem 1rem 1rem !important;
+  border-top: 1px solid var(--ema-control-line-soft, rgba(203, 213, 225, 0.58)) !important;
+  background: var(--ema-control-surface, #fff) !important;
+}
+
+.hardware-module-root .hardware-detail-timeline {
+  display: grid !important;
+  gap: 0.72rem !important;
+}
+
+.hardware-module-root .hardware-timeline-item {
+  position: relative !important;
+  display: grid !important;
+  gap: 0.18rem !important;
+  padding: 0.72rem 0.82rem 0.72rem 2.25rem !important;
+  border: 1px solid var(--ema-control-border, rgba(203, 213, 225, 0.84)) !important;
+  border-radius: 1rem !important;
+  background: rgba(248, 251, 255, 0.94) !important;
+}
+
+.hardware-module-root .hardware-timeline-item::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 0.86rem !important;
+  top: 0.9rem !important;
+  width: 0.68rem !important;
+  height: 0.68rem !important;
+  border-radius: 999px !important;
+  background: rgba(100, 116, 139, 0.48) !important;
+}
+
+.hardware-module-root .hardware-timeline-item.is-current::before {
+  background: var(--ema-control-primary, #2558e8) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12) !important;
+}
+
+.hardware-module-root .hardware-timeline-item strong {
+  color: var(--ema-control-text-strong, #0f2746) !important;
+  font-size: 0.8rem !important;
+  font-weight: 900 !important;
+}
+
+.hardware-module-root .hardware-timeline-item span,
+.hardware-module-root .hardware-timeline-item small {
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+}
+
+.hardware-module-root .hardware-storage-hero {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 0.9rem !important;
+}
+
+.hardware-module-root .hardware-storage-percent {
+  min-width: 4rem !important;
+  color: var(--ema-control-primary, #2558e8) !important;
+  font-size: 1.35rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.055em !important;
+  text-align: right !important;
+}
+
+.hardware-module-root .hardware-storage-bar {
+  height: 0.72rem !important;
+  margin: 0.82rem 0 !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  background: rgba(203, 213, 225, 0.58) !important;
+}
+
+.hardware-module-root .hardware-storage-bar > div {
+  height: 100% !important;
+  border-radius: inherit !important;
+  background: linear-gradient(135deg, #2558e8, #087ea4) !important;
+}
+
+.hardware-module-root .hardware-tree-branch,
+.hardware-module-root .hardware-tree-children {
+  min-width: 0 !important;
+}
+
+.hardware-module-root .hardware-tree-children {
+  display: grid !important;
+  gap: 0.18rem !important;
+}
+
+.hardware-module-root .hardware-custom-select-check {
+  flex: 0 0 auto !important;
+  color: var(--ema-control-primary, #2558e8) !important;
+  font-size: 0.72rem !important;
+  font-weight: 900 !important;
+}
+
+.hardware-module-root .hardware-folder-modal {
+  width: min(520px, calc(100vw - 40px)) !important;
+}
+
+.hardware-module-root .hardware-toast-success .hardware-toast-icon,
+.hardware-module-root .hardware-toast-info .hardware-toast-icon {
+  color: #2558e8 !important;
+  background: rgba(37, 99, 235, 0.12) !important;
+}
+
+.hardware-module-root .hardware-toast-error .hardware-toast-icon {
+  color: #dc2626 !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+}
+
+.hardware-module-root .hardware-action-item.is-action-message .hardware-action-icon,
+.hardware-module-root .hardware-action-item.is-action-remote .hardware-action-icon,
+.hardware-module-root .hardware-action-item.is-action-geo .hardware-action-icon,
+.hardware-module-root .hardware-action-item.is-action-scan .hardware-action-icon,
+.hardware-module-root .hardware-action-item.is-action-move .hardware-action-icon {
+  color: var(--ema-control-primary, #2558e8) !important;
+  background: rgba(37, 99, 235, 0.10) !important;
+}
+
+.hardware-module-root .hardware-action-item.is-action-lock .hardware-action-icon {
+  color: #dc2626 !important;
+  background: rgba(239, 68, 68, 0.11) !important;
+}
+
+.hardware-module-root .hardware-action-item.is-action-unlock .hardware-action-icon {
+  color: #047857 !important;
+  background: rgba(16, 185, 129, 0.11) !important;
+}
+
+.hardware-module-root .hardware-geo-empty,
+.hardware-module-root .hardware-geo-empty-redesign,
+.hardware-module-root .hardware-geo-history-empty-modern {
+  min-height: 7rem !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 1rem !important;
+  color: var(--ema-control-muted, #64748b) !important;
+  font-size: 0.76rem !important;
+  font-weight: 760 !important;
+  text-align: center !important;
+}
+
+.hardware-module-root .hardware-geo-floating-marker {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 999px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #2558e8, #087ea4) !important;
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.24) !important;
+}
+
+.hardware-module-root .hardware-geo-map-mini-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  color: var(--ema-control-primary, #2558e8) !important;
+  font-size: 0.7rem !important;
+  font-weight: 850 !important;
+  text-decoration: none !important;
+}
+
+.hardware-module-root .hardware-page-summary,
+.hardware-module-root .hardware-pagination-actions,
+.hardware-module-root .hardware-pagination-current,
+.hardware-module-root .hardware-geo-page-summary,
+.hardware-module-root .hardware-geo-pagination-actions,
+.hardware-module-root .hardware-geo-pagination-current {
+  min-width: 0 !important;
+}
+
+/* =========================================================
+   V24 EMA sidebar alias support for Hardware/global modules
+   Append-only aliases so Hardware.tsx can keep shared class names.
+========================================================= */
+
+.settings-module-root .ema-sidebar-tabs {
+  min-width: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-field {
+  min-width: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-action-btn {
+  width: calc(100% - 1.56rem) !important;
+  margin-inline: 0.78rem !important;
+}
+
+.settings-module-root .ema-sidebar-tree,
+.settings-module-root .ema-sidebar-tree-branch,
+.settings-module-root .ema-sidebar-tree-children {
+  min-width: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-tree-node {
+  min-width: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-tree-toggle,
+.settings-module-root .ema-sidebar-tree-main,
+.settings-module-root .ema-sidebar-tree-menu-btn {
+  min-width: 0 !important;
+}
+
+.settings-module-root .ema-sidebar-tree-main {
+  overflow: hidden !important;
+}
+
+.settings-module-root .ema-sidebar-tree-icon,
+.settings-module-root .ema-sidebar-tree-count {
+  flex: 0 0 auto !important;
+}
+
+.settings-module-root .ema-sidebar-tree-label {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu-wrap {
+  position: relative !important;
+}
+
+.settings-module-root .ema-sidebar-tree-menu {
+  position: absolute !important;
+  right: 0 !important;
+  top: calc(100% + 0.3rem) !important;
+  z-index: 80 !important;
+}
+
+.hardware-module-root .hardware-search-box-with-clear {
+  padding-right: 0.42rem !important;
+}
+
+.hardware-module-root .is-empty,
+.hardware-module-root .is-loading {
+  pointer-events: none !important;
+}
+
+.hardware-module-root .hardware-search-box.small {
+  min-height: 2.42rem !important;
+  height: 2.42rem !important;
 }
