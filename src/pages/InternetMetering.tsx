@@ -1176,7 +1176,7 @@ export default function InternetMetering() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root internet-metering-module container-fluid p-3 p-xl-4">
+    <main data-section="users" className="settings-module-root ema-settings-pro ema-module-root internet-metering-module container-fluid p-3 p-xl-4">
       {toast && (
         <div className="settings-toast-layer">
           <div className="settings-toast settings-toast-success">
@@ -1282,6 +1282,12 @@ export default function InternetMetering() {
                 )}
               </>
             )}
+          </div>
+
+          <div className="settings-helper-card m-3 mt-0">
+            <strong>Selected scope</strong>
+            <span>{selectedScopeLabel}</span>
+            <small>Domain: {selectedUrlLabel}</small>
           </div>
         </aside>
 

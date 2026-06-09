@@ -1593,9 +1593,35 @@ const validIcons: IconName[] = [
   "chevron",
 ];
 
+const API_BASE_URL = String(import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+
+function buildApiUrl(path: string) {
+  return `${API_BASE_URL}${path}`;
+}
+
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem("token") || localStorage.getItem("authToken") || "";
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function readApiJson(res: Response, featureName: string) {
+  const contentType = res.headers.get("content-type") || "";
+  const bodyText = await res.text();
+
+  if (!contentType.toLowerCase().includes("application/json")) {
+    const isHtml = bodyText.trim().toLowerCase().startsWith("<!doctype") || bodyText.trim().toLowerCase().startsWith("<html");
+    throw new Error(
+      isHtml
+        ? `${featureName} endpoint is returning the frontend HTML page. Check that the backend route exists and Vite proxy / API base URL points to the Express server.`
+        : `${featureName} endpoint did not return JSON.`
+    );
+  }
+
+  try {
+    return bodyText ? JSON.parse(bodyText) : {};
+  } catch {
+    throw new Error(`${featureName} endpoint returned invalid JSON.`);
+  }
 }
 
 function formatMoney(value: number) {
@@ -1657,23 +1683,29 @@ function readText(value: unknown, fallback = "-") {
 }
 
 async function fetchDashboardOverview() {
-  const res = await fetch("/api/management-dashboard/overview", {
+  const res = await fetch(buildApiUrl("/api/management-dashboard/overview"), {
     headers: getAuthHeaders(),
   });
 
-  if (!res.ok) throw new Error("Management insight is not available right now.");
-  const json = await res.json();
-  return normalizeDashboardData(json.data);
+  const json = await readApiJson(res, "Management dashboard overview");
+  if (!res.ok || json?.success === false) {
+    throw new Error(json?.message || "Management insight is not available right now.");
+  }
+
+  return normalizeDashboardData(json.data || json);
 }
 
 async function fetchDashboardDrilldown(area: string, key = "", level: DrillLevel = 2) {
   const params = new URLSearchParams({ area, key, level: String(level) });
-  const res = await fetch(`/api/management-dashboard/drilldown?${params.toString()}`, {
+  const res = await fetch(buildApiUrl(`/api/management-dashboard/drilldown?${params.toString()}`), {
     headers: getAuthHeaders(),
   });
 
-  if (!res.ok) throw new Error("Detail insight is not available right now.");
-  const json = await res.json();
+  const json = await readApiJson(res, "Management dashboard drilldown");
+  if (!res.ok || json?.success === false) {
+    throw new Error(json?.message || "Detail insight is not available right now.");
+  }
+
   return json.data || { rows: [], total: 0 };
 }
 
