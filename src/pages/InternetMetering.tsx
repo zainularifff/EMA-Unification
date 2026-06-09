@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   CalendarDays,
@@ -453,7 +454,37 @@ function CompactPagination({ currentPage, totalPages, onPageChange, label, class
 type ImSelectOption = {
   value: string;
   label: string;
+  triggerLabel?: string;
 };
+
+const formatDateDisplay = (value: string) => {
+  if (!value) return '-';
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) return value;
+  return `${day}/${month}/${year}`;
+};
+
+function buildDateOptions(currentValue: string): ImSelectOption[] {
+  const baseOptions: ImSelectOption[] = [
+    { value: todayIso(), label: `Today · ${formatDateDisplay(todayIso())}`, triggerLabel: formatDateDisplay(todayIso()) },
+    { value: daysAgoIso(1), label: `Yesterday · ${formatDateDisplay(daysAgoIso(1))}`, triggerLabel: formatDateDisplay(daysAgoIso(1)) },
+    { value: daysAgoIso(7), label: `7 days ago · ${formatDateDisplay(daysAgoIso(7))}`, triggerLabel: formatDateDisplay(daysAgoIso(7)) },
+    { value: daysAgoIso(14), label: `14 days ago · ${formatDateDisplay(daysAgoIso(14))}`, triggerLabel: formatDateDisplay(daysAgoIso(14)) },
+    { value: daysAgoIso(30), label: `30 days ago · ${formatDateDisplay(daysAgoIso(30))}`, triggerLabel: formatDateDisplay(daysAgoIso(30)) },
+    { value: daysAgoIso(60), label: `60 days ago · ${formatDateDisplay(daysAgoIso(60))}`, triggerLabel: formatDateDisplay(daysAgoIso(60)) },
+    { value: daysAgoIso(90), label: `90 days ago · ${formatDateDisplay(daysAgoIso(90))}`, triggerLabel: formatDateDisplay(daysAgoIso(90)) },
+  ];
+
+  if (currentValue && !baseOptions.some((option) => option.value === currentValue)) {
+    baseOptions.unshift({
+      value: currentValue,
+      label: `Selected · ${formatDateDisplay(currentValue)}`,
+      triggerLabel: formatDateDisplay(currentValue),
+    });
+  }
+
+  return baseOptions;
+}
 
 function ImCustomSelect({
   value,
@@ -461,6 +492,7 @@ function ImCustomSelect({
   onChange,
   className,
   ariaLabel,
+  icon,
 }: {
   value: string;
   options: ImSelectOption[];
@@ -469,17 +501,111 @@ function ImCustomSelect({
   icon?: ReactNode;
   ariaLabel: string;
 }) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const selected = options.find((option) => option.value === value);
+  const selectedLabel = selected?.triggerLabel || selected?.label || options[0]?.label || 'Select';
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 16;
+    const gap = 8;
+    const menuWidth = Math.max(rect.width, 210);
+    const optionHeight = 36;
+    const estimatedHeight = Math.min(288, Math.max(44, options.length * optionHeight + 10));
+    const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const availableAbove = rect.top - viewportPadding;
+    const openAbove = availableBelow < estimatedHeight && availableAbove > availableBelow;
+    const maxHeight = Math.max(96, Math.min(estimatedHeight, openAbove ? availableAbove : availableBelow));
+    const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - menuWidth - viewportPadding);
+    const top = openAbove
+      ? Math.max(viewportPadding, rect.top - maxHeight - gap)
+      : Math.min(rect.bottom + gap, window.innerHeight - maxHeight - viewportPadding);
+
+    setMenuStyle({
+      position: 'fixed',
+      left,
+      top,
+      width: menuWidth,
+      maxHeight,
+      zIndex: 2147483600,
+    });
+  }, [options.length]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    updateMenuPosition();
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
+
+  const menuNode = open && typeof document !== 'undefined' ? createPortal(
+    <div ref={menuRef} className="uam-filter-menu uam-filter-menu-portal setting-select-menu" style={menuStyle} role="listbox" aria-label={ariaLabel}>
+      {options.map((option) => {
+        const selectedOption = option.value === value;
+        return (
+          <button
+            key={`${option.value}-${option.label}`}
+            type="button"
+            className={clsx('uam-filter-option', selectedOption && 'selected')}
+            role="option"
+            aria-selected={selectedOption}
+            onClick={() => {
+              onChange(option.value);
+              setOpen(false);
+            }}
+          >
+            <span>{option.label}</span>
+            {selectedOption && <span className="uam-filter-check">✓</span>}
+          </button>
+        );
+      })}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <select
-      className={clsx('setting-select', className)}
-      value={value}
-      aria-label={ariaLabel}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
-      ))}
-    </select>
+    <div className={clsx('uam-filter-dropdown setting-select-dropdown', open && 'open', className)}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="uam-filter-trigger setting-select-trigger"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {icon}
+        <span>{selectedLabel}</span>
+        <ChevronDown size={15} />
+      </button>
+      {menuNode}
+    </div>
   );
 }
 
@@ -1283,12 +1409,6 @@ export default function InternetMetering() {
               </>
             )}
           </div>
-
-          <div className="settings-helper-card m-3 mt-0">
-            <strong>Selected scope</strong>
-            <span>{selectedScopeLabel}</span>
-            <small>Domain: {selectedUrlLabel}</small>
-          </div>
         </aside>
 
         <section className="settings-content d-grid gap-3">
@@ -1348,36 +1468,40 @@ export default function InternetMetering() {
               </div>
             </div>
 
-            <div className="content-toolbar users-toolbar">
-              <label className="section-search">
+            <div className="user-access-commandbar align-items-center">
+              <label className="section-search user-search-inline">
                 <Search size={15} />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search domain, device/user, Rule ID or date..." />
               </label>
-              <div className="content-actions">
-                <label className="section-search" title="Start date">
-                  <CalendarDays size={15} />
-                  <input type="date" value={fromDate} onChange={(event) => { setPage(1); setFromDate(event.target.value); }} />
-                </label>
-                <label className="section-search" title="End date">
-                  <CalendarDays size={15} />
-                  <input type="date" value={toDate} onChange={(event) => { setPage(1); setToDate(event.target.value); }} />
-                </label>
-                {usagePanelUrl ? (
-                  <ImCustomSelect
-                    value={String(limit)}
-                    onChange={(value) => { setPage(1); setLimit(Number(value)); }}
-                    options={[{ value: '50', label: '50 rows' }, { value: '100', label: '100 rows' }, { value: '250', label: '250 rows' }, { value: '500', label: '500 rows' }]}
-                    ariaLabel="Rows per page"
-                  />
-                ) : (
-                  <ImCustomSelect
-                    value={String(restrictFilter)}
-                    onChange={(value) => { setRestrictFilter(Number(value)); setUrlPage(1); }}
-                    options={[{ value: '-1', label: 'All rules' }, { value: '0', label: 'Managed' }, { value: '1', label: 'Restricted' }]}
-                    ariaLabel="URL rule filter"
-                  />
-                )}
-              </div>
+              <ImCustomSelect
+                value={fromDate}
+                onChange={(value) => { setPage(1); setFromDate(value); }}
+                options={buildDateOptions(fromDate)}
+                icon={<CalendarDays size={15} />}
+                ariaLabel="Start date"
+              />
+              <ImCustomSelect
+                value={toDate}
+                onChange={(value) => { setPage(1); setToDate(value); }}
+                options={buildDateOptions(toDate)}
+                icon={<CalendarDays size={15} />}
+                ariaLabel="End date"
+              />
+              {usagePanelUrl ? (
+                <ImCustomSelect
+                  value={String(limit)}
+                  onChange={(value) => { setPage(1); setLimit(Number(value)); }}
+                  options={[{ value: '50', label: '50 rows' }, { value: '100', label: '100 rows' }, { value: '250', label: '250 rows' }, { value: '500', label: '500 rows' }]}
+                  ariaLabel="Rows per page"
+                />
+              ) : (
+                <ImCustomSelect
+                  value={String(restrictFilter)}
+                  onChange={(value) => { setRestrictFilter(Number(value)); setUrlPage(1); }}
+                  options={[{ value: '-1', label: 'All rules' }, { value: '0', label: 'Managed' }, { value: '1', label: 'Restricted' }]}
+                  ariaLabel="URL rule filter"
+                />
+              )}
             </div>
 
             <div className="content-body p-3 pt-2">
