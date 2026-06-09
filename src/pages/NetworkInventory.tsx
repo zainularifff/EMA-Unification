@@ -1093,6 +1093,12 @@ export default function NetworkInventory() {
               />
             )}
           </div>
+
+          <div className="settings-helper-card m-3 mt-0">
+            <strong>Selected scope</strong>
+            <span>{selectedNode?.label || selectedWorkgroup || "Organization"}</span>
+            <small>{treeMode === "organization" ? `${selectedIps.length.toLocaleString()} scan target(s)` : "Workgroup statistics"}</small>
+          </div>
         </aside>
 
         <section className="settings-content">

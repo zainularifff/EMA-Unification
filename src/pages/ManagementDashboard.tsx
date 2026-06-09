@@ -1,1981 +1,146 @@
 import React, { useEffect, useMemo, useState } from "react";
-
-const MANAGEMENT_DASHBOARD_INLINE_CSS = `
-:root {
-  --md-font: "Inter", "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --md-page: #eef4fb;
-  --md-ink: #07152f;
-  --md-muted: #64748b;
-  --md-line: rgba(148, 163, 184, 0.24);
-  --md-card: rgba(255, 255, 255, 0.92);
-  --md-white: #ffffff;
-  --md-blue: #2563eb;
-  --md-sky: #06b6d4;
-  --md-green: #059669;
-  --md-red: #ef4444;
-  --md-amber: #f59e0b;
-  --md-purple: #8b5cf6;
-  --md-pink: #ec4899;
-  --md-shadow: 0 22px 55px rgba(15, 23, 42, 0.10);
-  --md-soft-shadow: 0 12px 30px rgba(15, 23, 42, 0.075);
-  --md-radius-xl: 28px;
-  --md-radius-lg: 22px;
-  --md-radius-md: 16px;
-  --md-radius-sm: 12px;
-}
-
-* { box-sizing: border-box; }
-body { font-family: var(--md-font); }
-button, table { font: inherit; }
-button { cursor: pointer; }
-
-.management-center-page {
-  height: calc(100vh - 72px);
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px;
-  background:
-    radial-gradient(circle at 74% 0%, rgba(59, 130, 246, 0.18), transparent 32%),
-    radial-gradient(circle at 14% 18%, rgba(139, 92, 246, 0.09), transparent 28%),
-    linear-gradient(135deg, #f8fbff 0%, #eef4fb 54%, #e9f1fa 100%);
-  color: var(--md-ink);
-  -webkit-font-smoothing: antialiased;
-}
-
-.management-module-root {
-  width: 100%;
-  max-width: 1620px;
-  margin: 0 auto;
-}
-
-.md-icon {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}
-
-.md-content {
-  display: grid;
-  gap: 16px;
-}
-
-.md-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 22px;
-  border: 1px solid rgba(226, 232, 240, 0.88);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(16px);
-}
-
-.md-header h1 {
-  margin: 0;
-  font-size: clamp(28px, 2.2vw, 42px);
-  line-height: 1;
-  font-weight: 920;
-  letter-spacing: -0.06em;
-  color: #06142f;
-}
-
-.md-header p {
-  margin: 7px 0 0;
-  color: #1d3766;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.md-generated {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  margin-top: 9px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.md-generated::before {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #22c55e;
-  content: "";
-}
-
-.md-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.md-toolbar button,
-.md-view-actions button,
-.md-table-action {
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  padding: 0 15px;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  border-radius: 14px;
-  color: #0f172a;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.055);
-  font-size: 13px;
-  font-weight: 900;
-  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-}
-
-.md-toolbar button:hover,
-.md-view-actions button:hover,
-.md-table-action:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.38);
-  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.09);
-}
-
-.md-toolbar .download,
-.md-view-actions .primary {
-  color: #fff;
-  border-color: transparent;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-}
-
-.md-state-panel {
-  display: grid;
-  place-items: center;
-  min-height: 260px;
-  padding: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 26px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--md-shadow);
-  color: #475569;
-  font-size: 15px;
-  font-weight: 850;
-}
-
-.md-state-error {
-  color: #b91c1c;
-  background: #fff7f7;
-  border-color: rgba(239, 68, 68, 0.24);
-}
-
-.md-studio-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-  align-items: stretch;
-}
-
-.md-side-panel,
-.md-card,
-.md-panel,
-.md-tile,
-.md-metric-card {
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  background: var(--md-card);
-  box-shadow: var(--md-soft-shadow);
-  backdrop-filter: blur(10px);
-}
-
-.md-side-panel {
-  position: sticky;
-  top: 110px;
-  align-self: start;
-  height: calc(100vh - 132px);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow: hidden;
-  padding: 16px;
-  border-radius: 26px;
-}
-
-.md-mini-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--md-line);
-}
-
-.md-mini-logo {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 15px;
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #8b5cf6);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.32);
-}
-
-.md-mini-brand strong,
-.md-side-user strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 950;
-  letter-spacing: -0.02em;
-}
-
-.md-mini-brand span,
-.md-side-user span {
-  display: block;
-  margin-top: 3px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.md-section-nav {
-  display: grid;
-  gap: 8px;
-  overflow: auto;
-  padding-right: 2px;
-}
-
-.md-section-nav p {
-  margin: 0 0 4px;
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 950;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.md-section-nav button {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 14px;
-  color: #334155;
-  background: transparent;
-  font-size: 13px;
-  font-weight: 850;
-  text-align: left;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
-}
-
-.md-section-nav button:hover,
-.md-section-nav button.active {
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #06b6d4);
-  transform: translateX(2px);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.26);
-}
-
-.md-side-user {
-  margin-top: auto;
-  padding: 14px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(139, 92, 246, 0.09));
-}
-
-.md-side-user small {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-  color: #059669;
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.md-side-user small::before {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #22c55e;
-  content: "";
-}
-
-.md-board {
-  min-width: 0;
-  display: grid;
-  gap: 16px;
-}
-
-.md-metric-grid {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(160px, 1fr));
-  gap: 14px;
-}
-
-.md-metric-card {
-  min-height: 132px;
-  position: relative;
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  border-radius: 24px;
-  overflow: hidden;
-  text-align: left;
-}
-
-.md-metric-card::after {
-  position: absolute;
-  inset: auto -16px -34px auto;
-  width: 98px;
-  height: 98px;
-  border-radius: 50%;
-  opacity: 0.12;
-  content: "";
-}
-
-.md-metric-card.tone-blue::after { background: var(--md-blue); }
-.md-metric-card.tone-green::after { background: var(--md-green); }
-.md-metric-card.tone-red::after { background: var(--md-red); }
-.md-metric-card.tone-amber::after { background: var(--md-amber); }
-.md-metric-card.tone-purple::after { background: var(--md-purple); }
-.md-metric-card.tone-navy::after { background: #0f172a; }
-
-.md-metric-card header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.md-metric-card h3,
-.md-panel-title h2,
-.md-widget-title h2 {
-  margin: 0;
-  color: #07152f;
-  font-size: 13px;
-  font-weight: 950;
-  letter-spacing: -0.01em;
-}
-
-.md-metric-card h3 {
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-}
-
-.md-kpi-icon {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-}
-
-.tone-blue .md-kpi-icon, .tone-blue .md-soft-badge { color: var(--md-blue); background: #e8f1ff; }
-.tone-green .md-kpi-icon, .tone-green .md-soft-badge { color: var(--md-green); background: #ddfbea; }
-.tone-red .md-kpi-icon, .tone-red .md-soft-badge { color: var(--md-red); background: #fee2e2; }
-.tone-amber .md-kpi-icon, .tone-amber .md-soft-badge { color: #d97706; background: #fff1d6; }
-.tone-purple .md-kpi-icon, .tone-purple .md-soft-badge { color: var(--md-purple); background: #ede9fe; }
-.tone-navy .md-kpi-icon, .tone-navy .md-soft-badge { color: #0f172a; background: #e2e8f0; }
-
-.md-metric-value {
-  display: flex;
-  align-items: flex-end;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
-.md-metric-value strong {
-  font-size: clamp(25px, 2vw, 34px);
-  line-height: 0.96;
-  font-weight: 950;
-  letter-spacing: -0.06em;
-  color: #07152f;
-}
-
-.tone-blue .md-metric-value strong { color: var(--md-blue); }
-.tone-green .md-metric-value strong { color: var(--md-green); }
-.tone-red .md-metric-value strong { color: var(--md-red); }
-.tone-amber .md-metric-value strong { color: #d97706; }
-.tone-purple .md-metric-value strong { color: var(--md-purple); }
-
-.md-metric-value span {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.md-soft-badge {
-  width: max-content;
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 950;
-}
-
-.md-metric-card p,
-.md-panel-title p,
-.md-widget-title p {
-  margin: 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.4;
-  font-weight: 750;
-}
-
-.md-main-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 14px;
-  align-items: start;
-}
-
-.md-left-stack,
-.md-right-stack {
-  min-width: 0;
-  display: grid;
-  gap: 16px;
-  align-content: start;
-  align-self: start;
-}
-
-.md-card,
-.md-panel {
-  border-radius: 26px;
-  overflow: hidden;
-}
-
-.md-finance-hero {
-  min-height: 342px;
-  display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
-  gap: 16px;
-  padding: 20px;
-}
-
-.md-panel-title,
-.md-widget-title {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.md-panel-title h2,
-.md-widget-title h2 {
-  font-size: 19px;
-  letter-spacing: -0.04em;
-}
-
-.md-panel-title span,
-.md-widget-title span {
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 950;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.md-money-hero {
-  display: grid;
-  gap: 18px;
-}
-
-.md-money-amount {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.md-money-amount strong {
-  font-size: clamp(42px, 4vw, 70px);
-  line-height: 0.9;
-  font-weight: 980;
-  letter-spacing: -0.08em;
-  color: #111827;
-}
-
-.md-money-amount span {
-  margin-bottom: 8px;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.md-mini-stat-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.md-mini-stat {
-  min-height: 82px;
-  padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.20);
-  border-radius: 20px;
-  background: linear-gradient(180deg, #fff, #f8fafc);
-}
-
-.md-mini-stat span {
-  display: block;
-  color: #94a3b8;
-  font-size: 11px;
-  font-weight: 950;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.md-mini-stat strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 22px;
-  line-height: 1;
-  font-weight: 950;
-  letter-spacing: -0.04em;
-  color: #07152f;
-}
-
-.text-blue { color: var(--md-blue) !important; }
-.text-green { color: var(--md-green) !important; }
-.text-red { color: var(--md-red) !important; }
-.text-amber { color: #d97706 !important; }
-.text-purple { color: var(--md-purple) !important; }
-.text-navy { color: #07152f !important; }
-
-.md-chart-panel {
-  min-height: 260px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 18px;
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 18% 22%, rgba(251, 191, 36, 0.22), transparent 26%),
-    radial-gradient(circle at 84% 22%, rgba(139, 92, 246, 0.18), transparent 24%),
-    linear-gradient(180deg, #fbfdff, #f8fafc);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-}
-
-.md-svg-chart {
-  width: 100%;
-  height: 172px;
-  margin-top: 8px;
-}
-
-.md-svg-chart polygon {
-  fill: rgba(37, 99, 235, 0.12);
-}
-
-.md-svg-chart .line-main {
-  fill: none;
-  stroke: #2563eb;
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.md-svg-chart .line-secondary {
-  fill: none;
-  stroke: #f59e0b;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.84;
-}
-
-.md-chart-dots circle {
-  fill: #fff;
-  stroke: #2563eb;
-  stroke-width: 2.5;
-}
-
-.md-chart-footer {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding-top: 10px;
-}
-
-.md-chart-footer button {
-  min-height: 52px;
-  padding: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 16px;
-  background: #fff;
-  text-align: left;
-}
-
-.md-chart-footer span {
-  display: block;
-  color: #94a3b8;
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.md-chart-footer strong {
-  display: block;
-  margin-top: 4px;
-  color: #07152f;
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.md-donut-card {
-  min-height: 282px;
-  display: grid;
-  gap: 12px;
-  padding: 16px;
-}
-
-.md-donut {
-  --md-donut-value: 72%;
-  width: min(158px, 56vw);
-  aspect-ratio: 1;
-  margin: 0 auto;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: conic-gradient(#ef4444 0 18%, #8b5cf6 18% var(--md-donut-value), #06b6d4 var(--md-donut-value) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 12px 24px rgba(15, 23, 42, 0.08);
-}
-
-.md-donut::before {
-  width: 58%;
-  height: 58%;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
-  content: "";
-}
-
-.md-donut-center {
-  position: absolute;
-  text-align: center;
-}
-
-.md-donut-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  padding: 2px 0;
-  border: 0;
-  outline: 0;
-  border-radius: 22px;
-  background: transparent;
-  box-shadow: none;
-}
-.md-donut-wrap:focus-visible,
-.md-donut-legend button:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.22);
-  outline-offset: 3px;
-}
-
-
-.md-donut-center strong {
-  display: block;
-  color: #07152f;
-  font-size: 27px;
-  line-height: 1;
-  font-weight: 980;
-  letter-spacing: -0.06em;
-}
-
-.md-donut-center span {
-  display: block;
-  margin-top: 4px;
-  color: #64748b;
-  font-size: 10px;
-  font-weight: 950;
-  text-transform: uppercase;
-}
-
-.md-donut-legend {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.md-donut-legend button {
-  min-height: 58px;
-  padding: 9px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 15px;
-  background: #fff;
-  text-align: left;
-}
-
-.md-donut-legend i,
-.md-dot {
-  width: 9px;
-  height: 9px;
-  display: inline-block;
-  margin-right: 6px;
-  border-radius: 999px;
-}
-
-.md-dot.blue, .md-donut-legend .blue { background: #2563eb; }
-.md-dot.green, .md-donut-legend .green { background: #059669; }
-.md-dot.red, .md-donut-legend .red { background: #ef4444; }
-.md-dot.amber, .md-donut-legend .amber { background: #f59e0b; }
-.md-dot.purple, .md-donut-legend .purple { background: #8b5cf6; }
-.md-dot.sky, .md-donut-legend .sky { background: #06b6d4; }
-
-.md-donut-legend span {
-  display: block;
-  color: #64748b;
-  font-size: 10px;
-  font-weight: 900;
-}
-
-.md-donut-legend strong {
-  display: block;
-  margin-top: 6px;
-  color: #07152f;
-  font-size: 16px;
-  line-height: 1;
-  font-weight: 950;
-  letter-spacing: -0.04em;
-}
-
-.md-color-tiles {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.md-tile {
-  min-height: 144px;
-  position: relative;
-  overflow: hidden;
-  padding: 18px;
-  border-radius: 24px;
-  color: #fff;
-  text-align: left;
-  border: 0;
-}
-
-.md-tile::after {
-  position: absolute;
-  right: -18px;
-  bottom: -26px;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  content: "";
-}
-
-.md-tile.tone-red { background: linear-gradient(135deg, #ef4444, #f97316); }
-.md-tile.tone-blue { background: linear-gradient(135deg, #2563eb, #06b6d4); }
-.md-tile.tone-green { background: linear-gradient(135deg, #059669, #10b981); }
-.md-tile.tone-amber { background: linear-gradient(135deg, #f59e0b, #fb923c); }
-.md-tile.tone-purple { background: linear-gradient(135deg, #7c3aed, #ec4899); }
-.md-tile.tone-navy { background: linear-gradient(135deg, #0f172a, #334155); }
-
-.md-tile header {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.md-tile h3 {
-  position: relative;
-  z-index: 1;
-  margin: 18px 0 0;
-  font-size: 13px;
-  font-weight: 950;
-  letter-spacing: -0.01em;
-}
-
-.md-tile strong {
-  position: relative;
-  z-index: 1;
-  display: block;
-  margin-top: 8px;
-  font-size: 34px;
-  line-height: 1;
-  font-weight: 980;
-  letter-spacing: -0.07em;
-}
-
-.md-tile p {
-  position: relative;
-  z-index: 1;
-  margin: 8px 0 0;
-  color: rgba(255, 255, 255, 0.84);
-  font-size: 12px;
-  line-height: 1.45;
-  font-weight: 750;
-}
-
-.md-tile-icon {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 15px;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.md-bottom-grid {
-  display: grid;
-  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.md-widget {
-  padding: 16px;
-  border-radius: 24px;
-}
-
-.md-activity-list {
-  display: grid;
-  gap: 9px;
-  margin-top: 14px;
-}
-
-.md-activity-item {
-  min-height: 62px;
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 11px;
-  align-items: center;
-  padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 17px;
-  background: #fff;
-  text-align: left;
-}
-
-.md-activity-icon {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #06b6d4);
-}
-
-.md-activity-item strong {
-  display: block;
-  color: #07152f;
-  font-size: 12px;
-  line-height: 1.25;
-  font-weight: 950;
-}
-
-.md-activity-item span {
-  display: block;
-  margin-top: 3px;
-  color: #64748b;
-  font-size: 11px;
-  line-height: 1.3;
-  font-weight: 750;
-}
-
-.md-table-wrap {
-  width: 100%;
-  max-height: 286px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  margin-top: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 20px;
-  background: #fff;
-}
-
-.md-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 0;
-  table-layout: fixed;
-}
-
-.md-table th,
-.md-table td {
-  padding: 12px 13px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.86);
-  text-align: left;
-  vertical-align: top;
-  font-size: 11px;
-  line-height: 1.45;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.md-table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  color: #64748b;
-  background: #f8fafc;
-  font-weight: 950;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.md-table th:nth-child(1), .md-table td:nth-child(1) { width: 92px; }
-.md-table th:nth-child(2), .md-table td:nth-child(2) { width: 92px; }
-.md-table th:nth-child(3), .md-table td:nth-child(3) { width: 36%; }
-.md-table th:nth-child(4), .md-table td:nth-child(4) { width: 110px; }
-.md-table th:nth-child(5), .md-table td:nth-child(5) { width: 30%; }
-
-.md-table td {
-  color: #334155;
-  font-weight: 750;
-}
-
-.md-table tbody tr:last-child td { border-bottom: 0; }
-.md-table tbody tr { cursor: pointer; }
-.md-table tbody tr:hover td { background: #f8fbff; }
-
-.md-priority {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 950;
-}
-
-
-.md-right-stack .md-widget {
-  max-height: 292px;
-  overflow: auto;
-}
-
-.md-bottom-grid .md-panel,
-.md-right-stack .md-panel {
-  min-height: 0;
-}
-
-.md-bottom-grid .md-widget-title,
-.md-right-stack .md-widget-title {
-  gap: 12px;
-}
-
-.md-bottom-grid .md-widget-title h2,
-.md-right-stack .md-widget-title h2 {
-  font-size: 17px;
-  line-height: 1.1;
-}
-
-.md-bottom-grid .md-widget-title p,
-.md-right-stack .md-widget-title p {
-  font-size: 11px;
-}
-
-.md-priority-high { color: #b91c1c; background: #fee2e2; }
-.md-priority-medium { color: #b45309; background: #fef3c7; }
-.md-priority-low { color: #047857; background: #d1fae5; }
-
-.md-view-panel {
-  min-height: 560px;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 28px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--md-shadow);
-}
-
-.md-view-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 24px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  background:
-    radial-gradient(circle at 88% 0%, rgba(37, 99, 235, 0.12), transparent 28%),
-    linear-gradient(180deg, #fff, #f8fafc);
-}
-
-.md-view-eyebrow {
-  display: inline-flex;
-  margin-bottom: 8px;
-  color: #2563eb;
-  font-size: 11px;
-  font-weight: 950;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.md-view-header h2 {
-  margin: 0;
-  color: #06142f;
-  font-size: clamp(28px, 2vw, 38px);
-  line-height: 1;
-  font-weight: 950;
-  letter-spacing: -0.06em;
-}
-
-.md-view-header p {
-  margin: 9px 0 0;
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.md-view-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.md-view-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 22px;
-}
-
-.md-breakdown-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(210px, 1fr));
-  gap: 14px;
-}
-
-.md-breakdown-card {
-  min-height: 150px;
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 24px;
-  background: linear-gradient(180deg, #fff, #f8fafc);
-  text-align: left;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.055);
-}
-
-.md-breakdown-card::after {
-  position: absolute;
-  right: -22px;
-  bottom: -42px;
-  width: 122px;
-  height: 122px;
-  border-radius: 50%;
-  background: rgba(37, 99, 235, 0.08);
-  content: "";
-}
-
-.md-breakdown-card span {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.md-breakdown-card strong {
-  color: #07152f;
-  font-size: 30px;
-  line-height: 1;
-  font-weight: 950;
-  letter-spacing: -0.05em;
-}
-
-.md-breakdown-card small {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.md-card-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: auto;
-  color: #2563eb;
-  font-style: normal;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.md-evidence-wrap {
-  max-height: none;
-  margin-top: 0;
-}
-
-@media (max-width: 1480px) {
-  .md-metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .md-main-grid { grid-template-columns: 1fr; }
-  .md-right-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .md-donut-card { min-height: 260px; }
-  .md-breakdown-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-@media (max-width: 1180px) {
-  .md-studio-shell { grid-template-columns: 1fr; }
-  .md-side-panel {
-    position: static;
-    height: auto;
+import * as Icons from "lucide-react";
+
+type IconComponent = React.ComponentType<{
+  size?: number | string;
+  strokeWidth?: number | string;
+  className?: string;
+}>;
+
+const getIcon = (...names: string[]): IconComponent => {
+  const iconSet = Icons as unknown as Record<string, IconComponent | undefined>;
+  for (const name of names) {
+    if (iconSet[name]) return iconSet[name] as IconComponent;
   }
-  .md-section-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .md-finance-hero { grid-template-columns: 1fr; }
-  .md-color-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .md-bottom-grid { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 760px) {
-  .management-center-page {
-    height: calc(100vh - 64px);
-    padding: 10px;
-  }
-  .md-header,
-  .md-view-header {
-    flex-direction: column;
-  }
-  .md-toolbar,
-  .md-view-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  .md-toolbar button,
-  .md-view-actions button {
-    flex: 1 1 auto;
-  }
-  .md-metric-grid,
-  .md-right-stack,
-  .md-mini-stat-row,
-  .md-chart-footer,
-  .md-donut-legend,
-  .md-color-tiles,
-  .md-section-nav,
-  .md-breakdown-grid {
-    grid-template-columns: 1fr;
-  }
-  .md-money-amount strong { font-size: 42px; }
-}
-
-@media print {
-  .management-center-page { height: auto; overflow: visible; padding: 0; background: #fff; }
-  .md-header { position: static; box-shadow: none; }
-  .md-toolbar, .md-side-panel { display: none; }
-  .md-studio-shell, .md-main-grid, .md-bottom-grid { grid-template-columns: 1fr; }
-  .md-card, .md-panel, .md-widget, .md-metric-card { box-shadow: none; break-inside: avoid; }
-}
-
-/* --------------------------------------------------------------------------
-   Reference dashboard layout - requested exact admin-card direction
-   -------------------------------------------------------------------------- */
-.management-center-page {
-  height: calc(100vh - 72px);
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px;
-  background: #f4f8fc;
-  color: #111827;
-}
-
-.management-module-root {
-  max-width: 1280px;
-}
-
-.md-content {
-  gap: 14px;
-}
-
-.md-header {
-  display: none !important;
-}
-
-.md-reference-dashboard {
-  display: grid;
-  gap: 14px;
-}
-
-.md-metric-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.md-metric-card {
-  min-height: 92px;
-  gap: 8px;
-  padding: 14px 15px;
-  border: 0;
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 9px 20px rgba(15, 23, 42, 0.055);
-}
-
-.md-metric-card::after {
-  width: 58px;
-  height: 58px;
-  right: -18px;
-  bottom: -24px;
-}
-
-.md-metric-card h3 {
-  font-size: 9px;
-  letter-spacing: 0.05em;
-  color: #7c8797;
-}
-
-.md-kpi-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-}
-
-.md-metric-value strong {
-  font-size: 24px;
-  letter-spacing: -0.05em;
-}
-
-.md-metric-value span {
-  font-size: 11px;
-}
-
-.md-soft-badge {
-  height: 20px;
-  padding: 0 8px;
-  font-size: 9px;
-}
-
-.md-metric-card p {
-  display: none;
-}
-
-.ref-top-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 2.12fr) minmax(270px, 0.88fr);
-  gap: 14px;
-  align-items: stretch;
-}
-
-.ref-card,
-.ref-tile,
-.ref-activity-card,
-.ref-order-card {
-  border: 0;
-  border-radius: 11px;
-  background: #ffffff;
-  box-shadow: 0 9px 22px rgba(15, 23, 42, 0.055);
-}
-
-.ref-card {
-  padding: 16px 18px 14px;
-}
-
-.ref-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.ref-card-kicker {
-  margin: 0;
-  color: #6b7280;
-  font-size: 10px;
-  line-height: 1;
-  font-weight: 850;
-}
-
-.ref-card-subtitle {
-  margin: 5px 0 0;
-  color: #9aa4b2;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.ref-tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: 18px;
-  color: #8a94a5;
-  font-size: 9px;
-  font-weight: 850;
-  white-space: nowrap;
-}
-
-.ref-tabs button {
-  border: 0;
-  background: transparent;
-  color: #f59e0b;
-  font: inherit;
-  padding: 0;
-}
-
-.ref-legend {
-  display: inline-flex;
-  align-items: center;
-  gap: 15px;
-  margin-left: 8px;
-  color: #8a94a5;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.ref-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.ref-chart-layout {
-  display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 14px;
-  min-height: 218px;
-  margin-top: 12px;
-}
-
-.ref-earning-panel {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  padding-top: 12px;
-}
-
-.ref-big-money {
-  margin: 0;
-  font-size: 27px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  color: #2d3748;
-}
-
-.ref-caption {
-  display: block;
-  margin-top: 7px;
-  color: #7d8795;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.ref-count-number {
-  margin: 0;
-  font-size: 24px;
-  line-height: 1;
-  font-weight: 850;
-  color: #2d3748;
-}
-
-.ref-summary-pill {
-  width: max-content;
-  min-height: 35px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  padding: 0 17px;
-  color: #fff;
-  background: linear-gradient(135deg, #f55793, #8b5cf6);
-  box-shadow: 0 10px 18px rgba(139, 92, 246, 0.18);
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.ref-line-chart {
-  min-width: 0;
-  min-height: 216px;
-  padding: 4px 0 0;
-}
-
-.ref-chart-svg {
-  width: 100%;
-  height: 198px;
-  display: block;
-}
-
-.ref-chart-grid line {
-  stroke: rgba(148, 163, 184, 0.20);
-  stroke-width: 0.6;
-  stroke-dasharray: 2 3;
-}
-
-.ref-chart-months {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  margin-top: -6px;
-  color: #868f9f;
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.ref-finance-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  padding-top: 13px;
-  border-top: 1px solid rgba(226, 232, 240, 0.76);
-}
-
-.ref-finance-chip {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 9px;
-  align-items: center;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  text-align: left;
-}
-
-.ref-finance-icon,
-.ref-mini-icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  color: #fff;
-  box-shadow: 0 7px 15px rgba(15, 23, 42, 0.08);
-}
-
-.ref-finance-chip span {
-  display: block;
-  color: #8b95a5;
-  font-size: 10px;
-  line-height: 1.2;
-  font-weight: 750;
-}
-
-.ref-finance-chip strong {
-  display: block;
-  margin-top: 3px;
-  color: #374151;
-  font-size: 12px;
-  line-height: 1.2;
-  font-weight: 900;
-}
-
-.ref-donut-card {
-  position: relative;
-  min-height: 322px;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 14px;
-  padding: 18px 18px 15px;
-  overflow: hidden;
-}
-
-.ref-donut-title {
-  position: absolute;
-  left: 18px;
-  top: 18px;
-  margin: 0;
-  color: #dfe5ee;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.ref-donut-wrap {
-  position: relative;
-  width: 195px;
-  height: 195px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  padding: 0;
-  border-radius: 50%;
-  background: transparent;
-}
-
-.ref-donut-ring {
-  width: 195px;
-  height: 195px;
-  border-radius: 50%;
-  background: conic-gradient(#ef5350 0 40%, #8b5cf6 40% 63%, #5dc7ec 63% 82%, #ef5350 82% 100%);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
-}
-
-.ref-donut-hole {
-  position: absolute;
-  width: 112px;
-  height: 112px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #ffffff;
-}
-
-.ref-donut-core {
-  width: 70px;
-  height: 70px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: #fff;
-  background: linear-gradient(135deg, #ffb232, #ff9a2d);
-  box-shadow: 0 10px 22px rgba(255, 154, 45, 0.24);
-}
-
-.ref-social-row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.ref-social-item {
-  border: 0;
-  background: transparent;
-  text-align: left;
-  padding: 0;
-}
-
-.ref-social-item strong {
-  display: block;
-  color: #1f2937;
-  font-size: 25px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-}
-
-.ref-social-item span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 7px;
-  color: #6b7280;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-.ref-tiles-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.ref-tile {
-  min-height: 112px;
-  position: relative;
-  overflow: hidden;
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  color: #fff;
-  text-align: left;
-}
-
-.ref-tile::after {
-  position: absolute;
-  right: 20px;
-  bottom: 14px;
-  width: 92px;
-  height: 44px;
-  opacity: 0.72;
-  content: "";
-  border-bottom: 2px dashed rgba(255, 255, 255, 0.62);
-  border-radius: 50%;
-  transform: rotate(-8deg);
-}
-
-.ref-tile-icon {
-  position: relative;
-  z-index: 1;
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.ref-tile-content {
-  position: relative;
-  z-index: 1;
-}
-
-.ref-tile span {
-  display: block;
-  color: rgba(255,255,255,.84);
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.ref-tile strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 24px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-}
-
-.ref-tile small {
-  display: block;
-  margin-top: 5px;
-  color: rgba(255,255,255,.82);
-  font-size: 9px;
-  font-weight: 750;
-}
-
-.ref-tile.tile-purple { background: linear-gradient(135deg, #8b3ff5, #5b73ff); }
-.ref-tile.tile-blue { background: linear-gradient(135deg, #16a8ff, #2d63f2); }
-.ref-tile.tile-teal { background: linear-gradient(135deg, #25c3b2, #1aa9d5); }
-.ref-tile.tile-orange { background: linear-gradient(135deg, #ffbb4f, #ff8744); }
-
-.ref-bottom-grid {
-  display: grid;
-  grid-template-columns: minmax(250px, .7fr) minmax(0, 1.7fr);
-  gap: 14px;
-}
-
-.ref-activity-card,
-.ref-order-card {
-  padding: 16px;
-}
-
-.ref-section-title {
-  margin: 0;
-  color: #273144;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.ref-section-subtitle {
-  margin: 4px 0 0;
-  color: #a2acba;
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.ref-activity-stack {
-  display: grid;
-  gap: 13px;
-  margin-top: 16px;
-}
-
-.ref-activity-row {
-  display: grid;
-  grid-template-columns: 60px 36px minmax(0,1fr);
-  gap: 11px;
-  align-items: center;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  text-align: left;
-}
-
-.ref-activity-time {
-  color: #6f7a8b;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.ref-activity-dot {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  color: #fff;
-  box-shadow: 0 8px 16px rgba(15,23,42,.08);
-}
-
-.ref-activity-row strong {
-  display: block;
-  color: #1f2937;
-  font-size: 15px;
-  line-height: 1.1;
-  font-weight: 850;
-}
-
-.ref-activity-row span:last-child {
-  display: block;
-  margin-top: 4px;
-  color: #9aa4b2;
-  font-size: 9px;
-  font-weight: 750;
-}
-
-.ref-order-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.ref-order-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ref-add-btn {
-  min-height: 35px;
-  border: 0;
-  border-radius: 8px;
-  padding: 0 13px;
-  color: #fff;
-  background: #fb5252;
-  font-size: 10px;
-  font-weight: 850;
-}
-
-.ref-icon-btn,
-.ref-search-box {
-  width: 35px;
-  height: 35px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 8px;
-  color: #b7c0ce;
-  background: #f4f6f9;
-}
-
-.ref-search-box {
-  width: 112px;
-  justify-content: start;
-  padding-left: 13px;
-  color: #a2acba;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.ref-order-table-wrap {
-  width: 100%;
-  margin-top: 12px;
-  overflow-x: auto;
-}
-
-.ref-order-table {
-  width: 100%;
-  min-width: 650px;
-  border-collapse: collapse;
-}
-
-.ref-order-table th,
-.ref-order-table td {
-  padding: 11px 10px;
-  border-bottom: 1px solid #eef2f7;
-  text-align: left;
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.ref-order-table th {
-  color: #7c8797;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.ref-order-table td {
-  color: #394456;
-  font-weight: 780;
-}
-
-.ref-order-table tr {
-  cursor: pointer;
-}
-
-.ref-order-table tr:hover td {
-  background: #f8fbff;
-}
-
-.ref-status-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 67px;
-  height: 26px;
-  border-radius: 7px;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 850;
-}
-
-.ref-status-pill.high { background: #f04d8a; }
-.ref-status-pill.medium { background: #8b5cf6; }
-.ref-status-pill.low { background: #42c2e8; }
-
-.ref-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 10px;
-  color: #8b95a5;
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.ref-page-dots {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.ref-page-dots span {
-  width: 21px;
-  height: 21px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-}
-
-.ref-page-dots span.active {
-  color: #fff;
-  background: #ef4444;
-}
-
-.bg-pink { background: linear-gradient(135deg, #f0528f, #e83e7f); }
-.bg-purple { background: linear-gradient(135deg, #8b5cf6, #6d5dfc); }
-.bg-cyan { background: linear-gradient(135deg, #5ed5f2, #37bde5); }
-.bg-orange { background: linear-gradient(135deg, #fbbf24, #fb923c); }
-.bg-blue { background: linear-gradient(135deg, #2563eb, #06b6d4); }
-
-@media (max-width: 1260px) {
-  .md-metric-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
-  .ref-top-grid { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 960px) {
-  .ref-chart-layout { grid-template-columns: 1fr; }
-  .ref-finance-strip,
-  .ref-tiles-grid,
-  .ref-bottom-grid { grid-template-columns: 1fr 1fr; }
-}
-
-@media (max-width: 680px) {
-  .management-center-page { padding: 10px; }
-  .md-metric-grid,
-  .ref-finance-strip,
-  .ref-tiles-grid,
-  .ref-bottom-grid,
-  .ref-social-row { grid-template-columns: 1fr; }
-  .ref-card-head,
-  .ref-order-header { flex-direction: column; align-items: flex-start; }
-  .ref-tabs { flex-wrap: wrap; gap: 10px; }
-  .ref-chart-months { display: none; }
-}
-
-`;
-
-type Tone = "green" | "blue" | "red" | "amber" | "purple" | "navy";
+  return (iconSet.Activity || iconSet.Circle || (() => null)) as IconComponent;
+};
+
+const IconSet = {
+  dashboard: getIcon("LayoutDashboard", "Gauge", "BarChart3"),
+  health: getIcon("ShieldCheck", "Shield"),
+  money: getIcon("WalletCards", "Wallet", "CreditCard"),
+  risk: getIcon("AlertTriangle", "AlertCircle", "ShieldAlert"),
+  audit: getIcon("ClipboardCheck", "ClipboardList", "CheckSquare"),
+  saving: getIcon("CircleDollarSign", "DollarSign", "BadgeDollarSign"),
+  endpoint: getIcon("Monitor", "Laptop", "Computer"),
+  users: getIcon("Users", "UsersRound"),
+  trend: getIcon("TrendingUp", "LineChart", "BarChart3"),
+  calendar: getIcon("CalendarDays", "Calendar"),
+  refresh: getIcon("RefreshCw", "RotateCw"),
+  download: getIcon("Download", "ArrowDownToLine"),
+  filter: getIcon("Filter", "SlidersHorizontal"),
+  search: getIcon("Search", "ScanLine"),
+  back: getIcon("ArrowLeft", "ChevronLeft"),
+  next: getIcon("ChevronRight", "ArrowRight"),
+  package: getIcon("Package", "Box"),
+  server: getIcon("Server", "Database"),
+  activity: getIcon("Activity", "Pulse"),
+  list: getIcon("ListChecks", "ListTodo"),
+  target: getIcon("Target", "Crosshair"),
+  clock: getIcon("Clock3", "Clock"),
+  table: getIcon("Table2", "Table"),
+};
+
+type Tone = "blue" | "green" | "red" | "amber" | "purple" | "cyan" | "pink" | "orange" | "slate";
 type DrillLevel = 1 | 2 | 3;
 
-type IconName =
-  | "dashboard"
-  | "shield"
-  | "wallet"
-  | "risk"
-  | "audit"
-  | "saving"
-  | "users"
-  | "alert"
-  | "calendar"
-  | "download"
-  | "filter"
-  | "endpoint"
-  | "service"
-  | "software"
-  | "remote"
-  | "job"
-  | "pin"
-  | "asset"
-  | "network"
-  | "settings"
-  | "chevron";
-
-type DashboardKpi = {
-  id: string;
+type KpiItem = {
   title: string;
   value: string;
   subValue?: string;
   note?: string;
   trend?: string;
-  tone: Tone;
-  icon?: IconName | string;
-  area: string;
+  tone?: Tone;
+  icon?: keyof typeof IconSet;
+  area?: string;
+  key?: string;
 };
 
-type DashboardPillar = {
+type DetailItem = {
+  label: string;
+  value: string;
+  tone?: Tone;
+  key?: string;
+};
+
+type PillarItem = {
   id: string;
-  index: number;
   title: string;
-  scoreTitle: string;
-  scoreValue: string;
+  scoreTitle?: string;
+  scoreValue?: string;
   scoreUnit?: string;
-  scoreStatus: string;
-  statusTone: Tone;
-  secondTitle: string;
-  secondValue: string;
+  scoreStatus?: string;
+  statusTone?: Tone;
+  secondTitle?: string;
+  secondValue?: string;
   secondNote?: string;
-  detailsTitle: string;
-  details: Array<{ label: string; value: string; tone?: Tone; key?: string }>;
-  footerText: string;
-  tone: Tone;
-  icon?: IconName | string;
+  details?: DetailItem[];
+  tone?: Tone;
+  icon?: keyof typeof IconSet;
   area: string;
 };
 
 type BoardAction = {
-  priority: "High" | "Medium" | "Low";
   area: string;
   key: string;
   issue: string;
   impact: string;
   decision: string;
-  targetDate: string;
+  priority: "High" | "Medium" | "Low" | string;
+};
+
+type TrendPoint = {
+  month: string;
+  label?: string;
+  financialExposure?: number;
+  riskExposure?: number;
+  serviceRisk?: number;
+  signals?: number;
+  capex?: number;
+  opex?: number;
 };
 
 type FinanceData = {
-  capexOpex: Array<{ month: string; capex: number; opex: number; count?: number }>;
-  tangibleCost: number;
-  intangibleCost: number;
-  totalCost: number;
-  capexYtd: number;
-  opexYtd: number;
-  riskCost: number;
-  avgMonthlyCost: number;
-  potentialSavings: number;
+  capexOpex?: TrendPoint[];
+  tangibleCost?: number;
+  intangibleCost?: number;
+  totalCost?: number;
+  capexYtd?: number;
+  opexYtd?: number;
+  riskCost?: number;
+  avgMonthlyCost?: number;
+  potentialSavings?: number;
+};
+
+type AnalysisData = {
+  headline?: string;
+  trend?: TrendPoint[];
+  mix?: {
+    risk?: number;
+    control?: number;
+    savings?: number;
+  };
+  signals?: Array<{
+    id?: string;
+    title: string;
+    subtitle?: string;
+    value?: string;
+    area?: string;
+    key?: string;
+    tone?: Tone;
+    icon?: keyof typeof IconSet;
+  }>;
 };
 
 type DrillRow = {
   key: string;
   label: string;
-  count: number;
-  value: number;
+  count?: number;
+  value?: number;
   valueFmt?: string;
+  sample?: string[];
   level3Area?: string;
   level3Key?: string;
-};
-
-type DashboardData = {
-  generatedAt: string;
-  executiveKpis: DashboardKpi[];
-  pillars: DashboardPillar[];
-  boardActions: BoardAction[];
-  finance: FinanceData;
-  level2: Record<string, DrillRow[]>;
 };
 
 type EvidenceRow = {
@@ -1992,9 +157,20 @@ type EvidenceRow = {
   lastSeen?: string;
   age?: string;
   ipAddress?: string;
-  riskScore?: number;
+  riskScore?: number | string;
   riskSeverity?: string;
   replacementCost?: string;
+};
+
+type DashboardData = {
+  generatedAt?: string;
+  executiveKpis: KpiItem[];
+  pillars: PillarItem[];
+  boardActions: BoardAction[];
+  finance: FinanceData;
+  analysis?: AnalysisData;
+  level2: Record<string, DrillRow[]>;
+  metrics?: Record<string, number | string | boolean>;
 };
 
 type DrillState = {
@@ -2002,123 +178,1578 @@ type DrillState = {
   area?: string;
   key?: string;
   title?: string;
-  rows?: Array<DrillRow | EvidenceRow>;
+  rows?: DrillRow[] | EvidenceRow[];
   total?: number;
   loading?: boolean;
-  parent?: {
-    level: DrillLevel;
-    area?: string;
-    key?: string;
-    title?: string;
-    rows?: Array<DrillRow | EvidenceRow>;
-    total?: number;
-    loading?: boolean;
-  };
+  parent?: DrillState;
 };
 
-const emptyFinance: FinanceData = {
-  capexOpex: [],
-  tangibleCost: 0,
-  intangibleCost: 0,
-  totalCost: 0,
-  capexYtd: 0,
-  opexYtd: 0,
-  riskCost: 0,
-  avgMonthlyCost: 0,
-  potentialSavings: 0,
-};
-
-const emptyDashboard: DashboardData = {
+const EMPTY_DASHBOARD: DashboardData = {
   generatedAt: "",
   executiveKpis: [],
   pillars: [],
   boardActions: [],
-  finance: emptyFinance,
+  finance: {},
+  analysis: { trend: [], signals: [], mix: { risk: 0, control: 0, savings: 0 } },
   level2: {},
+  metrics: {},
 };
 
-const validIcons: IconName[] = [
-  "dashboard", "shield", "wallet", "risk", "audit", "saving", "users", "alert", "calendar", "download", "filter", "endpoint", "service", "software", "remote", "job", "pin", "asset", "network", "settings", "chevron",
-];
+const MANAGEMENT_DASHBOARD_INLINE_CSS = `
+:root {
+  --md-font: var(--ema-font-sans, var(--ema-font-body, "Aptos", "Inter", "Manrope", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif));
+  --md-display-font: var(--ema-font-display, "Aptos Display", "Manrope", "Inter", "Segoe UI", ui-sans-serif, system-ui, sans-serif);
+  --md-mono-font: var(--ema-font-mono, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace);
+  --md-bg: #f4f8fc;
+  --md-card: #ffffff;
+  --md-ink: #0f172a;
+  --md-muted: #64748b;
+  --md-soft: #94a3b8;
+  --md-line: rgba(148, 163, 184, 0.22);
+  --md-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  --md-shadow-soft: 0 10px 24px rgba(15, 23, 42, 0.06);
+  --md-radius: 18px;
+  --md-blue: #2563eb;
+  --md-cyan: #06b6d4;
+  --md-purple: #8b5cf6;
+  --md-pink: #ec4899;
+  --md-red: #ef4444;
+  --md-orange: #fb923c;
+  --md-amber: #f59e0b;
+  --md-green: #059669;
+}
+* { box-sizing: border-box; }
+button, table, input { font: inherit; }
+button { cursor: pointer; }
+html.md-dashboard-page-active,
+body.md-dashboard-page-active,
+body.md-dashboard-page-active #root {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+body.md-dashboard-page-active .ema-main,
+body.md-dashboard-page-active .ema-content,
+body.md-dashboard-page-active .ema-content-area,
+body.md-dashboard-page-active .app-main,
+body.md-dashboard-page-active .app-content,
+body.md-dashboard-page-active .layout-main,
+body.md-dashboard-page-active .layout-content,
+body.md-dashboard-page-active .main,
+body.md-dashboard-page-active .main-content,
+body.md-dashboard-page-active main {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+body.md-dashboard-page-active .ema-page,
+body.md-dashboard-page-active .page-content,
+body.md-dashboard-page-active .content,
+body.md-dashboard-page-active .content-area {
+  height: calc(100dvh - 76px) !important;
+  max-height: calc(100dvh - 76px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #f4f8fc !important;
+}
+.management-center-page {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin: 0;
+  padding: 14px 14px 18px;
+  background: linear-gradient(180deg, #f8fbff 0%, #f4f8fc 44%, #eef4fb 100%);
+  color: var(--md-ink);
+  font-family: var(--md-font);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+.management-center-page::-webkit-scrollbar { width: 6px; }
+.management-center-page::-webkit-scrollbar-track { background: rgba(226,232,240,.55); border-radius: 999px; }
+.management-center-page::-webkit-scrollbar-thumb { background: rgba(100,116,139,.65); border-radius: 999px; border: 1px solid rgba(226,232,240,.55); }
+.management-center-page::-webkit-scrollbar-thumb:hover { background: rgba(71,85,105,.78); }
+.management-module-root {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.management-module-root > * { min-width: 0; }
+.md-content {
+  display: grid;
+  gap: 12px;
+  min-height: max-content;
+  padding-bottom: 0;
+}
+.md-dashboard-view {
+  display: grid;
+  gap: 12px;
+  min-height: max-content;
+  padding-bottom: 0;
+}
+.md-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.md-card {
+  border: 1px solid rgba(226, 232, 240, 0.88);
+  border-radius: var(--md-radius);
+  background: var(--md-card);
+  box-shadow: var(--md-shadow-soft);
+}
+.md-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.md-kpi-card {
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 0;
+  text-align: left;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.md-kpi-card:hover { transform: translateY(-2px); box-shadow: var(--md-shadow); }
+.md-kpi-card h3,
+.md-chip-label,
+.md-section-title,
+.md-section-subtitle,
+.md-small-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+.md-section-subtitle { margin-top: 4px; color: #64748b; font-size: 10px; font-weight: 800; }
+.md-kpi-card p { margin: 4px 0 0; color: var(--md-muted); font-size: 10px; font-weight: 800; }
+.md-kpi-value { display: flex; align-items: baseline; gap: 4px; margin-top: 9px; }
+.md-kpi-value strong { color: #0f172a; font-size: 24px; line-height: 1; font-weight: 950; letter-spacing: -0.05em; }
+.md-kpi-value span { color: #475569; font-size: 14px; font-weight: 900; }
+.md-kpi-icon,
+.md-chip-icon,
+.md-activity-icon {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
+}
+.md-kpi-icon { width: 40px; height: 40px; border-radius: 14px; }
+.tone-blue .md-kpi-icon, .bg-blue { background: linear-gradient(135deg, #1da4ff, #2563eb); }
+.tone-green .md-kpi-icon, .bg-green { background: linear-gradient(135deg, #34d399, #059669); }
+.tone-red .md-kpi-icon, .bg-red { background: linear-gradient(135deg, #fb7185, #ef4444); }
+.tone-amber .md-kpi-icon, .bg-amber { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+.tone-purple .md-kpi-icon, .bg-purple { background: linear-gradient(135deg, #a855f7, #6d5dfc); }
+.tone-cyan .md-kpi-icon, .bg-cyan { background: linear-gradient(135deg, #22d3ee, #06b6d4); }
+.tone-pink .md-kpi-icon, .bg-pink { background: linear-gradient(135deg, #f472b6, #ec4899); }
+.tone-orange .md-kpi-icon, .bg-orange { background: linear-gradient(135deg, #ffbf4c, #fb923c); }
+.tone-slate .md-kpi-icon, .bg-slate { background: linear-gradient(135deg, #64748b, #334155); }
+.md-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.25fr) minmax(280px, .75fr);
+  gap: 14px;
+  align-items: start;
+}
+.md-chart-card,
+.md-donut-card { padding: 14px 16px; min-width: 0; }
+.md-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.md-eyebrow { display: block; color: #94a3b8; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+.md-card-head h2,
+.md-view-header h2 { margin: 2px 0 0; color: #0f172a; font-size: 17px; line-height: 1.12; font-weight: 950; letter-spacing: -0.04em; }
+.md-card-head p,
+.md-view-header p { margin: 4px 0 0; color: #64748b; font-size: 12px; font-weight: 750; }
+.md-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.md-action-btn {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(226,232,240,.95);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: #0f172a;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(15,23,42,.05);
+}
+.md-action-btn.primary { color: #fff; border: 0; background: linear-gradient(135deg, #ef477b, #8b5cf6); }
+.md-action-icon { width: 36px; padding: 0; justify-content: center; }
+.md-chart-layout { display: grid; grid-template-columns: 138px minmax(0, 1fr); gap: 14px; align-items: start; }
+.md-chart-summary { display: grid; align-content: center; gap: 13px; }
+.md-chart-number { margin: 0; color: #111827; font-size: 27px; line-height: 1; font-weight: 950; letter-spacing: -0.05em; }
+.md-chart-summary span { color: #64748b; font-size: 11px; font-weight: 750; }
+.md-summary-btn {
+  width: max-content;
+  min-height: 34px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  box-shadow: 0 10px 20px rgba(139,92,246,.18);
+  font-size: 11px;
+  font-weight: 900;
+}
+.md-chart-panel { min-width: 0; position: relative; }
+.md-chart-legend { display: flex; justify-content: flex-end; align-items: center; gap: 16px; color: #64748b; font-size: 10px; font-weight: 850; margin-bottom: 4px; }
+.md-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.md-dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+.md-dot.red { background: #ef4444; }
+.md-dot.orange { background: #f59e0b; }
+.md-dot.purple { background: #8b5cf6; }
+.md-dot.cyan { background: #06b6d4; }
+.md-dot.green { background: #059669; }
+.md-chart-svg { width: 100%; height: 202px; display: block; overflow: visible; }
+.md-chart-grid { stroke: rgba(148,163,184,.24); stroke-width: 1; stroke-dasharray: 4 8; }
+.md-chart-axis { stroke: rgba(148,163,184,.45); stroke-width: 1; }
+.md-chart-label { fill: #94a3b8; font-size: 10px; font-weight: 800; }
+.md-chart-line-risk { fill: none; stroke: #ef4444; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.md-chart-line-finance { fill: none; stroke: #f59e0b; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.md-chart-area { fill: url(#mdAreaGradient); opacity: .9; }
+.md-chart-point-risk { fill: #ef4444; stroke: #fff; stroke-width: 3; }
+.md-chart-point-finance { fill: #f59e0b; stroke: #fff; stroke-width: 3; }
+.md-chart-bar-finance { fill: #f59e0b; opacity: .82; rx: 6; }
+.md-chart-bar-risk { fill: #ef4444; opacity: .86; rx: 6; }
+.md-chart-empty-note { fill: #94a3b8; font-size: 12px; font-weight: 850; }
+.md-finance-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(226,232,240,.85);
+}
+.md-finance-chip {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+.md-chip-icon { width: 36px; height: 36px; border-radius: 12px; }
+.md-chip-body { min-width: 0; display: block; line-height: 1.1; }
+.md-chip-body .md-chip-label { display: block; color: #64748b; font-size: 10px; white-space: normal; }
+.md-chip-value { display: block; margin-top: 4px; color: #0f172a; font-size: 13px; font-weight: 950; line-height: 1.1; }
+.md-donut-card { display: grid; align-content: start; gap: 14px; }
+.md-donut-shell { display: grid; justify-items: center; gap: 14px; }
+.md-donut {
+  --risk-end: 34%;
+  --control-end: 78%;
+  width: 168px;
+  height: 168px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: conic-gradient(#ef4444 0 var(--risk-end), #8b5cf6 var(--risk-end) var(--control-end), #06b6d4 var(--control-end) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55), 0 18px 34px rgba(15,23,42,.08);
+}
+.md-donut-hole { width: 84px; height: 84px; display: grid; place-items: center; border-radius: 999px; background: #fff; }
+.md-donut-core { width: 50px; height: 50px; display: grid; place-items: center; border-radius: 999px; color: #fff; background: linear-gradient(135deg, #ffc046, #ff982e); }
+.md-mix-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.md-mix-item { border: 1px solid rgba(226,232,240,.92); border-radius: 14px; padding: 9px 10px; background: #fff; text-align: left; }
+.md-mix-item strong { display: block; color: #111827; font-size: 22px; line-height: 1; font-weight: 950; letter-spacing: -0.04em; }
+.md-mix-item span { display: flex; align-items: center; gap: 6px; margin-top: 7px; color: #64748b; font-size: 10px; font-weight: 900; }
+.md-pillar-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.md-pillar-tile {
+  min-height: 100px;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 0;
+  border-radius: 14px;
+  padding: 14px;
+  color: #fff;
+  text-align: left;
+  box-shadow: var(--md-shadow-soft);
+}
+.md-pillar-tile::after {
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+  width: 86px;
+  height: 40px;
+  border-bottom: 2px dashed rgba(255,255,255,.45);
+  border-radius: 0 0 999px 999px;
+  content: "";
+}
+.tile-purple { background: linear-gradient(135deg, #8b3ff5, #5b73ff); }
+.tile-blue { background: linear-gradient(135deg, #19a8ff, #2d63f2); }
+.tile-teal { background: linear-gradient(135deg, #25c3b2, #1aa9d5); }
+.tile-orange { background: linear-gradient(135deg, #ffbb4f, #ff8744); }
+.md-tile-icon { width: 54px; height: 54px; display: grid; place-items: center; border-radius: 16px; background: rgba(255,255,255,.22); }
+.md-pillar-tile h3 { margin: 0; font-size: 12px; font-weight: 900; }
+.md-tile-value { margin-top: 7px; display: flex; align-items: baseline; gap: 2px; }
+.md-tile-value strong { font-size: 28px; line-height: 1; font-weight: 950; letter-spacing: -0.04em; }
+.md-pillar-tile small { display: block; margin-top: 5px; color: rgba(255,255,255,.86); font-size: 10px; font-weight: 850; }
+.md-bottom-grid { display: grid; grid-template-columns: minmax(320px, .68fr) minmax(0, 1.82fr); gap: 14px; align-items: start; margin-bottom: 28px; }
+.md-signals-card,
+.md-action-card { padding: 16px; }
+.md-signal-stack { display: grid; gap: 12px; margin-top: 14px; }
+.md-signal-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  padding: 8px 6px;
+  text-align: left;
+}
+.md-signal-row:hover { background: #f8fafc; }
+.md-activity-icon { width: 36px; height: 36px; border-radius: 999px; }
+.md-signal-row strong { display: block; color: #0f172a; font-size: 14px; line-height: 1.08; font-weight: 950; letter-spacing: -0.035em; }
+.md-signal-row span { display: block; margin-top: 4px; color: #64748b; font-size: 10px; font-weight: 850; }
+.md-signal-value { color: #334155; font-size: 11px; font-weight: 950; white-space: nowrap; }
+.md-table-wrap { width: 100%; overflow-x: auto; }
+.md-action-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.md-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.md-table th { color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 950; text-align: left; padding: 12px 10px; border-bottom: 1px solid rgba(226,232,240,.9); }
+.md-table td { color: #0f172a; font-size: 11.5px; font-weight: 800; line-height: 1.35; padding: 12px 10px; border-bottom: 1px solid rgba(226,232,240,.86); vertical-align: top; word-break: break-word; }
+.md-table tbody tr { transition: background 160ms ease; }
+.md-table tbody tr:hover { background: #f8fafc; }
+.md-priority { display: inline-flex; min-height: 24px; align-items: center; justify-content: center; border-radius: 999px; padding: 0 10px; font-size: 10px; font-weight: 950; }
+.md-priority.high { color: #991b1b; background: #fee2e2; }
+.md-priority.medium { color: #92400e; background: #fef3c7; }
+.md-priority.low { color: #065f46; background: #d1fae5; }
+.md-status-pill { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; min-height: 28px; padding: 0 12px; color: #fff; background: linear-gradient(135deg, #1eb6e9, #3b82f6); font-size: 10px; font-weight: 950; }
+.md-view-panel { padding: 18px; border: 1px solid rgba(226,232,240,.92); border-radius: 20px; background: #fff; box-shadow: var(--md-shadow-soft); }
+.md-view-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(226,232,240,.88); }
+.md-view-eyebrow { color: #2563eb; font-size: 11px; font-weight: 950; text-transform: uppercase; letter-spacing: .05em; }
+.md-view-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.md-view-body { padding-top: 16px; }
+.md-state-panel { display: grid; place-items: center; min-height: 220px; border: 1px solid rgba(226,232,240,.9); border-radius: 18px; background: #fff; color: #64748b; font-size: 13px; font-weight: 900; }
+.md-state-error { color: #b91c1c; background: #fff7f7; border-color: rgba(239,68,68,.22); }
+.md-breakdown-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.md-breakdown-card { min-height: 145px; display: grid; align-content: space-between; gap: 10px; border: 1px solid rgba(226,232,240,.92); border-radius: 16px; background: linear-gradient(180deg, #fff, #f8fbff); padding: 16px; text-align: left; box-shadow: 0 10px 22px rgba(15,23,42,.05); }
+.md-breakdown-card span { color: #0f172a; font-size: 13px; font-weight: 950; }
+.md-breakdown-card strong { color: #2563eb; font-size: 26px; line-height: 1; font-weight: 950; letter-spacing: -0.04em; }
+.md-breakdown-card small { color: #64748b; font-size: 11px; font-weight: 850; }
+.md-card-hint { display: inline-flex; align-items: center; gap: 5px; color: #8b5cf6; font-style: normal; font-size: 11px; font-weight: 950; }
+.md-evidence-wrap { border: 1px solid rgba(226,232,240,.92); border-radius: 16px; background: #fff; }
+.md-evidence-wrap .md-table { min-width: 920px; }
 
-const API_BASE_URL = String(import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
-
-function buildApiUrl(path: string) {
-  return `${API_BASE_URL}${path}`;
+/* =========================================================
+   Typography + executive polish
+   Uses the same EMA typography tokens when global CSS is loaded,
+   but keeps safe fallbacks because this dashboard CSS is inline.
+========================================================= */
+.management-center-page,
+.management-center-page button,
+.management-center-page input,
+.management-center-page table {
+  font-family: var(--md-font) !important;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.md-card-head h2,
+.md-view-header h2,
+.md-kpi-value strong,
+.md-chart-number,
+.md-chip-value,
+.md-mix-item strong,
+.md-pillar-tile h3,
+.md-tile-value strong,
+.md-signal-row strong,
+.md-breakdown-card strong,
+.md-breakdown-card span {
+  font-family: var(--md-display-font) !important;
+}
+.md-kpi-card h3,
+.md-section-title,
+.md-small-title,
+.md-eyebrow,
+.md-view-eyebrow,
+.md-table th,
+.md-priority,
+.md-status-pill,
+.md-action-btn,
+.md-summary-btn {
+  font-family: var(--md-font) !important;
+}
+.md-card-head h2,
+.md-view-header h2 {
+  font-size: clamp(16px, 1.05vw, 19px) !important;
+  line-height: 1.14 !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.038em !important;
+}
+.md-card-head p,
+.md-view-header p,
+.md-chart-summary span {
+  color: #5f718a !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.005em !important;
+}
+.md-eyebrow,
+.md-view-eyebrow {
+  color: #8ca0ba !important;
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.10em !important;
+}
+.md-kpi-card h3,
+.md-section-title,
+.md-small-title {
+  color: #10233f !important;
+  font-size: 11.5px !important;
+  line-height: 1.18 !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.025em !important;
+}
+.md-kpi-card p,
+.md-section-subtitle,
+.md-chip-body .md-chip-label,
+.md-signal-row span,
+.md-breakdown-card small {
+  color: #677b95 !important;
+  font-size: 10.5px !important;
+  line-height: 1.35 !important;
+  font-weight: 650 !important;
+  letter-spacing: -0.006em !important;
+}
+.md-kpi-value strong {
+  font-size: clamp(23px, 1.65vw, 30px) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.060em !important;
+  line-height: 0.96 !important;
+  font-variant-numeric: tabular-nums;
+}
+.md-kpi-value span {
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+}
+.md-chart-number {
+  font-size: clamp(26px, 2.2vw, 36px) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.064em !important;
+  line-height: 0.98 !important;
+  font-variant-numeric: tabular-nums;
+}
+.md-chip-value,
+.md-signal-value,
+.md-table td,
+.md-mix-item strong,
+.md-tile-value strong,
+.md-breakdown-card strong {
+  font-variant-numeric: tabular-nums;
+}
+.md-chip-value {
+  font-size: 12.5px !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.025em !important;
+}
+.md-mix-item strong {
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.052em !important;
+}
+.md-mix-item span {
+  font-size: 10px !important;
+  font-weight: 750 !important;
+  letter-spacing: -0.004em !important;
+}
+.md-pillar-tile h3 {
+  font-size: 12px !important;
+  line-height: 1.12 !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.025em !important;
+}
+.md-tile-value strong {
+  font-size: clamp(25px, 2vw, 32px) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.058em !important;
+}
+.md-pillar-tile small {
+  font-size: 10.5px !important;
+  line-height: 1.22 !important;
+  font-weight: 700 !important;
+}
+.md-signal-row strong {
+  font-size: 14px !important;
+  line-height: 1.12 !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.035em !important;
+}
+.md-signal-value {
+  color: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+.md-table th {
+  color: #65758e !important;
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  font-weight: 850 !important;
+  letter-spacing: 0.065em !important;
+}
+.md-table td {
+  color: #14243a !important;
+  font-size: 11.3px !important;
+  line-height: 1.42 !important;
+  font-weight: 690 !important;
+  letter-spacing: -0.006em !important;
+}
+.md-priority,
+.md-status-pill {
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.006em !important;
+}
+.md-action-btn,
+.md-summary-btn {
+  font-size: 11px !important;
+  line-height: 1 !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.012em !important;
+}
+.md-breakdown-card span {
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.025em !important;
+}
+.md-breakdown-card strong {
+  font-size: 28px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.06em !important;
+}
+/* Small style refinement so typography feels less harsh without changing layout */
+.md-card,
+.md-view-panel,
+.md-breakdown-card,
+.md-evidence-wrap {
+  border-color: rgba(203, 213, 225, 0.78) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045) !important;
+}
+.md-kpi-card,
+.md-chart-card,
+.md-donut-card,
+.md-signals-card,
+.md-action-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,251,255,0.97)) !important;
+}
+.md-table tbody tr:hover,
+.md-signal-row:hover {
+  background: rgba(239, 246, 255, 0.56) !important;
 }
 
-function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem("token") || localStorage.getItem("authToken") || "";
+
+/* Modern executive visual refresh: calmer palette, proper chart hover, premium ring */
+:root {
+  --md-prof-blue: #2563eb;
+  --md-prof-cyan: #06b6d4;
+  --md-prof-teal: #14b8a6;
+  --md-prof-indigo: #6366f1;
+  --md-prof-violet: #7c3aed;
+  --md-prof-rose: #f43f5e;
+  --md-prof-amber: #f59e0b;
+  --md-prof-emerald: #10b981;
+}
+.md-kpi-icon,
+.md-chip-icon {
+  box-shadow: 0 10px 22px rgba(30, 64, 175, 0.12) !important;
+}
+.tone-blue .md-kpi-icon, .bg-blue { background: linear-gradient(135deg, #38bdf8 0%, #2563eb 100%) !important; }
+.tone-green .md-kpi-icon, .bg-green { background: linear-gradient(135deg, #34d399 0%, #059669 100%) !important; }
+.tone-red .md-kpi-icon, .bg-red { background: linear-gradient(135deg, #fb7185 0%, #e11d48 100%) !important; }
+.tone-amber .md-kpi-icon, .bg-amber { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%) !important; }
+.tone-purple .md-kpi-icon, .bg-purple { background: linear-gradient(135deg, #a78bfa 0%, #6d28d9 100%) !important; }
+.tone-cyan .md-kpi-icon, .bg-cyan { background: linear-gradient(135deg, #22d3ee 0%, #0891b2 100%) !important; }
+.tone-pink .md-kpi-icon, .bg-pink { background: linear-gradient(135deg, #f472b6 0%, #db2777 100%) !important; }
+.tone-orange .md-kpi-icon, .bg-orange { background: linear-gradient(135deg, #fdba74 0%, #f97316 100%) !important; }
+.tone-slate .md-kpi-icon, .bg-slate { background: linear-gradient(135deg, #94a3b8 0%, #475569 100%) !important; }
+.md-activity-icon.bg-blue { color: #1d4ed8 !important; background: #eff6ff !important; border: 1px solid #bfdbfe !important; box-shadow: none !important; }
+.md-activity-icon.bg-green { color: #047857 !important; background: #ecfdf5 !important; border: 1px solid #a7f3d0 !important; box-shadow: none !important; }
+.md-activity-icon.bg-red { color: #e11d48 !important; background: #fff1f2 !important; border: 1px solid #fecdd3 !important; box-shadow: none !important; }
+.md-activity-icon.bg-amber { color: #b45309 !important; background: #fffbeb !important; border: 1px solid #fde68a !important; box-shadow: none !important; }
+.md-activity-icon.bg-purple { color: #7c3aed !important; background: #f5f3ff !important; border: 1px solid #ddd6fe !important; box-shadow: none !important; }
+.md-activity-icon.bg-cyan { color: #0891b2 !important; background: #ecfeff !important; border: 1px solid #a5f3fc !important; box-shadow: none !important; }
+.md-activity-icon.bg-pink { color: #db2777 !important; background: #fdf2f8 !important; border: 1px solid #fbcfe8 !important; box-shadow: none !important; }
+.md-activity-icon.bg-orange { color: #ea580c !important; background: #fff7ed !important; border: 1px solid #fed7aa !important; box-shadow: none !important; }
+.md-activity-icon svg { stroke-width: 2.25 !important; }
+.md-chart-card {
+  background:
+    radial-gradient(circle at 82% 0%, rgba(37, 99, 235, 0.045), transparent 20rem),
+    linear-gradient(180deg, rgba(255,255,255,0.995), rgba(248,251,255,0.975)) !important;
+}
+.md-chart-panel {
+  min-height: 222px;
+  border-radius: 16px;
+  padding: 4px 2px 0;
+}
+.md-chart-svg { height: 220px !important; cursor: crosshair; }
+.md-chart-grid { stroke: rgba(148, 163, 184, 0.20) !important; stroke-dasharray: 3 9 !important; }
+.md-chart-axis { stroke: rgba(100, 116, 139, 0.30) !important; }
+.md-chart-label { fill: #7c8ea8 !important; font-size: 10px !important; font-weight: 850 !important; }
+.md-chart-bar-finance { fill: url(#mdFinanceBarGradient) !important; opacity: 1 !important; filter: drop-shadow(0 5px 8px rgba(245, 158, 11, 0.14)); }
+.md-chart-bar-risk { fill: url(#mdRiskBarGradient) !important; opacity: 1 !important; filter: drop-shadow(0 5px 8px rgba(244, 63, 94, 0.16)); }
+.md-chart-hover-band { fill: transparent; cursor: pointer; }
+.md-chart-hover-band:hover { fill: rgba(37, 99, 235, 0.035); }
+.md-chart-active-line { stroke: rgba(37,99,235,.30); stroke-width: 1; stroke-dasharray: 4 5; }
+.md-chart-tooltip-box { fill: rgba(15, 23, 42, 0.96); filter: drop-shadow(0 14px 20px rgba(15, 23, 42, 0.20)); }
+.md-chart-tooltip-title { fill: #ffffff; font-size: 11px; font-weight: 900; }
+.md-chart-tooltip-text { fill: #cbd5e1; font-size: 10px; font-weight: 750; }
+.md-donut-card {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(37, 99, 235, 0.055), transparent 14rem),
+    linear-gradient(180deg, rgba(255,255,255,0.995), rgba(248,251,255,0.975)) !important;
+}
+.md-donut-shell { gap: 12px !important; }
+.md-donut {
+  width: 180px !important;
+  height: 180px !important;
+  border: 0 !important;
+  border-radius: 24px !important;
+  background:
+    radial-gradient(circle at 52% 44%, rgba(255,255,255,.95) 0 35%, transparent 36%),
+    linear-gradient(180deg, rgba(255,255,255,.88), rgba(245,249,253,.96)) !important;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.075) !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+}
+.md-donut:hover { transform: translateY(-1px); box-shadow: 0 22px 44px rgba(15,23,42,.10) !important; }
+.md-health-ring { position: relative; width: 160px; height: 160px; display: grid; place-items: center; }
+.md-health-ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.md-ring-track { fill: none; stroke: #e8eef7; stroke-width: 18; }
+.md-ring-control { fill: none; stroke: url(#mdControlRingGradient); stroke-width: 18; stroke-linecap: round; filter: drop-shadow(0 10px 12px rgba(37, 99, 235, 0.18)); transition: stroke-dasharray 220ms ease; }
+.md-ring-risk { fill: none; stroke: url(#mdRiskRingGradient); stroke-width: 14; stroke-linecap: round; opacity: .95; filter: drop-shadow(0 8px 12px rgba(244, 63, 94, 0.13)); }
+.md-ring-center { position: relative; z-index: 1; width: 82px; height: 82px; border-radius: 999px; display: grid; place-items: center; background: #ffffff; box-shadow: inset 0 0 0 1px rgba(226,232,240,.88), 0 12px 22px rgba(15,23,42,.06); }
+.md-ring-center strong { display: block; color: #10233f; font-size: 26px; line-height: 1; font-weight: 950; letter-spacing: -0.06em; font-variant-numeric: tabular-nums; }
+.md-ring-center span { display: block; margin-top: 4px; color: #64748b; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.md-ring-core-icon { position: absolute; right: 24px; bottom: 20px; width: 36px; height: 36px; border-radius: 14px; display: grid; place-items: center; color: #ffffff; background: linear-gradient(135deg, #38bdf8, #2563eb); box-shadow: 0 14px 22px rgba(37,99,235,.18); }
+.md-donut-hole,
+.md-donut-core { display: none !important; }
+.md-mix-item {
+  border-color: rgba(203, 213, 225, 0.82) !important;
+  background: rgba(255,255,255,0.86) !important;
+  box-shadow: 0 8px 18px rgba(15,23,42,.035) !important;
+}
+.md-mix-item:hover { transform: translateY(-1px); border-color: rgba(37,99,235,.28) !important; }
+
+/* Bottom gap fix: keep scroll usable without forcing a large empty footer. */
+.management-center-page { padding-bottom: 18px !important; }
+.md-content,
+.md-dashboard-view { padding-bottom: 0 !important; }
+.md-bottom-grid { margin-bottom: 0 !important; }
+
+
+/* Final bottom card alignment polish */
+.md-bottom-grid {
+  align-items: stretch !important;
+  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.88fr) !important;
+  gap: 14px !important;
+}
+.md-signals-card,
+.md-action-card {
+  height: 100% !important;
+  min-height: 356px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.md-signals-card .md-card-head,
+.md-action-card .md-action-header {
+  flex: 0 0 auto !important;
+}
+.md-signal-stack {
+  flex: 1 1 auto !important;
+  display: grid !important;
+  grid-auto-rows: minmax(56px, 1fr) !important;
+  gap: 8px !important;
+  margin-top: 12px !important;
+}
+.md-signal-row {
+  min-height: 56px !important;
+  height: 100% !important;
+  display: grid !important;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(64px, auto) !important;
+  align-items: center !important;
+  gap: 11px !important;
+  padding: 8px 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 16px !important;
+}
+.md-signal-row:hover {
+  border-color: rgba(203, 213, 225, 0.82) !important;
+  background: rgba(248, 251, 255, 0.88) !important;
+}
+.md-activity-icon {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  min-height: 38px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  align-self: center !important;
+  margin: 0 !important;
+  border-radius: 14px !important;
+}
+.md-activity-icon .md-icon,
+.md-activity-icon svg {
+  width: 17px !important;
+  height: 17px !important;
+  display: block !important;
+  margin: 0 !important;
+}
+.md-signal-copy {
+  min-width: 0 !important;
+  display: block !important;
+  margin: 0 !important;
+  align-self: center !important;
+}
+.md-signal-copy strong {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.md-signal-copy span {
+  display: block !important;
+  margin-top: 4px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+.md-signal-value {
+  min-width: 64px !important;
+  justify-self: end !important;
+  align-self: center !important;
+  margin: 0 !important;
+  text-align: right !important;
+}
+.md-action-card .md-table-wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+.md-action-header {
+  align-items: flex-start !important;
+}
+.md-action-header .md-actions {
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+}
+.md-action-btn {
+  height: 36px !important;
+  min-height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  line-height: 1 !important;
+}
+.md-action-btn .md-icon,
+.md-action-btn svg {
+  width: 16px !important;
+  height: 16px !important;
+  display: block !important;
+  margin: 0 !important;
+}
+.md-action-icon {
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+}
+
+@media (max-width: 1180px) {
+  .md-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .md-top-row, .md-bottom-grid { grid-template-columns: 1fr; }
+  .md-pillar-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 760px) {
+  .management-center-page { height: 100%; max-height: 100%; overflow-y: auto !important; margin: 0; padding: 10px 8px 18px; }
+  .md-kpi-grid, .md-pillar-grid, .md-finance-strip, .md-mix-row, .md-breakdown-grid { grid-template-columns: 1fr; }
+  .md-chart-layout { grid-template-columns: 1fr; }
+  .md-card-head, .md-action-header, .md-view-header { flex-direction: column; align-items: start; }
+}
+@media print {
+  .management-center-page { height: auto; overflow: visible; padding: 0; background: #fff; }
+  .md-actions, .md-view-actions { display: none; }
+  .md-card, .md-view-panel { box-shadow: none; break-inside: avoid; }
+}
+
+
+/* Executive density polish - fills the main canvas with useful, compact signals */
+.management-module-root {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
+    radial-gradient(circle at 98% 18%, rgba(14, 165, 233, 0.06), transparent 26rem),
+    linear-gradient(135deg, #eef4fb 0%, #f8fbff 46%, #e8eff7 100%) !important;
+}
+.management-module-root::before {
+  content: "";
+  position: fixed;
+  inset: 76px 0 0 0;
+  pointer-events: none;
+  opacity: .28;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, .07) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 78%, transparent 100%);
+}
+.md-dashboard-view { gap: 12px !important; }
+.md-card {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37,99,235,.035), transparent 11rem),
+    linear-gradient(180deg, rgba(255,255,255,.99), rgba(248,251,255,.965)) !important;
+}
+.md-intel-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.md-intel-card {
+  min-width: 0;
+  border: 1px solid rgba(203, 213, 225, .86);
+  border-radius: 16px;
+  padding: 12px 13px;
+  display: grid;
+  gap: 8px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.985), rgba(248,251,255,.96));
+  box-shadow: 0 8px 18px rgba(15,23,42,.045);
+  text-align: left;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.md-intel-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, .28);
+  box-shadow: 0 14px 26px rgba(15,23,42,.075);
+}
+.md-intel-top {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.md-intel-top span {
+  min-width: 0;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-intel-top strong {
+  color: #0f172a;
+  font-family: var(--md-display-font);
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -.055em;
+  white-space: nowrap;
+}
+.md-intel-card small {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 780;
+  line-height: 1.25;
+}
+.md-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(203, 213, 225, .72);
+}
+.md-progress-track i {
+  display: block;
+  height: 100%;
+  width: var(--w, 0%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--a, #2563eb), var(--b, #06b6d4));
+  box-shadow: 0 0 0 1px rgba(255,255,255,.35) inset;
+}
+.md-intel-card.is-red { --a:#fb7185; --b:#ef4444; }
+.md-intel-card.is-blue { --a:#38bdf8; --b:#2563eb; }
+.md-intel-card.is-green { --a:#34d399; --b:#059669; }
+.md-intel-card.is-amber { --a:#fbbf24; --b:#f59e0b; }
+.md-chart-card { position: relative; overflow: hidden; }
+.md-chart-card::after {
+  content: "";
+  position: absolute;
+  right: 16px;
+  top: 78px;
+  width: 110px;
+  height: 110px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(37,99,235,.08), transparent 64%);
+  pointer-events: none;
+}
+.md-chart-summary {
+  padding: 12px;
+  border: 1px solid rgba(226,232,240,.78);
+  border-radius: 16px;
+  background: rgba(248,251,255,.74);
+}
+.md-chart-summary > div {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(226,232,240,.75);
+}
+.md-chart-summary > div:last-of-type { border-bottom: 0; padding-bottom: 0; }
+.md-donut-card { position: relative; overflow: hidden; }
+.md-donut-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 20px 20px auto;
+  width: 86px;
+  height: 86px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(14,165,233,.08), transparent 68%);
+  pointer-events: none;
+}
+.md-action-card,
+.md-signals-card { min-height: 318px; }
+.md-bottom-grid { margin-bottom: 12px !important; }
+@media (max-width: 1180px) {
+  .md-intel-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .md-intel-strip { grid-template-columns: 1fr; }
+}
+
+
+/* =========================================================
+   V Next - executive colour accents for previously plain cards
+   Keep existing fully-coloured gradient cards unchanged.
+========================================================= */
+.md-card:not(.md-pillar-tile),
+.md-view-panel,
+.md-breakdown-card,
+.md-evidence-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+.md-card:not(.md-pillar-tile)::before,
+.md-view-panel::before,
+.md-breakdown-card::before,
+.md-evidence-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--card-a, #2563eb), var(--card-b, #06b6d4));
+  opacity: .82;
+  pointer-events: none;
+}
+
+.md-kpi-card {
+  border: 1px solid rgba(203, 213, 225, .74) !important;
+  background:
+    radial-gradient(circle at 100% 12%, color-mix(in srgb, var(--card-a, #2563eb) 13%, transparent), transparent 48%),
+    linear-gradient(135deg, rgba(255,255,255,.99), color-mix(in srgb, var(--card-a, #2563eb) 5%, #f8fbff)) !important;
+}
+
+.tone-blue { --card-a:#2563eb; --card-b:#06b6d4; }
+.tone-cyan { --card-a:#06b6d4; --card-b:#0ea5e9; }
+.tone-green { --card-a:#059669; --card-b:#22c55e; }
+.tone-red { --card-a:#ef4444; --card-b:#f97316; }
+.tone-amber { --card-a:#f59e0b; --card-b:#facc15; }
+.tone-purple { --card-a:#8b5cf6; --card-b:#6366f1; }
+.tone-pink { --card-a:#ec4899; --card-b:#8b5cf6; }
+.tone-orange { --card-a:#fb923c; --card-b:#f97316; }
+.tone-slate { --card-a:#64748b; --card-b:#334155; }
+
+.md-chart-card {
+  --card-a:#2563eb;
+  --card-b:#06b6d4;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(37,99,235,.115), transparent 15rem),
+    radial-gradient(circle at 8% 100%, rgba(6,182,212,.08), transparent 14rem),
+    linear-gradient(135deg, rgba(255,255,255,.99), rgba(239,246,255,.95)) !important;
+}
+
+.md-donut-card {
+  --card-a:#10b981;
+  --card-b:#0ea5e9;
+  background:
+    radial-gradient(circle at 96% 8%, rgba(16,185,129,.12), transparent 13rem),
+    radial-gradient(circle at 0% 100%, rgba(14,165,233,.08), transparent 14rem),
+    linear-gradient(135deg, rgba(255,255,255,.99), rgba(240,253,250,.94)) !important;
+}
+
+.md-signals-card {
+  --card-a:#f43f5e;
+  --card-b:#f59e0b;
+  background:
+    radial-gradient(circle at 94% 0%, rgba(244,63,94,.10), transparent 13rem),
+    radial-gradient(circle at 0% 100%, rgba(245,158,11,.07), transparent 14rem),
+    linear-gradient(135deg, rgba(255,255,255,.99), rgba(255,247,247,.94)) !important;
+}
+
+.md-action-card {
+  --card-a:#6366f1;
+  --card-b:#8b5cf6;
+  background:
+    radial-gradient(circle at 98% 0%, rgba(99,102,241,.11), transparent 14rem),
+    radial-gradient(circle at 0% 100%, rgba(139,92,246,.07), transparent 15rem),
+    linear-gradient(135deg, rgba(255,255,255,.99), rgba(245,243,255,.94)) !important;
+}
+
+.md-intel-card.is-blue {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37,99,235,.12), transparent 10rem),
+    linear-gradient(135deg, #ffffff, #eff6ff) !important;
+  border-color: rgba(37,99,235,.18) !important;
+}
+.md-intel-card.is-red {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(239,68,68,.12), transparent 10rem),
+    linear-gradient(135deg, #ffffff, #fff1f2) !important;
+  border-color: rgba(239,68,68,.18) !important;
+}
+.md-intel-card.is-green {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(5,150,105,.12), transparent 10rem),
+    linear-gradient(135deg, #ffffff, #ecfdf5) !important;
+  border-color: rgba(5,150,105,.18) !important;
+}
+.md-intel-card.is-amber {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(245,158,11,.13), transparent 10rem),
+    linear-gradient(135deg, #ffffff, #fffbeb) !important;
+  border-color: rgba(245,158,11,.20) !important;
+}
+
+.md-chart-summary,
+.md-finance-chip,
+.md-mix-item {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37,99,235,.06), transparent 8rem),
+    linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,251,255,.94)) !important;
+}
+
+.md-finance-chip {
+  border-radius: 14px;
+  padding: 8px !important;
+}
+.md-finance-chip:nth-child(1) { background: linear-gradient(135deg, #fff, #fdf2f8) !important; }
+.md-finance-chip:nth-child(2) { background: linear-gradient(135deg, #fff, #f5f3ff) !important; }
+.md-finance-chip:nth-child(3) { background: linear-gradient(135deg, #fff, #ecfeff) !important; }
+.md-finance-chip:nth-child(4) { background: linear-gradient(135deg, #fff, #fff7ed) !important; }
+
+.md-mix-item:nth-child(1) { background: linear-gradient(135deg, #fff, #fff1f2) !important; border-color: rgba(244,63,94,.20) !important; }
+.md-mix-item:nth-child(2) { background: linear-gradient(135deg, #fff, #f5f3ff) !important; border-color: rgba(139,92,246,.20) !important; }
+.md-mix-item:nth-child(3) { background: linear-gradient(135deg, #fff, #ecfeff) !important; border-color: rgba(6,182,212,.20) !important; }
+
+.md-signal-row {
+  border: 1px solid rgba(226,232,240,.62) !important;
+  background: rgba(255,255,255,.58) !important;
+}
+.md-signal-row:nth-child(1),
+.md-signal-row:nth-child(2) { background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(255,241,242,.72)) !important; }
+.md-signal-row:nth-child(3),
+.md-signal-row:nth-child(4) { background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(245,243,255,.72)) !important; }
+.md-signal-row:nth-child(5) { background: linear-gradient(135deg, rgba(255,255,255,.88), rgba(236,253,245,.72)) !important; }
+.md-signal-row:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(15,23,42,.055); }
+
+.md-table thead th {
+  background: linear-gradient(180deg, rgba(248,250,252,.98), rgba(241,245,249,.92));
+}
+.md-table tbody tr:nth-child(odd) td { background: rgba(248,250,252,.36); }
+.md-table tbody tr:hover td { background: rgba(239,246,255,.74) !important; }
+
+.md-view-panel { --card-a:#2563eb; --card-b:#8b5cf6; }
+.md-breakdown-card { --card-a:#2563eb; --card-b:#06b6d4; }
+.md-breakdown-card:nth-child(4n + 2) { --card-a:#8b5cf6; --card-b:#6366f1; }
+.md-breakdown-card:nth-child(4n + 3) { --card-a:#059669; --card-b:#10b981; }
+.md-breakdown-card:nth-child(4n + 4) { --card-a:#f59e0b; --card-b:#fb923c; }
+.md-evidence-wrap { --card-a:#0ea5e9; --card-b:#6366f1; }
+
+
+/* =========================================================
+   Final colour correction - no accent stripes, modern KPI cards
+   Reference direction: rounded gradient cards with full colour body.
+========================================================= */
+.md-card:not(.md-pillar-tile)::before,
+.md-view-panel::before,
+.md-breakdown-card::before,
+.md-evidence-wrap::before,
+.md-chart-card::before,
+.md-donut-card::before,
+.md-signals-card::before,
+.md-action-card::before {
+  display: none !important;
+  content: none !important;
+}
+
+.md-kpi-card {
+  min-height: 74px !important;
+  grid-template-columns: 42px minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: center !important;
+  padding: 11px 12px !important;
+  border: 0 !important;
+  border-radius: 16px !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.10) !important;
+  overflow: hidden !important;
+}
+.md-kpi-card > span:first-child {
+  order: 2 !important;
+  min-width: 0 !important;
+}
+.md-kpi-card .md-kpi-icon {
+  order: 1 !important;
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 999px !important;
+  color: var(--md-kpi-icon-color, rgba(15, 23, 42, 0.55)) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(255, 255, 255, 0.82) !important;
+  box-shadow: 0 8px 18px rgba(15,23,42,.10) !important;
+}
+.md-kpi-card .md-kpi-icon svg {
+  width: 18px !important;
+  height: 18px !important;
+  stroke-width: 2.35 !important;
+}
+.md-kpi-card h3 {
+  margin: 0 !important;
+  color: rgba(255,255,255,.86) !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.012em !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.md-kpi-card .md-kpi-value {
+  margin-top: 4px !important;
+  gap: 3px !important;
+}
+.md-kpi-card .md-kpi-value strong {
+  color: #ffffff !important;
+  font-size: 20px !important;
+  font-weight: 950 !important;
+  letter-spacing: -0.055em !important;
+  text-shadow: 0 1px 0 rgba(15,23,42,.08) !important;
+}
+.md-kpi-card .md-kpi-value span {
+  color: rgba(255,255,255,.88) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+}
+.md-kpi-card p {
+  margin-top: 4px !important;
+  color: rgba(255,255,255,.82) !important;
+  font-size: 9px !important;
+  font-weight: 760 !important;
+  line-height: 1.18 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.md-kpi-card:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.14) !important;
+}
+
+.tone-blue.md-kpi-card { background: linear-gradient(135deg, #21c6d8 0%, #1677f2 100%) !important; }
+.tone-cyan.md-kpi-card { background: linear-gradient(135deg, #19c7d6 0%, #0ea5e9 100%) !important; }
+.tone-green.md-kpi-card { background: linear-gradient(135deg, #13c88b 0%, #059669 100%) !important; }
+.tone-red.md-kpi-card { background: linear-gradient(135deg, #ff6a78 0%, #ef4444 100%) !important; }
+.tone-amber.md-kpi-card { background: linear-gradient(135deg, #ffbd42 0%, #f59e0b 100%) !important; }
+.tone-purple.md-kpi-card { background: linear-gradient(135deg, #8b5cf6 0%, #2563eb 100%) !important; }
+.tone-pink.md-kpi-card { background: linear-gradient(135deg, #f472b6 0%, #8b5cf6 100%) !important; }
+.tone-orange.md-kpi-card { background: linear-gradient(135deg, #ffb64a 0%, #fb7b2b 100%) !important; }
+.tone-slate.md-kpi-card { background: linear-gradient(135deg, #64748b 0%, #334155 100%) !important; }
+
+
+/* KPI semantic colour system
+   Premium/executive palette. Each top KPI uses a distinct semantic colour,
+   while icons stay in clean white circular bubbles like the reference. */
+.md-kpi-card.kpi-health {
+  --md-kpi-icon-color: #e11d48;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #e11d48 0%, #9f1239 100%) !important;
+}
+.md-kpi-card.kpi-financial {
+  --md-kpi-icon-color: #2563eb;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #0ea5e9 0%, #1d4ed8 100%) !important;
+}
+.md-kpi-card.kpi-risk {
+  --md-kpi-icon-color: #dc2626;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #fb923c 0%, #b91c1c 100%) !important;
+}
+.md-kpi-card.kpi-compliance {
+  --md-kpi-icon-color: #ca8a04;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #facc15 0%, #ca8a04 100%) !important;
+}
+.md-kpi-card.kpi-savings {
+  --md-kpi-icon-color: #0f766e;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #14b8a6 0%, #0f766e 100%) !important;
+}
+.md-kpi-card.kpi-board {
+  --md-kpi-icon-color: #6366f1;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #6366f1 0%, #4338ca 100%) !important;
+}
+.md-kpi-card.kpi-default {
+  --md-kpi-icon-color: #475569;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.2), transparent 30%),
+    linear-gradient(135deg, #64748b 0%, #334155 100%) !important;
+}
+.md-kpi-card.kpi-compliance .md-kpi-value strong,
+.md-kpi-card.kpi-compliance h3,
+.md-kpi-card.kpi-compliance p {
+  text-shadow: 0 1px 0 rgba(120, 53, 15, 0.14) !important;
+}
+
+/* Plain panels now use full soft coloured borders, not thick top stripes. */
+.md-chart-card,
+.md-donut-card,
+.md-signals-card,
+.md-action-card,
+.md-intel-card,
+.md-view-panel,
+.md-breakdown-card,
+.md-evidence-wrap {
+  border-width: 1.5px !important;
+  border-style: solid !important;
+}
+.md-chart-card { border-color: rgba(37, 99, 235, .24) !important; }
+.md-donut-card { border-color: rgba(20, 184, 166, .24) !important; }
+.md-signals-card { border-color: rgba(244, 63, 94, .22) !important; }
+.md-action-card { border-color: rgba(99, 102, 241, .24) !important; }
+.md-intel-card.is-blue { border-color: rgba(37, 99, 235, .24) !important; }
+.md-intel-card.is-red { border-color: rgba(239, 68, 68, .24) !important; }
+.md-intel-card.is-green { border-color: rgba(5, 150, 105, .24) !important; }
+.md-intel-card.is-amber { border-color: rgba(245, 158, 11, .26) !important; }
+
+/* Remove the last over-coloured empty-card fills from the previous patch. */
+.md-chart-card,
+.md-donut-card,
+.md-signals-card,
+.md-action-card {
+  background:
+    radial-gradient(circle at 96% 0%, rgba(37,99,235,.035), transparent 14rem),
+    linear-gradient(180deg, rgba(255,255,255,.995), rgba(248,251,255,.975)) !important;
+}
+.md-signal-row,
+.md-signal-row:nth-child(1),
+.md-signal-row:nth-child(2),
+.md-signal-row:nth-child(3),
+.md-signal-row:nth-child(4),
+.md-signal-row:nth-child(5) {
+  background: rgba(255,255,255,.72) !important;
+  border-color: rgba(226,232,240,.78) !important;
+}
+.md-finance-chip,
+.md-finance-chip:nth-child(1),
+.md-finance-chip:nth-child(2),
+.md-finance-chip:nth-child(3),
+.md-finance-chip:nth-child(4),
+.md-mix-item,
+.md-mix-item:nth-child(1),
+.md-mix-item:nth-child(2),
+.md-mix-item:nth-child(3) {
+  background: rgba(255,255,255,.86) !important;
+}
+
+@media (max-width: 1280px) {
+  .md-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 720px) {
+  .md-kpi-grid { grid-template-columns: 1fr !important; }
+}
+
+
+/* =========================================================
+   Chart layout repair
+   Fix cramped left summary card and clipped CTA in Monthly Exposure Snapshot.
+========================================================= */
+.md-chart-card {
+  overflow: hidden !important;
+}
+.md-chart-card .md-card-head {
+  margin-bottom: 10px !important;
+}
+.md-chart-layout {
+  grid-template-columns: minmax(206px, 0.28fr) minmax(0, 1fr) !important;
+  gap: 18px !important;
+  align-items: stretch !important;
+}
+.md-chart-summary {
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  display: grid !important;
+  gap: 10px !important;
+  align-content: start !important;
+}
+.md-chart-summary > div {
+  min-width: 0 !important;
+  min-height: 82px !important;
+  padding: 13px 14px !important;
+  border: 1px solid rgba(203, 213, 225, 0.74) !important;
+  border-radius: 16px !important;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.055), transparent 8rem),
+    linear-gradient(180deg, rgba(255,255,255,0.98), rgba(247,250,254,0.96)) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.74) !important;
+}
+.md-chart-summary > div:last-of-type {
+  padding-bottom: 13px !important;
+}
+.md-chart-number {
+  font-size: 30px !important;
+  line-height: 0.95 !important;
+  letter-spacing: -0.06em !important;
+  white-space: nowrap !important;
+}
+.md-chart-summary span {
+  display: block !important;
+  margin-top: 7px !important;
+  color: #52677f !important;
+  font-size: 11px !important;
+  line-height: 1.42 !important;
+  font-weight: 780 !important;
+  white-space: normal !important;
+  overflow-wrap: normal !important;
+}
+.md-summary-btn {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 38px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 12px !important;
+  border-radius: 14px !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+.md-chart-panel {
+  min-width: 0 !important;
+  align-self: stretch !important;
+  padding-top: 4px !important;
+}
+.md-chart-svg {
+  height: 226px !important;
+  max-width: 100% !important;
+}
+.md-finance-strip {
+  margin-top: 13px !important;
+  padding-top: 12px !important;
+  gap: 12px !important;
+}
+.md-finance-chip {
+  min-height: 46px !important;
+  border-radius: 15px !important;
+  padding: 8px 10px !important;
+}
+@media (max-width: 1180px) {
+  .md-chart-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .md-chart-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .md-summary-btn {
+    grid-column: 1 / -1 !important;
+  }
+}
+@media (max-width: 640px) {
+  .md-chart-summary {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+`;
+
+function Icon({ name, className = "" }: { name: keyof typeof IconSet; className?: string }) {
+  const Cmp = IconSet[name] || IconSet.activity;
+  return <Cmp className={`md-icon ${className}`} strokeWidth={2.1} aria-hidden="true" />;
+}
+
+function getAuthHeaders() {
+  const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || sessionStorage.getItem("token") || "";
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function readApiJson(res: Response, featureName: string) {
-  const contentType = res.headers.get("content-type") || "";
-  const bodyText = await res.text();
+function buildApiUrl(path: string) {
+  const env = (import.meta as any).env || {};
+  const explicitBase = env.VITE_API_URL || env.VITE_API_BASE_URL || "";
 
-  if (!contentType.toLowerCase().includes("application/json")) {
-    const isHtml = bodyText.trim().toLowerCase().startsWith("<!doctype") || bodyText.trim().toLowerCase().startsWith("<html");
-    throw new Error(
-      isHtml
-        ? `${featureName} endpoint is returning the frontend HTML page. Check backend route and Vite proxy / API base URL.`
-        : `${featureName} endpoint did not return JSON.`
-    );
+  if (explicitBase) {
+    return `${String(explicitBase).replace(/\/$/, "")}${path}`;
   }
 
+  // Development safety: when Vite runs on 5173/3000 and backend runs on 3001,
+  // a relative /api call returns the frontend HTML page. Force localhost:3001.
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const port = window.location.port;
+    const isLocal = host === "localhost" || host === "127.0.0.1";
+    if (isLocal && port && port !== "3001") {
+      return `${window.location.protocol}//${host}:3001${path}`;
+    }
+  }
+
+  return path;
+}
+
+async function readApiJson(res: Response, label: string) {
+  const text = await res.text();
   try {
-    return bodyText ? JSON.parse(bodyText) : {};
-  } catch {
-    throw new Error(`${featureName} endpoint returned invalid JSON.`);
+    return text ? JSON.parse(text) : {};
+  } catch (err) {
+    throw new Error(`${label} returned non-JSON response.`);
   }
 }
 
-function formatMoney(value: number) {
+function moneyValue(value: unknown) {
   const n = Number(value || 0);
-  if (Math.abs(n) >= 1_000_000) return `RM ${(n / 1_000_000).toFixed(2)}M`;
-  if (Math.abs(n) >= 1_000) return `RM ${Math.round(n / 1_000).toLocaleString()}K`;
+  if (!Number.isFinite(n)) return 0;
+  return n;
+}
+
+function formatMoney(value: unknown) {
+  const n = moneyValue(value);
+  if (Math.abs(n) >= 1000000) return `RM ${(n / 1000000).toFixed(2)}M`;
+  if (Math.abs(n) >= 1000) return `RM ${Math.round(n / 1000).toLocaleString()}K`;
   return `RM ${Math.round(n).toLocaleString()}`;
 }
 
 function parseNumberFromText(value: unknown, fallback = 0) {
-  const text = String(value ?? "");
-  const match = text.replace(/,/g, "").match(/-?\d+(\.\d+)?/);
-  return match ? Number(match[0]) : fallback;
+  const matched = String(value ?? "").replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+  return matched ? Number(matched[0]) : fallback;
 }
 
-function clamp(value: number, min = 0, max = 100) {
-  return Math.min(max, Math.max(min, value));
+function clampPercent(value: unknown) {
+  const n = Math.round(moneyValue(value));
+  return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
 }
 
-function normalizeIcon(value?: string): IconName {
-  return validIcons.includes(value as IconName) ? (value as IconName) : "dashboard";
+function normalizeTone(value?: string): Tone {
+  const text = String(value || "blue").toLowerCase();
+  if (["blue", "green", "red", "amber", "purple", "cyan", "pink", "orange", "slate"].includes(text)) return text as Tone;
+  return "blue";
 }
 
-function normalizeDashboardData(payload: Partial<DashboardData> | null | undefined): DashboardData {
+
+function getKpiSemanticClass(kpi: KpiItem, index = 0) {
+  const title = String(kpi.title || "").toLowerCase();
+
+  if (title.includes("health")) return "kpi-health";
+  if (title.includes("financial") || title.includes("exposure")) {
+    if (title.includes("risk")) return "kpi-risk";
+    return "kpi-financial";
+  }
+  if (title.includes("risk")) return "kpi-risk";
+  if (title.includes("compliance") || title.includes("audit")) return "kpi-compliance";
+  if (title.includes("saving") || title.includes("opportunity")) return "kpi-savings";
+  if (title.includes("board") || title.includes("attention") || title.includes("decision")) return "kpi-board";
+
+  const fallback = ["kpi-health", "kpi-financial", "kpi-risk", "kpi-compliance", "kpi-savings", "kpi-board"];
+  return fallback[index % fallback.length] || "kpi-default";
+}
+
+function normalizeIcon(value?: string): keyof typeof IconSet {
+  const key = String(value || "dashboard") as keyof typeof IconSet;
+  return IconSet[key] ? key : "dashboard";
+}
+
+function normalizeDashboard(payload: Partial<DashboardData> | null | undefined): DashboardData {
   return {
     generatedAt: payload?.generatedAt || "",
     executiveKpis: Array.isArray(payload?.executiveKpis) ? payload.executiveKpis : [],
     pillars: Array.isArray(payload?.pillars) ? payload.pillars : [],
     boardActions: Array.isArray(payload?.boardActions) ? payload.boardActions : [],
-    finance: {
-      ...emptyFinance,
-      ...(payload?.finance || {}),
-      capexOpex: Array.isArray(payload?.finance?.capexOpex) ? payload.finance.capexOpex : [],
+    finance: payload?.finance || {},
+    analysis: {
+      ...(payload?.analysis || {}),
+      trend: Array.isArray(payload?.analysis?.trend) ? payload.analysis?.trend : [],
+      signals: Array.isArray(payload?.analysis?.signals) ? payload.analysis?.signals : [],
+      mix: payload?.analysis?.mix || { risk: 0, control: 0, savings: 0 },
     },
     level2: payload?.level2 || {},
+    metrics: payload?.metrics || {},
   };
 }
 
-function parseActionTarget(action: BoardAction) {
-  const rawKey = action.key || "";
-  const [prefix, ...rest] = rawKey.split(":");
-  let area = (prefix || action.area || "risk").toLowerCase().trim();
-  let key = rest.join(":") || rawKey;
+function getKpiTarget(kpi: KpiItem) {
+  const title = String(kpi.title || "").toLowerCase();
+  if (kpi.area) return { area: kpi.area, key: kpi.key || "", title: kpi.title };
+  if (title.includes("financial")) return { area: "capex", key: "", title: kpi.title };
+  if (title.includes("risk")) return { area: "risk", key: "", title: kpi.title };
+  if (title.includes("compliance")) return { area: "compliance", key: "", title: kpi.title };
+  if (title.includes("saving")) return { area: "saving", key: "", title: kpi.title };
+  if (title.includes("board") || title.includes("attention")) return { area: "actions", key: "", title: "Board Action Queue" };
+  return { area: "resources", key: "", title: kpi.title || "Management Insight" };
+}
 
+function parseActionTarget(action: BoardAction) {
+  const raw = String(action.key || "");
+  const [prefix, ...rest] = raw.split(":");
+  let area = String(action.area || prefix || "risk").toLowerCase();
+  let key = rest.join(":") || raw;
   if (area === "capex-category" || area === "capex-department") area = "capex";
-  if (area === "data quality" || area === "data-quality") {
-    area = "compliance";
-    key = key || "data-quality";
-  }
+  if (area === "data-quality") area = "compliance";
   if (!area || area === "actions") area = "risk";
   return { area, key };
 }
@@ -2128,7 +1759,7 @@ function getDrillValue(row: DrillRow, area?: string) {
   if (area === "resources") return `${Number(row.count || 0).toLocaleString()} endpoint(s)`;
   if (area === "compliance") return row.key === "pricing-coverage" ? `${Number(row.value || 0)}%` : `${Number(row.count || 0).toLocaleString()} record(s)`;
   if (area === "actions") return row.value ? formatMoney(row.value) : "Decision item";
-  return formatMoney(row.value || 0);
+  return row.value ? formatMoney(row.value) : `${Number(row.count || 0).toLocaleString()} record(s)`;
 }
 
 function readText(value: unknown, fallback = "-") {
@@ -2136,156 +1767,99 @@ function readText(value: unknown, fallback = "-") {
   return String(value);
 }
 
-async function fetchDashboardOverview() {
-  const res = await fetch(buildApiUrl("/api/management-dashboard/overview"), {
-    headers: getAuthHeaders(),
-  });
-
-  const json = await readApiJson(res, "Management dashboard overview");
-  if (!res.ok || json?.success === false) {
-    throw new Error(json?.message || "Management insight is not available right now.");
+function buildChartRows(dashboard: DashboardData): TrendPoint[] {
+  const direct = dashboard.analysis?.trend || [];
+  if (direct.length) return direct.slice(-6);
+  const financeRows = dashboard.finance.capexOpex || [];
+  if (financeRows.length) {
+    return financeRows.slice(-6).map((row) => ({
+      month: row.month,
+      label: row.label || row.month,
+      financialExposure: moneyValue(row.financialExposure ?? row.capex),
+      riskExposure: moneyValue(row.riskExposure ?? row.opex),
+      signals: Number(row.signals || 0),
+    }));
   }
-  return normalizeDashboardData(json.data || json);
-}
-
-async function fetchDashboardDrilldown(area: string, key = "", level: DrillLevel = 2) {
-  const params = new URLSearchParams({ area, key, level: String(level) });
-  const res = await fetch(buildApiUrl(`/api/management-dashboard/drilldown?${params.toString()}`), {
-    headers: getAuthHeaders(),
-  });
-
-  const json = await readApiJson(res, "Management dashboard drilldown");
-  if (!res.ok || json?.success === false) {
-    throw new Error(json?.message || "Detail insight is not available right now.");
-  }
-  return json.data || { rows: [], total: 0 };
-}
-
-function Icon({ name, className = "" }: { name: IconName; className?: string }) {
-  const props = {
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    className: `md-icon ${className}`,
-    "aria-hidden": true,
-  };
-
-  const icons: Record<IconName, React.ReactElement> = {
-    dashboard: <svg {...props}><rect x="4" y="4" width="7" height="7" rx="1.5" /><rect x="13" y="4" width="7" height="7" rx="1.5" /><rect x="4" y="13" width="7" height="7" rx="1.5" /><rect x="13" y="13" width="7" height="7" rx="1.5" /></svg>,
-    shield: <svg {...props}><path d="M12 3l7 3v5c0 4.5-2.8 8.5-7 10-4.2-1.5-7-5.5-7-10V6l7-3z" /><path d="M9 12l2 2 4-5" /></svg>,
-    wallet: <svg {...props}><path d="M4 7.5h14A3 3 0 0 1 21 10.5v6.2A3.3 3.3 0 0 1 17.7 20H6.3A3.3 3.3 0 0 1 3 16.7V7a3 3 0 0 1 3-3h11" /><path d="M16.5 13H21" /><path d="M17.8 15.2h.1" /></svg>,
-    risk: <svg {...props}><path d="M12 3l9 16H3L12 3z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>,
-    audit: <svg {...props}><path d="M8 4h8l1 2h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2l1-2z" /><path d="M8 13l2.2 2.2L16 9.5" /></svg>,
-    saving: <svg {...props}><path d="M19 6.8A8.7 8.7 0 0 0 12 3C7 3 3.4 6.2 3.4 10.5c0 3.9 3 7.2 7.1 7.8V21h3v-2.7c2.9-.5 5.2-2.2 6.1-4.6" /><path d="M9.5 14.5c.7.7 1.7 1 2.8 1 1.4 0 2.5-.6 2.5-1.7 0-1.2-1.2-1.5-2.7-1.8-1.4-.3-2.6-.7-2.6-1.9 0-1 1-1.7 2.5-1.7 1 0 1.9.3 2.6.9" /></svg>,
-    users: <svg {...props}><path d="M16 20v-1.7c0-1.8-1.6-3.3-3.6-3.3H7.6C5.6 15 4 16.5 4 18.3V20" /><circle cx="10" cy="8" r="3.5" /><path d="M20 20v-1.4c0-1.5-1.1-2.8-2.6-3.2" /><path d="M16.3 4.4a3 3 0 0 1 0 5.8" /></svg>,
-    alert: <svg {...props}><path d="M10.3 4.1L2.9 17a2 2 0 0 0 1.7 3h14.8a2 2 0 0 0 1.7-3L13.7 4.1a2 2 0 0 0-3.4 0z" /><path d="M12 9v4" /><path d="M12 17h.01" /></svg>,
-    calendar: <svg {...props}><path d="M7 3v3" /><path d="M17 3v3" /><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M4 9h16" /></svg>,
-    download: <svg {...props}><path d="M12 4v10" /><path d="M8 10l4 4 4-4" /><path d="M5 20h14" /></svg>,
-    filter: <svg {...props}><path d="M4 5h16l-6.5 7.5V18l-3 1.5v-7L4 5z" /></svg>,
-    endpoint: <svg {...props}><rect x="4" y="5" width="16" height="11" rx="2" /><path d="M8 21h8" /><path d="M12 16v5" /></svg>,
-    service: <svg {...props}><path d="M4 14a8 8 0 0 1 16 0" /><path d="M4 14v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2z" /><path d="M20 14v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2z" /></svg>,
-    software: <svg {...props}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 4v16" /><path d="M4 9h16" /></svg>,
-    remote: <svg {...props}><path d="M6 7h12v10H6z" /><path d="M9 20h6" /><path d="M12 17v3" /><path d="M9 11h6" /></svg>,
-    job: <svg {...props}><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></svg>,
-    pin: <svg {...props}><path d="M12 21s7-5.5 7-12a7 7 0 0 0-14 0c0 6.5 7 12 7 12z" /><circle cx="12" cy="9" r="2.4" /></svg>,
-    asset: <svg {...props}><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" /><path d="M12 12l8-4.5" /><path d="M12 12v9" /><path d="M12 12L4 7.5" /></svg>,
-    network: <svg {...props}><circle cx="6" cy="6" r="2" /><circle cx="18" cy="6" r="2" /><circle cx="12" cy="18" r="2" /><path d="M8 7l3 8" /><path d="M16 7l-3 8" /><path d="M8 6h8" /></svg>,
-    settings: <svg {...props}><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2 3.4-.2-.1a1.7 1.7 0 0 0-2 .2 1.7 1.7 0 0 0-.8 1.6V22H9.2v-.2a1.7 1.7 0 0 0-.8-1.6 1.7 1.7 0 0 0-2-.2l-.2.1-2-3.4.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.4-1H3V10h.2a1.7 1.7 0 0 0 1.4-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 2-3.4.2.1a1.7 1.7 0 0 0 2-.2A1.7 1.7 0 0 0 9.2 2V2h5.6v.2a1.7 1.7 0 0 0 .8 1.6 1.7 1.7 0 0 0 2 .2l.2-.1 2 3.4-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.4 1h.2v3.8h-.2a1.7 1.7 0 0 0-1.4.9z" /></svg>,
-    chevron: <svg {...props}><path d="M9 18l6-6-6-6" /></svg>,
-  };
-
-  return icons[name];
-}
-
-function SoftBadge({ children, tone }: { children: React.ReactNode; tone: Tone }) {
-  return <span className={`md-soft-badge tone-${tone}`}>{children}</span>;
+  return ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map((month) => ({ month, financialExposure: 0, riskExposure: 0, signals: 0 }));
 }
 
 export default function ManagementDashboard() {
-  const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
+  const [dashboard, setDashboard] = useState<DashboardData>(EMPTY_DASHBOARD);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [drill, setDrill] = useState<DrillState>({ level: 1 });
+  const [chartHover, setChartHover] = useState<number | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-
-    fetchDashboardOverview()
-      .then((data) => {
-        if (!mounted) return;
-        setDashboard(data);
-        setError("");
+  function loadDashboard() {
+    setLoading(true);
+    setError("");
+    return fetch(buildApiUrl("/api/management-dashboard/overview"), { headers: getAuthHeaders() })
+      .then(async (res) => {
+        const json = await readApiJson(res, "Management dashboard overview");
+        if (!res.ok || json?.success === false) throw new Error(json?.message || "Management dashboard failed to load.");
+        setDashboard(normalizeDashboard(json.data || json));
       })
       .catch((err) => {
-        if (!mounted) return;
-        setDashboard(emptyDashboard);
-        setError(err?.message || "Management insight is not available right now.");
+        setDashboard(EMPTY_DASHBOARD);
+        setError(err?.message || "Management dashboard failed to load.");
       })
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => { loadDashboard(); }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.add("md-dashboard-page-active");
+    document.body.classList.add("md-dashboard-page-active");
+    document.documentElement.classList.remove("md-management-dashboard-active");
+    document.body.classList.remove("md-management-dashboard-active");
 
     return () => {
-      mounted = false;
+      document.documentElement.classList.remove("md-dashboard-page-active");
+      document.body.classList.remove("md-dashboard-page-active");
     };
   }, []);
 
   useEffect(() => {
-    const scrollTarget = document.querySelector(".management-center-page");
-    if (scrollTarget && "scrollTo" in scrollTarget) {
-      (scrollTarget as HTMLElement).scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    const root = document.querySelector(".management-center-page") as HTMLElement | null;
+    if (root) root.scrollTo({ top: 0, behavior: "smooth" });
   }, [drill.level, drill.title]);
 
-  const capexMax = useMemo(() => {
-    const values = dashboard.finance.capexOpex.flatMap((item) => [Number(item.capex || 0), Number(item.opex || 0)]);
-    return Math.max(...values, 1);
-  }, [dashboard.finance.capexOpex]);
+  const topKpis = useMemo(() => dashboard.executiveKpis.slice(0, 6), [dashboard.executiveKpis]);
+  const pillars = useMemo(() => dashboard.pillars.slice(0, 4), [dashboard.pillars]);
+  const actions = useMemo(() => dashboard.boardActions.slice(0, 8), [dashboard.boardActions]);
+  const signals = useMemo(() => {
+    const apiSignals = dashboard.analysis?.signals || [];
+    if (apiSignals.length) return apiSignals.slice(0, 5);
+    return pillars.flatMap((pillar) => (pillar.details || []).slice(0, 1).map((detail) => ({
+      title: detail.label,
+      subtitle: `${detail.value} from ${pillar.title}`,
+      value: detail.value,
+      area: pillar.area,
+      key: detail.key || "",
+      tone: detail.tone || pillar.tone,
+      icon: normalizeIcon(pillar.icon),
+    }))).slice(0, 5);
+  }, [dashboard.analysis?.signals, pillars]);
 
-  const chartData = useMemo(() => {
-    const rows = dashboard.finance.capexOpex.slice(-6);
-    const max = Math.max(...rows.flatMap((item) => [Number(item.capex || 0), Number(item.opex || 0)]), 1);
-    const makePoints = (field: "capex" | "opex") => rows.map((item, index) => {
-      const x = rows.length <= 1 ? 50 : (index / (rows.length - 1)) * 100;
-      const y = 88 - (Number(item[field] || 0) / max) * 68;
-      return { x, y, item };
-    });
-    const capex = makePoints("capex");
-    const opex = makePoints("opex");
-    return {
-      capex,
-      opex,
-      capexLine: capex.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "),
-      opexLine: opex.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "),
-      capexArea: capex.length ? `0,100 ${capex.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ")} 100,100` : "0,100 100,100",
-      latest: rows.slice(-4),
-    };
-  }, [dashboard.finance.capexOpex]);
-
-  const healthPercent = useMemo(() => {
-    const compliance = dashboard.executiveKpis.find((item) => /compliance|health/i.test(item.title));
-    const first = compliance || dashboard.executiveKpis[0];
-    return clamp(parseNumberFromText(first?.value, 72), 0, 100);
-  }, [dashboard.executiveKpis]);
-
-  const quickActions = useMemo(() => dashboard.boardActions.slice(0, 4), [dashboard.boardActions]);
-  const topMetrics = useMemo(() => dashboard.executiveKpis.slice(0, 6), [dashboard.executiveKpis]);
-  const tiles = useMemo(() => dashboard.pillars.slice(0, 4), [dashboard.pillars]);
+  const chartRows = useMemo(() => buildChartRows(dashboard), [dashboard]);
+  const chartMax = useMemo(() => Math.max(1, ...chartRows.flatMap((row) => [moneyValue(row.financialExposure), moneyValue(row.riskExposure)])), [chartRows]);
+  const mix = dashboard.analysis?.mix || { risk: 0, control: 0, savings: 0 };
+  const healthValue = parseNumberFromText(topKpis.find((item) => /health/i.test(item.title))?.value, moneyValue(mix.control));
+  const ringHealth = clampPercent(healthValue || moneyValue(mix.control));
+  const ringRisk = clampPercent(moneyValue(mix.risk));
+  const ringCircumference = 2 * Math.PI * 78;
+  const ringControlDash = (ringHealth / 100) * ringCircumference;
+  const ringRiskDash = (Math.min(100, ringRisk) / 100) * ringCircumference;
 
   function openLevel2(area: string, title: string, key = "") {
     if (area === "actions") {
       const rows: DrillRow[] = dashboard.boardActions.map((action) => {
         const target = parseActionTarget(action);
         return {
-          key: action.key || `${action.area}-${action.issue}`,
+          key: action.key || `${target.area}:${target.key}`,
           label: action.issue,
           count: 1,
-          value: 0,
           valueFmt: action.impact,
           level3Area: target.area,
           level3Key: target.key,
@@ -2295,275 +1869,321 @@ export default function ManagementDashboard() {
       return;
     }
 
-    const rows = key ? [] : dashboard.level2[area] || [];
-    setDrill({ level: 2, area, key, title, rows, total: rows.length, loading: Boolean(key) });
-
-    if (key) {
-      fetchDashboardDrilldown(area, key, 2)
-        .then((data) => setDrill({ level: 2, area, key, title: data.title || title, rows: data.rows || [], total: data.total || 0 }))
-        .catch(() => setDrill({ level: 2, area, key, title, rows: [], total: 0, loading: false }));
+    if (!key) {
+      const rows = dashboard.level2[area] || [];
+      setDrill({ level: 2, area, key, title, rows, total: rows.length });
+      return;
     }
+
+    setDrill({ level: 2, area, key, title, rows: [], total: 0, loading: true });
+    const params = new URLSearchParams({ area, key, level: "2" });
+    fetch(buildApiUrl(`/api/management-dashboard/drilldown?${params}`), { headers: getAuthHeaders() })
+      .then(async (res) => {
+        const json = await readApiJson(res, "Management dashboard drilldown");
+        if (!res.ok || json?.success === false) throw new Error(json?.message || "Breakdown failed.");
+        const data = json.data || {};
+        setDrill({ level: 2, area, key, title: data.title || title, rows: data.rows || [], total: data.total || 0 });
+      })
+      .catch(() => setDrill({ level: 2, area, key, title, rows: [], total: 0 }));
   }
 
   function openLevel3(area: string, key: string, title: string) {
-    const parent = drill.level === 2
-      ? {
-          level: drill.level,
-          area: drill.area,
-          key: drill.key,
-          title: drill.title,
-          rows: drill.rows,
-          total: drill.total,
-          loading: false,
-        }
-      : undefined;
-
+    const parent = drill.level === 2 ? { ...drill, loading: false } : undefined;
     setDrill({ level: 3, area, key, title, rows: [], total: 0, loading: true, parent });
-
-    fetchDashboardDrilldown(area, key, 3)
-      .then((data) => setDrill({ level: 3, area, key, title: data.title || title, rows: data.rows || [], total: data.total || 0, parent }))
-      .catch(() => setDrill({ level: 3, area, key, title, rows: [], total: 0, loading: false, parent }));
+    const params = new URLSearchParams({ area, key, level: "3" });
+    fetch(buildApiUrl(`/api/management-dashboard/drilldown?${params}`), { headers: getAuthHeaders() })
+      .then(async (res) => {
+        const json = await readApiJson(res, "Management dashboard evidence");
+        if (!res.ok || json?.success === false) throw new Error(json?.message || "Evidence failed.");
+        const data = json.data || {};
+        setDrill({ level: 3, area, key, title: data.title || title, rows: data.rows || [], total: data.total || 0, parent });
+      })
+      .catch(() => setDrill({ level: 3, area, key, title, rows: [], total: 0, parent }));
   }
 
-  function closeDrilldown() {
-    setDrill({ level: 1 });
-  }
-
-  function backDrilldown() {
-    if (drill.level === 3 && drill.parent) {
-      setDrill({ ...drill.parent, level: 2 });
-      return;
-    }
-    closeDrilldown();
-  }
-
-  function refreshDashboard() {
-    setLoading(true);
-    setError("");
-    closeDrilldown();
-
-    fetchDashboardOverview()
-      .then((data) => setDashboard(data))
-      .catch((err) => setError(err?.message || "Management insight is not available right now."))
-      .finally(() => setLoading(false));
-  }
-
-  function printDashboard() {
-    window.print();
-  }
-
-  const hasDashboardData = dashboard.executiveKpis.length > 0 || dashboard.pillars.length > 0;
+  function closeDrilldown() { setDrill({ level: 1 }); }
+  function backDrilldown() { drill.level === 3 && drill.parent ? setDrill({ ...drill.parent, level: 2 }) : closeDrilldown(); }
+  function refreshDashboard() { closeDrilldown(); loadDashboard(); }
+  function printDashboard() { window.print(); }
 
   function renderOverview() {
     const financeChips = [
-      { label: "Wallet Balance", value: formatMoney(dashboard.finance.totalCost), icon: "wallet" as IconName, bg: "bg-pink", area: "capex", title: "Financial Exposure" },
-      { label: "Risk Exposure", value: formatMoney(dashboard.finance.riskCost), icon: "risk" as IconName, bg: "bg-purple", area: "risk", title: "Risk Exposure" },
-      { label: "Savings", value: formatMoney(dashboard.finance.potentialSavings), icon: "saving" as IconName, bg: "bg-cyan", area: "saving", title: "Savings Opportunity" },
-      { label: "CAPEX Watch", value: formatMoney(dashboard.finance.capexYtd), icon: "asset" as IconName, bg: "bg-orange", area: "capex", title: "CAPEX Watch" },
+      { label: "Financial Exposure", value: formatMoney(dashboard.finance.totalCost || 0), icon: "money" as const, tone: "pink" as Tone, area: "capex", title: "Financial Exposure" },
+      { label: "Risk Exposure", value: formatMoney(dashboard.finance.riskCost || 0), icon: "risk" as const, tone: "purple" as Tone, area: "risk", title: "Risk Exposure" },
+      { label: "Savings", value: formatMoney(dashboard.finance.potentialSavings || 0), icon: "saving" as const, tone: "cyan" as Tone, area: "saving", title: "Savings Opportunity" },
+      { label: "CAPEX Watch", value: formatMoney(dashboard.finance.capexYtd || 0), icon: "package" as const, tone: "orange" as Tone, area: "capex", title: "CAPEX Watch" },
     ];
-
-    const tileClasses = ["tile-purple", "tile-blue", "tile-teal", "tile-orange"];
-    const activityColors = ["bg-pink", "bg-purple", "bg-cyan", "bg-orange"];
-    const chartMonths = chartData.latest.length ? chartData.latest.map((item) => item.month) : ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
-    const displayActions = dashboard.boardActions.slice(0, 5);
+    const totalEndpoints = Number(dashboard.metrics?.totalEndpoints || parseNumberFromText(pillars.find((item) => /resource/i.test(item.title))?.secondValue, 0) || 0);
+    const onlineCoverage = clampPercent(dashboard.metrics?.onlineCoverage || parseNumberFromText(pillars.find((item) => /resource/i.test(item.title))?.scoreValue, 0));
+    const pricingCoverage = clampPercent(dashboard.metrics?.pricingCoverage || parseNumberFromText(topKpis.find((item) => /compliance/i.test(item.title))?.note, 0));
+    const riskSignals = Number(dashboard.metrics?.riskCandidates || parseNumberFromText(topKpis.find((item) => /risk/i.test(item.title))?.note, 0) || 0);
+    const boardItems = Number(dashboard.metrics?.boardItems || actions.length || 0);
+    const riskProgress = totalEndpoints > 0 ? Math.min(100, Math.round((riskSignals / totalEndpoints) * 100)) : Math.min(100, riskSignals);
+    const boardProgress = Math.min(100, boardItems * 25);
 
     return (
-      <section className="md-reference-dashboard" aria-label="Management dashboard overview">
-        <section className="md-metric-grid" aria-label="Executive KPI cards">
-          {topMetrics.map((kpi) => (
-            <button
-              type="button"
-              className={`md-metric-card tone-${kpi.tone}`}
-              key={kpi.id || kpi.title}
-              onClick={() => openLevel2(kpi.area, kpi.title)}
-            >
-              <header>
-                <h3>{kpi.title}</h3>
+      <section className="md-dashboard-view" aria-label="Management dashboard overview">
+        <section className="md-kpi-grid" aria-label="Executive KPI cards">
+          {topKpis.map((kpi, index) => {
+            const target = getKpiTarget(kpi);
+            return (
+              <button type="button" className={`md-card md-kpi-card tone-${normalizeTone(kpi.tone)} ${getKpiSemanticClass(kpi, index)}`} key={`${kpi.title}-${index}`} onClick={() => openLevel2(target.area, target.title, target.key)}>
+                <span>
+                  <h3>{kpi.title}</h3>
+                  <span className="md-kpi-value"><strong>{kpi.value}</strong>{kpi.subValue && <span>{kpi.subValue}</span>}</span>
+                  <p>{kpi.note || kpi.trend || "Click for management breakdown"}</p>
+                </span>
                 <span className="md-kpi-icon"><Icon name={normalizeIcon(kpi.icon)} /></span>
-              </header>
-              <div className="md-metric-value">
-                <strong>{kpi.value}</strong>
-                {kpi.subValue && <span>{kpi.subValue}</span>}
-              </div>
-              {kpi.note && <SoftBadge tone={kpi.tone}>{kpi.note}</SoftBadge>}
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </section>
 
-        <section className="ref-top-grid">
-          <article className="ref-card" aria-label="Financial trend dashboard">
-            <div className="ref-card-head">
+        <section className="md-intel-strip" aria-label="Executive intelligence summary">
+          <button type="button" className="md-intel-card is-blue" onClick={() => openLevel2("resources", "Endpoint Visibility") }>
+            <span className="md-intel-top"><span>Endpoint visibility</span><strong>{totalEndpoints.toLocaleString()}</strong></span>
+            <span className="md-progress-track"><i style={{ "--w": `${onlineCoverage}%` } as React.CSSProperties} /></span>
+            <small>{onlineCoverage}% online/control coverage across current estate.</small>
+          </button>
+          <button type="button" className="md-intel-card is-red" onClick={() => openLevel2("risk", "Active Risk Signals") }>
+            <span className="md-intel-top"><span>Risk density</span><strong>{riskSignals.toLocaleString()}</strong></span>
+            <span className="md-progress-track"><i style={{ "--w": `${riskProgress}%` } as React.CSSProperties} /></span>
+            <small>{riskProgress}% of visible estate requires management attention.</small>
+          </button>
+          <button type="button" className="md-intel-card is-green" onClick={() => openLevel2("compliance", "Evidence Coverage") }>
+            <span className="md-intel-top"><span>Evidence coverage</span><strong>{pricingCoverage}%</strong></span>
+            <span className="md-progress-track"><i style={{ "--w": `${pricingCoverage}%` } as React.CSSProperties} /></span>
+            <small>Pricing and compliance evidence linked to dashboard decisions.</small>
+          </button>
+          <button type="button" className="md-intel-card is-amber" onClick={() => openLevel2("actions", "Board Action Queue") }>
+            <span className="md-intel-top"><span>Decision pressure</span><strong>{boardItems.toLocaleString()}</strong></span>
+            <span className="md-progress-track"><i style={{ "--w": `${boardProgress}%` } as React.CSSProperties} /></span>
+            <small>Open executive action(s) ready for review.</small>
+          </button>
+        </section>
+
+        <section className="md-top-row">
+          <article className="md-card md-chart-card">
+            <div className="md-card-head">
               <div>
-                <p className="ref-card-kicker">Dashboard</p>
-                <p className="ref-card-subtitle">Overview of latest Month</p>
+                <span className="md-eyebrow">Management Analytics</span>
+                <h2>Monthly Exposure Snapshot</h2>
+                <p>{dashboard.analysis?.headline || "Live trend generated from endpoint lifecycle, pricing and service desk evidence."}</p>
               </div>
-              <div className="ref-tabs" aria-label="Time filter tabs">
-                <span>DAILY</span>
-                <span>WEEKLY</span>
-                <button type="button" onClick={() => openLevel2("capex", "Monthly Exposure")}>MONTHLY</button>
-                <span>YEARLY</span>
-                <span className="ref-legend"><span><i className="md-dot red" />Online</span><span><i className="md-dot amber" />Store</span></span>
+              <div className="md-actions">
+                <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
+                <button type="button" className="md-action-btn primary" onClick={printDashboard}><Icon name="download" /> Report</button>
               </div>
             </div>
 
-            <div className="ref-chart-layout">
-              <aside className="ref-earning-panel">
+            <div className="md-chart-layout">
+              <div className="md-chart-summary">
                 <div>
-                  <p className="ref-big-money">{formatMoney(dashboard.finance.totalCost)}</p>
-                  <span className="ref-caption">Current Month Exposure</span>
+                  <p className="md-chart-number">{formatMoney(dashboard.finance.totalCost || 0)}</p>
+                  <span>Total management exposure</span>
                 </div>
                 <div>
-                  <p className="ref-count-number">{Number(topMetrics[1]?.value?.replace(/[^0-9.-]/g, "") || dashboard.boardActions.length || 0).toLocaleString()}</p>
-                  <span className="ref-caption">Current Month Signals</span>
+                  <p className="md-chart-number">{Number(dashboard.metrics?.riskCandidates || 0).toLocaleString()}</p>
+                  <span>Endpoint risk signal(s)</span>
                 </div>
-                <button type="button" className="ref-summary-pill" onClick={() => openLevel2("capex", "Monthly Financial Summary")}>Last Month Summary</button>
-              </aside>
+                <button type="button" className="md-summary-btn" onClick={() => openLevel2("risk", "Current Risk Signals")}>View Risk Breakdown</button>
+              </div>
 
-              <div className="ref-line-chart">
-                <svg className="ref-chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                  <g className="ref-chart-grid">
-                    {[20, 40, 60, 80].map((y) => <line key={`h-${y}`} x1="0" y1={y} x2="100" y2={y} />)}
-                    {[16, 33, 50, 67, 84].map((x) => <line key={`v-${x}`} x1={x} y1="0" x2={x} y2="100" />)}
-                  </g>
+              <div className="md-chart-panel">
+                <div className="md-chart-legend">
+                  <span><i className="md-dot orange" /> Financial exposure</span>
+                  <span><i className="md-dot red" /> Risk exposure</span>
+                </div>
+                <svg className="md-chart-svg" viewBox="0 0 640 230" role="img" aria-label="Monthly management exposure trend" onMouseLeave={() => setChartHover(null)}>
                   <defs>
-                    <linearGradient id="refBlueArea" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.24" />
-                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+                    <linearGradient id="mdFinanceBarGradient" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#fbbf24" />
+                      <stop offset="100%" stopColor="#f59e0b" />
                     </linearGradient>
-                    <linearGradient id="refOrangeArea" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.22" />
-                      <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                    <linearGradient id="mdRiskBarGradient" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#fb7185" />
+                      <stop offset="100%" stopColor="#f43f5e" />
                     </linearGradient>
                   </defs>
-                  <polygon points={chartData.capexArea} fill="url(#refBlueArea)" />
-                  <polyline points={chartData.capexLine || "0,90 18,62 34,70 50,42 68,58 84,22 100,86"} fill="none" stroke="#8b5cf6" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-                  <polyline points={chartData.opexLine || "0,88 18,70 34,42 50,76 68,64 84,34 100,88"} fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-                  {chartData.capex.map((point) => <circle key={`${point.item.month}-${point.x}`} cx={point.x} cy={point.y} r="1.8" fill="#fff" stroke="#8b5cf6" strokeWidth="1.2" />)}
+                  {[0, 1, 2, 3, 4].map((tick) => {
+                    const y = 18 + tick * 43;
+                    const labelValue = chartMax - (chartMax / 4) * tick;
+                    return (
+                      <g key={`grid-${tick}`}>
+                        <line className="md-chart-grid" x1="54" x2="602" y1={y} y2={y} />
+                        <text className="md-chart-label" x="0" y={y + 4}>{formatMoney(labelValue).replace("RM ", "")}</text>
+                      </g>
+                    );
+                  })}
+                  <line className="md-chart-axis" x1="54" x2="602" y1="190" y2="190" />
+                  {chartRows.map((row, index) => {
+                    const x = chartRows.length <= 1 ? 328 : 54 + (index / Math.max(1, chartRows.length - 1)) * 548;
+                    const financeRaw = moneyValue(row.financialExposure);
+                    const riskRaw = moneyValue(row.riskExposure);
+                    const financeHeight = financeRaw > 0 ? Math.max(9, (financeRaw / chartMax) * 172) : 0;
+                    const riskHeight = riskRaw > 0 ? Math.max(9, (riskRaw / chartMax) * 172) : 0;
+                    return (
+                      <g key={`bar-${index}`} onMouseEnter={() => setChartHover(index)}>
+                        <rect className="md-chart-hover-band" x={x - 34} y="12" width="68" height="194" rx="12" />
+                        <rect className="md-chart-bar-finance" x={x - 14} y={190 - financeHeight} width="12" height={financeHeight} rx="6" />
+                        <rect className="md-chart-bar-risk" x={x + 4} y={190 - riskHeight} width="12" height={riskHeight} rx="6" />
+                        <text className="md-chart-label" x={x - 12} y="218">{row.label || row.month}</text>
+                      </g>
+                    );
+                  })}
+                  {chartHover !== null && chartRows[chartHover] && (() => {
+                    const row = chartRows[chartHover];
+                    const x = chartRows.length <= 1 ? 328 : 54 + (chartHover / Math.max(1, chartRows.length - 1)) * 548;
+                    const boxX = x > 440 ? x - 202 : x + 20;
+                    const boxY = 24;
+                    return (
+                      <g pointerEvents="none">
+                        <line className="md-chart-active-line" x1={x} x2={x} y1="18" y2="190" />
+                        <rect className="md-chart-tooltip-box" x={boxX} y={boxY} width="182" height="82" rx="14" />
+                        <text className="md-chart-tooltip-title" x={boxX + 14} y={boxY + 22}>{row.label || row.month}</text>
+                        <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 42}>Financial: {formatMoney(row.financialExposure || 0)}</text>
+                        <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 59}>Risk: {formatMoney(row.riskExposure || 0)}</text>
+                        <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 76}>Signals: {Number(row.signals || 0).toLocaleString()}</text>
+                      </g>
+                    );
+                  })()}
+                  {chartRows.every((row) => moneyValue(row.financialExposure) === 0 && moneyValue(row.riskExposure) === 0) && (
+                    <text className="md-chart-empty-note" x="210" y="104">No monthly exposure data available yet.</text>
+                  )}
                 </svg>
-                <div className="ref-chart-months">
-                  {chartMonths.slice(-6).map((month, index) => <span key={`${month}-${index}`}>{month}</span>)}
-                </div>
               </div>
             </div>
 
-            <div className="ref-finance-strip">
+            <div className="md-finance-strip">
               {financeChips.map((chip) => (
-                <button type="button" className="ref-finance-chip" key={chip.label} onClick={() => openLevel2(chip.area, chip.title)}>
-                  <span className={`ref-finance-icon ${chip.bg}`}><Icon name={chip.icon} /></span>
-                  <span>{chip.label}<strong>{chip.value}</strong></span>
+                <button key={chip.label} type="button" className="md-finance-chip" onClick={() => openLevel2(chip.area, chip.title)}>
+                  <span className={`md-chip-icon bg-${chip.tone}`}><Icon name={chip.icon} /></span>
+                  <span className="md-chip-body"><span className="md-chip-label">{chip.label}</span><strong className="md-chip-value">{chip.value}</strong></span>
                 </button>
               ))}
             </div>
           </article>
 
-          <article className="ref-card ref-donut-card" aria-label="Risk and channel mix">
-            <p className="ref-donut-title">Title</p>
-            <button type="button" className="ref-donut-wrap" onClick={() => openLevel2("compliance", "Risk and Compliance Mix")}>
-              <div className="ref-donut-ring" />
-              <div className="ref-donut-hole">
-                <div className="ref-donut-core"><Icon name="asset" /></div>
-              </div>
-            </button>
-            <div className="ref-social-row">
-              <button type="button" className="ref-social-item" onClick={() => openLevel2("risk", "Risk Exposure")}><strong>{Math.max(0, 100 - healthPercent)}%</strong><span><i className="md-dot purple" />Risk</span></button>
-              <button type="button" className="ref-social-item" onClick={() => openLevel2("compliance", "Compliance Score")}><strong>{healthPercent}%</strong><span><i className="md-dot red" />Control</span></button>
-              <button type="button" className="ref-social-item" onClick={() => openLevel2("saving", "Savings Opportunity")}><strong>{clamp(parseNumberFromText(formatMoney(dashboard.finance.potentialSavings), 12), 0, 99)}%</strong><span><i className="md-dot green" />Savings</span></button>
-            </div>
-          </article>
-        </section>
-
-        <section className="ref-tiles-grid" aria-label="Executive shortcut cards">
-          {tiles.map((pillar, index) => (
-            <button
-              type="button"
-              className={`ref-tile ${tileClasses[index % tileClasses.length]}`}
-              key={pillar.id || pillar.title}
-              onClick={() => openLevel2(pillar.area, pillar.title)}
-            >
-              <span className="ref-tile-icon"><Icon name={normalizeIcon(pillar.icon)} /></span>
-              <span className="ref-tile-content">
-                <span>{pillar.title}</span>
-                <strong>{pillar.scoreValue}{pillar.scoreUnit || ""}</strong>
-                <small>{pillar.secondTitle}: {pillar.secondValue}</small>
-              </span>
-            </button>
-          ))}
-        </section>
-
-        <section className="ref-bottom-grid">
-          <article className="ref-activity-card">
-            <h2 className="ref-section-title">Recent Activities</h2>
-            <div className="ref-activity-stack">
-              {dashboard.pillars.slice(0, 4).map((pillar, index) => {
-                const firstDetail = pillar.details?.[0];
-                return (
-                  <button
-                    type="button"
-                    className="ref-activity-row"
-                    key={`activity-${pillar.id}`}
-                    onClick={() => openLevel2(pillar.area, firstDetail?.label || pillar.title, firstDetail?.key || "")}
-                  >
-                    <span className="ref-activity-time">{index === 0 ? "40 Mins Ago" : index === 1 ? "1 day ago" : index === 2 ? "40 Mins Ago" : "1 day ago"}</span>
-                    <span className={`ref-activity-dot ${activityColors[index % activityColors.length]}`}><Icon name={normalizeIcon(pillar.icon)} /></span>
-                    <span>
-                      <strong>{firstDetail?.label || pillar.title}</strong>
-                      <span>{firstDetail ? `${firstDetail.value} from ${pillar.title}` : pillar.scoreStatus}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </article>
-
-          <article className="ref-order-card">
-            <div className="ref-order-header">
+          <article className="md-card md-donut-card">
+            <div className="md-card-head">
               <div>
-                <h2 className="ref-section-title">Order Status</h2>
-                <p className="ref-section-subtitle">Overview of latest month</p>
+                <span className="md-eyebrow">Executive Health</span>
+                <h2>Risk and Control Mix</h2>
+                <p>Risk exposure, operational control and savings visibility.</p>
               </div>
-              <div className="ref-order-actions">
-                <button type="button" className="ref-add-btn" onClick={() => openLevel2("actions", "Board Action Queue")}>Add</button>
-                <button type="button" className="ref-icon-btn" onClick={refreshDashboard}><Icon name="filter" /></button>
-                <button type="button" className="ref-icon-btn" onClick={() => openLevel2("actions", "Board Action Queue")}><Icon name="audit" /></button>
-                <button type="button" className="ref-icon-btn" onClick={printDashboard}><Icon name="download" /></button>
-                <span className="ref-search-box">Search</span>
-                <button type="button" className="ref-icon-btn" onClick={printDashboard}><Icon name="download" /></button>
+              <Icon name="health" />
+            </div>
+            <div className="md-donut-shell">
+              <button type="button" className="md-donut" onClick={() => openLevel2("risk", "Risk and Control Mix")} aria-label="Open risk and control mix">
+                <span className="md-health-ring">
+                  <svg className="md-health-ring-svg" viewBox="0 0 220 220" aria-hidden="true">
+                    <defs>
+                      <linearGradient id="mdControlRingGradient" x1="0%" x2="100%" y1="0%" y2="100%">
+                        <stop offset="0%" stopColor="#38bdf8" />
+                        <stop offset="52%" stopColor="#2563eb" />
+                        <stop offset="100%" stopColor="#1d4ed8" />
+                      </linearGradient>
+                      <linearGradient id="mdRiskRingGradient" x1="0%" x2="100%" y1="0%" y2="100%">
+                        <stop offset="0%" stopColor="#fb7185" />
+                        <stop offset="100%" stopColor="#e11d48" />
+                      </linearGradient>
+                    </defs>
+                    <circle className="md-ring-track" cx="110" cy="110" r="78" />
+                    <circle className="md-ring-control" cx="110" cy="110" r="78" strokeDasharray={`${ringControlDash} ${ringCircumference}`} strokeDashoffset="58" />
+                    <circle className="md-ring-risk" cx="110" cy="110" r="78" strokeDasharray={`${ringRiskDash} ${ringCircumference}`} strokeDashoffset={String(-ringControlDash - 24)} />
+                  </svg>
+                  <span className="md-ring-center"><span><strong>{ringHealth}%</strong><span>Health</span></span></span>
+                  <span className="md-ring-core-icon"><Icon name="health" /></span>
+                </span>
+              </button>
+              <div className="md-mix-row">
+                <button type="button" className="md-mix-item" onClick={() => openLevel2("risk", "Risk Exposure")}><strong>{Math.round(moneyValue(mix.risk))}%</strong><span><i className="md-dot red" /> Risk</span></button>
+                <button type="button" className="md-mix-item" onClick={() => openLevel2("resources", "Operational Control")}><strong>{Math.round(healthValue || moneyValue(mix.control))}%</strong><span><i className="md-dot purple" /> Control</span></button>
+                <button type="button" className="md-mix-item" onClick={() => openLevel2("saving", "Savings Visibility")}><strong>{Math.round(moneyValue(mix.savings))}%</strong><span><i className="md-dot cyan" /> Savings</span></button>
               </div>
             </div>
+          </article>
+        </section>
 
-            <div className="ref-order-table-wrap">
-              <table className="ref-order-table">
+        <section className="md-pillar-grid" aria-label="Management pillar cards">
+          {pillars.map((pillar, index) => {
+            const colors = ["tile-purple", "tile-blue", "tile-teal", "tile-orange"];
+            return (
+              <button type="button" key={pillar.id || pillar.title} className={`md-pillar-tile ${colors[index % colors.length]}`} onClick={() => openLevel2(pillar.area, pillar.title)}>
+                <span className="md-tile-icon"><Icon name={normalizeIcon(pillar.icon)} /></span>
+                <span>
+                  <h3>{pillar.title}</h3>
+                  <span className="md-tile-value"><strong>{pillar.scoreValue}</strong>{pillar.scoreUnit && <em>{pillar.scoreUnit}</em>}</span>
+                  <small>{pillar.secondTitle}: {pillar.secondValue || pillar.secondNote || pillar.scoreStatus}</small>
+                </span>
+              </button>
+            );
+          })}
+        </section>
+
+        <section className="md-bottom-grid">
+          <article className="md-card md-signals-card">
+            <div className="md-card-head">
+              <div>
+                <span className="md-eyebrow">Recent Signals</span>
+                <h2>Management Insights</h2>
+                <p>High-value items from current dashboard analysis.</p>
+              </div>
+            </div>
+            <div className="md-signal-stack">
+              {signals.length === 0 ? <div className="md-state-panel">No signal found.</div> : signals.map((signal, index) => (
+                <button type="button" className="md-signal-row" key={`${signal.title}-${index}`} onClick={() => openLevel2(signal.area || "risk", signal.title, signal.key || "")}>
+                  <span className={`md-activity-icon bg-${normalizeTone(signal.tone)}`}><Icon name={normalizeIcon(signal.icon)} /></span>
+                  <span className="md-signal-copy"><strong>{signal.title}</strong><span>{signal.subtitle || "Click to inspect evidence."}</span></span>
+                  <span className="md-signal-value">{signal.value || "View"}</span>
+                </button>
+              ))}
+            </div>
+          </article>
+
+          <article className="md-card md-action-card">
+            <div className="md-action-header">
+              <div>
+                <span className="md-eyebrow">Decision Table</span>
+                <h2 className="md-section-title">Board Action Queue</h2>
+                <p className="md-section-subtitle">Click a row to open the related breakdown.</p>
+              </div>
+              <div className="md-actions">
+                <button type="button" className="md-action-btn primary" onClick={() => openLevel2("actions", "Board Action Queue")}><Icon name="list" /> View All</button>
+                <button type="button" className="md-action-btn md-action-icon" onClick={refreshDashboard} aria-label="Refresh"><Icon name="refresh" /></button>
+              </div>
+            </div>
+            <div className="md-table-wrap">
+              <table className="md-table">
                 <thead>
                   <tr>
-                    <th>Invoice</th>
-                    <th>Customers</th>
-                    <th>From</th>
-                    <th>Price</th>
-                    <th>Status</th>
+                    <th style={{ width: "96px" }}>Priority</th>
+                    <th style={{ width: "120px" }}>Area</th>
+                    <th>Signal</th>
+                    <th style={{ width: "120px" }}>Impact</th>
+                    <th>Decision</th>
+                    <th style={{ width: "96px" }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayActions.length === 0 ? (
-                    <tr><td colSpan={5}>No executive action is required for this view.</td></tr>
-                  ) : displayActions.map((action, index) => {
+                  {actions.length === 0 ? (
+                    <tr><td colSpan={6}>No executive action is required for this view.</td></tr>
+                  ) : actions.map((action, index) => {
                     const target = parseActionTarget(action);
+                    const priority = String(action.priority || "Low").toLowerCase();
                     return (
-                      <tr key={`${action.area}-${action.key}-${action.issue}`} onClick={() => openLevel2(target.area, action.issue, target.key)}>
-                        <td>{String(index + 12386)}</td>
+                      <tr key={`${action.area}-${action.key}-${index}`} onClick={() => openLevel2(target.area, action.issue, target.key)}>
+                        <td><span className={`md-priority ${priority}`}>{action.priority}</span></td>
                         <td>{action.area}</td>
                         <td>{action.issue}</td>
                         <td>{action.impact}</td>
-                        <td><span className={`ref-status-pill ${action.priority.toLowerCase()}`}>{action.priority === "High" ? "Process" : action.priority === "Medium" ? "Open" : "On Hold"}</span></td>
+                        <td>{action.decision}</td>
+                        <td><span className="md-status-pill">Open</span></td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
-
-            <div className="ref-pagination">
-              <span>Showing 1 to {Math.max(1, displayActions.length)} entries</span>
-              <span className="ref-page-dots"><span>‹</span><span>1</span><span className="active">2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>›</span></span>
             </div>
           </article>
         </section>
@@ -2573,39 +2193,28 @@ export default function ManagementDashboard() {
 
   function renderBreakdownView() {
     const rows = (drill.rows || []) as DrillRow[];
-
     return (
-      <section className="md-view-panel" aria-label="Executive breakdown view">
+      <section className="md-view-panel">
         <div className="md-view-header">
           <div>
-            <span className="md-view-eyebrow">Level 2 - Executive Breakdown</span>
+            <span className="md-view-eyebrow">Executive Breakdown</span>
             <h2>{drill.title || "Management Breakdown"}</h2>
-            <p>{Number(drill.total || rows.length || 0).toLocaleString()} item(s). Click any card to open Level 3 evidence.</p>
+            <p>{Number(drill.total || rows.length || 0).toLocaleString()} item(s). Click any card to open evidence detail.</p>
           </div>
           <div className="md-view-actions">
-            <button type="button" className="primary" onClick={closeDrilldown}>Back to Overview</button>
-            <button type="button" onClick={refreshDashboard}><Icon name="filter" /> Refresh</button>
+            <button type="button" className="md-action-btn primary" onClick={closeDrilldown}><Icon name="back" /> Back to Overview</button>
+            <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
           </div>
         </div>
-
         <div className="md-view-body">
-          {drill.loading ? (
-            <div className="md-state-panel">Loading breakdown...</div>
-          ) : rows.length === 0 ? (
-            <div className="md-state-panel">No breakdown item is available for this selection.</div>
-          ) : (
+          {drill.loading ? <div className="md-state-panel">Loading breakdown...</div> : rows.length === 0 ? <div className="md-state-panel">No breakdown item is available for this selection.</div> : (
             <div className="md-breakdown-grid">
               {rows.map((row) => (
-                <button
-                  type="button"
-                  key={row.key || row.label}
-                  className="md-breakdown-card"
-                  onClick={() => openLevel3(row.level3Area || drill.area || "risk", row.level3Key || row.key, row.label)}
-                >
+                <button type="button" key={row.key || row.label} className="md-breakdown-card" onClick={() => openLevel3(row.level3Area || drill.area || "risk", row.level3Key || row.key, row.label)}>
                   <span>{row.label}</span>
                   <strong>{getDrillValue(row, drill.area)}</strong>
                   <small>{Number(row.count || 0).toLocaleString()} record(s)</small>
-                  <em className="md-card-hint">Open Level 3 <Icon name="chevron" /></em>
+                  <em className="md-card-hint">Open evidence <Icon name="next" /></em>
                 </button>
               ))}
             </div>
@@ -2617,25 +2226,21 @@ export default function ManagementDashboard() {
 
   function renderEvidenceView() {
     const rows = (drill.rows || []) as EvidenceRow[];
-
     return (
-      <section className="md-view-panel" aria-label="Evidence detail view">
+      <section className="md-view-panel">
         <div className="md-view-header">
           <div>
-            <span className="md-view-eyebrow">Level 3 - Evidence Detail</span>
+            <span className="md-view-eyebrow">Evidence Detail</span>
             <h2>{drill.title || "Evidence View"}</h2>
             <p>{Number(drill.total || rows.length || 0).toLocaleString()} record(s) found for this selection.</p>
           </div>
           <div className="md-view-actions">
-            <button type="button" className="primary" onClick={backDrilldown}>{drill.parent ? "Back to Breakdown" : "Back to Overview"}</button>
-            <button type="button" onClick={closeDrilldown}>Close</button>
+            <button type="button" className="md-action-btn primary" onClick={backDrilldown}><Icon name="back" /> {drill.parent ? "Back to Breakdown" : "Back to Overview"}</button>
+            <button type="button" className="md-action-btn" onClick={closeDrilldown}>Close</button>
           </div>
         </div>
-
         <div className="md-view-body">
-          {drill.loading ? (
-            <div className="md-state-panel">Loading evidence...</div>
-          ) : (
+          {drill.loading ? <div className="md-state-panel">Loading evidence...</div> : (
             <div className="md-table-wrap md-evidence-wrap">
               <table className="md-table">
                 <thead>
@@ -2651,24 +2256,18 @@ export default function ManagementDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={8}>No evidence record found for this selection.</td>
+                  {rows.length === 0 ? <tr><td colSpan={8}>No evidence record found.</td></tr> : rows.map((row, index) => (
+                    <tr key={row.assetKey || `${row.objectAgent}-${row.assetId}-${index}`}>
+                      <td>{readText(row.deviceName)}</td>
+                      <td>{readText(row.department)}</td>
+                      <td>{readText(row.category)}</td>
+                      <td>{readText(`${readText(row.brand, "")} ${readText(row.model, "")}`.trim())}</td>
+                      <td>{readText(row.status)}</td>
+                      <td>{readText(row.age)}</td>
+                      <td>{readText(row.riskSeverity)} ({readText(row.riskScore, "0")})</td>
+                      <td>{readText(row.replacementCost)}</td>
                     </tr>
-                  ) : (
-                    rows.map((row) => (
-                      <tr key={row.assetKey || `${row.objectAgent}-${row.assetId}-${row.deviceName}`}>
-                        <td>{readText(row.deviceName)}</td>
-                        <td>{readText(row.department)}</td>
-                        <td>{readText(row.category)}</td>
-                        <td>{readText(`${readText(row.brand, "")} ${readText(row.model, "")}`.trim())}</td>
-                        <td>{readText(row.status)}</td>
-                        <td>{readText(row.age)}</td>
-                        <td>{readText(row.riskSeverity)} ({readText(row.riskScore, "0")})</td>
-                        <td>{readText(row.replacementCost)}</td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -2678,36 +2277,17 @@ export default function ManagementDashboard() {
     );
   }
 
+  const hasData = dashboard.executiveKpis.length > 0 || dashboard.pillars.length > 0 || dashboard.boardActions.length > 0;
+
   return (
     <div className="management-center-page">
       <style>{MANAGEMENT_DASHBOARD_INLINE_CSS}</style>
       <main className="management-module-root">
         <div className="md-content">
-          <header className="md-header">
-            <div>
-              <h1>Management Dashboard</h1>
-              <p>Executive Intelligence Cockpit</p>
-              {dashboard.generatedAt && <span className="md-generated">Updated {new Date(dashboard.generatedAt).toLocaleString()}</span>}
-            </div>
-
-            <div className="md-toolbar">
-              <button type="button"><Icon name="calendar" /> Current View</button>
-              <button type="button" onClick={refreshDashboard}><Icon name="filter" /> Refresh Insight</button>
-              <button type="button" className="download" onClick={printDashboard}><Icon name="download" /> Download Report</button>
-            </div>
-          </header>
-
-          {loading && <div className="md-state-panel">Loading management insight...</div>}
+          {loading && <div className="md-state-panel">Loading management dashboard...</div>}
           {!loading && error && <div className="md-state-panel md-state-error">{error}</div>}
-          {!loading && !error && !hasDashboardData && <div className="md-state-panel">No management insight is available for the selected view.</div>}
-
-          {!loading && !error && hasDashboardData && (
-            drill.level === 2
-              ? renderBreakdownView()
-              : drill.level === 3
-                ? renderEvidenceView()
-                : renderOverview()
-          )}
+          {!loading && !error && !hasData && <div className="md-state-panel">No management insight is available right now.</div>}
+          {!loading && !error && hasData && (drill.level === 2 ? renderBreakdownView() : drill.level === 3 ? renderEvidenceView() : renderOverview())}
         </div>
       </main>
     </div>
