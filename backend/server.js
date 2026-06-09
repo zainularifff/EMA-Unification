@@ -29103,6 +29103,240 @@ app.get("/api/management-dashboard/drilldown", authenticateToken, async (req, re
     }
 });
 
+function mdStoryText(value, fallback = "") {
+    if (value === undefined || value === null) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function mdStoryArray(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map((item) => mdStoryText(item)).filter(Boolean);
+}
+
+function mdStoryToNumber(value, fallback = 0) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const parsed = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function mdStoryFallback(overview = {}, reason = "") {
+    const metrics = overview.metrics || {};
+    const finance = overview.finance || {};
+    const boardActions = Array.isArray(overview.boardActions) ? overview.boardActions : [];
+    const kpis = Array.isArray(overview.executiveKpis) ? overview.executiveKpis : [];
+
+    const healthKpi = kpis.find((item) => /health/i.test(item.title || ""));
+    const complianceKpi = kpis.find((item) => /compliance/i.test(item.title || ""));
+    const healthScore = mdStoryToNumber(metrics.healthScore ?? healthKpi?.value, 0);
+    const riskSignals = mdStoryToNumber(metrics.riskCandidates, 0);
+    const boardItems = mdStoryToNumber(metrics.boardItems, boardActions.length);
+    const pricingCoverage = mdStoryToNumber(metrics.pricingCoverage ?? complianceKpi?.value, 0);
+    const totalExposure = mdStoryToNumber(finance.totalCost, 0);
+    const exposureText = typeof mdMoneyValue === "function" ? mdMoneyValue(totalExposure) : `RM ${Math.round(totalExposure).toLocaleString()}`;
+
+    const tone = healthScore < 50 || riskSignals >= 20
+        ? "red"
+        : healthScore < 75 || boardItems > 0
+            ? "amber"
+            : "green";
+
+    const status = tone === "red" ? "Needs attention" : tone === "amber" ? "Watch closely" : "Healthy posture";
+
+    return {
+        status,
+        tone,
+        headline: `${status}: ${exposureText} exposure with ${Math.round(riskSignals).toLocaleString()} risk signal(s).`,
+        summary: `Current dashboard posture is ${status.toLowerCase()} based on endpoint health, lifecycle exposure, compliance coverage and action queue evidence.`,
+        narrative: `Current estate health is ${Math.round(healthScore)}% with ${Math.round(pricingCoverage)}% evidence coverage. Management should prioritise the highest-risk endpoint groups, refresh planning and open decision items before exposure grows further.`,
+        keySignals: [
+            `${Math.round(riskSignals).toLocaleString()} risk signal(s)`,
+            `${boardItems.toLocaleString()} board action(s)`,
+            `${Math.round(pricingCoverage)}% evidence coverage`,
+            `${exposureText} total exposure`
+        ],
+        boardRecommendation: boardItems > 0
+            ? "Review open board actions and assign ownership for risk remediation, lifecycle refresh and evidence closure."
+            : "Continue weekly monitoring and keep management evidence ready for the next governance cycle.",
+        actionItems: [
+            "Validate the highest exposure endpoint groups.",
+            "Assign owner and target date for risk remediation.",
+            "Close pricing and compliance evidence gaps before the next review."
+        ],
+        source: "local",
+        fallbackReason: reason || undefined,
+        generatedAt: new Date().toISOString()
+    };
+}
+
+function mdBuildStoryAiContext(req, overview = {}) {
+    const metrics = overview.metrics || {};
+    const finance = overview.finance || {};
+    const analysis = overview.analysis || {};
+
+    return {
+        currentUser: {
+            console_Idn: req.user?.console_Idn || null,
+            userID: req.user?.userID || "",
+            menuIndex: req.user?.menuIndex || null
+        },
+        policy: {
+            access: "read-only",
+            scope: "Management Dashboard executive storytelling. Use only the provided dashboard facts.",
+            blocked: ["create", "update", "delete", "approve", "assign", "raw SQL", "tokens", "passwords"]
+        },
+        allowedModules: ["Management Dashboard", "Endpoint Lifecycle", "Risk Exposure", "Compliance Evidence", "Board Action Queue"],
+        data: {
+            dashboard: {
+                generatedAt: overview.generatedAt || new Date().toISOString(),
+                metrics,
+                executiveKpis: (overview.executiveKpis || []).slice(0, 8).map((item) => ({
+                    title: item.title,
+                    value: item.value,
+                    subValue: item.subValue,
+                    note: item.note,
+                    trend: item.trend
+                })),
+                finance: {
+                    totalCost: finance.totalCost || 0,
+                    riskCost: finance.riskCost || 0,
+                    capexYtd: finance.capexYtd || 0,
+                    potentialSavings: finance.potentialSavings || 0,
+                    avgMonthlyCost: finance.avgMonthlyCost || 0
+                },
+                signals: (analysis.signals || []).slice(0, 5).map((item) => ({
+                    title: item.title,
+                    subtitle: item.subtitle,
+                    value: item.value,
+                    tone: item.tone
+                })),
+                boardActions: (overview.boardActions || []).slice(0, 5).map((item) => ({
+                    title: item.title,
+                    priority: item.priority,
+                    owner: item.owner,
+                    impact: item.impact,
+                    due: item.due
+                })),
+                riskBreakdown: (overview.level2?.risk || []).slice(0, 6).map((item) => ({
+                    label: item.label,
+                    count: item.count,
+                    value: item.value,
+                    valueFmt: item.valueFmt
+                })),
+                complianceBreakdown: (overview.level2?.compliance || []).slice(0, 6).map((item) => ({
+                    label: item.label,
+                    count: item.count,
+                    valueFmt: item.valueFmt
+                }))
+            }
+        }
+    };
+}
+
+function mdParseGeminiStory(answer, overview = {}) {
+    const raw = mdStoryText(answer);
+    if (!raw) return null;
+
+    let jsonText = raw;
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) jsonText = fenced[1].trim();
+
+    const firstBrace = jsonText.indexOf("{");
+    const lastBrace = jsonText.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+        jsonText = jsonText.slice(firstBrace, lastBrace + 1);
+    }
+
+    try {
+        const parsed = JSON.parse(jsonText);
+        const fallback = mdStoryFallback(overview);
+        const tone = mdStoryText(parsed.tone, fallback.tone).toLowerCase();
+        const safeTone = ["green", "amber", "red", "blue", "purple"].includes(tone) ? tone : fallback.tone;
+
+        return {
+            status: mdStoryText(parsed.status, fallback.status),
+            tone: safeTone,
+            headline: mdStoryText(parsed.headline, fallback.headline),
+            summary: mdStoryText(parsed.summary, fallback.summary),
+            narrative: mdStoryText(parsed.narrative, parsed.summary || fallback.narrative),
+            keySignals: mdStoryArray(parsed.keySignals).length ? mdStoryArray(parsed.keySignals).slice(0, 4) : fallback.keySignals,
+            boardRecommendation: mdStoryText(parsed.boardRecommendation, fallback.boardRecommendation),
+            actionItems: mdStoryArray(parsed.actionItems).length ? mdStoryArray(parsed.actionItems).slice(0, 3) : fallback.actionItems,
+            source: "gemini",
+            generatedAt: new Date().toISOString()
+        };
+    } catch (err) {
+        const fallback = mdStoryFallback(overview);
+        return {
+            ...fallback,
+            narrative: raw,
+            source: "gemini",
+            generatedAt: new Date().toISOString()
+        };
+    }
+}
+
+async function handleManagementDashboardStorytelling(req, res) {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const context = await mdLoadDashboardContext(pool);
+        const overview = mdBuildOverviewPayload(context.assets, context.incidents, context.rule);
+        const fallback = mdStoryFallback(overview);
+
+        if (!process.env.GEMINI_API_KEY) {
+            return res.json({
+                success: true,
+                data: fallback,
+                model: "local-executive-rule",
+                hasGeminiKey: false
+            });
+        }
+
+        const aiContext = mdBuildStoryAiContext(req, overview);
+        const prompt = [
+            "Generate an executive storytelling block for the Management Dashboard.",
+            "Return JSON only. Do not use markdown.",
+            "Schema: { status, tone, headline, summary, narrative, keySignals, boardRecommendation, actionItems }.",
+            "tone must be one of: red, amber, green, blue, purple.",
+            "Write for C-level and board users in clear business English.",
+            "Do not mention internal routes, SQL, API, backend, database names, raw payloads or implementation details.",
+            "Do not invent facts. Use only the connected dashboard data.",
+            "Keep headline short. Keep narrative to 1-2 sentences. actionItems must be 3 short items."
+        ].join("\n");
+
+        try {
+            const answer = await askGeminiWithEmaContext(prompt, aiContext, []);
+            const story = mdParseGeminiStory(answer, overview) || fallback;
+
+            return res.json({
+                success: true,
+                data: story,
+                model: GEMINI_MODEL,
+                hasGeminiKey: true
+            });
+        } catch (geminiErr) {
+            console.warn("Management dashboard Gemini storytelling fallback:", getGeminiErrorMessage(geminiErr));
+            return res.json({
+                success: true,
+                data: mdStoryFallback(overview, getGeminiErrorMessage(geminiErr)),
+                model: "local-executive-rule",
+                hasGeminiKey: true,
+                geminiFallback: true
+            });
+        }
+    } catch (err) {
+        console.error("GET /api/management-dashboard/storytelling error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to build management dashboard storytelling.",
+            error: err.message
+        });
+    }
+}
+
+app.get("/api/management-dashboard/storytelling", authenticateToken, handleManagementDashboardStorytelling);
+app.post("/api/management-dashboard/storytelling", authenticateToken, handleManagementDashboardStorytelling);
+
 /*
 |--------------------------------------------------------------------------
 | START SERVER

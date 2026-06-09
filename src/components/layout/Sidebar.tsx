@@ -194,7 +194,26 @@ export function Sidebar() {
   const fullRoleLabel = getUserRoles(accessUser).join(" • ") || roleLabel;
 
   return (
-    <aside className="ema-sidebar">
+    <>
+      <style>{`
+        .ema-sidebar-scrollless {
+          overflow-y: auto;
+          overflow-x: hidden;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+
+        .ema-sidebar-scrollless::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+          display: none;
+        }
+      `}</style>
+
+      <aside
+        className="ema-sidebar ema-sidebar-scrollless"
+        style={{ overscrollBehavior: "contain" }}
+      >
       <div className="ema-sidebar-brand">
         <div className="ema-logo">
           <Box size={23} />
@@ -330,6 +349,7 @@ export function Sidebar() {
           Logout
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

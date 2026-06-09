@@ -171,6 +171,7 @@ const FRONTEND_REPORT_CATALOG: ReportCategory[] = [
     icon: "chart",
     items: [
       { id: "executive-summary", title: "Executive Summary Report", description: "Overall management view for endpoint, risk, support and compliance.", type: "Summary", source: "Assets + Service Desk + Software + Jobs + Geolocation", outputs: ["PDF", "PowerPoint"] },
+      { id: "client-summary-rnr", title: "Client Summary & RNR Report", description: "Client-facing report pack for subscription, endpoint management, OS compliance, resource planning, application risk and browser vulnerability watch.", type: "Summary", source: "Endpoint Inventory + Subscription + Asset Pricing + Software Inventory", outputs: ["PDF", "PowerPoint", "Excel"] },
       { id: "ema-operations-overview", title: "EMA Operations Overview", description: "High-level operational performance and endpoint health overview.", type: "Summary", source: "Device Registry + Task List", outputs: ["PDF"] },
       { id: "risk-attention-summary", title: "Risk & Attention Summary", description: "Major risk items requiring management attention.", type: "Risk", source: "Device Status + Service Desk SLA + Data Quality", outputs: ["PDF"] },
       { id: "monthly-management-dashboard", title: "Monthly Management Dashboard Report", description: "Monthly KPI snapshot based on dashboard and operational data.", type: "Summary", source: "Management Dashboard + Report Aggregation", outputs: ["PDF", "PowerPoint"] },
@@ -199,7 +200,8 @@ const FRONTEND_REPORT_CATALOG: ReportCategory[] = [
       { id: "aging-device", title: "Aging Device Report", description: "Devices above age threshold or replacement candidate.", type: "Detail", source: "Hardware Inventory", outputs: ["Excel"] },
       { id: "hardware-inventory", title: "Hardware Inventory Report", description: "CPU, RAM, storage, model and manufacturer breakdown.", type: "Detail", source: "Hardware Inventory", outputs: ["Excel"] },
       { id: "missing-hardware-information", title: "Missing Hardware Information Report", description: "Devices with incomplete hardware data.", type: "Detail", source: "Data Quality", outputs: ["Excel"] },
-      { id: "asset-replacement-planning", title: "Asset Replacement Planning Report", description: "Devices that may require refresh planning.", type: "Summary", source: "Lifecycle + Risk", outputs: ["PDF", "Excel"] }
+      { id: "asset-replacement-planning", title: "Asset Replacement Planning Report", description: "Devices that may require refresh planning.", type: "Summary", source: "Lifecycle + Risk", outputs: ["PDF", "Excel"] },
+      { id: "resource-planning-brand-summary", title: "Resource Planning Brand Summary", description: "Brand, model, endpoint type, aging candidate and estimated replacement cost planning.", type: "Summary", source: "Endpoint Inventory + AssetPricing", outputs: ["PDF", "Excel"] }
     ]
   },
   {
@@ -488,6 +490,8 @@ function DownloadIcon() {
 
 function flattenExportRows(payload: ReportPayload) {
   const reportId = payload.report.id;
+  if (reportId === "client-summary-rnr") return payload.exportData.clientSummarySections || payload.exportData.assets || [];
+  if (reportId.includes("resource-planning") || reportId.includes("brand-summary")) return payload.exportData.resourcePlanningModels || payload.exportData.resourcePlanningBrandSummary || payload.exportData.assets || [];
   if (reportId.includes("ticket") || reportId.includes("sla") || reportId.includes("incident") || reportId.includes("workload")) return payload.exportData.incidents || [];
   if (reportId.includes("software")) return payload.exportData.software || [];
   if (reportId.includes("remote") || reportId.includes("metering") || reportId.includes("distribution")) return payload.exportData.jobs || [];
@@ -2473,9 +2477,45 @@ function buildGenericPrintableHtml(payload: ReportPayload, filters: ReportFilter
   `;
 }
 
+
+function buildFullPackPrintableHtml(payload: ReportPayload, filters: ReportFilters) {
+  const kpiSections = payload.sections.filter((section) => section.type === "kpi");
+  const chartSections = payload.sections.filter((section) => ["bar", "donut"].includes(section.type));
+  const riskSections = payload.sections.filter((section) => section.type === "risk");
+  const tableSections = payload.sections.filter((section) => section.type === "table");
+
+  return `
+    ${buildPdfCoverOnlyPage(payload, filters, "generic")}
+
+    <section class="pdf-section pdf-summary-section">
+      <div class="pdf-section-head"><div><h2>Client Report Snapshot</h2><p>Consolidated Summary / RNR pack generated from available endpoint, software, pricing and report configuration data.</p></div><span>Summary</span></div>
+      <div class="pdf-summary-layout">
+        <div>
+          <span class="pdf-eyebrow">Report Narrative</span>
+          <h2>${pdfText(payload.narrative.title || payload.report.title, 90)}</h2>
+          <p>${pdfText(payload.narrative.executiveSummary || payload.narrative.managementConclusion, 360)}</p>
+        </div>
+        ${buildPdfMetricTable(payload)}
+      </div>
+    </section>
+
+    <section class="pdf-section">
+      <div class="pdf-section-head"><div><h2>Key Findings</h2><p>Priority findings for management and RNR discussion.</p></div><span>Findings</span></div>
+      <table class="pdf-real-table"><thead><tr><th>No</th><th>Finding</th></tr></thead><tbody>${payload.narrative.keyFindings.slice(0, 8).map((item, index) => `<tr><td>${String(index + 1).padStart(2, "0")}</td><td>${pdfText(item, 240)}</td></tr>`).join("")}</tbody></table>
+    </section>
+
+    ${filters.includeSummary ? kpiSections.map((section) => `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(section.title, 90)}</h2><p>KPI and management snapshot.</p></div><span>KPI</span></div>${tableRowsHtml(section, 18)}</section>`).join("") : ""}
+    ${filters.includeChart ? chartSections.map((section) => `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(section.title, 90)}</h2><p>Distribution rendered as PDF-safe chart rows.</p></div><span>Chart</span></div><div class="pdf-bars">${barListHtml(section)}</div></section>`).join("") : ""}
+    ${filters.includeTable ? riskSections.map((section) => `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(section.title, 90)}</h2><p>Risk and management attention items.</p></div><span>Risk</span></div>${riskTableHtml(section.rows || [], 24)}</section>`).join("") : ""}
+    ${filters.includeTable ? tableSections.map((section) => `<section class="pdf-section pdf-table-section"><div class="pdf-section-head"><div><h2>${pdfText(section.title, 90)}</h2><p>Structured report table rendered for client-facing review.</p></div><span>Table</span></div>${tableRowsHtml(section, 40)}</section>`).join("") : ""}
+    ${filters.includeRecommendation ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>Recommended Actions</h2><p>Follow-up actions generated from report evidence.</p></div><span>Action</span></div>${tableRowsHtml({ type: "table", title: "Actions", rows: payload.recommendations || [] }, 12)}</section>` : ""}
+  `;
+}
+
 function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilters) {
+  const isFullPack = ["client-summary-rnr", "resource-planning-brand-summary"].includes(payload.report.id);
   const isExecutive = /executive/i.test(`${payload.report.id} ${payload.report.title} ${payload.report.category || ""}`);
-  const content = isExecutive ? buildExecutivePrintableHtml(payload, filters) : buildGenericPrintableHtml(payload, filters);
+  const content = isFullPack ? buildFullPackPrintableHtml(payload, filters) : isExecutive ? buildExecutivePrintableHtml(payload, filters) : buildGenericPrintableHtml(payload, filters);
   return `
 <!doctype html>
 <html>
