@@ -110,7 +110,8 @@ type FinanceData = {
   opexYtd?: number;
   riskCost?: number;
   avgMonthlyCost?: number;
-  potentialSavings?: number;
+  potentialSavings?: number | null;
+  actualSavingsRecorded?: boolean;
 };
 
 type AnalysisData = {
@@ -142,6 +143,14 @@ type DrillRow = {
   sample?: string[];
   level3Area?: string;
   level3Key?: string;
+  tone?: Tone;
+  impactType?: string;
+  riskType?: string;
+  costType?: string;
+  decision?: string;
+  insight?: string;
+  confidence?: string;
+  metricLabel?: string;
 };
 
 type EvidenceRow = {
@@ -2141,6 +2150,1058 @@ body.md-dashboard-page-active .content-area {
   .md-story-banner p { max-width: 100% !important; }
 }
 
+
+/* =========================================================
+   Executive second-level decision lens
+   Replaces count-only cards with exposure, confidence, action and evidence logic.
+========================================================= */
+.md-executive-lens {
+  display: grid;
+  gap: 14px;
+}
+.md-lens-summary {
+  display: grid;
+  grid-template-columns: 1.15fr .85fr .85fr .85fr;
+  gap: 12px;
+}
+.md-lens-hero,
+.md-lens-metric,
+.md-decision-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(203, 213, 225, .78);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255,255,255,.99), rgba(248,251,255,.96));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .055);
+}
+.md-lens-hero {
+  min-height: 142px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 94% 8%, rgba(37,99,235,.13), transparent 13rem),
+    radial-gradient(circle at 0% 100%, rgba(139,92,246,.09), transparent 14rem),
+    linear-gradient(135deg, #ffffff, #eff6ff);
+}
+.md-lens-hero::after,
+.md-decision-card::after {
+  content: "";
+  position: absolute;
+  right: -42px;
+  top: -42px;
+  width: 130px;
+  height: 130px;
+  border-radius: 999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--lens-a, #2563eb) 20%, transparent), transparent 64%);
+  pointer-events: none;
+}
+.md-lens-label,
+.md-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 23px;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #1e3a8a;
+  background: rgba(219,234,254,.88);
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: .065em;
+  text-transform: uppercase;
+}
+.md-lens-title {
+  max-width: 720px;
+  margin: 12px 0 0;
+  color: #0f172a;
+  font-family: var(--md-display-font) !important;
+  font-size: clamp(20px, 1.45vw, 27px);
+  line-height: 1.12;
+  font-weight: 850;
+  letter-spacing: -.045em;
+}
+.md-lens-copy {
+  max-width: 780px;
+  margin: 9px 0 0;
+  color: #51657f;
+  font-size: 12.5px;
+  line-height: 1.55;
+  font-weight: 620;
+}
+.md-lens-metric {
+  min-height: 142px;
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+.md-lens-metric span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.md-lens-metric strong {
+  color: #0f172a;
+  font-family: var(--md-display-font) !important;
+  font-size: clamp(23px, 1.85vw, 34px);
+  line-height: .96;
+  font-weight: 900;
+  letter-spacing: -.06em;
+  font-variant-numeric: tabular-nums;
+}
+.md-lens-metric small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 650;
+}
+.md-lens-metric.is-money { background: linear-gradient(135deg, #fff, #fdf2f8); }
+.md-lens-metric.is-risk { background: linear-gradient(135deg, #fff, #fff1f2); }
+.md-lens-metric.is-evidence { background: linear-gradient(135deg, #fff, #ecfeff); }
+
+
+/* Visual intelligence layer for second-level breakdowns */
+.md-visual-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(320px, .88fr);
+  gap: 12px;
+}
+.md-visual-chart-card,
+.md-visual-legend-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(203, 213, 225, .78);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255,255,255,.99), rgba(248,251,255,.96));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .055);
+}
+.md-visual-chart-card {
+  min-height: 310px;
+  padding: 17px;
+  background:
+    radial-gradient(circle at 96% 4%, rgba(37,99,235,.12), transparent 15rem),
+    radial-gradient(circle at 0% 100%, rgba(6,182,212,.075), transparent 14rem),
+    linear-gradient(135deg, #ffffff, #f8fbff);
+}
+.md-visual-legend-card {
+  min-height: 310px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 17px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(139,92,246,.11), transparent 14rem),
+    linear-gradient(135deg, #ffffff, #f5f3ff);
+}
+.md-visual-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.md-visual-head > div { min-width: 0; }
+.md-visual-head span,
+.md-visual-mode {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #1e3a8a;
+  background: rgba(219,234,254,.82);
+  border: 1px solid rgba(191,219,254,.72);
+  font-size: 9.5px;
+  line-height: 1;
+  font-weight: 850;
+  letter-spacing: .065em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.md-visual-head h3,
+.md-visual-legend-card h3 {
+  margin: 9px 0 0;
+  color: #10233f;
+  font-family: var(--md-display-font) !important;
+  font-size: 17px;
+  line-height: 1.14;
+  font-weight: 860;
+  letter-spacing: -.04em;
+}
+.md-visual-head p,
+.md-visual-legend-card p {
+  margin: 7px 0 0;
+  color: #51657f;
+  font-size: 11.7px;
+  line-height: 1.48;
+  font-weight: 610;
+}
+.md-visual-donut-row {
+  display: grid;
+  grid-template-columns: 235px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+.md-visual-donut {
+  width: 220px;
+  height: 220px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: conic-gradient(var(--donut, #2563eb 0% 100%));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.58), 0 18px 34px rgba(15,23,42,.10);
+}
+.md-visual-donut::before {
+  content: "";
+  position: absolute;
+  width: 126px;
+  height: 126px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.98);
+  box-shadow: inset 0 0 0 1px rgba(226,232,240,.92), 0 10px 22px rgba(15,23,42,.07);
+}
+.md-visual-donut-center {
+  position: relative;
+  z-index: 1;
+  width: 106px;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  text-align: center;
+}
+.md-visual-donut-center strong {
+  color: #0f172a;
+  font-family: var(--md-display-font) !important;
+  font-size: 22px;
+  line-height: .98;
+  font-weight: 920;
+  letter-spacing: -.065em;
+  font-variant-numeric: tabular-nums;
+}
+.md-visual-donut-center small {
+  color: #64748b;
+  font-size: 9.5px;
+  line-height: 1.18;
+  font-weight: 760;
+}
+.md-visual-side-stats {
+  display: grid;
+  gap: 9px;
+}
+.md-visual-stat {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 48px;
+  border: 1px solid rgba(226,232,240,.8);
+  border-radius: 15px;
+  padding: 9px 10px;
+  background: rgba(255,255,255,.72);
+  text-align: left;
+}
+.md-visual-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--dot, #2563eb);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dot, #2563eb) 14%, transparent);
+}
+.md-visual-stat span,
+.md-visual-legend-row span {
+  min-width: 0;
+  color: #10233f;
+  font-size: 11.5px;
+  line-height: 1.22;
+  font-weight: 800;
+}
+.md-visual-stat em,
+.md-visual-legend-row em {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.2;
+  font-style: normal;
+  font-weight: 640;
+}
+.md-visual-stat strong,
+.md-visual-legend-row strong {
+  color: #0f172a;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.md-visual-bars {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+.md-visual-bar {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(226,232,240,.86);
+  border-radius: 15px;
+  padding: 10px 11px;
+  background: rgba(255,255,255,.72);
+  text-align: left;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.md-visual-bar:hover,
+.md-visual-stat:hover,
+.md-visual-legend-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(15,23,42,.06);
+}
+.md-visual-bar-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #10233f;
+  font-size: 11.5px;
+  line-height: 1.25;
+  font-weight: 820;
+}
+.md-visual-bar-top em {
+  color: #475569;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.md-visual-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226,232,240,.88);
+}
+.md-visual-track i {
+  display: block;
+  width: var(--w, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--dot, #2563eb), color-mix(in srgb, var(--dot, #2563eb) 62%, #06b6d4));
+}
+.md-visual-legend {
+  display: grid;
+  gap: 8px;
+}
+.md-visual-legend-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(226,232,240,.82);
+  border-radius: 14px;
+  padding: 9px 10px;
+  background: rgba(255,255,255,.70);
+  text-align: left;
+}
+
+.md-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.md-decision-card {
+  --lens-a: #2563eb;
+  min-height: 235px;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 12px;
+  padding: 16px;
+  text-align: left;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+.md-decision-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--lens-a) 38%, rgba(203,213,225,.78));
+  box-shadow: 0 18px 36px rgba(15, 23, 42, .085);
+}
+.md-decision-card.tone-blue { --lens-a:#2563eb; background: linear-gradient(135deg, #fff, #eff6ff); }
+.md-decision-card.tone-cyan { --lens-a:#06b6d4; background: linear-gradient(135deg, #fff, #ecfeff); }
+.md-decision-card.tone-green { --lens-a:#059669; background: linear-gradient(135deg, #fff, #ecfdf5); }
+.md-decision-card.tone-red { --lens-a:#e11d48; background: linear-gradient(135deg, #fff, #fff1f2); }
+.md-decision-card.tone-amber { --lens-a:#d97706; background: linear-gradient(135deg, #fff, #fffbeb); }
+.md-decision-card.tone-purple { --lens-a:#7c3aed; background: linear-gradient(135deg, #fff, #f5f3ff); }
+.md-decision-card.tone-pink { --lens-a:#db2777; background: linear-gradient(135deg, #fff, #fdf2f8); }
+.md-decision-card.tone-orange { --lens-a:#f97316; background: linear-gradient(135deg, #fff, #fff7ed); }
+.md-card-kicker {
+  color: color-mix(in srgb, var(--lens-a) 84%, #0f172a);
+  background: color-mix(in srgb, var(--lens-a) 12%, #fff);
+}
+.md-decision-card h3 {
+  margin: 0;
+  color: #10233f;
+  font-family: var(--md-display-font) !important;
+  font-size: 16px;
+  line-height: 1.16;
+  font-weight: 850;
+  letter-spacing: -.035em;
+}
+.md-decision-value-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+.md-decision-value-row strong {
+  color: color-mix(in srgb, var(--lens-a) 92%, #0f172a);
+  font-family: var(--md-display-font) !important;
+  font-size: clamp(24px, 1.9vw, 34px);
+  line-height: .96;
+  font-weight: 920;
+  letter-spacing: -.065em;
+  font-variant-numeric: tabular-nums;
+}
+.md-decision-value-row span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 750;
+  text-align: right;
+}
+.md-decision-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226,232,240,.9);
+}
+.md-decision-progress i {
+  display: block;
+  height: 100%;
+  width: var(--w, 0%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--lens-a), color-mix(in srgb, var(--lens-a) 58%, #06b6d4));
+}
+.md-decision-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.md-decision-meta span {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 9px;
+  color: #475569;
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(226,232,240,.72);
+  font-size: 10px;
+  font-weight: 760;
+}
+.md-decision-insight {
+  margin: 0;
+  color: #51657f;
+  font-size: 11.5px;
+  line-height: 1.48;
+  font-weight: 610;
+}
+.md-decision-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  border-top: 1px solid rgba(226,232,240,.82);
+  padding-top: 11px;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 820;
+}
+.md-decision-next em {
+  color: color-mix(in srgb, var(--lens-a) 84%, #0f172a);
+  font-style: normal;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   Compact executive command center for second-level drilldown
+   Designed to look valuable: dashboard cockpit + chart + action table.
+========================================================= */
+.md-command-lens {
+  display: grid;
+  gap: 12px;
+}
+.md-command-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(420px, .85fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.md-command-story,
+.md-command-scoreboard,
+.md-command-chart-card,
+.md-command-priority-card,
+.md-command-read-card,
+.md-command-table-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(203, 213, 225, .74);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(248,251,255,.96));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .055);
+}
+.md-command-story {
+  min-height: 132px;
+  padding: 18px 20px;
+  background:
+    radial-gradient(circle at 98% 8%, rgba(37,99,235,.14), transparent 15rem),
+    radial-gradient(circle at 4% 100%, rgba(6,182,212,.09), transparent 16rem),
+    linear-gradient(135deg, #ffffff, #f8fbff);
+}
+.md-command-story > span,
+.md-command-pill,
+.md-command-card-head span {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 9px;
+  color: #155e75;
+  background: rgba(207,250,254,.72);
+  border: 1px solid rgba(165,243,252,.72);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 880;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.md-command-story h3 {
+  max-width: 860px;
+  margin: 11px 0 0;
+  color: #0f172a;
+  font-family: var(--md-display-font) !important;
+  font-size: clamp(18px, 1.35vw, 25px);
+  line-height: 1.1;
+  font-weight: 880;
+  letter-spacing: -.045em;
+}
+.md-command-story p {
+  max-width: 940px;
+  margin: 8px 0 0;
+  color: #51657f;
+  font-size: 12px;
+  line-height: 1.48;
+  font-weight: 630;
+}
+.md-command-scoreboard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 0;
+  background: #fff;
+}
+.md-command-scoreboard article {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 14px 14px;
+  border-right: 1px solid rgba(226,232,240,.78);
+}
+.md-command-scoreboard article:last-child { border-right: 0; }
+.md-command-scoreboard span,
+.md-command-read-card div span {
+  color: #64748b;
+  font-size: 9.5px;
+  line-height: 1.1;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.md-command-scoreboard strong,
+.md-command-priority-card > strong,
+.md-command-read-card div strong {
+  color: #0f172a;
+  font-family: var(--md-display-font) !important;
+  font-size: clamp(20px, 1.65vw, 30px);
+  line-height: .98;
+  font-weight: 920;
+  letter-spacing: -.06em;
+  font-variant-numeric: tabular-nums;
+}
+.md-command-scoreboard small {
+  color: #64748b;
+  font-size: 10.5px;
+  line-height: 1.28;
+  font-weight: 650;
+}
+.md-command-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(245px, .52fr) minmax(255px, .58fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.md-command-chart-card,
+.md-command-priority-card,
+.md-command-read-card,
+.md-command-table-card {
+  padding: 14px;
+}
+.md-command-chart-card {
+  min-height: 252px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37,99,235,.10), transparent 13rem),
+    linear-gradient(135deg, #ffffff, #f8fbff);
+}
+.md-command-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.md-command-card-head h3,
+.md-command-priority-card h3,
+.md-command-read-card h3,
+.md-command-table-head h3 {
+  margin: 8px 0 0;
+  color: #10233f;
+  font-family: var(--md-display-font) !important;
+  font-size: 15.5px;
+  line-height: 1.13;
+  font-weight: 870;
+  letter-spacing: -.037em;
+}
+.md-command-card-head p,
+.md-command-priority-card p,
+.md-command-read-card p,
+.md-command-table-head p {
+  margin: 6px 0 0;
+  color: #5a6f89;
+  font-size: 11px;
+  line-height: 1.42;
+  font-weight: 630;
+}
+.md-command-card-head > em {
+  align-self: flex-start;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid rgba(226,232,240,.84);
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 820;
+  white-space: nowrap;
+}
+.md-command-donut-layout {
+  display: grid;
+  grid-template-columns: 158px minmax(0,1fr);
+  gap: 16px;
+  align-items: center;
+}
+.md-command-donut {
+  position: relative;
+  width: 146px;
+  height: 146px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: conic-gradient(var(--donut, #2563eb 0% 100%));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.58), 0 14px 28px rgba(15,23,42,.09);
+}
+.md-command-donut::before {
+  content: "";
+  position: absolute;
+  width: 82px;
+  height: 82px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(226,232,240,.9);
+}
+.md-command-donut > span {
+  position: relative;
+  z-index: 1;
+  width: 74px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.md-command-donut strong {
+  color: #0f172a;
+  font-family: var(--md-display-font) !important;
+  font-size: 16px;
+  line-height: .98;
+  font-weight: 920;
+  letter-spacing: -.05em;
+  font-variant-numeric: tabular-nums;
+}
+.md-command-donut small {
+  color: #64748b;
+  font-size: 8.8px;
+  line-height: 1.12;
+  font-weight: 760;
+}
+.md-command-mini-legend,
+.md-command-bars {
+  display: grid;
+  gap: 7px;
+}
+.md-command-mini-legend button,
+.md-command-bars button {
+  border: 1px solid rgba(226,232,240,.82);
+  border-radius: 13px;
+  background: rgba(255,255,255,.76);
+  text-align: left;
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+}
+.md-command-mini-legend button {
+  min-height: 35px;
+  display: grid;
+  grid-template-columns: 9px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+}
+.md-command-mini-legend button:hover,
+.md-command-bars button:hover,
+.md-command-row:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--dot, #2563eb) 36%, rgba(226,232,240,.82));
+  box-shadow: 0 12px 24px rgba(15,23,42,.06);
+}
+.md-command-mini-legend i,
+.md-command-row > span:first-child i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--dot, #2563eb);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dot, #2563eb) 13%, transparent);
+}
+.md-command-mini-legend span {
+  min-width: 0;
+  color: #10233f;
+  font-size: 11px;
+  line-height: 1.15;
+  font-weight: 790;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.md-command-mini-legend strong {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.md-command-bars button {
+  display: grid;
+  gap: 7px;
+  padding: 8px 10px;
+}
+.md-command-bars button > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #10233f;
+  font-size: 11px;
+  line-height: 1.15;
+}
+.md-command-bars b,
+.md-command-row b {
+  font-weight: 850;
+}
+.md-command-bars em,
+.md-command-row em {
+  color: #64748b;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 690;
+}
+.md-command-bars button > i {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226,232,240,.86);
+}
+.md-command-bars u {
+  display: block;
+  width: var(--w, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--dot, #2563eb), color-mix(in srgb, var(--dot, #2563eb) 62%, #06b6d4));
+}
+.md-command-priority-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(236,72,153,.10), transparent 12rem),
+    linear-gradient(135deg, #ffffff, #fff7fb);
+}
+.md-command-priority-card > strong {
+  color: #db2777;
+}
+.md-command-chipline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.md-command-chipline span {
+  min-height: 23px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 8px;
+  color: #475569;
+  background: rgba(255,255,255,.74);
+  border: 1px solid rgba(226,232,240,.78);
+  font-size: 9.5px;
+  font-weight: 760;
+}
+.md-command-priority-card > button {
+  width: max-content;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  font-size: 10.5px;
+  font-weight: 840;
+  box-shadow: 0 12px 22px rgba(139,92,246,.18);
+}
+.md-command-read-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(6,182,212,.10), transparent 12rem),
+    linear-gradient(135deg, #ffffff, #ecfeff);
+}
+.md-command-read-card div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(226,232,240,.82);
+}
+.md-command-read-card div strong {
+  font-size: 14px;
+  letter-spacing: -.035em;
+  text-align: right;
+}
+.md-command-table-card {
+  padding: 0;
+  background: #fff;
+}
+.md-command-table-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid rgba(226,232,240,.84);
+}
+.md-command-table-head h3 { margin-top: 7px; }
+.md-command-table-head p {
+  max-width: 280px;
+  text-align: right;
+}
+.md-data-table-shell {
+  display: grid;
+  gap: 10px;
+}
+.md-data-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(150px, max-content) minmax(112px, max-content) max-content;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(226,232,240,.82);
+  background: linear-gradient(180deg, #fff, #f8fbff);
+}
+.md-data-search {
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(203,213,225,.86);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0 11px;
+  color: #64748b;
+}
+.md-data-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #0f172a;
+  font-size: 11.5px;
+  font-weight: 720;
+}
+.md-data-toolbar select {
+  min-height: 36px;
+  border: 1px solid rgba(203,213,225,.86);
+  border-radius: 12px;
+  background: #fff;
+  color: #10233f;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 780;
+}
+.md-data-toolbar > span {
+  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 820;
+  white-space: nowrap;
+}
+.md-empty-row {
+  padding: 16px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 760;
+}
+.md-data-pagination {
+  min-height: 44px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(226,232,240,.82);
+  background: #fff;
+}
+.md-data-pagination span,
+.md-data-pagination strong {
+  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 820;
+}
+.md-data-pagination div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.md-data-pagination button {
+  min-height: 30px;
+  border: 1px solid rgba(203,213,225,.86);
+  border-radius: 10px;
+  background: #fff;
+  color: #10233f;
+  padding: 0 10px;
+  font-size: 10.5px;
+  font-weight: 820;
+}
+.md-data-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+.md-command-rows {
+  display: grid;
+}
+.md-command-row {
+  --dot: #2563eb;
+  min-height: 60px;
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1.3fr) 150px 150px minmax(220px, .9fr) 106px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(226,232,240,.76);
+  background: #fff;
+  padding: 10px 16px;
+  text-align: left;
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+.md-command-row:last-child { border-bottom: 0; }
+.md-command-row.tone-blue { --dot:#2563eb; }
+.md-command-row.tone-cyan { --dot:#0891b2; }
+.md-command-row.tone-green { --dot:#059669; }
+.md-command-row.tone-red { --dot:#e11d48; }
+.md-command-row.tone-amber { --dot:#d97706; }
+.md-command-row.tone-purple { --dot:#7c3aed; }
+.md-command-row.tone-pink { --dot:#db2777; }
+.md-command-row.tone-orange { --dot:#f97316; }
+.md-command-row:hover { background: linear-gradient(90deg, color-mix(in srgb, var(--dot) 5%, #fff), #fff); }
+.md-command-row > span {
+  min-width: 0;
+  color: #10233f;
+  font-size: 11px;
+  line-height: 1.22;
+  font-weight: 730;
+}
+.md-command-row > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: color-mix(in srgb, var(--dot) 88%, #0f172a);
+  font-weight: 850;
+}
+.md-command-row > span:nth-child(2),
+.md-command-row > span:nth-child(3),
+.md-command-row > span:nth-child(4) {
+  display: grid;
+  gap: 3px;
+}
+.md-command-row > span:nth-child(6) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  color: color-mix(in srgb, var(--dot) 88%, #0f172a);
+  font-weight: 850;
+  white-space: nowrap;
+}
+.md-command-row-head {
+  min-height: 36px;
+  background: #f8fafc !important;
+  pointer-events: none;
+}
+.md-command-row-head span {
+  color: #64748b !important;
+  font-size: 9.5px !important;
+  font-weight: 880 !important;
+  letter-spacing: .065em;
+  text-transform: uppercase;
+}
+.md-command-row-head span:first-child i { display: none; }
+@media (max-width: 1280px) {
+  .md-command-hero,
+  .md-command-grid { grid-template-columns: 1fr; }
+  .md-command-row { grid-template-columns: 106px minmax(0,1.2fr) 130px 130px minmax(180px,.9fr) 96px; }
+}
+@media (max-width: 900px) {
+  .md-command-scoreboard { grid-template-columns: 1fr; }
+  .md-command-scoreboard article { border-right: 0; border-bottom: 1px solid rgba(226,232,240,.78); }
+  .md-command-scoreboard article:last-child { border-bottom: 0; }
+  .md-command-donut-layout { grid-template-columns: 1fr; justify-items: center; }
+  .md-command-table-card { overflow-x: auto; }
+  .md-command-row { min-width: 860px; }
+  .md-data-toolbar { grid-template-columns: 1fr; }
+  .md-data-pagination { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 1240px) {
+  .md-lens-summary { grid-template-columns: 1fr 1fr; }
+  .md-lens-hero { grid-column: 1 / -1; }
+  .md-visual-panel { grid-template-columns: 1fr; }
+  .md-decision-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .md-lens-summary,
+  .md-visual-panel,
+  .md-decision-grid { grid-template-columns: 1fr; }
+  .md-visual-donut-row { grid-template-columns: 1fr; justify-items: center; }
+}
+
 `;
 
 function Icon({ name, className = "" }: { name: keyof typeof IconSet; className?: string }) {
@@ -2205,6 +3266,27 @@ function parseNumberFromText(value: unknown, fallback = 0) {
 function clampPercent(value: unknown) {
   const n = Math.round(moneyValue(value));
   return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
+}
+
+const TABLE_PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
+
+function normalizeTableSearchText(...values: unknown[]) {
+  return values
+    .map((value) => String(value ?? "").toLowerCase().trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function clampPage(page: number, totalPages: number) {
+  return Math.max(1, Math.min(Math.max(1, totalPages), page));
+}
+
+function getPageInfo(totalRows: number, page: number, pageSize: number) {
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const safePage = clampPage(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  const end = Math.min(start + pageSize, totalRows);
+  return { totalPages, safePage, start, end };
 }
 
 function normalizeTone(value?: string): Tone {
@@ -2284,6 +3366,302 @@ function getDrillValue(row: DrillRow, area?: string) {
   return row.value ? formatMoney(row.value) : `${Number(row.count || 0).toLocaleString()} record(s)`;
 }
 
+function drillNumber(value: unknown) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function drillMoneyFromText(value: unknown) {
+  const text = String(value || "");
+  const match = text.replace(/,/g, "").match(/RM\s*([0-9.]+)\s*([MK])?/i);
+  if (!match) return 0;
+  const base = Number(match[1] || 0);
+  const suffix = String(match[2] || "").toUpperCase();
+  if (suffix === "M") return base * 1000000;
+  if (suffix === "K") return base * 1000;
+  return base;
+}
+
+function getRowValue(row: DrillRow) {
+  return drillNumber(row.value) || drillMoneyFromText(row.valueFmt);
+}
+
+
+
+type BreakdownVisualItem = {
+  row: DrillRow;
+  label: string;
+  shortLabel: string;
+  value: number;
+  display: string;
+  percent: number;
+  tone: Tone;
+  color: string;
+};
+
+type BreakdownVisualModel = {
+  type: "donut" | "bar";
+  modeLabel: string;
+  title: string;
+  description: string;
+  headline: string;
+  guidance: string;
+  totalLabel: string;
+  totalCaption: string;
+  gradient: string;
+  items: BreakdownVisualItem[];
+};
+
+function shortVisualLabel(value: unknown, max = 34) {
+  const text = String(value || "-").trim();
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function getToneHex(tone?: string, index = 0) {
+  const palette: Record<string, string> = {
+    blue: "#2563eb",
+    cyan: "#06b6d4",
+    green: "#059669",
+    red: "#e11d48",
+    amber: "#d97706",
+    purple: "#7c3aed",
+    pink: "#db2777",
+    orange: "#f97316",
+    slate: "#475569",
+  };
+  const fallback = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#e11d48", "#06b6d4"];
+  return palette[String(tone || "").toLowerCase()] || fallback[index % fallback.length];
+}
+
+function getVisualMeasure(row: DrillRow, area?: string) {
+  const areaKey = String(area || "").toLowerCase();
+  const rowKey = String(row.key || "").toLowerCase();
+  const valueFmt = String(row.valueFmt || "");
+  const rowValue = getRowValue(row);
+  const rowCount = drillNumber(row.count);
+
+  if (areaKey === "resources" || areaKey === "actions") {
+    return { value: rowCount || rowValue, mode: "count" as const };
+  }
+
+  if (areaKey === "compliance" && (valueFmt.includes("%") || /coverage|identity|telemetry|sla/.test(rowKey))) {
+    return { value: rowCount || rowValue, mode: "count" as const };
+  }
+
+  if (rowValue > 0 && !valueFmt.includes("%")) return { value: rowValue, mode: "money" as const };
+  return { value: rowCount || rowValue, mode: rowValue > 0 ? "value" as const : "count" as const };
+}
+
+function formatVisualMeasure(row: DrillRow, area?: string) {
+  const measure = getVisualMeasure(row, area);
+  if (measure.mode === "money") return row.valueFmt || formatMoney(measure.value);
+  if (row.valueFmt && !/^RM\s/i.test(row.valueFmt)) return row.valueFmt;
+  return `${Math.round(measure.value).toLocaleString()} record(s)`;
+}
+
+function buildBreakdownVisual(rows: DrillRow[], area?: string, lens?: ReturnType<typeof getBreakdownLens>): BreakdownVisualModel | null {
+  if (!rows.length) return null;
+
+  const areaKey = String(area || "").toLowerCase();
+  const rawItems = rows
+    .map((row, index) => {
+      const measure = getVisualMeasure(row, area);
+      return {
+        row,
+        label: row.label || row.key || `Item ${index + 1}`,
+        shortLabel: shortVisualLabel(row.label || row.key || `Item ${index + 1}`),
+        value: measure.value,
+        display: formatVisualMeasure(row, area),
+        tone: normalizeTone(row.tone),
+        color: getToneHex(row.tone, index),
+      };
+    })
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
+  if (!rawItems.length) return null;
+
+  const total = rawItems.reduce((sum, item) => sum + item.value, 0) || 1;
+  const items = rawItems.map((item) => ({
+    ...item,
+    percent: Math.max(1, Math.round((item.value / total) * 100)),
+  }));
+
+  let cursor = 0;
+  const gradient = items.map((item, index) => {
+    const start = index === 0 ? 0 : cursor;
+    const end = index === items.length - 1 ? 100 : Math.min(100, cursor + (item.value / total) * 100);
+    cursor = end;
+    return `${item.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+  }).join(", ");
+
+  const pricedComposition = ["capex", "risk", "saving"].includes(areaKey) && rows.filter((row) => getVisualMeasure(row, area).mode === "money").length >= 2;
+  const type: "donut" | "bar" = pricedComposition ? "donut" : "bar";
+  const hasMoney = items.some((item) => getVisualMeasure(item.row, area).mode === "money");
+
+  const titles: Record<string, { title: string; barTitle: string; headline: string; guidance: string }> = {
+    capex: {
+      title: "Financial exposure composition",
+      barTitle: "Financial exposure ranking",
+      headline: "Read this as budget shape, not just a count.",
+      guidance: "Large slices show where immediate spend, reserve, risk-adjusted cost or pricing cleanup is driving management exposure.",
+    },
+    risk: {
+      title: "Risk exposure composition",
+      barTitle: "Risk pressure ranking",
+      headline: "Risk is split by source and business consequence.",
+      guidance: "Use the distribution to separate financial risk, PC lifecycle risk, visibility risk and auditor evidence risk before assigning owners.",
+    },
+    saving: {
+      title: "Optimization evidence mix",
+      barTitle: "Optimization evidence ranking",
+      headline: "Optimization is shown only where live evidence exists.",
+      guidance: "Rows without an approved cost or savings source are shown as evidence counts, not invented RM values.",
+    },
+    compliance: {
+      title: "Audit evidence distribution",
+      barTitle: "Audit gap ranking",
+      headline: "Audit compliance is an evidence problem before it is a score problem.",
+      guidance: "Prioritise the tallest bars because they show pricing, identity, telemetry or SLA proof gaps that auditors can challenge.",
+    },
+    resources: {
+      title: "Endpoint visibility distribution",
+      barTitle: "Endpoint pressure ranking",
+      headline: "Resource view should show usable fleet, blind spots and ownership pressure.",
+      guidance: "This chart turns endpoint counts into operational planning: online capacity, offline pressure, stale telemetry and ownership gaps.",
+    },
+    actions: {
+      title: "Decision queue distribution",
+      barTitle: "Decision queue pressure",
+      headline: "This is the board queue, ranked by evidence pressure.",
+      guidance: "Use the chart to identify which decision needs evidence review first, then open the linked evidence detail.",
+    },
+  };
+
+  const copy = titles[areaKey] || {
+    title: `${lens?.label || "Executive"} composition`,
+    barTitle: `${lens?.label || "Executive"} ranking`,
+    headline: "Use this visual to decide what needs attention first.",
+    guidance: "The chart translates the second-level data into a ranking or composition so the cards below are easier to interpret.",
+  };
+
+  return {
+    type,
+    modeLabel: type === "donut" ? "Donut composition" : "Ranked bar chart",
+    title: type === "donut" ? copy.title : copy.barTitle,
+    description: type === "donut"
+      ? "Auto-selected because this breakdown contains comparable priced exposure buckets."
+      : "Auto-selected because this breakdown is better read as ranked operational or evidence pressure.",
+    headline: copy.headline,
+    guidance: copy.guidance,
+    totalLabel: hasMoney ? formatMoney(total) : Math.round(total).toLocaleString(),
+    totalCaption: hasMoney ? "visualised exposure" : "visualised records",
+    gradient,
+    items,
+  };
+}
+
+function getBreakdownLens(area?: string, title?: string) {
+  const key = String(area || "").toLowerCase();
+  const copy: Record<string, { label: string; title: string; description: string; valueLabel: string; recordLabel: string; evidenceLabel: string }> = {
+    capex: {
+      label: "Financial lens",
+      title: "Exposure split by tangible cost, intangible confidence gap and risk-adjusted spend.",
+      description: "This view should help management decide what must be bought, what can be deferred, and what needs evidence cleanup before budget approval.",
+      valueLabel: "Exposure value",
+      recordLabel: "Endpoint scope",
+      evidenceLabel: "Decision confidence",
+    },
+    risk: {
+      label: "Risk lens",
+      title: "Risk is separated into financial, PC lifecycle, operational visibility and audit evidence exposure.",
+      description: "Not every risk is the same. The cards below separate replacement money, stale telemetry, offline control loss and audit weakness so ownership is clearer.",
+      valueLabel: "Risk value",
+      recordLabel: "Risk records",
+      evidenceLabel: "Control pressure",
+    },
+    saving: {
+      label: "Optimization lens",
+      title: "Optimization uses actual cost evidence only; uncosted items remain evidence counts.",
+      description: "This avoids displaying fake savings. Reuse, deferral, cleanup and productivity items only become RM values when a live cost or approved savings source exists.",
+      valueLabel: "Recorded value",
+      recordLabel: "Opportunity scope",
+      evidenceLabel: "Actionability",
+    },
+    compliance: {
+      label: "Audit lens",
+      title: "Audit compliance is based on pricing evidence, identity quality, telemetry recency and SLA governance.",
+      description: "This translates evidence gaps into audit risk so teams know what needs proof, not just what has a missing field.",
+      valueLabel: "Evidence value",
+      recordLabel: "Evidence records",
+      evidenceLabel: "Audit readiness",
+    },
+    resources: {
+      label: "Resource lens",
+      title: "Endpoint visibility is split by usable fleet, offline pressure, stale telemetry and ownership gaps.",
+      description: "This makes the second level useful for resource planning instead of showing department counts only.",
+      valueLabel: "Resource value",
+      recordLabel: "Endpoint scope",
+      evidenceLabel: "Operational coverage",
+    },
+    actions: {
+      label: "Decision lens",
+      title: "Board actions are grouped by management decision, business impact and evidence target.",
+      description: "Use this view to move from dashboard signal to owner, decision and next evidence check.",
+      valueLabel: "Impact",
+      recordLabel: "Decision items",
+      evidenceLabel: "Execution focus",
+    },
+  };
+  return copy[key] || {
+    label: "Executive lens",
+    title: title || "Management breakdown",
+    description: "Review the business impact, evidence and next decision for each item below.",
+    valueLabel: "Value",
+    recordLabel: "Records",
+    evidenceLabel: "Confidence",
+  };
+}
+
+function getRowLens(row: DrillRow, area?: string, maxValue = 1, totalCount = 0) {
+  const key = String(row.key || "").toLowerCase();
+  const label = String(row.label || "").toLowerCase();
+  const rowValue = getRowValue(row);
+  const rowCount = drillNumber(row.count);
+  const progress = Math.max(6, Math.min(100, Math.round(((rowValue || rowCount) / Math.max(1, rowValue ? maxValue : totalCount)) * 100)));
+  const tone = normalizeTone(row.tone || (rowValue > 0 ? "blue" : rowCount > 0 ? "purple" : "slate"));
+
+  const base = {
+    tone,
+    progress,
+    impactType: row.impactType || "Operational",
+    costType: row.costType || (rowValue > 0 ? "Recorded cost" : "Evidence only"),
+    riskType: row.riskType || "Management signal",
+    confidence: row.confidence || (rowValue > 0 && rowCount > 0 ? "Costed evidence" : rowCount > 0 ? "Evidence gap" : "Monitor"),
+    decision: row.decision || "Open evidence and assign owner",
+    insight: row.insight || "This item needs evidence review before management can decide confidently.",
+    metricLabel: row.metricLabel || (rowValue > 0 ? "Recorded value" : "Evidence records"),
+  };
+
+  if (/financial|capex|replacement|cost/.test(`${area} ${key} ${label}`)) {
+    return { ...base, tone: row.tone || "pink", impactType: row.impactType || "Financial", costType: row.costType || "Tangible + risk-adjusted", riskType: row.riskType || "Budget exposure", decision: row.decision || "Prioritise budget, deferment or pricing cleanup", insight: row.insight || "Exposure is not a single cost bucket; separate immediate replacement, risk-adjusted refresh and confidence gaps." };
+  }
+  if (/risk|stale|offline|aging|visibility|control/.test(`${area} ${key} ${label}`)) {
+    return { ...base, tone: row.tone || "red", impactType: row.impactType || "Risk", costType: row.costType || (rowValue > 0 ? "Financial risk" : "Control risk"), riskType: row.riskType || "PC / operational risk", decision: row.decision || "Validate ownership and remediation path", insight: row.insight || "This separates PC lifecycle, telemetry and control risk instead of mixing all risk into one number." };
+  }
+  if (/saving|reuse|defer|cleanup|recover|optimization/.test(`${area} ${key} ${label}`)) {
+    return { ...base, tone: row.tone || "green", impactType: row.impactType || "Cost optimization", costType: row.costType || (rowValue > 0 ? "Recorded cost" : "Evidence only - no saving source"), riskType: row.riskType || "Optimization", decision: row.decision || "Review reuse, recovery or deferral policy", insight: row.insight || "No savings value is shown unless it comes from live cost evidence or an approved savings source." };
+  }
+  if (/compliance|audit|pricing|identity|sla|evidence/.test(`${area} ${key} ${label}`)) {
+    return { ...base, tone: row.tone || "purple", impactType: row.impactType || "Audit compliance", costType: row.costType || "Intangible exposure", riskType: row.riskType || "Auditor / evidence risk", decision: row.decision || "Close evidence gap and keep audit trail", insight: row.insight || "Compliance value comes from real evidence quality: pricing, ownership, telemetry and SLA proof." };
+  }
+  if (/resource|endpoint|online|owner|department/.test(`${area} ${key} ${label}`)) {
+    return { ...base, tone: row.tone || "blue", impactType: row.impactType || "Resource", costType: row.costType || "Capacity", riskType: row.riskType || "Resource control", decision: row.decision || "Validate capacity, owner and endpoint state", insight: row.insight || "Resource visibility should show usability, ownership and operational pressure, not department counts alone." };
+  }
+  return base;
+}
+
 function readText(value: unknown, fallback = "-") {
   if (value === undefined || value === null || value === "") return fallback;
   return String(value);
@@ -2311,7 +3689,7 @@ function buildLocalExecutiveStory(dashboard: DashboardData): ExecutiveStory {
     status,
     tone,
     headline,
-    narrative: `Health is at ${health || 0}% with ${compliance}% evidence coverage. Prioritise high-exposure endpoints, refresh ownership and pricing cleanup before the next management review.`,
+    narrative: `Health is at ${health || 0}% with ${compliance}% evidence coverage. Prioritise recorded high-exposure endpoints, refresh ownership and pricing cleanup before the next management review.`,
     keySignals: [
       `${riskSignals.toLocaleString()} ${riskLabel}`,
       `${boardItems.toLocaleString()} ${boardLabel}`,
@@ -2353,6 +3731,16 @@ export default function ManagementDashboard() {
   const [chartHover, setChartHover] = useState<number | null>(null);
   const [story, setStory] = useState<ExecutiveStory | null>(null);
   const [storyLoading, setStoryLoading] = useState(false);
+  const [tableSearch, setTableSearch] = useState("");
+  const [tableFilter, setTableFilter] = useState("all");
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(10);
+
+  useEffect(() => {
+    setTableSearch("");
+    setTableFilter("all");
+    setTablePage(1);
+  }, [drill.level, drill.area, drill.key]);
 
   function loadExecutiveStory() {
     setStoryLoading(true);
@@ -2486,10 +3874,11 @@ export default function ManagementDashboard() {
   function printDashboard() { window.print(); }
 
   function renderOverview() {
+    const actualSavingsRecorded = dashboard.finance.actualSavingsRecorded === true && typeof dashboard.finance.potentialSavings === "number";
     const financeChips = [
       { label: "Financial Exposure", value: formatMoney(dashboard.finance.totalCost || 0), icon: "money" as const, tone: "pink" as Tone, area: "capex", title: "Financial Exposure" },
       { label: "Risk Exposure", value: formatMoney(dashboard.finance.riskCost || 0), icon: "risk" as const, tone: "purple" as Tone, area: "risk", title: "Risk Exposure" },
-      { label: "Savings", value: formatMoney(dashboard.finance.potentialSavings || 0), icon: "saving" as const, tone: "cyan" as Tone, area: "saving", title: "Savings Opportunity" },
+      { label: "Actual Savings", value: actualSavingsRecorded ? formatMoney(Number(dashboard.finance.potentialSavings || 0)) : "Not recorded", icon: "saving" as const, tone: actualSavingsRecorded ? "cyan" as Tone : "slate" as Tone, area: "saving", title: "Actual Savings" },
       { label: "CAPEX Watch", value: formatMoney(dashboard.finance.capexYtd || 0), icon: "package" as const, tone: "orange" as Tone, area: "capex", title: "CAPEX Watch" },
     ];
     const totalEndpoints = Number(dashboard.metrics?.totalEndpoints || parseNumberFromText(pillars.find((item) => /resource/i.test(item.title))?.secondValue, 0) || 0);
@@ -2509,7 +3898,7 @@ export default function ManagementDashboard() {
             <div>
               <span className="md-story-status">{storyLoading ? "Generating story" : executiveStory.status || "Executive narrative"}</span>
               <h2>{executiveStory.headline || "Executive management summary is being prepared."}</h2>
-              <p>{executiveStory.narrative || executiveStory.summary || "Management insights are generated from endpoint lifecycle, risk, pricing, compliance and service evidence."}</p>
+              <p>{executiveStory.narrative || executiveStory.summary || "Management insights use only live endpoint lifecycle, risk, pricing, compliance and service evidence."}</p>
               <div className="md-story-signals">
                 {(executiveStory.keySignals || []).slice(0, 4).map((signal, index) => <span key={`${signal}-${index}`}>{signal}</span>)}
               </div>
@@ -2570,7 +3959,7 @@ export default function ManagementDashboard() {
               <div>
                 <span className="md-eyebrow">Management Analytics</span>
                 <h2>Monthly Exposure Snapshot</h2>
-                <p>{dashboard.analysis?.headline || "Live trend generated from endpoint lifecycle, pricing and service desk evidence."}</p>
+                <p>{dashboard.analysis?.headline || "Live trend uses endpoint lifecycle, pricing and service desk evidence only."}</p>
               </div>
               <div className="md-actions">
                 <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
@@ -2795,13 +4184,42 @@ export default function ManagementDashboard() {
 
   function renderBreakdownView() {
     const rows = (drill.rows || []) as DrillRow[];
+    const lens = getBreakdownLens(drill.area, drill.title);
+    const totalCount = rows.reduce((sum, row) => sum + drillNumber(row.count), 0);
+    const totalValue = rows.reduce((sum, row) => sum + getRowValue(row), 0);
+    const maxValue = Math.max(1, ...rows.map((row) => getRowValue(row)));
+    const costedRows = rows.filter((row) => getRowValue(row) > 0).length;
+    const confidence = rows.length ? Math.round((costedRows / rows.length) * 100) : 0;
+    const visual = buildBreakdownVisual(rows, drill.area, lens);
+    const sortedRows = [...rows].sort((a, b) => (getRowValue(b) || drillNumber(b.count)) - (getRowValue(a) || drillNumber(a.count)));
+    const commandFilterOptions = Array.from(new Set(sortedRows.map((row) => getRowLens(row, drill.area, maxValue, totalCount).impactType).filter(Boolean)));
+    const commandSearch = tableSearch.trim().toLowerCase();
+    const filteredCommandRows = sortedRows.filter((row) => {
+      const rowLens = getRowLens(row, drill.area, maxValue, totalCount);
+      const matchesFilter = tableFilter === "all" || rowLens.impactType === tableFilter;
+      if (!matchesFilter) return false;
+      if (!commandSearch) return true;
+      return normalizeTableSearchText(row.label, row.valueFmt, row.sample?.join(" "), rowLens.impactType, rowLens.riskType, rowLens.costType, rowLens.decision, rowLens.insight).includes(commandSearch);
+    });
+    const commandPageInfo = getPageInfo(filteredCommandRows.length, tablePage, tablePageSize);
+    const visibleCommandRows = filteredCommandRows.slice(commandPageInfo.start, commandPageInfo.end);
+    const topRow = sortedRows[0];
+    const topLens = topRow ? getRowLens(topRow, drill.area, maxValue, totalCount) : null;
+    const topPrimary = topRow ? getDrillValue(topRow, drill.area) : "-";
+    const scopeTotal = Number(totalCount || drill.total || rows.length || 0);
+    const primaryValue = totalValue > 0 ? formatMoney(totalValue) : scopeTotal.toLocaleString();
+    const exposureCaption = totalValue > 0 ? "Recorded / priced value" : "Evidence records in scope";
+    const managementRead = topRow
+      ? `${topRow.label} is the strongest management signal. Open evidence to confirm owner, recorded value and remediation path.`
+      : "Open a breakdown item to review the supporting evidence.";
+
     return (
       <section className="md-view-panel">
         <div className="md-view-header">
           <div>
-            <span className="md-view-eyebrow">Executive Breakdown</span>
+            <span className="md-view-eyebrow">Executive Command Center</span>
             <h2>{drill.title || "Management Breakdown"}</h2>
-            <p>{Number(drill.total || rows.length || 0).toLocaleString()} item(s). Click any card to open evidence detail.</p>
+            <p>{scopeTotal.toLocaleString()} item(s). Compact view for value, risk, evidence and action priority.</p>
           </div>
           <div className="md-view-actions">
             <button type="button" className="md-action-btn primary" onClick={closeDrilldown}><Icon name="back" /> Back to Overview</button>
@@ -2810,15 +4228,186 @@ export default function ManagementDashboard() {
         </div>
         <div className="md-view-body">
           {drill.loading ? <div className="md-state-panel">Loading breakdown...</div> : rows.length === 0 ? <div className="md-state-panel">No breakdown item is available for this selection.</div> : (
-            <div className="md-breakdown-grid">
-              {rows.map((row) => (
-                <button type="button" key={row.key || row.label} className="md-breakdown-card" onClick={() => openLevel3(row.level3Area || drill.area || "risk", row.level3Key || row.key, row.label)}>
-                  <span>{row.label}</span>
-                  <strong>{getDrillValue(row, drill.area)}</strong>
-                  <small>{Number(row.count || 0).toLocaleString()} record(s)</small>
-                  <em className="md-card-hint">Open evidence <Icon name="next" /></em>
-                </button>
-              ))}
+            <div className="md-command-lens">
+              <section className="md-command-hero">
+                <div className="md-command-story">
+                  <span>{lens.label}</span>
+                  <h3>{lens.title}</h3>
+                  <p>{lens.description}</p>
+                </div>
+                <div className="md-command-scoreboard">
+                  <article>
+                    <span>{lens.valueLabel}</span>
+                    <strong>{primaryValue}</strong>
+                    <small>{exposureCaption}</small>
+                  </article>
+                  <article>
+                    <span>{lens.recordLabel}</span>
+                    <strong>{scopeTotal.toLocaleString()}</strong>
+                    <small>Evidence records represented</small>
+                  </article>
+                  <article>
+                    <span>{lens.evidenceLabel}</span>
+                    <strong>{confidence}%</strong>
+                    <small>{costedRows.toLocaleString()} / {rows.length.toLocaleString()} priced rows</small>
+                  </article>
+                </div>
+              </section>
+
+              {visual && (
+                <section className="md-command-grid">
+                  <article className="md-command-chart-card">
+                    <div className="md-command-card-head">
+                      <div>
+                        <span>{visual.modeLabel}</span>
+                        <h3>{visual.title}</h3>
+                        <p>{visual.headline}</p>
+                      </div>
+                      <em>{visual.type === "donut" ? "Composition" : "Ranking"}</em>
+                    </div>
+
+                    {visual.type === "donut" ? (
+                      <div className="md-command-donut-layout">
+                        <div className="md-command-donut" style={{ "--donut": visual.gradient } as React.CSSProperties} aria-label={visual.title}>
+                          <span>
+                            <strong>{visual.totalLabel}</strong>
+                            <small>{visual.totalCaption}</small>
+                          </span>
+                        </div>
+                        <div className="md-command-mini-legend">
+                          {visual.items.slice(0, 5).map((item) => (
+                            <button
+                              type="button"
+                              key={`cmd-donut-${item.row.key || item.label}`}
+                              style={{ "--dot": item.color } as React.CSSProperties}
+                              onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}
+                            >
+                              <i />
+                              <span>{item.shortLabel}</span>
+                              <strong>{item.percent}%</strong>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="md-command-bars">
+                        {visual.items.map((item) => (
+                          <button
+                            type="button"
+                            key={`cmd-bar-${item.row.key || item.label}`}
+                            style={{ "--dot": item.color } as React.CSSProperties}
+                            onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}
+                          >
+                            <span><b>{item.shortLabel}</b><em>{item.display}</em></span>
+                            <i><u style={{ "--w": `${item.percent}%` } as React.CSSProperties} /></i>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </article>
+
+                  <article className="md-command-priority-card">
+                    <span className="md-command-pill">Priority signal</span>
+                    <h3>{topRow?.label || "No priority signal"}</h3>
+                    <strong>{topPrimary}</strong>
+                    <p>{managementRead}</p>
+                    {topLens && (
+                      <div className="md-command-chipline">
+                        <span>{topLens.impactType}</span>
+                        <span>{topLens.riskType}</span>
+                        <span>{topLens.confidence}</span>
+                      </div>
+                    )}
+                    {topRow && (
+                      <button type="button" onClick={() => openLevel3(topRow.level3Area || drill.area || "risk", topRow.level3Key || topRow.key, topRow.label)}>
+                        Open evidence <Icon name="next" />
+                      </button>
+                    )}
+                  </article>
+
+                  <article className="md-command-read-card">
+                    <span className="md-command-pill">Management read</span>
+                    <h3>What this means</h3>
+                    <p>{visual.guidance}</p>
+                    <div>
+                      <span>Value</span><strong>{totalValue > 0 ? formatMoney(totalValue) : "Not priced"}</strong>
+                      <span>Scope</span><strong>{scopeTotal.toLocaleString()}</strong>
+                      <span>Priced</span><strong>{confidence}%</strong>
+                    </div>
+                  </article>
+                </section>
+              )}
+
+              <section className="md-command-table-card">
+                <div className="md-command-table-head">
+                  <div>
+                    <span className="md-command-pill">Decision queue</span>
+                    <h3>Management actions by value and evidence</h3>
+                  </div>
+                  <p>Search, filter and paginate the queue before opening evidence. No assumed values are shown.</p>
+                </div>
+                <div className="md-data-toolbar">
+                  <label className="md-data-search">
+                    <Icon name="search" />
+                    <input
+                      type="search"
+                      value={tableSearch}
+                      onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); }}
+                      placeholder="Search signal, risk, decision..."
+                    />
+                  </label>
+                  <select value={tableFilter} onChange={(event) => { setTableFilter(event.target.value); setTablePage(1); }} aria-label="Filter decision queue">
+                    <option value="all">All impact types</option>
+                    {commandFilterOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                  <select value={tablePageSize} onChange={(event) => { setTablePageSize(Number(event.target.value)); setTablePage(1); }} aria-label="Rows per page">
+                    {TABLE_PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} rows</option>)}
+                  </select>
+                  <span>{filteredCommandRows.length.toLocaleString()} / {sortedRows.length.toLocaleString()} row(s)</span>
+                </div>
+                <div className="md-command-rows">
+                  <div className="md-command-row md-command-row-head" aria-hidden="true">
+                    <span>Impact</span>
+                    <span>Signal</span>
+                    <span>Value</span>
+                    <span>Evidence</span>
+                    <span>Decision</span>
+                    <span></span>
+                  </div>
+                  {visibleCommandRows.length === 0 ? (
+                    <div className="md-empty-row">No matching decision row.</div>
+                  ) : visibleCommandRows.map((row) => {
+                    const rowLens = getRowLens(row, drill.area, maxValue, totalCount);
+                    const primary = getDrillValue(row, drill.area);
+                    const countLabel = `${Number(row.count || 0).toLocaleString()} record(s)`;
+                    return (
+                      <button
+                        type="button"
+                        key={row.key || row.label}
+                        className={`md-command-row tone-${normalizeTone(rowLens.tone)}`}
+                        onClick={() => openLevel3(row.level3Area || drill.area || "risk", row.level3Key || row.key, row.label)}
+                      >
+                        <span><i />{rowLens.impactType}</span>
+                        <span><b>{row.label}</b><em>{rowLens.riskType}</em></span>
+                        <span><b>{primary}</b><em>{rowLens.metricLabel}</em></span>
+                        <span><b>{countLabel}</b><em>{rowLens.confidence}</em></span>
+                        <span>{rowLens.decision}</span>
+                        <span>Evidence <Icon name="next" /></span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="md-data-pagination">
+                  <span>Showing {filteredCommandRows.length ? (commandPageInfo.start + 1).toLocaleString() : 0} - {commandPageInfo.end.toLocaleString()} of {filteredCommandRows.length.toLocaleString()}</span>
+                  <div>
+                    <button type="button" onClick={() => setTablePage(1)} disabled={commandPageInfo.safePage <= 1}>First</button>
+                    <button type="button" onClick={() => setTablePage((page) => Math.max(1, page - 1))} disabled={commandPageInfo.safePage <= 1}>Prev</button>
+                    <strong>Page {commandPageInfo.safePage} / {commandPageInfo.totalPages}</strong>
+                    <button type="button" onClick={() => setTablePage((page) => Math.min(commandPageInfo.totalPages, page + 1))} disabled={commandPageInfo.safePage >= commandPageInfo.totalPages}>Next</button>
+                    <button type="button" onClick={() => setTablePage(commandPageInfo.totalPages)} disabled={commandPageInfo.safePage >= commandPageInfo.totalPages}>Last</button>
+                  </div>
+                </div>
+              </section>
             </div>
           )}
         </div>
@@ -2826,8 +4415,20 @@ export default function ManagementDashboard() {
     );
   }
 
+
   function renderEvidenceView() {
     const rows = (drill.rows || []) as EvidenceRow[];
+    const evidenceFilterOptions = Array.from(new Set(rows.map((row) => readText(row.category, "Uncategorised")).filter(Boolean)));
+    const evidenceSearch = tableSearch.trim().toLowerCase();
+    const filteredEvidenceRows = rows.filter((row) => {
+      const domain = readText(row.category, "Uncategorised");
+      const matchesFilter = tableFilter === "all" || domain === tableFilter;
+      if (!matchesFilter) return false;
+      if (!evidenceSearch) return true;
+      return normalizeTableSearchText(row.deviceName, row.department, row.category, row.brand, row.model, row.platform, row.status, row.lastSeen, row.age, row.ipAddress, row.riskSeverity, row.riskScore, row.replacementCost).includes(evidenceSearch);
+    });
+    const evidencePageInfo = getPageInfo(filteredEvidenceRows.length, tablePage, tablePageSize);
+    const visibleEvidenceRows = filteredEvidenceRows.slice(evidencePageInfo.start, evidencePageInfo.end);
     return (
       <section className="md-view-panel">
         <div className="md-view-header">
@@ -2843,35 +4444,66 @@ export default function ManagementDashboard() {
         </div>
         <div className="md-view-body">
           {drill.loading ? <div className="md-state-panel">Loading evidence...</div> : (
-            <div className="md-table-wrap md-evidence-wrap">
-              <table className="md-table">
-                <thead>
-                  <tr>
-                    <th>Device</th>
-                    <th>Department</th>
-                    <th>Category</th>
-                    <th>Brand / Model</th>
-                    <th>Status</th>
-                    <th>Age</th>
-                    <th>Risk</th>
-                    <th>Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.length === 0 ? <tr><td colSpan={8}>No evidence record found.</td></tr> : rows.map((row, index) => (
-                    <tr key={row.assetKey || `${row.objectAgent}-${row.assetId}-${index}`}>
-                      <td>{readText(row.deviceName)}</td>
-                      <td>{readText(row.department)}</td>
-                      <td>{readText(row.category)}</td>
-                      <td>{readText(`${readText(row.brand, "")} ${readText(row.model, "")}`.trim())}</td>
-                      <td>{readText(row.status)}</td>
-                      <td>{readText(row.age)}</td>
-                      <td>{readText(row.riskSeverity)} ({readText(row.riskScore, "0")})</td>
-                      <td>{readText(row.replacementCost)}</td>
+            <div className="md-data-table-shell">
+              <div className="md-data-toolbar">
+                <label className="md-data-search">
+                  <Icon name="search" />
+                  <input
+                    type="search"
+                    value={tableSearch}
+                    onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); }}
+                    placeholder="Search evidence, owner, IP, risk..."
+                  />
+                </label>
+                <select value={tableFilter} onChange={(event) => { setTableFilter(event.target.value); setTablePage(1); }} aria-label="Filter evidence domain">
+                  <option value="all">All domains</option>
+                  {evidenceFilterOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+                <select value={tablePageSize} onChange={(event) => { setTablePageSize(Number(event.target.value)); setTablePage(1); }} aria-label="Rows per page">
+                  {TABLE_PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} rows</option>)}
+                </select>
+                <span>{filteredEvidenceRows.length.toLocaleString()} / {rows.length.toLocaleString()} record(s)</span>
+              </div>
+              <div className="md-table-wrap md-evidence-wrap">
+                <table className="md-table">
+                  <thead>
+                    <tr>
+                      <th>Evidence Item</th>
+                      <th>Owner / Scope</th>
+                      <th>Domain</th>
+                      <th>Detail</th>
+                      <th>Status</th>
+                      <th>Freshness</th>
+                      <th>Risk</th>
+                      <th>Exposure</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {visibleEvidenceRows.length === 0 ? <tr><td colSpan={8}>No matching evidence record found.</td></tr> : visibleEvidenceRows.map((row, index) => (
+                      <tr key={row.assetKey || `${row.objectAgent}-${row.assetId}-${evidencePageInfo.start + index}`}>
+                        <td>{readText(row.deviceName)}</td>
+                        <td>{readText(row.department)}</td>
+                        <td>{readText(row.category)}</td>
+                        <td>{readText(`${readText(row.brand, "")} ${readText(row.model, "")}`.trim() || row.ipAddress)}</td>
+                        <td>{readText(row.status)}</td>
+                        <td>{readText(row.age || row.lastSeen)}</td>
+                        <td>{readText(row.riskSeverity)} ({readText(row.riskScore, "0")})</td>
+                        <td>{readText(row.replacementCost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="md-data-pagination">
+                <span>Showing {filteredEvidenceRows.length ? (evidencePageInfo.start + 1).toLocaleString() : 0} - {evidencePageInfo.end.toLocaleString()} of {filteredEvidenceRows.length.toLocaleString()}</span>
+                <div>
+                  <button type="button" onClick={() => setTablePage(1)} disabled={evidencePageInfo.safePage <= 1}>First</button>
+                  <button type="button" onClick={() => setTablePage((page) => Math.max(1, page - 1))} disabled={evidencePageInfo.safePage <= 1}>Prev</button>
+                  <strong>Page {evidencePageInfo.safePage} / {evidencePageInfo.totalPages}</strong>
+                  <button type="button" onClick={() => setTablePage((page) => Math.min(evidencePageInfo.totalPages, page + 1))} disabled={evidencePageInfo.safePage >= evidencePageInfo.totalPages}>Next</button>
+                  <button type="button" onClick={() => setTablePage(evidencePageInfo.totalPages)} disabled={evidencePageInfo.safePage >= evidencePageInfo.totalPages}>Last</button>
+                </div>
+              </div>
             </div>
           )}
         </div>
