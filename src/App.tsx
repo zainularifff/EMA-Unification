@@ -15,6 +15,7 @@ import SoftwareDistribution from "./pages/SoftwareDistribution";
 import PatchManagement from "./pages/PatchManagement";
 import InternetMetering from "./pages/InternetMetering";
 import NetworkInventory from "./pages/NetworkInventory";
+import ManagementDashboard from "./pages/ManagementDashboard";
 
 
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/internet-metering" element={<InternetMetering />} />
         <Route path="/network-metering" element={<NetworkInventory />} />
         <Route path="/network-inventory" element={<NetworkInventory />} />
+        <Route path="/management-dashboard" element={<ManagementDashboard />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

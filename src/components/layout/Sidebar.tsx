@@ -24,6 +24,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", path: "/dashboard", icon: Gauge },
+  { label: "Management Dashboard", path: "/management-dashboard", icon: Gauge },
   { label: "Hardware", path: "/hardware", icon: Laptop },
   { label: "Software", path: "/software", icon: Monitor},
   { label: "App Metering", path: "/appmetering", icon: BarChart3},

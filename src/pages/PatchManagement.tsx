@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  ArrowUpRight,
   Boxes,
   ChevronDown,
   ChevronLeft,
@@ -193,15 +192,8 @@ const toScopeParams = (selection: ScopeSelection): OnlinePatchScopeParams => ({
   Object_Root_Idn: selection.Object_Root_Idn,
 });
 
+
 function PatchManagement() {
-  useEffect(() => {
-    document.documentElement.classList.add('ema-settings-page-active', 'ema-layout-lock');
-    document.body.classList.add('ema-settings-page-active', 'ema-layout-lock');
-    return () => {
-      document.documentElement.classList.remove('ema-settings-page-active', 'ema-layout-lock');
-      document.body.classList.remove('ema-settings-page-active', 'ema-layout-lock');
-    };
-  }, []);
   const [mode, setMode] = useState<PatchMode>('online');
   const [activeTab, setActiveTab] = useState<PatchTab>('status');
   const [departments, setDepartments] = useState<DepartmentNode[]>([]);
@@ -367,27 +359,29 @@ function PatchManagement() {
     const id = Number(node.Object_Rel_Idn || 0);
     if (!id) return;
 
+    const willExpand = !expanded.has(id);
+
     setExpanded((current) => {
       const next = new Set(current);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
 
-    loadAssetsForRelation(id);
+    if (willExpand) {
+      loadAssetsForRelation(id);
+    }
   };
 
   const selectDepartment = (node: DepartmentNode) => {
     const relationID = Number(node.Object_Rel_Idn || 0);
     const label = node.Object_Full_Name || node.Object_Rel_Name || `Department ${relationID}`;
     setSelectedScope({ scope: 'relation', Object_Rel_Idn: relationID, label });
-    setExpanded((current) => new Set(current).add(relationID));
-    loadAssetsForRelation(relationID);
   };
 
   const selectDevice = (asset: AssetItem, relationID: number) => {
     const objectRootIdn = getDeviceId(asset);
     if (!objectRootIdn) {
-      showToast({ type: 'error', message: 'This device does not have Object_Root_Idn, so patching action cannot be created.' });
+      showToast({ type: 'error', message: 'This device cannot be selected for patch action yet.' });
       return;
     }
 
@@ -422,12 +416,12 @@ function PatchManagement() {
     try {
       if (confirmState.type === 'scan') {
         await createOnlinePatchScanJob(scopeParams);
-        showToast({ type: 'success', message: 'Scan / Rescan Patches job created successfully.' });
+        showToast({ type: 'success', message: 'Patch scan job created successfully.' });
       }
 
       if (confirmState.type === 'install') {
         const objectRootIdn = Number(confirmState.row.Object_Root_Idn || selectedScope.Object_Root_Idn || 0);
-        if (!objectRootIdn) throw new Error('Object_Root_Idn is required before installing patch. Select a device or use a device status row.');
+        if (!objectRootIdn) throw new Error('Please select a device or use a device status row before installing a patch.');
 
         await prepareOnlinePatchInstall({
           Object_Root_Idn: objectRootIdn,
@@ -435,13 +429,13 @@ function PatchManagement() {
           RevisionNumber: Number(confirmState.row.RevisionNumber),
         });
 
-        showToast({ type: 'success', message: 'Install Patch Online job created successfully.' });
+        showToast({ type: 'success', message: 'Patch install job created successfully.' });
       }
 
       setConfirmState(null);
       await loadPatchData();
     } catch (error) {
-      showToast({ type: 'error', message: extractErrorMessage(error, 'Patch action failed. Please check backend/job tables.') });
+      showToast({ type: 'error', message: extractErrorMessage(error, 'Patch action failed. Please try again.') });
     } finally {
       setActionLoading(false);
     }
@@ -482,234 +476,171 @@ function PatchManagement() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root" data-section="patch-management">
+    <main className="settings-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="patch-management">
       {toast && <PatchToast toast={toast} onClose={() => setToast(null)} />}
 
-      <div className="settings-layout">
+      <div className="settings-layout d-grid gap-3">
         <aside className="settings-menu ema-panel-surface">
-        <div className="panel-head">
-          <span>PATCH SCOPE</span>
-          <strong>Patch Management</strong>
-          <small>Organization, department and endpoint.</small>
-        </div>
+          <div className="panel-head">
+            <span>Patch Scope</span>
+            <strong>Package Library</strong>
+            <small>Choose organization, department, or device.</small>
+          </div>
 
-        <label className="section-search ema-sidebar-field">
-          <Search size={15} />
-          <input placeholder="Search tree is API-driven" readOnly />
-        </label>
+          <div className="p-3 pb-2">
+            <label className="section-search">
+              <Search size={15} />
+              <input placeholder="Search scope" readOnly />
+            </label>
+          </div>
 
-        <div className="settings-menu-list">
-          <button className={cx('setting-btn', selectedScope.scope === 'all' && 'active')} onClick={selectOrganization} type="button">
-            <span className="setting-icon"><Globe2 /></span>
-            <span className="settings-menu-list-content">
-              <strong>Organization</strong>
-              <small>Whole company</small>
-            </span>
-            <span className="user-pill">ALL</span>
-          </button>
+          <div className="settings-menu-list">
+            <button className={cx('setting-btn', selectedScope.scope === 'all' && 'active')} onClick={selectOrganization} type="button">
+              <span className="setting-icon"><Globe2 /></span>
+              <span>
+                <strong>Organization</strong>
+                <small>Whole company</small>
+              </span>
+            </button>
 
-          {departments.map((node) => (
-            <TreeNode
-              key={node.Object_Rel_Idn}
-              node={node}
-              level={0}
-              selectedScope={selectedScope}
-              expanded={expanded}
-              assetsByRelation={assetsByRelation}
-              loadingAssets={loadingAssets}
-              onToggle={toggleDepartment}
-              onSelectDepartment={selectDepartment}
-              onSelectDevice={selectDevice}
-            />
-          ))}
+            {departments.map((node) => (
+              <TreeNode
+                key={node.Object_Rel_Idn}
+                node={node}
+                level={0}
+                selectedScope={selectedScope}
+                expanded={expanded}
+                assetsByRelation={assetsByRelation}
+                loadingAssets={loadingAssets}
+                onToggle={toggleDepartment}
+                onSelectDepartment={selectDepartment}
+                onSelectDevice={selectDevice}
+              />
+            ))}
 
-          {treeLoading && <div className="settings-helper-card"><Loader2 className="patch-spin" size={14} /> Loading hierarchy...</div>}
-          {!treeLoading && departments.length === 0 && <div className="settings-helper-card">No hierarchy data returned from /departments.</div>}
-        </div>
+            {treeLoading && <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading organization...</div>}
+            {!treeLoading && departments.length === 0 && <div className="settings-helper-card">No organization scope available.</div>}
+          </div>
 
-        <div className="settings-helper-card">
-          <span>Selected</span>
-          <strong>{selectedScope.label}</strong>
-        </div>
-      </aside>
+          <div className="settings-helper-card m-3 mt-0">
+            <strong>Selected scope</strong>
+            <span>{selectedScope.label}</span>
+          </div>
+        </aside>
 
         <section className="settings-content">
           <section className="settings-hero ema-panel-surface">
             <div>
-              <span className="eyebrow">PATCH OPERATIONS</span>
+              <span className="section-tag">Patch Operations</span>
               <h2>Patch Management</h2>
-              <p>Scan, review and install endpoint patches by organization scope.</p>
+              <p>Review update coverage, scan selected endpoints, and install missing patches from one workspace.</p>
             </div>
+
             <div className="settings-score users-hero-score">
-        <KpiCard
-          label="Coverage"
-          value={`${patchCoverage}%`}
-          note="Click: all status"
-          icon={<ShieldCheck />}
-          tone="green"
-          active={activeKpi === 'coverage'}
-          onClick={() => handleKpiClick('coverage')}
-        />
-        <KpiCard
-          label="Applicable"
-          value={formatNumber(summary.ApplicablePatches)}
-          note="Click: applicable rows"
-          icon={<ListChecks />}
-          tone="blue"
-          active={activeKpi === 'applicable'}
-          onClick={() => handleKpiClick('applicable')}
-        />
-        <KpiCard
-          label="Missing"
-          value={formatNumber(summary.MissingPatches)}
-          note={`${installableMissingCount} visible actions`}
-          icon={<ShieldAlert />}
-          tone="orange"
-          active={activeKpi === 'missing' || statusFilter === 'missing'}
-          onClick={() => handleKpiClick('missing')}
-        />
-        <KpiCard
-          label="Installed"
-          value={formatNumber(summary.InstalledPatches)}
-          note="Click: installed only"
-          icon={<PackageCheck />}
-          tone="green"
-          active={activeKpi === 'installed' || statusFilter === 'installed'}
-          onClick={() => handleKpiClick('installed')}
-        />
-        <KpiCard
-          label="Devices"
-          value={formatNumber(summary.DeviceCount)}
-          note="Click: clear filters"
-          icon={<Laptop />}
-          tone="purple"
-          active={activeKpi === 'devices'}
-          onClick={() => handleKpiClick('devices')}
-        />
-        <KpiCard
-          label="Last Scan"
-          value={formatDateTime(summary.LastScanTime)}
-          note="Click: refresh data"
-          icon={<Clock3 />}
-          tone="cyan"
-          compact
-          active={activeKpi === 'lastScan'}
-          onClick={() => handleKpiClick('lastScan')}
-        />
+              <KpiCard label="Coverage" value={`${patchCoverage}%`} note="Installed rate" icon={<ShieldCheck />} active={activeKpi === 'coverage'} onClick={() => handleKpiClick('coverage')} />
+              <KpiCard label="Applicable" value={formatNumber(summary.ApplicablePatches)} note="Detected updates" icon={<ListChecks />} active={activeKpi === 'applicable'} onClick={() => handleKpiClick('applicable')} />
+              <KpiCard label="Missing" value={formatNumber(summary.MissingPatches)} note={`${installableMissingCount} action row(s)`} icon={<ShieldAlert />} active={activeKpi === 'missing' || statusFilter === 'missing'} onClick={() => handleKpiClick('missing')} />
+              <KpiCard label="Installed" value={formatNumber(summary.InstalledPatches)} note="Completed updates" icon={<PackageCheck />} active={activeKpi === 'installed' || statusFilter === 'installed'} onClick={() => handleKpiClick('installed')} />
             </div>
           </section>
 
-          <section className="content-shell ema-panel-surface content-panel clean">
-        <header className="content-head">
-          <div>
-            <span className="ema-eyebrow">EMA Online Patching</span>
-            <h1>Patch Management</h1>
-            <p>Mapped to TS_UPDATE_ONLINE_MASTER, FILES, STATUS, REPLACE and INSTALL_JOB flow.</p>
-          </div>
+          <main className="content-shell ema-panel-surface content-panel clean">
+            <header className="content-head">
+              <div>
+                <span className="section-tag">Online patching</span>
+                <h3>Patch Registry</h3>
+                <p>Current scope: <strong>{selectedScope.label}</strong></p>
+              </div>
 
-          <div className="content-actions">
-            <button className="soft-btn" type="button" onClick={loadPatchData} disabled={loadingData || mode !== 'online'}>
-              {loadingData ? <Loader2 className="patch-spin" size={15} /> : <RefreshCw size={15} />}
-              Refresh
-            </button>
-            <button className="primary-btn" type="button" onClick={() => setConfirmState({ type: 'scan' })} disabled={mode !== 'online'}>
-              <Search size={15} />
-              Scan / Rescan Patches
-            </button>
-          </div>
-        </header>
+              <div className="content-actions">
+                <button className="soft-btn" type="button" onClick={loadPatchData} disabled={loadingData || mode !== 'online'}>
+                  {loadingData ? <Loader2 className="me-1" size={15} /> : <RefreshCw size={15} />}
+                  Refresh
+                </button>
+                <button className="primary-btn" type="button" onClick={() => setConfirmState({ type: 'scan' })} disabled={mode !== 'online'}>
+                  <Search size={15} />
+                  Scan / Rescan
+                </button>
+              </div>
+            </header>
 
-        <section className="patch-mode-strip">
-          <button type="button" className={cx('settings-helper-card', mode === 'online' && 'is-active')} onClick={() => setMode('online')}>
-            <span><Cloud size={18} /></span>
-            <strong>Online Patching</strong>
-            <small>Agent downloads from online URLs, installs locally, then reports status.</small>
-          </button>
-          <button type="button" className={cx('settings-helper-card', mode === 'offline' && 'is-active')} onClick={() => setMode('offline')}>
-            <span><Server size={18} /></span>
-            <strong>Offline Patching</strong>
-            <small>Kept separate from online scan/install flow.</small>
-          </button>
-          <div className="patch-scope-summary">
-            <span>Current scope</span>
-            <strong>{selectedScope.label}</strong>
-          </div>
-          <div className="patch-scope-summary">
-            <span>Scope mode</span>
-            <strong>{selectedScope.scope === 'all' ? 'Whole company' : selectedScope.scope === 'relation' ? 'Organization unit' : 'Individual device'}</strong>
-          </div>
-          <div className="patch-scope-summary">
-            <span>Install rule</span>
-            <strong>Missing only - no server package transfer</strong>
-          </div>
-        </section>
-
-        {mode === 'offline' ? (
-          <OfflinePlaceholder />
-        ) : (
-          <>
-            <div className="patch-tabs" role="tablist" aria-label="Patch Management Views">
-              <button type="button" className={activeTab === 'status' ? 'soft-btn active' : 'soft-btn'} onClick={() => setActiveTab('status')}>
-                <Laptop size={15} /> Device Patch Status
-              </button>
-              <button type="button" className={activeTab === 'catalog' ? 'soft-btn active' : 'soft-btn'} onClick={() => setActiveTab('catalog')}>
-                <Database size={15} /> Online Update Catalog
-              </button>
-            </div>
-
-            <div className="content-toolbar">
-              <label className="section-search">
+            <div className="user-access-commandbar">
+              <label className="section-search user-search-inline">
                 <Search size={15} />
-                <input value={searchTerm} onChange={(event) => { setActiveKpi(null); setSearchTerm(event.target.value); }} placeholder="Search KB / title / update id" />
+                <input value={searchTerm} onChange={(event) => { setActiveKpi(null); setSearchTerm(event.target.value); }} placeholder="Search KB, title, update id" />
               </label>
 
-              <select value={severityFilter} onChange={(event) => { setActiveKpi(null); setSeverityFilter(event.target.value); }}>
+              <select className="setting-select" value={severityFilter} onChange={(event) => { setActiveKpi(null); setSeverityFilter(event.target.value); }}>
                 <option value="">All severity</option>
                 {severityOptions.map((severity) => <option key={severity} value={severity}>{severity}</option>)}
               </select>
 
-              <select value={statusFilter} onChange={(event) => { setActiveKpi(null); setStatusFilter(event.target.value as OnlinePatchStatusFilter); }} disabled={activeTab === 'catalog'}>
+              <select className="setting-select" value={statusFilter} onChange={(event) => { setActiveKpi(null); setStatusFilter(event.target.value as OnlinePatchStatusFilter); }} disabled={activeTab === 'catalog'}>
                 <option value="all">All status</option>
                 <option value="missing">Missing</option>
                 <option value="installed">Installed</option>
               </select>
 
-              <select value={limit} onChange={(event) => { setActiveKpi(null); setLimit(Number(event.target.value)); }}>
+              <select className="setting-select" value={activeTab} onChange={(event) => setActiveTab(event.target.value as PatchTab)}>
+                <option value="status">Device status</option>
+                <option value="catalog">Update catalog</option>
+              </select>
+
+              <select className="setting-select" value={limit} onChange={(event) => { setActiveKpi(null); setLimit(Number(event.target.value)); }}>
                 {pageSizeOptions.map((size) => <option key={size} value={size}>{size} / page</option>)}
               </select>
             </div>
 
-            {loadingData ? (
-              <div className="settings-helper-card">
-                <div className="patch-loading-state"><Loader2 className="patch-spin" size={22} /> Loading patch data...</div>
+            <div className="content-body">
+              <div className="settings-helper-card mb-3">
+                <strong>{mode === 'online' ? 'Online patching' : 'Offline patching'}</strong>
+                <span>{mode === 'online' ? 'Agents scan and report update status for the selected scope.' : 'Offline patching is kept separate from the online scan and install flow.'}</span>
+                <div className="content-actions mt-2">
+                  <button type="button" className={cx('soft-btn', mode === 'online' && 'primary-btn')} onClick={() => setMode('online')}>
+                    <Cloud size={15} /> Online
+                  </button>
+                  <button type="button" className={cx('soft-btn', mode === 'offline' && 'primary-btn')} onClick={() => setMode('offline')}>
+                    <Server size={15} /> Offline
+                  </button>
+                  <button type="button" className="soft-btn" onClick={() => handleKpiClick('devices')}>
+                    <Laptop size={15} /> {formatNumber(summary.DeviceCount)} devices
+                  </button>
+                  <button type="button" className="soft-btn" onClick={() => handleKpiClick('lastScan')}>
+                    <Clock3 size={15} /> Last scan: {formatDateTime(summary.LastScanTime)}
+                  </button>
+                </div>
               </div>
-            ) : (
-              <PatchTable
-                rows={currentResult.rows}
-                activeTab={activeTab}
-                page={page}
-                limit={limit}
-                onOpenDetails={openDetails}
-                onInstall={(row) => setConfirmState({ type: 'install', row })}
-              />
-            )}
 
-            <footer className="uam-pagination global-style">
-              <div className="uam-page-summary">
-                <span>Page {page} of {totalPages}</span>
-              </div>
+              {mode === 'offline' ? (
+                <OfflinePlaceholder />
+              ) : loadingData ? (
+                <div className="settings-helper-card">
+                  <Loader2 className="me-2" size={18} /> Loading patch data...
+                </div>
+              ) : (
+                <PatchTable
+                  rows={currentResult.rows}
+                  activeTab={activeTab}
+                  page={page}
+                  limit={limit}
+                  onOpenDetails={openDetails}
+                  onInstall={(row) => setConfirmState({ type: 'install', row })}
+                />
+              )}
 
-              <nav className="uam-pagination-controls global-style" aria-label="Pagination">
-                <button type="button" onClick={() => goToPage(1)} disabled={page <= 1} aria-label="First page"><ChevronsLeft size={14} /></button>
-                <button type="button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="Previous page"><ChevronLeft size={14} /></button>
-                <b>{page}</b>
-                <button type="button" onClick={() => goToPage(page + 1)} disabled={page >= totalPages} aria-label="Next page"><ChevronRight size={14} /></button>
-                <button type="button" onClick={() => goToPage(totalPages)} disabled={page >= totalPages} aria-label="Last page"><ChevronsRight size={14} /></button>
-              </nav>
-            </footer>
-          </>
-        )}
-          </section>
+              <footer className="uam-pagination global-style">
+                <span className="uam-page-summary">Page {page} of {totalPages}</span>
+                <span className="uam-page-status">{formatNumber(currentResult.totalRecords)} record(s)</span>
+                <nav className="uam-pagination-controls global-style" aria-label="Patch pagination">
+                  <button className="uam-page-icon" type="button" onClick={() => goToPage(1)} disabled={page <= 1} aria-label="First page"><ChevronsLeft size={14} /></button>
+                  <button className="uam-page-icon" type="button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="Previous page"><ChevronLeft size={14} /></button>
+                  <b className="uam-page-current">{page}</b>
+                  <button className="uam-page-icon" type="button" onClick={() => goToPage(page + 1)} disabled={page >= totalPages} aria-label="Next page"><ChevronRight size={14} /></button>
+                  <button className="uam-page-icon" type="button" onClick={() => goToPage(totalPages)} disabled={page >= totalPages} aria-label="Last page"><ChevronsRight size={14} /></button>
+                </nav>
+              </footer>
+            </div>
+          </main>
         </section>
       </div>
 
@@ -762,41 +693,36 @@ function TreeNode({
 }) {
   const relationID = Number(node.Object_Rel_Idn || 0);
   const label = node.Object_Full_Name || node.Object_Rel_Name || `Department ${relationID}`;
+  const shortLabel = node.Object_Rel_Name || label;
   const isExpanded = expanded.has(relationID);
   const isSelected = selectedScope.scope === 'relation' && selectedScope.Object_Rel_Idn === relationID;
   const children = node.children || [];
   const devices = assetsByRelation[relationID] || [];
   const isLoading = Boolean(loadingAssets[relationID]);
   const hasLoadedDevices = Object.prototype.hasOwnProperty.call(assetsByRelation, relationID);
-  const hasExpandableContent = children.length > 0 || !hasLoadedDevices || devices.length > 0 || isLoading;
   const Icon = isExpanded ? FolderOpen : Folder;
+  const indentClass = level > 0 ? `ms-${Math.min(level, 4)}` : '';
 
   return (
-    <div className="patch-tree-group">
+    <div className={cx('d-grid gap-2', indentClass)}>
       <button
         className={cx('setting-btn', isSelected && 'active')}
-        style={{ paddingLeft: level * 14 + 10 }}
         type="button"
-        onClick={() => onSelectDepartment(node)}
+        onClick={() => {
+          onToggle(node);
+          onSelectDepartment(node);
+        }}
+        title={label}
       >
         <span className="setting-icon"><Icon /></span>
-        <span className="settings-menu-list-content">
-          <strong>{label}</strong>
-          <small>{isLoading ? 'Loading devices...' : `${children.length} branches / ${devices.length} devices`}</small>
-        </span>
-        <span
-          className="user-pill patch-tree-toggle"
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggle(node);
-          }}
-        >
-          {hasExpandableContent ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <CircleDot size={10} />}
+        <span>
+          <strong>{shortLabel}</strong>
+          <small>{isExpanded ? 'Click to collapse scope' : 'Click to expand scope'}</small>
         </span>
       </button>
 
       {isExpanded && (
-        <div className="patch-tree-children">
+        <div className="d-grid gap-2 ms-3">
           {children.map((child) => (
             <TreeNode
               key={child.Object_Rel_Idn}
@@ -812,28 +738,24 @@ function TreeNode({
             />
           ))}
 
-          {isLoading && <div className="settings-helper-card" style={{ paddingLeft: (level + 1) * 14 + 18 }}><Loader2 className="patch-spin" size={13} /> Loading devices...</div>}
+          {isLoading && <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading devices...</div>}
+          {!isLoading && hasLoadedDevices && devices.length === 0 && <div className="settings-helper-card">No devices in this scope.</div>}
 
           {devices.map((asset) => {
             const deviceID = getDeviceId(asset);
-            const selected = selectedScope.scope === 'device' && selectedScope.Object_Root_Idn === deviceID;
-            const deviceName = getDeviceName(asset);
-            const isOnline = String(asset.ConnectionStatus || '').toLowerCase() === 'online';
-
+            const isDeviceSelected = selectedScope.scope === 'device' && selectedScope.Object_Root_Idn === deviceID;
             return (
               <button
-                key={`${relationID}-${deviceID}-${deviceName}`}
-                className={cx('setting-btn', selected && 'active')}
-                style={{ paddingLeft: (level + 1) * 14 + 20 }}
+                key={`${relationID}-${deviceID}-${getDeviceName(asset)}`}
+                className={cx('setting-btn', isDeviceSelected && 'active')}
                 type="button"
                 onClick={() => onSelectDevice(asset, relationID)}
               >
                 <span className="setting-icon"><Laptop /></span>
-                <span className="settings-menu-list-content">
-                  <strong>{deviceName}</strong>
-                  <small>{asset.IP || asset.Object_DeviceID || '-'}</small>
+                <span>
+                  <strong>{getDeviceName(asset)}</strong>
+                  <small>{asset.IP || asset.Object_DeviceID || asset.DeviceID || 'Endpoint device'}</small>
                 </span>
-                <span className={cx('ema-status-dot', isOnline ? 'is-online' : 'is-offline')} />
               </button>
             );
           })}
@@ -848,8 +770,6 @@ function KpiCard({
   value,
   note,
   icon,
-  tone,
-  compact,
   active,
   onClick,
 }: {
@@ -857,25 +777,21 @@ function KpiCard({
   value: ReactNode;
   note: ReactNode;
   icon: ReactNode;
-  tone: 'blue' | 'green' | 'orange' | 'purple' | 'cyan';
-  compact?: boolean;
   active?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button
-      className={cx('ema-kpi-card', `is-${tone}`, 'patch-kpi-action', active && 'is-active')}
+      className={cx('score-box ema-kpi-card text-start', active && 'active')}
       type="button"
       onClick={onClick}
       aria-pressed={Boolean(active)}
       title={`${label}: click to filter patch table`}
     >
-      <div className="ema-kpi-content">
-        <span className="ema-kpi-icon">{icon}</span>
-        <span className="ema-kpi-label">{label}</span>
-        <strong className={cx('ema-kpi-value', compact && 'patch-kpi-compact')}>{value}</strong>
-        <small className="ema-kpi-note">{note}</small>
-      </div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{note}</small>
+      <i className="d-none">{icon}</i>
     </button>
   );
 }
@@ -883,14 +799,9 @@ function KpiCard({
 function PatchTable({ rows, activeTab, page, limit, onOpenDetails, onInstall }: { rows: OnlinePatchRow[]; activeTab: PatchTab; page: number; limit: number; onOpenDetails: (row: OnlinePatchRow) => void; onInstall: (row: OnlinePatchRow) => void }) {
   if (!rows.length) {
     return (
-      <div className="settings-helper-card">
-        <div className="settings-helper-card">
-          <Boxes size={40} />
-          <div>
-            <h3>No online patch data found</h3>
-            <p>Try a different scope/filter, or run Scan / Rescan Patches so the agent can update TS_UPDATE_ONLINE_STATUS.</p>
-          </div>
-        </div>
+      <div className="settings-helper-card text-center py-4">
+        <strong>No online patch data found</strong>
+        <span>Try a different scope or run scan again.</span>
       </div>
     );
   }
@@ -900,16 +811,16 @@ function PatchTable({ rows, activeTab, page, limit, onOpenDetails, onInstall }: 
       <table className="table table-hover align-middle mb-0">
         <thead>
           <tr>
-            <th className="patch-col-no">No.</th>
+            <th>No.</th>
             {activeTab === 'status' && <th>Device</th>}
             <th>KB / Update</th>
-            <th className="patch-col-pill">Severity</th>
-            <th className="patch-col-date">Release</th>
-            {activeTab === 'status' && <th className="patch-col-pill">Status</th>}
-            {activeTab === 'status' && <th className="patch-col-date">Last Scan</th>}
-            {activeTab === 'catalog' && <th className="patch-col-date">Files</th>}
-            {activeTab === 'catalog' && <th className="patch-col-date">Devices</th>}
-            <th className="patch-col-actions">Action</th>
+            <th>Severity</th>
+            <th>Release</th>
+            {activeTab === 'status' && <th>Status</th>}
+            {activeTab === 'status' && <th>Last Scan</th>}
+            {activeTab === 'catalog' && <th>Files</th>}
+            {activeTab === 'catalog' && <th>Devices</th>}
+            <th className="text-end text-nowrap">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -920,17 +831,22 @@ function PatchTable({ rows, activeTab, page, limit, onOpenDetails, onInstall }: 
 
             return (
               <tr key={getPatchRowKey(row, index)}>
-                <td className="patch-col-no"><span className="row-index-pill">{number}</span></td>
+                <td><span className="row-index-pill">{number}</span></td>
                 {activeTab === 'status' && (
                   <td>
-                    <strong className="patch-primary-text">{row.DeviceName || row.ComputerName || row.Object_Client_Name || '-'}</strong>
-                    <small className="patch-muted-text">{row.Department || row.Object_Full_Name || row.IP || '-'}</small>
+                    <div className="user-name">
+                      <span className="user-mini-avatar"><Laptop size={14} /></span>
+                      <span>
+                        <strong>{row.DeviceName || row.ComputerName || row.Object_Client_Name || '-'}</strong>
+                        <small>{row.Department || row.Object_Full_Name || row.IP || '-'}</small>
+                      </span>
+                    </div>
                   </td>
                 )}
                 <td>
-                  <button className="patch-table-link" type="button" onClick={() => onOpenDetails(row)}>
-                    <span>{getKbText(row)}</span>
-                    <strong>{row.Title || 'Untitled update'}</strong>
+                  <button className="border-0 bg-transparent p-0 text-start" type="button" onClick={() => onOpenDetails(row)}>
+                    <span className="user-pill info mb-1">{getKbText(row)}</span>
+                    <strong className="d-block">{row.Title || 'Untitled update'}</strong>
                   </button>
                 </td>
                 <td><span className={`user-pill ${getSeverityPillClass(row.MsrcSeverity)}`}>{row.MsrcSeverity || 'Unspecified'}</span></td>
@@ -939,21 +855,16 @@ function PatchTable({ rows, activeTab, page, limit, onOpenDetails, onInstall }: 
                 {activeTab === 'status' && <td>{formatDateTime(row.LastScanTime)}</td>}
                 {activeTab === 'catalog' && <td>{formatNumber(row.FileCount)} / {formatFileSize(row.TotalFileSize)}</td>}
                 {activeTab === 'catalog' && <td>{formatNumber(row.DeviceCount)} devices</td>}
-                <td>
-                  <div className="ema-row-actions patch-row-actions">
+                <td className="text-end text-nowrap">
+                  <div className="user-row-action-wrap clean justify-content-end flex-nowrap gap-1">
                     {canInstall && (
-                      <button className="primary-btn" type="button" onClick={() => onInstall(row)}>
+                      <button className="primary-btn px-3" type="button" onClick={() => onInstall(row)}>
                         <Play size={13} /> Install
                       </button>
                     )}
-                    <button className="soft-btn" type="button" onClick={() => onOpenDetails(row)}>
+                    <button className="mini-btn" type="button" onClick={() => onOpenDetails(row)}>
                       <Info size={13} /> Details
                     </button>
-                    {Array.isArray(row.KBArticleUrls) && row.KBArticleUrls[0] && (
-                      <a className="soft-btn" href={row.KBArticleUrls[0]} target="_blank" rel="noreferrer">
-                        <ArrowUpRight size={13} /> KB
-                      </a>
-                    )}
                   </div>
                 </td>
               </tr>
@@ -974,89 +885,89 @@ function PatchDetailDrawer({ row, detail, loading, onClose, onInstall }: { row: 
 
   return (
     <div className="user-modal-backdrop open">
-      <section className="user-modal advanced patch-detail-drawer">
+      <section className="user-modal advanced">
         <div className="user-modal-head">
           <div>
-            <span>Patch Detail</span>
-            <h2>{getKbText(patch)} - Revision {patch.RevisionNumber || row.RevisionNumber}</h2>
+            <span className="section-tag">Patch Detail</span>
+            <h3>{getKbText(patch)} - Revision {patch.RevisionNumber || row.RevisionNumber}</h3>
             <p>{patch.Title || row.Title}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
+          <button className="modal-close" type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
 
-        <div className="user-modal-body">
+        <div className="user-modal-body content-body">
           {loading ? (
-            <div className="patch-loading-state"><Loader2 className="patch-spin" size={22} /> Loading patch detail...</div>
+            <div className="settings-helper-card wide"><Loader2 className="me-2" size={18} /> Loading patch detail...</div>
           ) : (
             <>
-              <section className="policy-card">
-                <div className="patch-detail-title-row">
-                  <div className="patch-pill-row">
+              <section className="policy-card wide p-3">
+                <div className="policy-top">
+                  <div>
+                    <h4>Patch Overview</h4>
+                    <p>{patch.Description || 'No description available.'}</p>
+                  </div>
+                  <div className="content-actions">
                     <span className={`user-pill ${getSeverityPillClass(patch.MsrcSeverity)}`}>{patch.MsrcSeverity || 'Unspecified'}</span>
                     <span className={`user-pill ${getStatusPillClass(status)}`}>{status}</span>
+                    {canInstall && (
+                      <button className="primary-btn" type="button" onClick={() => onInstall(row)}>
+                        <Play size={15} /> Install
+                      </button>
+                    )}
                   </div>
-                  {canInstall && (
-                    <button className="primary-btn" type="button" onClick={() => onInstall(row)}>
-                      <Play size={15} /> Install Missing Patch
-                    </button>
-                  )}
                 </div>
-                <p className="patch-description">{patch.Description || 'No description returned from patch catalog.'}</p>
               </section>
 
-              <section className="policy-card">
-                <h3>Patch metadata</h3>
+              <section className="policy-card p-3">
+                <h4>Patch metadata</h4>
                 <InfoGrid rows={[
-                  ['UpdateID', patch.UpdateID || row.UpdateID],
-                  ['Revision', patch.RevisionNumber || row.RevisionNumber],
-                  ['Release Date', formatDateOnly(patch.ReleaseDate)],
-                  ['File Count', formatNumber(patch.FileCount)],
-                  ['Total Size', formatFileSize(patch.TotalFileSize)],
-                  ['Reboot Required', patch.RebootRequired ? 'Yes' : 'No'],
+                  ['UpdateID:', patch.UpdateID || row.UpdateID],
+                  ['Revision:', patch.RevisionNumber || row.RevisionNumber],
+                  ['Release Date:', formatDateOnly(patch.ReleaseDate)],
+                  ['File Count:', formatNumber(patch.FileCount)],
+                  ['Total Size:', formatFileSize(patch.TotalFileSize)],
+                  ['Reboot Required:', patch.RebootRequired ? 'Yes' : 'No'],
                 ]} />
               </section>
 
-              <section className="policy-card">
-                <h3>Device status</h3>
+              <section className="policy-card p-3">
+                <h4>Device status</h4>
                 <InfoGrid rows={[
-                  ['Device', row.DeviceName || row.ComputerName || row.Object_Client_Name || '-'],
-                  ['Department', row.Department || row.Object_Full_Name || '-'],
-                  ['Last Scan', formatDateTime(row.LastScanTime)],
-                  ['Last Install', formatDateTime(row.LastInstallTime)],
-                  ['Applicable', row.IsApplicable ? 'Yes' : 'No'],
-                  ['Downloaded', row.IsDownloaded ? 'Yes' : 'No'],
+                  ['Device:', row.DeviceName || row.ComputerName || row.Object_Client_Name || '-'],
+                  ['Department:', row.Department || row.Object_Full_Name || '-'],
+                  ['Last Scan:', formatDateTime(row.LastScanTime)],
+                  ['Last Install:', formatDateTime(row.LastInstallTime)],
+                  ['Applicable:', row.IsApplicable ? 'Yes' : 'No'],
+                  ['Downloaded:', row.IsDownloaded ? 'Yes' : 'No'],
                 ]} />
               </section>
 
-              <section className="policy-card">
-                <h3>Products & classifications</h3>
+              <section className="policy-card p-3">
+                <h4>Products & classifications</h4>
                 <TagList values={[...products, ...classifications]} emptyText="No product/category data returned." />
               </section>
 
-              <section className="policy-card">
-                <h3>Security references</h3>
+              <section className="policy-card p-3">
+                <h4>Security references</h4>
                 <TagList values={[...(patch.CVEIDs || []), ...(patch.SecurityBulletinIDs || [])]} emptyText="No CVE/security bulletin data returned." />
               </section>
 
-              <section className="policy-card">
-                <h3>Online source files</h3>
-                <div className="patch-file-list">
+              <section className="policy-card wide p-3">
+                <h4>Online source files</h4>
+                <div className="pricing-grid">
                   {(detail?.files || []).length ? detail?.files.map((file) => (
-                    <div key={`${file.UpdateID}-${file.RevisionNumber}-${file.FileName}`}>
-                      <FileDown size={16} />
-                      <span>
-                        <strong>{file.FileName || 'Unnamed file'}</strong>
-                        <small>{file.ShortLanguage || 'neutral'} - {formatFileSize(file.FileSize)}</small>
-                      </span>
-                      {file.DownloadUrl && <a href={file.DownloadUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /></a>}
+                    <div className="settings-helper-card" key={`${file.UpdateID}-${file.RevisionNumber}-${file.FileName}`}>
+                      <strong>{file.FileName || 'Unnamed file'}</strong>
+                      <span>{file.ShortLanguage || 'neutral'} - {formatFileSize(file.FileSize)}</span>
+                      {file.DownloadUrl && <a className="soft-btn mt-2" href={file.DownloadUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Open</a>}
                     </div>
-                  )) : <p>No file list returned. Check TS_UPDATE_ONLINE_FILES for this UpdateID/RevisionNumber.</p>}
+                  )) : <p>No file list returned.</p>}
                 </div>
               </section>
 
-              <section className="policy-card">
-                <h3>Links</h3>
-                <div className="patch-link-list">
+              <section className="policy-card wide p-3">
+                <h4>Links</h4>
+                <div className="pricing-grid">
                   {patch.SupportUrl && <ExternalRow label="Support URL" url={patch.SupportUrl} />}
                   {(patch.KBArticleUrls || []).map((url) => <ExternalRow key={url} label="KB Article" url={url} />)}
                   {!patch.SupportUrl && !(patch.KBArticleUrls || []).length && <p>No support links returned.</p>}
@@ -1081,21 +992,18 @@ function ConfirmModal({ state, scope, loading, onCancel, onConfirm }: { state: N
     : scope.label;
 
   return (
-    <div className="settings-confirm-backdrop open">
-      <section className="settings-confirm-modal is-info">
-        <button className="modal-close" type="button" onClick={onCancel} aria-label="Close"><X size={17} /></button>
-        <div className="pricing-confirm-icon">{isInstall ? <Play size={28} /> : <RefreshCw size={28} />}</div>
-        <span className="eyebrow">Patch Job</span>
-        <h2>{isInstall ? 'Create Install Patch Online job?' : 'Create Scan / Rescan Patches job?'}</h2>
-        <p>{isInstall ? 'The backend will create Job_Type 10700, Job_Command 1640 and selectedUpdates for the agent.' : 'The backend will create Job_Type 10700, Job_Command 1630 for the selected scope.'}</p>
-        <div className="settings-helper-card">
-          <strong>Target:</strong> {target}
-          {isInstall ? <><br /><strong>Patch:</strong> {getKbText(state.row)} - {state.row.Title}</> : <><br /><strong>Scope:</strong> {scope.scope === 'all' ? 'Whole company' : scope.scope === 'relation' ? 'Organization unit' : 'Device'}</>}
+    <div className="user-modal-backdrop open">
+      <section className="settings-confirm-modal">
+        <h3>{isInstall ? 'Install selected patch?' : 'Create patch scan job?'}</h3>
+        <p>{isInstall ? 'This will create an install action for the selected endpoint.' : 'This will create a scan job for the selected scope.'}</p>
+        <div className="settings-helper-card my-3">
+          <strong>Target: {target}</strong>
+          <span>{isInstall ? `${getKbText(state.row)} - ${state.row.Title}` : scope.scope === 'all' ? 'Whole company' : scope.scope === 'relation' ? 'Organization unit' : 'Device'}</span>
         </div>
         <div className="settings-confirm-actions">
           <button className="soft-btn" type="button" onClick={onCancel} disabled={loading}>Cancel</button>
           <button className="primary-btn" type="button" onClick={onConfirm} disabled={loading}>
-            {loading && <Loader2 className="patch-spin" size={15} />}
+            {loading && <Loader2 className="me-1" size={15} />}
             {isInstall ? 'Install Patch' : 'Create Scan Job'}
           </button>
         </div>
@@ -1106,39 +1014,37 @@ function ConfirmModal({ state, scope, loading, onCancel, onConfirm }: { state: N
 
 function OfflinePlaceholder() {
   return (
-    <div className="settings-helper-card">
-      <div className="settings-helper-card patch-offline-state">
-        <Server size={42} />
-        <div>
-          <h3>Offline patching is separated from online flow</h3>
-          <p>This UI keeps offline patching isolated so online scan/install does not mix with legacy package-transfer flow.</p>
-        </div>
-      </div>
+    <div className="settings-helper-card text-center py-4">
+      <strong>Offline patching is separated</strong>
+      <span>Use online patching for scan and install actions from this workspace.</span>
     </div>
   );
 }
 
 function PatchToast({ toast, onClose }: { toast: NonNullable<ToastState>; onClose: () => void }) {
   const title = toast.type === 'success' ? 'Success' : toast.type === 'error' ? 'Error' : 'Info';
+  const toastClass = toast.type === 'success' ? 'settings-toast-success' : toast.type === 'error' ? 'settings-toast-error' : 'settings-toast-info';
   return (
-    <div className={`settings-toast settings-toast-${toast.type}`}>
-      <i>{toast.type === 'success' ? '✓' : toast.type === 'error' ? '!' : 'i'}</i>
-      <div>
-        <strong>{title}</strong>
-        <span>{toast.message}</span>
+    <div className="settings-toast-layer">
+      <div className={cx('settings-toast', toastClass)}>
+        <span className="settings-toast-icon">{toast.type === 'success' ? '✓' : toast.type === 'error' ? '!' : 'i'}</span>
+        <div>
+          <strong>{title}</strong>
+          <span>{toast.message}</span>
+        </div>
+        <button className="settings-toast-close" type="button" onClick={onClose} aria-label="Close toast"><X size={15} /></button>
       </div>
-      <button type="button" onClick={onClose} aria-label="Close toast"><X size={15} /></button>
     </div>
   );
 }
 
 function InfoGrid({ rows }: { rows: Array<[string, ReactNode]> }) {
   return (
-    <div className="form-grid">
+    <div className="pricing-grid mt-3">
       {rows.map(([label, value]) => (
-        <div key={label}>
-          <span>{label}</span>
-          <strong>{value}</strong>
+        <div className="settings-helper-card" key={label}>
+          <strong>{label}</strong>
+          <span>{value}</span>
         </div>
       ))}
     </div>
@@ -1147,22 +1053,20 @@ function InfoGrid({ rows }: { rows: Array<[string, ReactNode]> }) {
 
 function TagList({ values, emptyText }: { values: string[]; emptyText: string }) {
   const cleaned = values.filter(Boolean);
-  if (!cleaned.length) return <p className="patch-description">{emptyText}</p>;
+  if (!cleaned.length) return <p>{emptyText}</p>;
   return (
-    <div className="role-chip-stack">
-      {cleaned.map((value) => <span className="user-pill is-blue" key={value}>{value}</span>)}
+    <div className="role-chip-stack mt-2">
+      {cleaned.map((value) => <span className="user-pill info" key={value}>{value}</span>)}
     </div>
   );
 }
 
 function ExternalRow({ label, url }: { label: string; url: string }) {
   return (
-    <a className="settings-helper-card" href={url} target="_blank" rel="noreferrer">
-      <span>
-        <strong>{label}</strong>
-        <small>{url}</small>
-      </span>
-      <ExternalLink size={15} />
+    <a className="settings-helper-card text-decoration-none" href={url} target="_blank" rel="noreferrer">
+      <strong>{label}</strong>
+      <span>{url}</span>
+      <small><ExternalLink size={15} /> Open link</small>
     </a>
   );
 }

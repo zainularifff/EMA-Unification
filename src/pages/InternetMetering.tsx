@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   CalendarDays,
@@ -427,24 +427,22 @@ function CompactPagination({ currentPage, totalPages, onPageChange, label, class
   };
 
   return (
-    <div className={clsx('uam-pagination global-style im-compact-pagination', className)}>
-      <div className="uam-page-summary im-page-summary">
-        <span>Page {formatNumber(safeCurrentPage)} of {formatNumber(safeTotalPages)}</span>
-      </div>
-
-      <div className="uam-pagination-controls global-style im-icon-pager-nav" aria-label={label}>
-        <button type="button" onClick={() => goToPage(1)} disabled={safeCurrentPage <= 1} aria-label="First page">
-          <ChevronsLeft className="h-3.5 w-3.5" />
+    <div className={clsx('uam-pagination global-style', className)}>
+      <div className="uam-page-summary">Page {formatNumber(safeCurrentPage)} of {formatNumber(safeTotalPages)}</div>
+      <div className="uam-page-status">{label}</div>
+      <div className="uam-pagination-controls global-style" aria-label={label}>
+        <button type="button" className="uam-page-icon" onClick={() => goToPage(1)} disabled={safeCurrentPage <= 1} aria-label="First page">
+          <ChevronsLeft size={14} />
         </button>
-        <button type="button" onClick={() => goToPage(safeCurrentPage - 1)} disabled={safeCurrentPage <= 1} aria-label="Previous page">
-          <ChevronLeft className="h-3.5 w-3.5" />
+        <button type="button" className="uam-page-icon" onClick={() => goToPage(safeCurrentPage - 1)} disabled={safeCurrentPage <= 1} aria-label="Previous page">
+          <ChevronLeft size={14} />
         </button>
-        <b>{formatNumber(safeCurrentPage)}</b>
-        <button type="button" onClick={() => goToPage(safeCurrentPage + 1)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Next page">
-          <ChevronRight className="h-3.5 w-3.5" />
+        <span className="uam-page-current">{formatNumber(safeCurrentPage)}</span>
+        <button type="button" className="uam-page-icon" onClick={() => goToPage(safeCurrentPage + 1)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Next page">
+          <ChevronRight size={14} />
         </button>
-        <button type="button" onClick={() => goToPage(safeTotalPages)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Last page">
-          <ChevronsRight className="h-3.5 w-3.5" />
+        <button type="button" className="uam-page-icon" onClick={() => goToPage(safeTotalPages)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Last page">
+          <ChevronsRight size={14} />
         </button>
       </div>
     </div>
@@ -462,7 +460,6 @@ function ImCustomSelect({
   options,
   onChange,
   className,
-  icon,
   ariaLabel,
 }: {
   value: string;
@@ -472,64 +469,17 @@ function ImCustomSelect({
   icon?: ReactNode;
   ariaLabel: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const selected = options.find((option) => option.value === value) || options[0];
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className={clsx('im-select-custom', className, open && 'is-open')}>
-      <button
-        type="button"
-        className="im-select-trigger"
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {icon && <span className="im-select-leading">{icon}</span>}
-        <span className="im-select-value">{selected?.label || '-'}</span>
-        <ChevronDown className="im-select-arrow" />
-      </button>
-      {open && (
-        <div className="im-select-menu" role="listbox">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="option"
-              aria-selected={option.value === value}
-              className={clsx('im-select-option', option.value === value && 'is-selected')}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-            >
-              <span>{option.label}</span>
-              {option.value === value && <i>✓</i>}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <select
+      className={clsx('setting-select', className)}
+      value={value}
+      aria-label={ariaLabel}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>{option.label}</option>
+      ))}
+    </select>
   );
 }
 
@@ -538,11 +488,8 @@ function TreeNode({
   selectedId,
   onSelect,
   onLoadChildren,
-  onOpenNodeMenu,
   level = 0,
   defaultOpen = false,
-  showCounts = false,
-  showActions = false,
   rootDisplayLabel,
 }: {
   node: TreeNodeType;
@@ -558,72 +505,52 @@ function TreeNode({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const canExpand = node.type === 'all' || node.type === 'folder' || node.type === 'url-folder' || Boolean(node.children?.length);
-  const isRootNode = node.type === 'all' || node.id === 'url-sidebar-root';
-  const selected = selectedId === node.id && !isRootNode;
+  const selected = selectedId === node.id;
   const displayLabel = rootDisplayLabel && level === 0 ? rootDisplayLabel : node.label;
   const Icon = node.type === 'device' ? Laptop : node.type === 'url' ? Globe : open ? FolderOpen : Folder;
-  const count = treeDisplayCount(node);
-  const showCount = showCounts && node.type !== 'url-folder' && node.type !== 'url' && count > 0;
-  const showNodeActions = showActions && Boolean(onOpenNodeMenu) && (node.type === 'all' || node.type === 'folder' || node.type === 'device');
+  const indentClass = level > 0 ? `ms-${Math.min(level + 2, 4)}` : '';
+  const subtitle = node.type === 'device'
+    ? (node.objectDeviceID || 'Endpoint device')
+    : node.type === 'url'
+      ? (node.restrict ? 'Restricted URL' : 'Managed URL')
+      : open
+        ? 'Click to collapse scope'
+        : 'Click to expand scope';
 
-  const toggleOpen = async (event: MouseEvent) => {
-    event.stopPropagation();
+  const handleSelect = async () => {
+    onSelect(node);
+
     if (!canExpand) return;
     if (!node.childrenLoaded && onLoadChildren) await onLoadChildren(node);
     setOpen((value) => !value);
   };
 
   return (
-    <div className="ema-sidebar-tree-branch">
+    <div className={clsx('d-grid gap-2', indentClass)}>
       <button
         type="button"
-        onClick={() => onSelect(node)}
-        onContextMenu={(event) => {
-          if (!showNodeActions || !onOpenNodeMenu) return;
-          event.preventDefault();
-          onOpenNodeMenu(node, { x: event.clientX, y: event.clientY });
-        }}
-        className={clsx('ema-sidebar-tree-node', selected && 'is-selected')}
-        style={{ paddingLeft: 12 + level * 16 }}
+        className={clsx('setting-btn', selected && 'active')}
+        onClick={handleSelect}
+        title={node.label}
       >
-        <span className="ema-sidebar-tree-toggle" onClick={toggleOpen}>
-          {canExpand ? (open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />) : <span className="ema-sidebar-tree-toggle" />}
-        </span>
-        <span className="ema-sidebar-tree-icon"><Icon className="h-3.5 w-3.5" /></span>
-        <span className="ema-sidebar-tree-label">{displayLabel}</span>
-        <span className="ema-sidebar-tree-count">{showCount ? count : ''}</span>
-        <span
-          className="ema-sidebar-tree-menu-btn"
-          role={showNodeActions ? 'button' : undefined}
-          tabIndex={showNodeActions ? 0 : undefined}
-          aria-label={showNodeActions ? `Open actions for ${node.label}` : undefined}
-          onMouseDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (showNodeActions && onOpenNodeMenu) {
-              const rect = event.currentTarget.getBoundingClientRect();
-              onOpenNodeMenu(node, { x: Math.min(rect.right + 8, window.innerWidth - 250), y: rect.top });
-            }
-          }}
-          onKeyDown={(event) => {
-            if (!showNodeActions || !onOpenNodeMenu) return;
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              event.stopPropagation();
-              const rect = event.currentTarget.getBoundingClientRect();
-              onOpenNodeMenu(node, { x: rect.left, y: rect.bottom });
-            }
-          }}
-        >
-          {showNodeActions ? <MoreVertical className="h-3.5 w-3.5" /> : null}
+        <span className="setting-icon"><Icon size={16} /></span>
+        <span>
+          <strong>{displayLabel}</strong>
+          <small>{subtitle}</small>
         </span>
       </button>
+
       {open && Boolean(node.children?.length) && (
-        <div className="ema-sidebar-tree-children">
+        <div className="d-grid gap-2 ms-3">
           {node.children?.map((child) => (
-            <TreeNode key={child.id} node={child} selectedId={selectedId} onSelect={onSelect} onLoadChildren={onLoadChildren} onOpenNodeMenu={onOpenNodeMenu} level={level + 1} showCounts={showCounts} showActions={showActions} />
+            <TreeNode
+              key={child.id}
+              node={child}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              onLoadChildren={onLoadChildren}
+              level={level + 1}
+            />
           ))}
         </div>
       )}
@@ -643,41 +570,38 @@ function DetailModal({ row, onClose }: { row: InternetUsageRow; onClose: () => v
 
   return (
     <div className="user-modal-backdrop open">
-      <div className="user-modal advanced">
+      <section className="user-modal advanced">
         <div className="user-modal-head">
           <div>
-            <h2 className="text-lg font-black text-slate-900">Internet Usage Detail</h2>
-            <p className="text-xs font-bold text-slate-500">{row.domainName}</p>
+            <span className="section-tag">Internet Metering</span>
+            <h3>Internet Usage Detail</h3>
+            <p>{row.domainName}</p>
           </div>
-          <button type="button" onClick={onClose} className="modal-close"><X className="h-5 w-5" /></button>
+          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={18} /></button>
         </div>
-        <div className="form-grid">
-          {fields.map(([label, value]) => (
-            <div key={label} className="settings-helper-card">
-              <div className="form-field-label">{label}</div>
-              <div className="user-pill">{value}</div>
-            </div>
-          ))}
+        <div className="user-modal-body content-body">
+          <div className="form-grid wide">
+            {fields.map(([label, value]) => (
+              <label key={label} className="form-field">
+                <span>{label}:</span>
+                <strong>{value}</strong>
+              </label>
+            ))}
+          </div>
+          <label className="form-field wide">
+            <span>Full Record:</span>
+            <pre className="settings-helper-card mb-0 text-start overflow-auto">{JSON.stringify(row.raw ?? row, null, 2)}</pre>
+          </label>
         </div>
-        <div className="settings-helper-card wide">
-          <div className="form-field-label">Full Record</div>
-          <pre className="setting-textarea">{JSON.stringify(row.raw ?? row, null, 2)}</pre>
+        <div className="user-modal-foot">
+          <button type="button" className="soft-btn" onClick={onClose}>Close</button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
-
 export default function InternetMetering() {
-  useEffect(() => {
-    document.documentElement.classList.add('ema-settings-page-active', 'ema-layout-lock');
-    document.body.classList.add('ema-settings-page-active', 'ema-layout-lock');
-    return () => {
-      document.documentElement.classList.remove('ema-settings-page-active', 'ema-layout-lock');
-      document.body.classList.remove('ema-settings-page-active', 'ema-layout-lock');
-    };
-  }, []);
   const [orgRoot, setOrgRoot] = useState<TreeNodeType>({ id: 'all-devices', label: 'All Devices', type: 'all', children: [], childrenLoaded: false });
   const [selectedScope, setSelectedScope] = useState<TreeNodeType>({ id: 'all-devices', label: 'All Devices', type: 'all', children: [], childrenLoaded: false });
   const [urlRoot, setUrlRoot] = useState<TreeNodeType>({ id: 'url-root', label: 'Domain Rules', type: 'url-folder', children: [], childrenLoaded: true });
@@ -1252,361 +1176,377 @@ export default function InternetMetering() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root" data-section="internet-metering">
+    <main className="settings-module-root ema-settings-pro ema-module-root internet-metering-module container-fluid p-3 p-xl-4">
       {toast && (
-        <div className="settings-toast settings-toast-success">
-          <i>✓</i>
-          <div>
-            <strong>Success</strong>
-            <span>{toast}</span>
+        <div className="settings-toast-layer">
+          <div className="settings-toast settings-toast-success">
+            <div className="settings-toast-icon">✓</div>
+            <div>
+              <strong>Success</strong>
+              <span>{toast}</span>
+            </div>
+            <button type="button" className="settings-toast-close" onClick={() => setToast('')} aria-label="Dismiss toast"><X size={14} /></button>
           </div>
-          <button type="button" onClick={() => setToast('')} aria-label="Dismiss toast"><X className="h-4 w-4" /></button>
         </div>
       )}
-      <div className="settings-layout">
+
+      <div className="settings-layout d-grid gap-3">
         <aside className="settings-menu ema-panel-surface">
           <div className="panel-head">
             <span>INTERNET METERING</span>
-            <strong>Internet Metering</strong>
-            <small>Web usage, device scope and URL controls.</small>
+            <strong>Metering Control</strong>
+            <small>Device scope, usage result and URL rules</small>
           </div>
 
-          <nav className="settings-menu-list" aria-label="Internet metering navigation">
-            <button type="button" className={clsx('setting-btn', sidebarTab === 'organization' && 'active')} onClick={() => setSidebarTab('organization')}>Scope</button>
-            <button type="button" className={clsx('setting-btn', sidebarTab === 'statistic' && 'active')} onClick={() => setSidebarTab('statistic')}>Usage</button>
-            <button type="button" className={clsx('setting-btn', sidebarTab === 'filters' && 'active')} onClick={() => setSidebarTab('filters')}>Rules</button>
+          <nav
+            className="d-grid gap-2 p-2 border-bottom"
+            style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}
+            role="tablist"
+            aria-label="Internet metering navigation"
+          >
+            <button
+              type="button"
+              className={clsx(sidebarTab === 'organization' ? 'primary-btn' : 'soft-btn', 'w-100 flex-column gap-1 px-2 py-2')}
+              title="Scope - Departments and devices"
+              onClick={() => setSidebarTab('organization')}
+            >
+              <FolderOpen size={15} />
+              <span>Scope</span>
+            </button>
+            <button
+              type="button"
+              className={clsx(sidebarTab === 'statistic' ? 'primary-btn' : 'soft-btn', 'w-100 flex-column gap-1 px-2 py-2')}
+              title="Usage - Summary and results"
+              onClick={() => setSidebarTab('statistic')}
+            >
+              <FileText size={15} />
+              <span>Usage</span>
+            </button>
+            <button
+              type="button"
+              className={clsx(sidebarTab === 'filters' ? 'primary-btn' : 'soft-btn', 'w-100 flex-column gap-1 px-2 py-2')}
+              title="Rules - Managed and restricted URLs"
+              onClick={() => setSidebarTab('filters')}
+            >
+              <Globe size={15} />
+              <span>Rules</span>
+            </button>
           </nav>
 
-          <div className="section-search ema-sidebar-field">
-            <Search className="h-3.5 w-3.5" />
-            <input
-              value={sidebarSearch}
-              onChange={(event) => setSidebarSearch(event.target.value)}
-              placeholder={sidebarTab === 'filters' ? 'Search rules...' : sidebarTab === 'statistic' ? 'Search usage...' : 'Search device / scope...'}
-            />
-            {sidebarSearch && (
-              <button type="button" onClick={() => setSidebarSearch('')} aria-label="Clear sidebar search">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+          <div className="p-3 pb-2">
+            <label className="section-search">
+              <Search size={15} />
+              <input
+                value={sidebarSearch}
+                onChange={(event) => setSidebarSearch(event.target.value)}
+                placeholder={sidebarTab === 'filters' ? 'Search rules...' : sidebarTab === 'statistic' ? 'Search usage...' : 'Search device / scope...'}
+              />
+            </label>
           </div>
 
-          <div className="ema-sidebar-content"><div className="ema-sidebar-subpanel"><div className="ema-sidebar-tree">
+          <div className="settings-menu-list">
             {sidebarTab === 'organization' && (
-              <div className="settings-helper-card">
-                <div className="ema-sidebar-section-title"><FolderOpen className="h-3.5 w-3.5" /> Device Scope {treeLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}</div>
+              <>
                 <TreeNode
                   node={sidebarOrgTree}
                   selectedId={selectedScope.id}
                   onSelect={handleSelectScopeNode}
                   onLoadChildren={loadOrgChildren}
-                  onOpenNodeMenu={(node, position) => setScopeMenu({ node, ...position })}
                   rootDisplayLabel="All Devices"
                   defaultOpen
                 />
+                {treeLoading && <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading device scope...</div>}
                 {sidebarSearch && !sidebarOrgTree.children?.length && sidebarOrgTree.id === orgRoot.id && (
                   <div className="settings-helper-card">No matching scope.</div>
                 )}
-              </div>
+              </>
             )}
 
             {sidebarTab === 'statistic' && (
-              <div className="settings-helper-card">
-                <div className="ema-sidebar-section-title"><FileText className="h-3.5 w-3.5" /> Usage Summary</div>
-                <div className="im-stat-list">
-                  {sidebarStats.map((item) => (
-                    <button type="button" key={item.id} className="setting-btn" onClick={() => openResultsLog()}>
-                      <span>{item.label}</span>
-                      <strong>{typeof item.value === 'number' ? formatNumber(item.value) : item.value}</strong>
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <>
+                {sidebarStats.map((item) => (
+                  <button type="button" key={item.id} className="setting-btn" onClick={() => openResultsLog()}>
+                    <span className="setting-icon"><FileText size={14} /></span>
+                    <span><strong>{typeof item.value === 'number' ? formatNumber(item.value) : item.value}</strong><small>{item.label}</small></span>
+                  </button>
+                ))}
+              </>
             )}
 
             {sidebarTab === 'filters' && (
-              <div className="settings-helper-card">
-                <div className="ema-sidebar-section-title"><Globe className="h-3.5 w-3.5" /> URL Rules {urlLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}</div>
+              <>
                 <TreeNode node={sidebarDomainTree} selectedId={sidebarSelectedUrlId} onSelect={handleSelectUrlNode} rootDisplayLabel="All Domains" defaultOpen />
+                {urlLoading && <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading URL rules...</div>}
                 {sidebarSearch && !sidebarDomainTree.children?.length && (
                   <div className="settings-helper-card">No matching domain filter.</div>
                 )}
-              </div>
+              </>
             )}
-          </div></div></div>
+          </div>
         </aside>
 
-        <section className="settings-content">
-          <section className="settings-hero ema-panel-surface">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400"><Globe className="h-3.5 w-3.5" /> {usagePanelUrl ? 'Usage Results' : 'URL Management'}</div>
-                <h1 className="mt-1 text-xl font-black tracking-tight text-slate-950">{usagePanelUrl ? 'Metering Results' : 'Internet Metering'}</h1>
-                <p className="mt-1 text-xs font-semibold text-slate-500">Scope: <span className="text-slate-800">{selectedScopeLabel}</span> · Domain: <span className="text-slate-800">{selectedUrlLabel}</span></p>
+        <section className="settings-content d-grid gap-3">
+          <div className="settings-hero ema-panel-surface">
+            <div>
+              <span className="eyebrow">URL MANAGEMENT</span>
+              <h2>{usagePanelUrl ? 'Metering Results' : 'Internet Metering'}</h2>
+              <p>Scope: {selectedScopeLabel} · Domain: {selectedUrlLabel}</p>
+            </div>
+            <div className="settings-score users-hero-score">
+              <div className="score-box">
+                <span>Records</span>
+                <strong>{formatNumber(stats.totalRecords || totalRecords || filteredRows.length)}</strong>
+                <small>Usage rows</small>
               </div>
-
-              <div className="settings-score users-hero-score">
-                <div className="score-box"><span>Total Records</span><strong>{formatNumber(stats.totalRecords)}</strong><small>metering rows</small></div>
-                <div className="score-box"><span>Domains</span><strong>{formatNumber(stats.totalDomains)}</strong><small>unique domains</small></div>
-                <div className="score-box"><span>Used Time</span><strong>{formatDuration(stats.totalUsageSeconds)}</strong><small>browsing duration</small></div>
-                <div className="score-box"><span>Access Count</span><strong>{formatNumber(stats.totalCounts)}</strong><small>total hits</small></div>
+              <div className="score-box">
+                <span>Domains</span>
+                <strong>{formatNumber(stats.totalDomains || visibleUrlRows.length)}</strong>
+                <small>Monitored rules</small>
               </div>
-
-              <div className="content-actions">
-                <button type="button" onClick={() => setPendingMeteringAction({ action: 'start', node: selectedScope })} disabled={meteringBusy || selectedScopeRunning} className="primary-btn im-action-btn">
-                  {meteringBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />} Start Metering
-                </button>
-                <button type="button" onClick={() => setPendingMeteringAction({ action: 'stop', node: selectedScope })} disabled={meteringBusy || !selectedScopeRunning} className="danger-btn im-action-btn">
-                  {meteringBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} Stop Metering
-                </button>
-                <button type="button" onClick={collectResult} disabled={collecting || meteringBusy} className="soft-btn im-action-btn">
-                  {collecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Collect Result
-                </button>
-                <button type="button" onClick={() => usagePanelUrl ? setUsagePanelUrl(null) : openResultsLog()} className="soft-btn im-action-btn"><FileText className="h-4 w-4" /> {usagePanelUrl ? 'URL List' : 'Results'}</button>
-                <button type="button" onClick={loadUrlTree} disabled={urlLoading} className="soft-btn im-action-btn"><RefreshCw className={clsx('h-4 w-4', urlLoading && 'animate-spin')} /> Refresh</button>
-                <button type="button" onClick={exportCsv} disabled={filteredRows.length === 0} className="soft-btn im-action-btn"><Download className="h-4 w-4" /> Export</button>
+              <div className="score-box">
+                <span>Usage Time</span>
+                <strong>{formatDuration(stats.totalUsageSeconds)}</strong>
+                <small>Total duration</small>
+              </div>
+              <div className="score-box">
+                <span>Access Count</span>
+                <strong>{formatNumber(stats.totalCounts)}</strong>
+                <small>Total hits</small>
               </div>
             </div>
-          </section>
+          </div>
 
-          <section className="content-shell ema-panel-surface content-panel clean">
-          <section className="content-toolbar im-filter-bar">
-            <div className="im-filter-layout">
-              <label className="section-search im-search-field">
-                <Search className="h-4 w-4" />
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search domain, device/user, Rule ID or date..." className="im-search-input" />
+          <div className="content-shell ema-panel-surface">
+            <div className="content-head d-flex flex-wrap align-items-start justify-content-between gap-3 p-3 pb-2">
+              <div>
+                <h3>{usagePanelUrl ? 'Metering Results' : 'URL List'}</h3>
+                <p>{usagePanelUrl ? `${selectedScopeLabel} · ${usagePanelUrl.label}` : `${urlTotalRecords > 0 ? formatNumber(urlTotalRecords) : formatNumber(visibleUrlRows.length)} rules available`}</p>
+              </div>
+              <div className="content-actions">
+                <button type="button" onClick={() => setPendingMeteringAction({ action: 'start', node: selectedScope })} disabled={meteringBusy || selectedScopeRunning} className="primary-btn">
+                  {meteringBusy ? <Loader2 size={14} className="animate-spin" /> : <Wifi size={14} />} Start
+                </button>
+                <button type="button" onClick={() => setPendingMeteringAction({ action: 'stop', node: selectedScope })} disabled={meteringBusy || !selectedScopeRunning} className="danger-btn">
+                  {meteringBusy ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Stop
+                </button>
+                <button type="button" onClick={collectResult} disabled={collecting || meteringBusy} className="soft-btn">
+                  {collecting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Collect
+                </button>
+                <button type="button" onClick={() => usagePanelUrl ? setUsagePanelUrl(null) : openResultsLog()} className="soft-btn">
+                  <FileText size={14} /> {usagePanelUrl ? 'URL List' : 'Results'}
+                </button>
+                <button type="button" onClick={usagePanelUrl ? () => loadMetering({ force: true }) : loadUrlTree} disabled={usagePanelUrl ? loading : urlLoading} className="soft-btn">
+                  <RefreshCw size={14} /> Refresh
+                </button>
+                <button type="button" onClick={exportCsv} disabled={filteredRows.length === 0} className="soft-btn"><Download size={14} /> Export</button>
+              </div>
+            </div>
+
+            <div className="content-toolbar users-toolbar">
+              <label className="section-search">
+                <Search size={15} />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search domain, device/user, Rule ID or date..." />
               </label>
               <div className="content-actions">
-                <div className="section-search im-date-range"><CalendarDays className="h-4 w-4 text-slate-400" /><input type="date" value={fromDate} onChange={(event) => { setPage(1); setFromDate(event.target.value); }} className="text-xs font-bold outline-none" /><span className="text-slate-300">-</span><input type="date" value={toDate} onChange={(event) => { setPage(1); setToDate(event.target.value); }} className="text-xs font-bold outline-none" /></div>
-
-              </div>
-            </div>
-          </section>
-
-          <div className="content-body">
-            {error && (
-              <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
-                <div className="settings-inline-alert"><AlertCircle className="h-4 w-4" />{error}</div>
-                <button type="button" onClick={() => setError('')}><X className="h-4 w-4" /></button>
-              </div>
-            )}
-
-            {usagePanelUrl ? (
-            <section className="content-panel clean im-results-inline-card">
-              <div className="content-head">
-                <div className="im-results-title">
-                  <p>Internet Metering</p>
-                  <h2>Metering Results</h2>
-                  <span>{selectedScopeLabel} · {usagePanelUrl.label}</span>
-                </div>
-                <div className="content-actions">
-                  <button type="button" onClick={() => loadMetering({ force: true })} disabled={loading} className="soft-btn im-action-btn"><RefreshCw className={clsx('h-4 w-4', loading && 'animate-spin')} /> Refresh</button>
-                  <button type="button" onClick={exportCsv} disabled={filteredRows.length === 0} className="soft-btn im-action-btn"><Download className="h-4 w-4" /> Export</button>
-                  <button type="button" onClick={() => { setUsagePanelUrl(null); setUsageRows([]); }} className="soft-btn im-action-btn"><Globe className="h-4 w-4" /> URL List</button>
-                </div>
-              </div>
-
-              <div className="content-toolbar im-results-filter">
-                <div className="im-results-filter-layout">
-                  <div className="section-search im-date-range"><CalendarDays className="h-4 w-4 text-slate-400" /><input type="date" value={fromDate} onChange={(event) => { setPage(1); setFromDate(event.target.value); }} /><span>-</span><input type="date" value={toDate} onChange={(event) => { setPage(1); setToDate(event.target.value); }} /></div>
+                <label className="section-search" title="Start date">
+                  <CalendarDays size={15} />
+                  <input type="date" value={fromDate} onChange={(event) => { setPage(1); setFromDate(event.target.value); }} />
+                </label>
+                <label className="section-search" title="End date">
+                  <CalendarDays size={15} />
+                  <input type="date" value={toDate} onChange={(event) => { setPage(1); setToDate(event.target.value); }} />
+                </label>
+                {usagePanelUrl ? (
                   <ImCustomSelect
                     value={String(limit)}
                     onChange={(value) => { setPage(1); setLimit(Number(value)); }}
                     options={[{ value: '50', label: '50 rows' }, { value: '100', label: '100 rows' }, { value: '250', label: '250 rows' }, { value: '500', label: '500 rows' }]}
-                    className="im-limit-select"
                     ariaLabel="Rows per page"
                   />
+                ) : (
+                  <ImCustomSelect
+                    value={String(restrictFilter)}
+                    onChange={(value) => { setRestrictFilter(Number(value)); setUrlPage(1); }}
+                    options={[{ value: '-1', label: 'All rules' }, { value: '0', label: 'Managed' }, { value: '1', label: 'Restricted' }]}
+                    ariaLabel="URL rule filter"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="content-body p-3 pt-2">
+              {error && (
+                <div className="settings-helper-card is-error d-flex align-items-start justify-content-between gap-3 mb-3">
+                  <span><AlertCircle size={14} className="me-2" />{error}</span>
+                  <button type="button" className="mini-btn icon-only" onClick={() => setError('')}><X size={13} /></button>
                 </div>
-              </div>
+              )}
 
-              <div className="pricing-table-card table-responsive im-results-table-wrap">
-                <table className="table table-hover align-middle mb-0">
-                  <thead className="im-table-head">
-                    <tr>
-                      <th className="px-5 py-3 im-number-th">NO</th>
-                      <th className="px-5 py-3">Domain</th>
-                      <th className="px-5 py-3">Device / User</th>
-                      <th className="px-5 py-3">Rule ID</th>
-                      <th className="px-5 py-3">Used Time</th>
-                      <th className="px-5 py-3">Access Count</th>
-                      <th className="px-5 py-3">Date</th>
-                      <th className="px-5 py-3 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {loading && (
-                      <tr><td colSpan={8} className="px-5 py-16 text-center text-sm font-bold text-slate-400"><Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin" />Loading</td></tr>
-                    )}
-                    {!loading && filteredRows.map((row, index) => (
-                      <tr key={`${row.id}-${row.domainName}-${row.device}-${row.date}`} className="hover:bg-blue-50/40">
-                        <td className="px-5 py-3 im-number-cell"><span className="row-index-pill im-row-number">{formatRowNumber((page - 1) * limit + index + 1)}</span></td>
-                        <td className="px-5 py-3 font-black text-slate-900">{row.domainName}</td>
-                        <td className="px-5 py-3 font-extrabold text-slate-800">{row.device || '-'}</td>
-                        <td className="px-5 py-3 font-mono font-bold text-slate-500">{row.urlMainIdn || '-'}</td>
-                        <td className="px-5 py-3 font-mono font-bold text-slate-700">{formatDuration(row.usedTime)}</td>
-                        <td className="px-5 py-3 font-black text-slate-900">{formatNumber(row.counts)}</td>
-                        <td className="px-5 py-3 font-bold text-slate-500">{row.date || '-'}</td>
-                        <td className="px-5 py-3 text-right"><button type="button" onClick={() => setDetailRow(row)} className="mini-btn"><Eye className="h-3.5 w-3.5" /> Detail</button></td>
-                      </tr>
-                    ))}
-                    {!loading && filteredRows.length === 0 && (
-                      <tr>
-                        <td colSpan={8}>
-                          <div className="settings-helper-card">
-                            <FileText className="h-7 w-7" />
-                            <strong>No metering records found</strong>
-                            <span>This table is now filtered by the selected sidebar scope. Use Start Metering or Collect Result, then Refresh after the job completes.</span>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {usagePanelUrl ? (
+                <>
+                  <div className="pricing-table-card table-responsive">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>No.</th>
+                          <th>Domain</th>
+                          <th>Device / User</th>
+                          <th>Rule ID</th>
+                          <th>Used Time</th>
+                          <th>Access Count</th>
+                          <th>Date</th>
+                          <th className="text-end">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loading && (
+                          <tr><td colSpan={8}><div className="settings-helper-card text-center py-4"><Loader2 size={18} className="me-2 animate-spin" /> Loading records...</div></td></tr>
+                        )}
+                        {!loading && filteredRows.map((row, index) => (
+                          <tr key={`${row.id}-${row.domainName}-${row.device}-${row.date}`}>
+                            <td><span className="row-index-pill">{formatRowNumber((page - 1) * limit + index + 1)}</span></td>
+                            <td><strong>{row.domainName}</strong></td>
+                            <td>{row.device || '-'}</td>
+                            <td>{row.urlMainIdn || '-'}</td>
+                            <td>{formatDuration(row.usedTime)}</td>
+                            <td>{formatNumber(row.counts)}</td>
+                            <td>{row.date || '-'}</td>
+                            <td className="text-end"><button type="button" onClick={() => setDetailRow(row)} className="mini-btn"><Eye size={13} /> Detail</button></td>
+                          </tr>
+                        ))}
+                        {!loading && filteredRows.length === 0 && (
+                          <tr><td colSpan={8}><div className="settings-helper-card text-center py-4"><strong>No metering records found</strong><span>Use Start Metering or Collect Result, then refresh after the job completes.</span></div></td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <CompactPagination currentPage={page} totalPages={resultsTotalPages} onPageChange={setPage} label="Metering results pagination" />
+                </>
+              ) : (
+                <>
+                  <div className="form-grid mb-3">
+                    <label className="form-field">
+                      <span>Rule Type:</span>
+                      <ImCustomSelect
+                        value={String(urlEntryType)}
+                        onChange={(value) => setUrlEntryType(Number(value) as 0 | 1)}
+                        options={[{ value: '0', label: 'Managed' }, { value: '1', label: 'Restricted' }]}
+                        ariaLabel="URL rule type"
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>URL / Domain:</span>
+                      <input value={newUrl} onChange={(event) => setNewUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveUrl(); }} placeholder="example.com" className="setting-input" />
+                    </label>
+                    <label className="form-field justify-content-end">
+                      <span>&nbsp;</span>
+                      <button type="button" onClick={saveUrl} disabled={urlLoading || !newUrl.trim()} className="primary-btn"><Plus size={14} /> Add URL</button>
+                    </label>
+                  </div>
 
-              <CompactPagination
-                currentPage={page}
-                totalPages={resultsTotalPages}
-                onPageChange={setPage}
-                label="Metering results pagination"
-                className="im-results-pagination"
-              />
-            </section>
-            ) : (
-            <section className="content-panel clean">
-              <div className="content-head">
-                <h2>URL List</h2>
-                <span>{urlTotalRecords > 0 ? `${formatNumber(urlTotalRecords)} rules` : `${formatNumber(visibleUrlRows.length)} loaded`}</span>
-              </div>
-
-              <div className="content-toolbar im-url-toolbar">
-                <ImCustomSelect
-                  value={String(urlEntryType)}
-                  onChange={(value) => setUrlEntryType(Number(value) as 0 | 1)}
-                  options={[{ value: '0', label: 'Managed' }, { value: '1', label: 'Restricted' }]}
-                  className="im-url-type-select"
-                  ariaLabel="URL rule type"
-                />
-                <input value={newUrl} onChange={(event) => setNewUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveUrl(); }} placeholder="example.com" className="setting-input im-url-input" />
-                <button type="button" onClick={saveUrl} disabled={urlLoading || !newUrl.trim()} className="primary-btn im-add-url-btn"><Plus className="h-4 w-4" /> Add</button>
-              </div>
-
-              <div className="pricing-table-card table-responsive im-url-table-wrap">
-                <table className="table table-hover align-middle mb-0">
-                  <thead className="im-table-head">
-                    <tr>
-                      <th className="px-5 py-3 im-number-th">NO</th>
-                      <th className="px-5 py-3">URL / Domain</th>
-                      <th className="px-5 py-3">Status</th>
-                      <th className="px-5 py-3 text-right">Rule ID</th>
-                      <th className="px-5 py-3 text-right"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="im-table-body">
-                    {pagedUrlRows.map((node, index) => (
-                      <tr key={node.id} onClick={() => { handleSelectUrlNode(node); openResultsLog(node); }} className={clsx('relative cursor-pointer hover:bg-blue-50/50', selectedUrl.id === node.id && 'bg-blue-50')}>
-                        <td className="px-5 py-3 im-number-cell"><span className="row-index-pill im-row-number">{formatRowNumber((urlPage - 1) * URL_RULE_PAGE_SIZE + index + 1)}</span></td>
-                        <td className="px-5 py-3 font-black text-slate-800">{node.label}</td>
-                        <td className="px-5 py-3">
-                          <span className={clsx('rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest', node.restrict === 1 ? 'bg-rose-50 text-rose-700' : 'bg-blue-50 text-blue-700')}>
-                            {node.restrict === 1 ? 'Restricted' : 'Managed'}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3 text-right font-mono font-bold text-slate-500">{node.urlMainIdn || '-'}</td>
-                        <td className="relative px-5 py-3 text-right" onClick={(event) => event.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              const rect = event.currentTarget.getBoundingClientRect();
-                              const menuWidth = 196;
-                              const menuHeight = 154;
-                              const x = Math.min(Math.max(12, rect.right - menuWidth), window.innerWidth - menuWidth - 12);
-                              const y = Math.min(Math.max(12, rect.bottom + 8), window.innerHeight - menuHeight - 12);
-                              setActionMenuId((value) => value?.node.id === node.id ? null : { node, x, y });
-                            }}
-                            className="mini-btn icon-only"
-                            aria-label="Open URL actions"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {pagedUrlRows.length === 0 && (
-                      <tr><td colSpan={5} className="px-5 py-10 text-center text-xs font-bold text-slate-400">No data</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <CompactPagination
-                currentPage={urlPage}
-                totalPages={urlTotalPages}
-                onPageChange={setUrlPage}
-                label="URL list pagination"
-                className="im-url-pagination"
-              />
-            </section>
-            )}
-
+                  <div className="pricing-table-card table-responsive">
+                    <table className="table table-hover align-middle mb-0">
+                      <thead>
+                        <tr>
+                          <th>No.</th>
+                          <th>URL / Domain</th>
+                          <th>Status</th>
+                          <th className="text-end">Rule ID</th>
+                          <th className="text-end">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pagedUrlRows.map((node, index) => (
+                          <tr key={node.id} onClick={() => { handleSelectUrlNode(node); openResultsLog(node); }} className={clsx(selectedUrl.id === node.id && 'table-primary')}>
+                            <td><span className="row-index-pill">{formatRowNumber((urlPage - 1) * URL_RULE_PAGE_SIZE + index + 1)}</span></td>
+                            <td><strong>{node.label}</strong></td>
+                            <td><span className={clsx('user-pill', node.restrict === 1 ? 'locked' : 'active')}>{node.restrict === 1 ? 'Restricted' : 'Managed'}</span></td>
+                            <td className="text-end">{node.urlMainIdn || '-'}</td>
+                            <td className="text-end" onClick={(event) => event.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  const rect = event.currentTarget.getBoundingClientRect();
+                                  const menuWidth = 220;
+                                  const menuHeight = 170;
+                                  const x = Math.min(Math.max(12, rect.right - menuWidth), window.innerWidth - menuWidth - 12);
+                                  const y = Math.min(Math.max(12, rect.bottom + 8), window.innerHeight - menuHeight - 12);
+                                  setActionMenuId((value) => value?.node.id === node.id ? null : { node, x, y });
+                                }}
+                                className="mini-btn icon-only"
+                                aria-label="Open URL actions"
+                              >
+                                <MoreVertical size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {pagedUrlRows.length === 0 && (
+                          <tr><td colSpan={5}><div className="settings-helper-card text-center py-4">No URL rule found.</div></td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <CompactPagination currentPage={urlPage} totalPages={urlTotalPages} onPageChange={setUrlPage} label="URL list pagination" />
+                </>
+              )}
+            </div>
           </div>
-          </section>
         </section>
       </div>
 
-
       {actionMenuId && (
-        <div className="im-context-layer" onClick={() => setActionMenuId(null)}>
+        <div className="user-modal-backdrop open" onClick={() => setActionMenuId(null)} style={{ background: 'transparent', backdropFilter: 'none', pointerEvents: 'auto' }}>
           <div
-            className="user-modal settings-helper-card"
-            style={{ left: actionMenuId.x, top: actionMenuId.y }}
+            className="settings-confirm-modal"
+            style={{ position: 'fixed', left: actionMenuId.x, top: actionMenuId.y, width: 230, padding: '0.75rem' }}
             onClick={(event) => event.stopPropagation()}
           >
-            <button type="button" onClick={() => { openResultsLog(actionMenuId.node); setActionMenuId(null); }}>View Results</button>
-            {actionMenuId.node.restrict === 1 ? (
-              <button type="button" onClick={() => { setPendingUrlAction({ action: 'manage', node: actionMenuId.node }); setActionMenuId(null); }}>Set as Managed</button>
-            ) : (
-              <button type="button" onClick={() => { setPendingUrlAction({ action: 'restrict', node: actionMenuId.node }); setActionMenuId(null); }} className="is-danger">Set as Restricted</button>
-            )}
-            <button type="button" onClick={() => { setPendingUrlAction({ action: 'remove', node: actionMenuId.node }); setActionMenuId(null); }} className="is-danger">Remove</button>
+            <h3 className="mb-2">URL Actions</h3>
+            <div className="d-grid gap-2">
+              <button type="button" className="soft-btn justify-content-start" onClick={() => { openResultsLog(actionMenuId.node); setActionMenuId(null); }}>View Results</button>
+              {actionMenuId.node.restrict === 1 ? (
+                <button type="button" className="soft-btn justify-content-start" onClick={() => { setPendingUrlAction({ action: 'manage', node: actionMenuId.node }); setActionMenuId(null); }}>Set as Managed</button>
+              ) : (
+                <button type="button" className="danger-btn justify-content-start" onClick={() => { setPendingUrlAction({ action: 'restrict', node: actionMenuId.node }); setActionMenuId(null); }}>Set as Restricted</button>
+              )}
+              <button type="button" className="danger-btn justify-content-start" onClick={() => { setPendingUrlAction({ action: 'remove', node: actionMenuId.node }); setActionMenuId(null); }}>Remove</button>
+            </div>
           </div>
         </div>
       )}
 
       {scopeMenu && (
-        <div className="im-context-layer" onClick={() => setScopeMenu(null)}>
+        <div className="user-modal-backdrop open" onClick={() => setScopeMenu(null)} style={{ background: 'transparent', backdropFilter: 'none', pointerEvents: 'auto' }}>
           <div
-            className="user-modal settings-helper-card"
-            style={{
-              left: Math.min(Math.max(12, scopeMenu.x), window.innerWidth - 250),
-              top: Math.min(Math.max(12, scopeMenu.y), window.innerHeight - 210),
-            }}
+            className="settings-confirm-modal"
+            style={{ position: 'fixed', left: Math.min(Math.max(12, scopeMenu.x), window.innerWidth - 270), top: Math.min(Math.max(12, scopeMenu.y), window.innerHeight - 230), width: 250, padding: '0.75rem' }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="content-head">
-              <strong>{scopeMenu.node.label}</strong>
-              <span>{getScopeTypeLabel(scopeMenu.node)}</span>
+            <h3>{scopeMenu.node.label}</h3>
+            <p>{getScopeTypeLabel(scopeMenu.node)}</p>
+            <div className="d-grid gap-2 mt-3">
+              <button type="button" className="primary-btn justify-content-start" onClick={() => { setPendingMeteringAction({ action: 'start', node: scopeMenu.node }); setScopeMenu(null); }} disabled={isScopeRunning(scopeMenu.node)}>Start Metering</button>
+              <button type="button" className="soft-btn justify-content-start" onClick={() => { setPendingMeteringAction({ action: 'collect', node: scopeMenu.node }); setScopeMenu(null); }}>Collect Result</button>
+              <button type="button" className="danger-btn justify-content-start" onClick={() => { setPendingMeteringAction({ action: 'stop', node: scopeMenu.node }); setScopeMenu(null); }} disabled={!isScopeRunning(scopeMenu.node)}>Stop Metering</button>
             </div>
-            <button type="button" onClick={() => { setPendingMeteringAction({ action: 'start', node: scopeMenu.node }); setScopeMenu(null); }} disabled={isScopeRunning(scopeMenu.node)}>Start Metering</button>
-            <button type="button" onClick={() => { setPendingMeteringAction({ action: 'collect', node: scopeMenu.node }); setScopeMenu(null); }}>Collect Result</button>
-            <button type="button" onClick={() => { setPendingMeteringAction({ action: 'stop', node: scopeMenu.node }); setScopeMenu(null); }} disabled={!isScopeRunning(scopeMenu.node)} className="is-danger">Stop Metering</button>
           </div>
         </div>
       )}
 
       {pendingMeteringAction && (
-        <div className="settings-confirm-backdrop open">
+        <div className="settings-confirm-backdrop">
           <div className="settings-confirm-modal">
-            <h2 className="text-lg font-black text-slate-900">Confirm</h2>
-            <p className="mt-2 text-sm font-bold text-slate-600">
-              {pendingMeteringAction.action === 'start' ? 'Start metering for' : pendingMeteringAction.action === 'stop' ? 'Stop metering for' : 'Collect result for'} <span className="font-black text-slate-900">{pendingMeteringAction.node.label}</span>
+            <h3>Confirm metering action</h3>
+            <p>
+              {pendingMeteringAction.action === 'start' ? 'Start metering for' : pendingMeteringAction.action === 'stop' ? 'Stop metering for' : 'Collect result for'} <strong>{pendingMeteringAction.node.label}</strong>
             </p>
-            <div className="mt-1 text-xs font-bold text-slate-400">{getScopeTypeLabel(pendingMeteringAction.node)}</div>
+            <p>{getScopeTypeLabel(pendingMeteringAction.node)}</p>
             <div className="settings-confirm-actions">
-              <button type="button" onClick={() => setPendingMeteringAction(null)} disabled={meteringBusy} className="soft-btn">No</button>
+              <button type="button" onClick={() => setPendingMeteringAction(null)} disabled={meteringBusy} className="soft-btn">Cancel</button>
               <button type="button" onClick={confirmMeteringAction} disabled={meteringBusy} className={clsx(pendingMeteringAction.action === 'stop' ? 'danger-btn' : 'primary-btn')}>
-                {meteringBusy && <Loader2 className="h-4 w-4 animate-spin" />} Yes
+                {meteringBusy && <Loader2 size={14} className="animate-spin" />} Confirm
               </button>
             </div>
           </div>
@@ -1614,13 +1554,13 @@ export default function InternetMetering() {
       )}
 
       {pendingUrlAction && (
-        <div className="settings-confirm-backdrop open">
+        <div className="settings-confirm-backdrop">
           <div className="settings-confirm-modal">
-            <h2 className="text-lg font-black text-slate-900">Confirm</h2>
-            <p className="mt-2 break-words text-sm font-bold text-slate-600">{pendingUrlAction.node.url}</p>
+            <h3>Confirm URL action</h3>
+            <p>{pendingUrlAction.node.url}</p>
             <div className="settings-confirm-actions">
-              <button type="button" onClick={() => setPendingUrlAction(null)} className="soft-btn">No</button>
-              <button type="button" onClick={applyUrlAction} className={clsx(pendingUrlAction.action === 'remove' || pendingUrlAction.action === 'restrict' ? 'danger-btn' : 'primary-btn')}>Yes</button>
+              <button type="button" onClick={() => setPendingUrlAction(null)} className="soft-btn">Cancel</button>
+              <button type="button" onClick={applyUrlAction} className={clsx(pendingUrlAction.action === 'remove' || pendingUrlAction.action === 'restrict' ? 'danger-btn' : 'primary-btn')}>Confirm</button>
             </div>
           </div>
         </div>
