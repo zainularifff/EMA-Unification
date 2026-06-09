@@ -163,6 +163,9 @@ type EvidenceRow = {
   brand?: string;
   model?: string;
   platform?: string;
+  os?: string;
+  biosDate?: string;
+  lastConnection?: string;
   status?: string;
   lastSeen?: string;
   age?: string;
@@ -4013,10 +4016,12 @@ function getEvidenceColumns(kind: string) {
   return [
     { label: "Device", render: (row: EvidenceRow) => evidenceCellValue(row, ["deviceName", "assetId"]) },
     { label: "Owner / department", render: (row: EvidenceRow) => evidenceCellValue(row, "department", "Unassigned") },
-    { label: "Asset type", render: (row: EvidenceRow) => evidenceCellValue(row, "category") },
+    { label: "OS / platform", render: (row: EvidenceRow) => evidenceCellValue(row, ["os", "platform"], "Unknown OS") },
+    { label: "BIOS date", render: (row: EvidenceRow) => evidenceCellValue(row, ["biosDate", "biosDateLabel"], "Not recorded") },
     { label: "Brand / model", render: (row: EvidenceRow) => `${evidenceCellValue(row, "brand", "")} ${evidenceCellValue(row, "model", "")}`.trim() || "-" },
     { label: "Status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
-    { label: "Last seen / age", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "lastSeen"], "-") },
+    { label: "Last connection", render: (row: EvidenceRow) => evidenceCellValue(row, ["lastConnection", "lastSeen"], "-") },
+    { label: "Age / lifecycle", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "lifecycle"], "-") },
     { label: "Risk", render: evidenceRiskText },
     { label: "Cost source", render: evidenceCostText }
   ];

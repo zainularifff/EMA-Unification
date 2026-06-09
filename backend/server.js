@@ -1196,6 +1196,51 @@ async function tableColumnExists(pool, tableName, columnName) {
     return result.recordset.length > 0;
 }
 
+async function hasBiosInventoryTables(pool) {
+    try {
+        const [hasCurrent, hasValue] = await Promise.all([
+            tableExists(pool, "TSHI_OBJECT_CURRENT"),
+            tableExists(pool, "TSHI_OBJECT_VALUE")
+        ]);
+
+        return hasCurrent && hasValue;
+    } catch (err) {
+        console.warn("BIOS inventory table check skipped:", err.message);
+        return false;
+    }
+}
+
+function getBiosSqlFragments(rootAlias = "a", connectionAlias = rootAlias, includeBios = false) {
+    if (!includeBios) {
+        return {
+            select: `CAST(NULL AS NVARCHAR(100)) AS BiosDate,
+        CAST(NULL AS INT) AS PCAge`,
+            join: ""
+        };
+    }
+
+    const parsedBiosDate = `COALESCE(
+            TRY_CONVERT(date, biosValue.Object_Value_Str, 120),
+            TRY_CONVERT(date, biosValue.Object_Value_Str, 103),
+            TRY_CONVERT(date, biosValue.Object_Value_Str, 101),
+            TRY_CONVERT(date, biosValue.Object_Value_Str)
+        )`;
+
+    return {
+        select: `biosValue.Object_Value_Str AS BiosDate,
+        CASE
+            WHEN ${parsedBiosDate} IS NULL THEN NULL
+            ELSE DATEDIFF(YEAR, ${parsedBiosDate}, ISNULL(${connectionAlias}.ConnectionTime, GETDATE()))
+        END AS PCAge`,
+        join: `
+        LEFT JOIN TSHI_OBJECT_CURRENT biosCurrent WITH (NOLOCK)
+            ON ${rootAlias}.Object_Root_Idn = biosCurrent.Object_Root_Idn
+           AND biosCurrent.Object_Field_Idn = 14
+        LEFT JOIN TSHI_OBJECT_VALUE biosValue WITH (NOLOCK)
+            ON biosValue.Object_Value_Idn = biosCurrent.Object_Value_Idn`
+    };
+}
+
 async function getDepartmentsRecursive(pool, parentID){
     let query = `
 SELECT DISTINCT
@@ -1253,6 +1298,8 @@ async function getAssetsByRelationID(pool, relationID) {
     //         .input("RelationID", sql.Int, relationID)
     //         .execute(query);
 
+    const biosFragments = getBiosSqlFragments("a", "a", await hasBiosInventoryTables(pool));
+
     const query = `
 declare @Object_Rel_Idn int = @RelationID;
 SELECT
@@ -1265,9 +1312,11 @@ SELECT
         a.Model,
         a.ConnectionTime,
         case when a.ConnectionStatus=1 then 'Online' else 'Offline' end as ConnectionStatus,
-        a.IP
+        a.IP,
+        ${biosFragments.select}
     FROM TS_OBJECT_ROOT a
         left join TS_OBJECT_RELATION b on a.Object_Rel_Idn=b.Object_Rel_Idn
+        ${biosFragments.join}
     WHERE a.Object_Rel_Idn = @Object_Rel_Idn
 union
     select 
@@ -1280,7 +1329,9 @@ union
         a.DeviceModelName as Model,
         a.DeviceTimeStamp as ConnectionTime,
         a.ConnectionStatus as ConnectionStatus,
-        case when a.DeviceLocalIPAddress is null or a.DeviceLocalIPAddress='' then a.DeviceIPAddress else a.DeviceLocalIPAddress end as IP
+        case when a.DeviceLocalIPAddress is null or a.DeviceLocalIPAddress='' then a.DeviceIPAddress else a.DeviceLocalIPAddress end as IP,
+        CAST(NULL AS NVARCHAR(100)) AS BiosDate,
+        CAST(NULL AS INT) AS PCAge
     from TSMDM_ASSET a
         left join TSMDM_OBJECT_RELATION b on a.MDM_Asset_Idn=b.MDM_Asset_Idn
         left join TS_OBJECT_RELATION c on b.Object_Rel_Idn=c.Object_Rel_Idn
@@ -1416,6 +1467,15 @@ function sdInferAssetBrand(...values) {
     return found ? found.brand : "";
 }
 
+function sdNormalizeAssetPcAge(value) {
+    if (value === undefined || value === null || value === "") return null;
+
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue)) return null;
+
+    return Math.max(0, Math.floor(numberValue));
+}
+
 function sdNormalizeAssetRow(row) {
     const model = sdAssetText(row.model || row.Model || row.DeviceModelName || row.machineType || row.MachineType);
     const os = sdAssetText(row.os || row.OS || row.PlatformType || row.deviceType || row.DeviceType, "-");
@@ -1424,6 +1484,8 @@ function sdNormalizeAssetRow(row) {
         "-"
     );
     const brand = sdAssetText(row.brand || row.Brand || row.manufacturer || row.Manufacturer || sdInferAssetBrand(row.brand, row.Manufacturer, model, name));
+    const biosDate = sdAssetText(row.biosDate || row.BiosDate || row.BIOSDate || row.bios_date);
+    const pcAge = sdNormalizeAssetPcAge(row.pcAge ?? row.PCAge ?? row.PcAge ?? row.pc_age);
 
     return {
         ...row,
@@ -1441,7 +1503,11 @@ function sdNormalizeAssetRow(row) {
         deviceType: sdAssetText(row.deviceType || row.DeviceType || os, os),
         ipAddress: sdAssetText(row.ipAddress || row.IP || row.DeviceIPAddress || row.DeviceLocalIPAddress),
         customerName: sdAssetText(row.customerName || row.CustomerName || row.Object_Full_Name || row.department),
-        department: sdAssetText(row.department || row.Object_Full_Name || row.customerName || row.CustomerName)
+        department: sdAssetText(row.department || row.Object_Full_Name || row.customerName || row.CustomerName),
+        biosDate: biosDate || "-",
+        BiosDate: biosDate || null,
+        pcAge,
+        PCAge: pcAge
     };
 }
 
@@ -1454,6 +1520,8 @@ async function handleServiceDeskAssets(req, res) {
         const request = pool.request();
         request.input("SearchText", sql.NVarChar(255), `%${search}%`);
         request.input("CustomerName", sql.NVarChar(255), customerName);
+
+        const serviceDeskBiosFragments = getBiosSqlFragments("r", "r", await hasBiosInventoryTables(pool));
 
         const result = await request.query(`
             SELECT TOP 500
@@ -1473,6 +1541,8 @@ async function handleServiceDeskAssets(req, res) {
                 END AS ipAddress,
                 ISNULL(rel.Object_Full_Name, '') AS customerName,
                 ISNULL(rel.Object_Full_Name, '') AS department,
+                CAST(NULL AS NVARCHAR(100)) AS BiosDate,
+                CAST(NULL AS INT) AS PCAge,
                 'MDM' AS source
             FROM TSMDM_ASSET a WITH (NOLOCK)
             LEFT JOIN TSMDM_OBJECT_RELATION mor WITH (NOLOCK)
@@ -1512,10 +1582,12 @@ async function handleServiceDeskAssets(req, res) {
                 ISNULL(r.IP, '') AS ipAddress,
                 ISNULL(rel.Object_Full_Name, '') AS customerName,
                 ISNULL(rel.Object_Full_Name, '') AS department,
+                ${serviceDeskBiosFragments.select},
                 'EM' AS source
             FROM TS_OBJECT_ROOT r WITH (NOLOCK)
             LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
                 ON r.Object_Rel_Idn = rel.Object_Rel_Idn
+            ${serviceDeskBiosFragments.join}
             WHERE
                 (
                     @SearchText = '%%'
@@ -1537,6 +1609,10 @@ async function handleServiceDeskAssets(req, res) {
         let data = (result.recordset || []).map(sdNormalizeAssetRow);
 
         if (data.length === 0 && await tableExists(pool, "HD_Assets")) {
+            const hasHdAssetBiosDate = await tableColumnExists(pool, "HD_Assets", "BiosDate").catch(() => false);
+            const hasHdAssetPcAge = await tableColumnExists(pool, "HD_Assets", "PCAge").catch(() => false);
+            const hdBiosSelect = hasHdAssetBiosDate ? "BiosDate AS BiosDate" : "CAST(NULL AS NVARCHAR(100)) AS BiosDate";
+            const hdPcAgeSelect = hasHdAssetPcAge ? "PCAge AS PCAge" : "CAST(NULL AS INT) AS PCAge";
             const hdRequest = pool.request();
             hdRequest.input("SearchText", sql.NVarChar(255), `%${search}%`);
             hdRequest.input("CustomerName", sql.NVarChar(255), customerName);
@@ -1555,6 +1631,8 @@ async function handleServiceDeskAssets(req, res) {
                     OS AS os,
                     IP AS ipAddress,
                     CustomerName AS department,
+                    ${hdBiosSelect},
+                    ${hdPcAgeSelect},
                     'HD' AS source
                 FROM HD_Assets WITH (NOLOCK)
                 WHERE
