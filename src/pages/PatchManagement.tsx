@@ -521,11 +521,6 @@ function PatchManagement() {
             {treeLoading && <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading organization...</div>}
             {!treeLoading && departments.length === 0 && <div className="settings-helper-card">No organization scope available.</div>}
           </div>
-
-          <div className="settings-helper-card m-3 mt-0">
-            <strong>Selected scope</strong>
-            <span>{selectedScope.label}</span>
-          </div>
         </aside>
 
         <section className="settings-content">

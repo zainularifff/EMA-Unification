@@ -28509,6 +28509,231 @@ async function mdDateCoalesceSql(pool, tableName, alias, preferredColumns = [], 
     return `COALESCE(${parts.join(", ")})`;
 }
 
+
+async function mdNvarcharColumnSql(pool, tableName, alias, columnName, fallbackSql = "''") {
+    if (await tableColumnExists(pool, tableName, columnName)) {
+        return `CAST(${alias}.${columnName} AS NVARCHAR(4000))`;
+    }
+    return fallbackSql;
+}
+
+async function mdDatetimeColumnSql(pool, tableName, alias, columnName, fallbackSql = "NULL") {
+    if (await tableColumnExists(pool, tableName, columnName)) {
+        return `TRY_CONVERT(datetime, ${alias}.${columnName})`;
+    }
+    return fallbackSql;
+}
+
+async function mdCoalesceDatetimeColumnsSql(pool, tableName, alias, columnNames = [], fallbackSql = "NULL") {
+    const parts = [];
+    for (const columnName of columnNames) {
+        if (await tableColumnExists(pool, tableName, columnName)) {
+            parts.push(`TRY_CONVERT(datetime, ${alias}.${columnName})`);
+        }
+    }
+    if (!parts.length) return fallbackSql;
+    return `COALESCE(${parts.join(", ")})`;
+}
+
+function mdInferDeviceCategory(row = {}) {
+    const text = [row.RawMachineType, row.rawMachineType, row.category, row.model, row.platform]
+        .map((value) => mdText(value).toLowerCase())
+        .filter(Boolean)
+        .join(" ");
+
+    if (!text) return "Others";
+    if (/(laptop|notebook|latitude|inspiron|precision 3|precision 5|precision 7|xps|thinkpad|elitebook|probook|surface|macbook)/i.test(text)) return "Laptop";
+    if (/(desktop|optiplex|thinkcentre|elitedesk|prodesk|tower|asuspro|aio|all-in-one|\bpc\b)/i.test(text)) return "Desktop";
+    if (/(server|vmware|poweredge|proliant|thinksystem)/i.test(text)) return "Server";
+    if (/(android|ios|ipad|iphone|phone|tablet|mobile)/i.test(text)) return "Mobile Device";
+    if (/(monitor|display|lcd|led)/i.test(text)) return "Monitor";
+    if (/(printer|scanner|mfp|copier)/i.test(text)) return "Printer";
+    if (/(router|switch|firewall|access point|ap\b|network)/i.test(text)) return "Network";
+    return "Others";
+}
+
+function mdNormalizeRawAssetRow(row = {}) {
+    const category = mdText(row.category || row.DeviceCategory || mdInferDeviceCategory(row), "Others");
+    return {
+        assetKey: mdText(row.assetKey, `${mdText(row.objectAgent, "ASSET")}-${mdText(row.assetId, "0")}`),
+        objectAgent: mdText(row.objectAgent, "ASSET"),
+        assetId: mdText(row.assetId, ""),
+        deviceName: mdText(row.deviceName || row.deviceId, "-"),
+        deviceId: mdText(row.deviceId || row.assetId, "-"),
+        department: mdText(row.department, "Unassigned"),
+        RawMachineType: mdText(row.RawMachineType || row.rawMachineType || category, ""),
+        category,
+        brand: mdText(row.brand || row.Brand, "-"),
+        model: mdText(row.model || row.Model, "-"),
+        platform: mdText(row.platform, "-"),
+        status: mdText(row.status, "-"),
+        lastSeen: row.lastSeen || null,
+        ageDate: row.ageDate || null,
+        ipAddress: mdText(row.ipAddress, "-")
+    };
+}
+
+async function mdFetchEmAssetRows(pool, rule) {
+    const hasEm = await tableExists(pool, "TS_OBJECT_ROOT");
+    const hasRootId = hasEm && await tableColumnExists(pool, "TS_OBJECT_ROOT", "Object_Root_Idn");
+    if (!hasEm || !hasRootId) return [];
+
+    const hasRelation = await tableExists(pool, "TS_OBJECT_RELATION");
+    const hasRootRelation = await tableColumnExists(pool, "TS_OBJECT_ROOT", "Object_Rel_Idn");
+    const hasClientInfo = await tableExists(pool, "TS_CLIENT_INFO") && await tableColumnExists(pool, "TS_CLIENT_INFO", "Object_Root_Idn");
+
+    const rootId = "CAST(root.Object_Root_Idn AS NVARCHAR(100))";
+    const deviceId = await mdNvarcharColumnSql(pool, "TS_OBJECT_ROOT", "root", "Object_DeviceID", rootId);
+    const computerName = await mdNvarcharColumnSql(pool, "TS_OBJECT_ROOT", "root", "ComputerName", deviceId);
+    const brand = await mdNvarcharColumnSql(pool, "TS_OBJECT_ROOT", "root", "MadeCompany", await mdNvarcharColumnSql(pool, "TS_OBJECT_ROOT", "root", "Manufacturer", "''"));
+    const model = await mdNvarcharColumnSql(pool, "TS_OBJECT_ROOT", "root", "Model", "''");
+    const ip = await mdNvarcharColumnSql(pool, "TS_OBJECT_ROOT", "root", "IP", "''");
+    const machineType = hasClientInfo && await tableColumnExists(pool, "TS_CLIENT_INFO", "MachineType")
+        ? "CAST(ci.MachineType AS NVARCHAR(4000))"
+        : model;
+    const platform = hasClientInfo && await tableColumnExists(pool, "TS_CLIENT_INFO", "OS_FullName")
+        ? "CAST(ci.OS_FullName AS NVARCHAR(4000))"
+        : "'Windows'";
+    const connectionStatus = await tableColumnExists(pool, "TS_OBJECT_ROOT", "ConnectionStatus")
+        ? `CASE
+                WHEN TRY_CONVERT(int, root.ConnectionStatus) = 1
+                  OR LOWER(CAST(root.ConnectionStatus AS NVARCHAR(100))) IN ('online', 'connected', 'active', 'true')
+                    THEN 'Online'
+                WHEN NULLIF(CAST(root.ConnectionStatus AS NVARCHAR(100)), '') IS NULL THEN '-'
+                ELSE 'Offline'
+           END`
+        : "'-'";
+    const lastSeen = await mdDatetimeColumnSql(pool, "TS_OBJECT_ROOT", "root", "ConnectionTime", "NULL");
+
+    const agePreference = rule?.ageSource === "HIUpdateTime"
+        ? ["HIUpdateTime", "RegDate", "ConnectionTime"]
+        : rule?.ageSource === "ConnectionTime"
+            ? ["ConnectionTime", "HIUpdateTime", "RegDate"]
+            : ["RegDate", "HIUpdateTime", "ConnectionTime"];
+
+    const rootAgeDate = await mdCoalesceDatetimeColumnsSql(pool, "TS_OBJECT_ROOT", "root", agePreference, lastSeen);
+    const ciAgeDate = hasClientInfo
+        ? await mdCoalesceDatetimeColumnsSql(pool, "TS_CLIENT_INFO", "ci", agePreference, rootAgeDate)
+        : rootAgeDate;
+
+    const relJoin = hasRelation && hasRootRelation
+        ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON root.Object_Rel_Idn = rel.Object_Rel_Idn"
+        : "";
+    const ciJoin = hasClientInfo
+        ? "LEFT JOIN TS_CLIENT_INFO ci WITH (NOLOCK) ON root.Object_Root_Idn = ci.Object_Root_Idn"
+        : "";
+    const department = relJoin
+        ? "COALESCE(NULLIF(CAST(rel.Object_Full_Name AS NVARCHAR(4000)), ''), NULLIF(CAST(rel.Object_Rel_Name AS NVARCHAR(4000)), ''), '')"
+        : "''";
+
+    const result = await pool.request().query(`
+        SELECT TOP 20000
+            CONCAT('EM-', ${rootId}) AS assetKey,
+            'EM' AS objectAgent,
+            ${rootId} AS assetId,
+            COALESCE(NULLIF(${computerName}, ''), NULLIF(${deviceId}, ''), ${rootId}) AS deviceName,
+            COALESCE(NULLIF(${deviceId}, ''), ${rootId}) AS deviceId,
+            ${department} AS department,
+            ISNULL(${machineType}, '') AS RawMachineType,
+            ISNULL(${brand}, '') AS brand,
+            ISNULL(${model}, '') AS model,
+            ISNULL(${platform}, 'Windows') AS platform,
+            ${connectionStatus} AS status,
+            ${lastSeen} AS lastSeen,
+            ${ciAgeDate} AS ageDate,
+            ISNULL(${ip}, '') AS ipAddress
+        FROM TS_OBJECT_ROOT root WITH (NOLOCK)
+        ${ciJoin}
+        ${relJoin};
+    `);
+
+    return (result.recordset || []).map(mdNormalizeRawAssetRow);
+}
+
+async function mdFetchMdmAssetRows(pool, rule) {
+    const hasMdm = await tableExists(pool, "TSMDM_ASSET");
+    const hasMdmId = hasMdm && await tableColumnExists(pool, "TSMDM_ASSET", "MDM_Asset_Idn");
+    if (!hasMdm || !hasMdmId) return [];
+
+    const hasRelation = await tableExists(pool, "TS_OBJECT_RELATION");
+    const hasMdmRelation = await tableExists(pool, "TSMDM_OBJECT_RELATION") && await tableColumnExists(pool, "TSMDM_OBJECT_RELATION", "MDM_Asset_Idn");
+    const hasMapping = await tableExists(pool, "TSMDM_TS_OBJECT_MAPPING") && await tableColumnExists(pool, "TSMDM_TS_OBJECT_MAPPING", "MDM_Asset_Idn");
+
+    const assetId = "CAST(asset.MDM_Asset_Idn AS NVARCHAR(100))";
+    const deviceId = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "DeviceID", assetId);
+    const deviceName = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "DeviceName", deviceId);
+    const brand = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "DeviceManufacture", await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "Manufacturer", "''"));
+    const model = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "DeviceModelName", await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "ModelNumber", "''"));
+    const platform = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "PlatformType", "'MDM'");
+    const ipLocal = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "DeviceLocalIPAddress", "''");
+    const ipRemote = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "DeviceIPAddress", "''");
+    const rawStatus = await mdNvarcharColumnSql(pool, "TSMDM_ASSET", "asset", "ConnectionStatus", "''");
+    const status = `CASE
+            WHEN TRY_CONVERT(int, ${rawStatus}) = 1
+              OR LOWER(${rawStatus}) IN ('online', 'connected', 'active', 'true')
+                THEN 'Online'
+            WHEN NULLIF(${rawStatus}, '') IS NULL THEN '-'
+            ELSE 'Offline'
+        END`;
+    const lastSeen = await mdDatetimeColumnSql(pool, "TSMDM_ASSET", "asset", "DeviceTimeStamp", "NULL");
+    const ageDate = await mdCoalesceDatetimeColumnsSql(pool, "TSMDM_ASSET", "asset", ["EnrolledDate", "RegisterDate", "CreatedAt", "DeviceTimeStamp"], lastSeen);
+
+    const mdmRelationJoin = hasMdmRelation
+        ? "LEFT JOIN TSMDM_OBJECT_RELATION mor WITH (NOLOCK) ON asset.MDM_Asset_Idn = mor.MDM_Asset_Idn"
+        : "";
+    const objectRelJoin = hasMdmRelation && hasRelation
+        ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON mor.Object_Rel_Idn = rel.Object_Rel_Idn"
+        : "";
+    const department = objectRelJoin
+        ? "COALESCE(NULLIF(CAST(rel.Object_Full_Name AS NVARCHAR(4000)), ''), NULLIF(CAST(rel.Object_Rel_Name AS NVARCHAR(4000)), ''), '')"
+        : "''";
+    const whereClause = hasMapping
+        ? "WHERE asset.MDM_Asset_Idn NOT IN (SELECT MDM_Asset_Idn FROM TSMDM_TS_OBJECT_MAPPING WITH (NOLOCK) WHERE MDM_Asset_Idn IS NOT NULL)"
+        : "";
+
+    const result = await pool.request().query(`
+        SELECT TOP 20000
+            CONCAT('MDM-', ${assetId}) AS assetKey,
+            'MDM' AS objectAgent,
+            ${assetId} AS assetId,
+            COALESCE(NULLIF(${deviceName}, ''), NULLIF(${deviceId}, ''), ${assetId}) AS deviceName,
+            COALESCE(NULLIF(${deviceId}, ''), ${assetId}) AS deviceId,
+            ${department} AS department,
+            ISNULL(${platform}, 'MDM') AS RawMachineType,
+            ISNULL(${brand}, '') AS brand,
+            ISNULL(${model}, '') AS model,
+            ISNULL(${platform}, 'MDM') AS platform,
+            ${status} AS status,
+            ${lastSeen} AS lastSeen,
+            ${ageDate} AS ageDate,
+            CASE WHEN NULLIF(${ipLocal}, '') IS NOT NULL THEN ${ipLocal} ELSE ${ipRemote} END AS ipAddress
+        FROM TSMDM_ASSET asset WITH (NOLOCK)
+        ${mdmRelationJoin}
+        ${objectRelJoin}
+        ${whereClause};
+    `);
+
+    return (result.recordset || []).map(mdNormalizeRawAssetRow);
+}
+
+async function mdFetchUnifiedAssets(pool, rule) {
+    const output = [];
+
+    try {
+        output.push(...await mdFetchEmAssetRows(pool, rule));
+    } catch (err) {
+        console.warn("Management dashboard EM asset query skipped:", err.message || err);
+    }
+
+    try {
+        output.push(...await mdFetchMdmAssetRows(pool, rule));
+    } catch (err) {
+        console.warn("Management dashboard MDM asset query skipped:", err.message || err);
+    }
+
+    return output;
+}
+
 async function mdLoadPcAgingRule(pool) {
     try {
         const result = await pool.request()
@@ -28680,16 +28905,28 @@ async function mdBuildUnifiedAssetSql(pool, rule) {
 
 async function mdFetchPricing(pool) {
     if (!(await tableExists(pool, "AssetPricing"))) return [];
-    const result = await pool.request().query(`
-        SELECT
-            ISNULL(Category, 'Others') AS Category,
-            ISNULL(Brand, '') AS Brand,
-            ISNULL(Model, '') AS Model,
-            ISNULL(Price, 0) AS Price,
-            ISNULL(IsExcluded, 0) AS IsExcluded
-        FROM AssetPricing WITH (NOLOCK);
-    `);
-    return result.recordset || [];
+
+    const categoryExpr = await tableColumnExists(pool, "AssetPricing", "Category") ? "ISNULL(Category, 'Others')" : "'Others'";
+    const brandExpr = await tableColumnExists(pool, "AssetPricing", "Brand") ? "ISNULL(Brand, '')" : "''";
+    const modelExpr = await tableColumnExists(pool, "AssetPricing", "Model") ? "ISNULL(Model, '')" : "''";
+    const priceExpr = await tableColumnExists(pool, "AssetPricing", "Price") ? "ISNULL(Price, 0)" : "0";
+    const excludedExpr = await tableColumnExists(pool, "AssetPricing", "IsExcluded") ? "ISNULL(IsExcluded, 0)" : "0";
+
+    try {
+        const result = await pool.request().query(`
+            SELECT
+                ${categoryExpr} AS Category,
+                ${brandExpr} AS Brand,
+                ${modelExpr} AS Model,
+                ${priceExpr} AS Price,
+                ${excludedExpr} AS IsExcluded
+            FROM AssetPricing WITH (NOLOCK);
+        `);
+        return result.recordset || [];
+    } catch (err) {
+        console.warn("Management dashboard pricing query skipped:", err.message || err);
+        return [];
+    }
 }
 
 function mdFindPrice(pricing, category, brand, model) {
@@ -28718,16 +28955,35 @@ async function mdFetchIncidentMetrics(pool) {
         return { totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
     }
 
-    const result = await pool.request().query(`
-        SELECT
-            COUNT(1) AS totalTickets,
-            SUM(CASE WHEN LOWER(ISNULL(Status, '')) NOT IN ('closed', 'resolved', 'completed', 'cancelled') THEN 1 ELSE 0 END) AS openTickets,
-            SUM(CASE WHEN LOWER(ISNULL(Status, '')) NOT IN ('closed', 'resolved', 'completed', 'cancelled') AND TRY_CONVERT(datetime, SlaDue) < GETDATE() THEN 1 ELSE 0 END) AS slaBreached,
-            SUM(CASE WHEN LOWER(ISNULL(Priority, '')) LIKE '%high%' OR LOWER(ISNULL(Priority, '')) LIKE '%critical%' OR LOWER(ISNULL(Priority, '')) LIKE '%urgent%' THEN 1 ELSE 0 END) AS highPriority
-        FROM HD_Incidents WITH (NOLOCK);
-    `);
+    const hasStatus = await tableColumnExists(pool, "HD_Incidents", "Status");
+    const hasSlaDue = await tableColumnExists(pool, "HD_Incidents", "SlaDue");
+    const hasPriority = await tableColumnExists(pool, "HD_Incidents", "Priority");
 
-    return result.recordset?.[0] || { totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
+    const openCondition = hasStatus
+        ? "LOWER(ISNULL(Status, '')) NOT IN ('closed', 'resolved', 'completed', 'cancelled')"
+        : "1 = 1";
+    const slaExpression = hasSlaDue
+        ? `SUM(CASE WHEN ${openCondition} AND TRY_CONVERT(datetime, SlaDue) < GETDATE() THEN 1 ELSE 0 END)`
+        : "0";
+    const highPriorityExpression = hasPriority
+        ? "SUM(CASE WHEN LOWER(ISNULL(Priority, '')) LIKE '%high%' OR LOWER(ISNULL(Priority, '')) LIKE '%critical%' OR LOWER(ISNULL(Priority, '')) LIKE '%urgent%' THEN 1 ELSE 0 END)"
+        : "0";
+
+    try {
+        const result = await pool.request().query(`
+            SELECT
+                COUNT(1) AS totalTickets,
+                SUM(CASE WHEN ${openCondition} THEN 1 ELSE 0 END) AS openTickets,
+                ${slaExpression} AS slaBreached,
+                ${highPriorityExpression} AS highPriority
+            FROM HD_Incidents WITH (NOLOCK);
+        `);
+
+        return result.recordset?.[0] || { totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
+    } catch (err) {
+        console.warn("Management dashboard incident query skipped:", err.message || err);
+        return { totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
+    }
 }
 
 function mdNormalizeAssets(rawAssets, pricing, rule) {
@@ -29083,14 +29339,13 @@ function mdFilterDrilldownRows(assets, area, key) {
 
 async function mdLoadDashboardContext(pool) {
     const rule = await mdLoadPcAgingRule(pool);
-    const assetSql = await mdBuildUnifiedAssetSql(pool, rule);
-    const [assetResult, pricing, incidents] = await Promise.all([
-        assetSql ? pool.request().query(assetSql) : Promise.resolve({ recordset: [] }),
+    const [rawAssets, pricing, incidents] = await Promise.all([
+        mdFetchUnifiedAssets(pool, rule),
         mdFetchPricing(pool),
         mdFetchIncidentMetrics(pool)
     ]);
 
-    const assets = mdNormalizeAssets(assetResult.recordset || [], pricing, rule);
+    const assets = mdNormalizeAssets(rawAssets || [], pricing, rule);
     return { assets, pricing, incidents, rule };
 }
 

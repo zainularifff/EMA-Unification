@@ -1778,7 +1778,7 @@ export default function SoftwareDistribution() {
           </div>
 
           <div className="settings-menu-list">
-            <button
+            {/* <button
               type="button"
               className="primary-btn"
               onClick={() => {
@@ -1790,7 +1790,7 @@ export default function SoftwareDistribution() {
             >
               <Plus size={14} />
               New Package
-            </button>
+            </button> */}
 
             <label className="section-search">
               <Search size={15} />

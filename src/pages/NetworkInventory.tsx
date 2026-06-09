@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent, MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, FormEvent, MouseEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   Activity,
   AlertCircle,
@@ -151,6 +152,138 @@ const tokenKeys = ["token", "access_token", "accessToken", "authToken", "emaToke
 
 function cx(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(" ");
+}
+
+
+type NetworkSelectOption = {
+  value: string;
+  label: string;
+};
+
+function NetworkCustomSelect({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  className,
+  style,
+}: {
+  value: string;
+  options: NetworkSelectOption[];
+  onChange: (value: string) => void;
+  ariaLabel: string;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  const updateMenuPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 16;
+    const gap = 8;
+    const width = Math.max(rect.width, 220);
+    const estimatedHeight = Math.min(292, Math.max(48, options.length * 38 + 10));
+    const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
+    const availableAbove = rect.top - viewportPadding;
+    const openAbove = availableBelow < estimatedHeight && availableAbove > availableBelow;
+    const maxHeight = Math.max(96, Math.min(estimatedHeight, openAbove ? availableAbove : availableBelow));
+    const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - width - viewportPadding);
+    const top = openAbove
+      ? Math.max(viewportPadding, rect.top - maxHeight - gap)
+      : Math.min(rect.bottom + gap, window.innerHeight - maxHeight - viewportPadding);
+
+    setMenuStyle({
+      position: "fixed",
+      left,
+      top,
+      width,
+      maxHeight,
+      zIndex: 2147483600,
+    });
+  }, [options.length]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    updateMenuPosition();
+
+    const handleMouseDown = (event: MouseEvent | globalThis.MouseEvent) => {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleMouseDown as EventListener);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown as EventListener);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
+
+  const menuNode = open && typeof document !== "undefined" ? createPortal(
+    <div
+      ref={menuRef}
+      className="uam-filter-menu uam-filter-menu-portal setting-select-menu"
+      style={menuStyle}
+      role="listbox"
+      aria-label={ariaLabel}
+    >
+      {options.map((option) => {
+        const isSelected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            className={cx("uam-filter-option", isSelected && "selected")}
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => {
+              onChange(option.value);
+              setOpen(false);
+            }}
+          >
+            <span>{option.label}</span>
+            {isSelected && <span className="uam-filter-check">✓</span>}
+          </button>
+        );
+      })}
+    </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <div className={cx("uam-filter-dropdown setting-select-dropdown", open && "open", className)} style={style}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="uam-filter-trigger setting-select-trigger"
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected?.label || "Select"}</span>
+        <ChevronDown size={15} />
+      </button>
+      {menuNode}
+    </div>
+  );
 }
 
 function readAuthToken() {
@@ -478,14 +611,6 @@ function formatScheduleTime(value: string) {
 }
 
 export default function NetworkInventory() {
-  useEffect(() => {
-    document.documentElement.classList.add('ema-settings-page-active', 'ema-layout-lock');
-    document.body.classList.add('ema-settings-page-active', 'ema-layout-lock');
-    return () => {
-      document.documentElement.classList.remove('ema-settings-page-active', 'ema-layout-lock');
-      document.body.classList.remove('ema-settings-page-active', 'ema-layout-lock');
-    };
-  }, []);
   const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
   const [treeMode, setTreeMode] = useState<NetworkTreeMode>("organization");
   const [hierarchy, setHierarchy] = useState<NetworkHierarchyNode | null>(null);
@@ -692,7 +817,7 @@ export default function NetworkInventory() {
           page: Number(response.page || nextPage),
           totalPages: Number(response.totalPages || 1),
           totalRecords: Number(response.totalRecords || 0),
-          source: "subnet detail API",
+          source: "Subnet detail",
           loading: false,
           serverPaginated: true,
         });
@@ -861,77 +986,91 @@ export default function NetworkInventory() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root" data-section="network-metering">
+    <main className="settings-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="users">
       {notice && (
-        <div className="settings-toast settings-toast-success" role="status" aria-live="polite">
-          <i><CheckCircle2 size={18} /></i>
-          <div>
-            <strong>Success</strong>
-            <span>{notice}</span>
+        <div className="settings-toast-layer">
+          <div className="settings-toast settings-toast-success" role="status" aria-live="polite">
+            <span className="settings-toast-icon"><CheckCircle2 size={18} /></span>
+            <div>
+              <strong>Success</strong>
+              <span>{notice}</span>
+            </div>
+            <button type="button" className="settings-toast-close" onClick={() => setNotice(null)} aria-label="Close notification">
+              <X size={14} />
+            </button>
           </div>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Close notification">
-            <X size={14} />
-          </button>
         </div>
       )}
 
       {error && (
-        <div className="settings-toast settings-toast-error" role="alert">
-          <i><AlertCircle size={18} /></i>
-          <div>
-            <strong>Error</strong>
-            <span>{error}</span>
+        <div className="settings-toast-layer">
+          <div className="settings-toast settings-toast-error" role="alert">
+            <span className="settings-toast-icon"><AlertCircle size={18} /></span>
+            <div>
+              <strong>Error</strong>
+              <span>{error}</span>
+            </div>
+            <button type="button" className="settings-toast-close" onClick={() => setError(null)} aria-label="Close error">
+              <X size={14} />
+            </button>
           </div>
-          <button type="button" onClick={() => setError(null)} aria-label="Close error">
-            <X size={14} />
-          </button>
         </div>
       )}
 
-      <div className="settings-layout">
+      <div className="settings-layout d-grid gap-3">
         <aside className="settings-menu ema-panel-surface">
-          <div className="panel-head" title={`${subnetCount} subnet path(s) • ${totalNetworkRecords} IPs`}>
-            <span>NETWORK METERING</span>
-            <strong>Network Metering</strong>
+          <div className="panel-head">
+            <span>Network Metering</span>
+            <strong>Network Control</strong>
             <small>IP/subnet hierarchy and synchronized device records.</small>
           </div>
 
-          <nav className="settings-menu-list" aria-label="Network metering navigation">
-            <button type="button" className={treeMode === "organization" ? "setting-btn active" : "setting-btn"} onClick={() => { setTreeMode("organization"); setTreeSearch(""); setExpandedTreeIds(new Set<string>()); }}>
-              <Network size={15} />
-              Organization
+          <nav className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher">
+            <button
+              type="button"
+              className={cx("setting-btn", treeMode === "organization" && "active")}
+              onClick={() => {
+                setTreeMode("organization");
+                setTreeSearch("");
+                setExpandedTreeIds(new Set<string>());
+              }}
+            >
+              <span className="setting-icon"><Network /></span>
+              <span>
+                <strong>Organization</strong>
+                <small>IP scope</small>
+              </span>
             </button>
-            <button type="button" className={treeMode === "statistics" ? "setting-btn active" : "setting-btn"} onClick={() => setTreeMode("statistics")}>
-              <ShieldCheck size={15} />
-              Statistics
+            <button type="button" className={cx("setting-btn", treeMode === "statistics" && "active")} onClick={() => setTreeMode("statistics")}>
+              <span className="setting-icon"><ShieldCheck /></span>
+              <span>
+                <strong>Statistics</strong>
+                <small>Workgroup</small>
+              </span>
             </button>
           </nav>
 
-          <div className="ema-sidebar-content"><div className="ema-sidebar-subpanel">
-          <label className="section-search ema-sidebar-field">
-            <Search size={16} />
-            <input
-              placeholder={treeMode === "organization" ? "Search IP / subnet..." : "Search workgroup..."}
-              value={treeSearch}
-              onChange={(event) => setTreeSearch(event.target.value)}
-            />
-            {treeSearch && (
-              <button type="button" onClick={() => setTreeSearch("")}> 
-                <X size={13} />
-              </button>
-            )}
-          </label>
+          <div className="p-3 pb-2">
+            <label className="section-search">
+              <Search size={15} />
+              <input
+                placeholder={treeMode === "organization" ? "Search IP / subnet..." : "Search workgroup..."}
+                value={treeSearch}
+                onChange={(event) => setTreeSearch(event.target.value)}
+              />
+            </label>
+          </div>
 
-          <div className="ema-sidebar-action">
-            <button type="button" className="soft-btn" onClick={openAddFolderDialog} disabled={!hierarchy || treeMode !== "organization" || busy}>
+          <div className="px-3 pb-2">
+            <button type="button" className="soft-btn w-100" onClick={openAddFolderDialog} disabled={!hierarchy || treeMode !== "organization" || busy}>
               <Plus size={14} />
               Add Folder
             </button>
           </div>
 
-          <div className="ema-sidebar-tree">
+          <div className="settings-menu-list">
             {loading ? (
-              <EmptyState icon="loading" title="Loading network hierarchy" subtitle="Reading /api/network/hierarchy." />
+              <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading network hierarchy...</div>
             ) : treeMode === "organization" ? (
               filteredHierarchy ? (
                 <NetworkTree
@@ -944,7 +1083,7 @@ export default function NetworkInventory() {
                   forceOpen={Boolean(treeSearch.trim())}
                 />
               ) : (
-                <EmptyState title="No IP segment found" subtitle="Try another search keyword." />
+                <div className="settings-helper-card">No IP segment found.</div>
               )
             ) : (
               <WorkgroupStatisticList
@@ -954,131 +1093,130 @@ export default function NetworkInventory() {
               />
             )}
           </div>
-          </div></div>
         </aside>
 
         <section className="settings-content">
           <section className="settings-hero ema-panel-surface">
             <div>
-              <span className="eyebrow">NETWORK OPERATIONS</span>
-              <h2>{activeTab === "device" ? "Network Metering" : "Network Device Registry"}</h2>
-              <p>Monitor network IP/subnet status and maintain synchronized device records.</p>
+              <span className="section-tag">Network Operations</span>
+              <h2>Network Metering</h2>
+              <p>Monitor IP scope status, discover endpoint agents, and maintain network device records.</p>
             </div>
+
             <div className="settings-score users-hero-score">
-              <div className="score-box"><span>Total IPs</span><strong>{totalNetworkRecords}</strong><small>network records</small></div>
-              <div className="score-box"><span>Subnets</span><strong>{subnetCount}</strong><small>network paths</small></div>
-              <div className="score-box"><span>Workgroups</span><strong>{workgroupStats.length}</strong><small>grouped segments</small></div>
-              <div className="score-box"><span>Selected Targets</span><strong>{selectedIps.length}</strong><small>active scope</small></div>
+              <KpiCard label="Total IPs" value={totalNetworkRecords.toLocaleString()} note="Network records" icon={<Database />} />
+              <KpiCard label="Subnets" value={subnetCount.toLocaleString()} note="Network paths" icon={<Network />} />
+              <KpiCard label="Registered" value={rootCounts.registered.toLocaleString()} note="Active agents" icon={<CheckCircle2 />} />
+              <KpiCard label="Other Devices" value={rootCounts.otherDevice.toLocaleString()} note="SNMP / routers" icon={<Router />} />
             </div>
           </section>
 
-          <section className="content-shell ema-panel-surface content-panel clean">
-            <div className="content-toolbar">
-              <button type="button" className={activeTab === "device" ? "soft-btn active" : "soft-btn"} onClick={() => setActiveTab("device")}>
-                Device Status
+          <main className="content-shell ema-panel-surface content-panel clean">
+            <header className="content-head">
+              <div>
+                <span className="section-tag">{activeTab === "device" ? "Device Status" : "Network Device Status"}</span>
+                <h3>{activeTab === "device" ? `Device Status${selectedNode?.label ? `: ${selectedNode.label}` : ""}` : "Network Device Registry"}</h3>
+                <p>{activeTab === "device" ? "Registered, not registered, not installed, and other network object counts." : `Showing ${manualFilteredRows.length.toLocaleString()} managed network devices.`}</p>
+              </div>
+
+              <div className="content-actions justify-content-center flex-nowrap">
+                <button type="button" className={cx("soft-btn", activeTab === "device" && "primary-btn")} onClick={() => setActiveTab("device")}>Device Status</button>
+                <button type="button" className={cx("soft-btn", activeTab === "network" && "primary-btn")} onClick={() => setActiveTab("network")}>Network Device Status</button>
+              </div>
+            </header>
+
+            <div
+              className="d-flex align-items-center gap-2 flex-nowrap px-3 py-2"
+              style={{ width: "100%", minWidth: 0, overflowX: "auto" }}
+            >
+              {activeTab === "network" ? (
+                <>
+                  <label className="section-search flex-grow-1 mb-0" style={{ minWidth: 360 }}>
+                    <Search size={15} />
+                    <input
+                      placeholder="Search device, brand, location..."
+                      value={manualSearch}
+                      onChange={(event) => setManualSearch(event.target.value)}
+                    />
+                  </label>
+
+                  <NetworkCustomSelect
+                    value={manualStatusFilter}
+                    options={[
+                      { value: "All", label: "All status" },
+                      { value: "Active", label: "Active" },
+                      { value: "Inactive", label: "Inactive" },
+                      { value: "Maintenance", label: "Maintenance" },
+                    ]}
+                    ariaLabel="Filter network device status"
+                    onChange={(nextValue) => setManualStatusFilter(nextValue as "All" | ManualDeviceStatus)}
+                    className="mb-0"
+                    style={{ width: 220, flex: "0 0 220px" }}
+                  />
+                </>
+              ) : (
+                <div className="d-flex align-items-center flex-grow-1" style={{ minWidth: 260 }}>
+                  <strong className="user-pill info">Reference: {lastSearchDate}</strong>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="soft-btn flex-shrink-0"
+                onClick={() => activeTab === "device" ? void loadInventory(true) : void loadManualDevices()}
+                disabled={refreshing || manualLoading || busy}
+              >
+                {(refreshing || manualLoading) ? <Loader2 size={15} className="me-1" /> : <RefreshCw size={15} />}
+                Refresh
               </button>
-              <button type="button" className={activeTab === "network" ? "soft-btn active" : "soft-btn"} onClick={() => setActiveTab("network")}>
-                Network Device Status
-              </button>
+
+              {activeTab === "device" ? (
+                <button
+                  type="button"
+                  className="primary-btn flex-shrink-0"
+                  onClick={() => openScanDialog(selectedNode?.id === hierarchy?.id ? "all" : isIpAddress(selectedNode?.label) ? "ip" : "subnet", selectedNode)}
+                  disabled={!selectedNode || busy}
+                >
+                  <Zap size={15} />
+                  Scan Scope
+                </button>
+              ) : (
+                <button type="button" className="primary-btn flex-shrink-0" onClick={openAddDevice} disabled={busy}>
+                  <Plus size={16} />
+                  Add New
+                </button>
+              )}
             </div>
 
-            {activeTab === "device" ? (
-              <div className="ni-work-body">
-                <div className="content-head">
-                  <div>
-                    <h2>Device Status{selectedNode?.label ? ` : ${selectedNode.label}` : ""}</h2>
-                    <p>Registered, not registered, not installed, and other network object counts.</p>
-                  </div>
-                  <div className="content-actions">
-                    <strong>Reference Date - {lastSearchDate}</strong>
-                    <button type="button" className="soft-btn" onClick={() => void loadInventory(true)} disabled={refreshing || busy}>
-                      {refreshing ? <Loader2 size={15} className="ni-spin" /> : <RefreshCw size={15} />}
-                      Refresh
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-btn"
-                      onClick={() => openScanDialog(selectedNode?.id === hierarchy?.id ? "all" : isIpAddress(selectedNode?.label) ? "ip" : "subnet", selectedNode)}
-                      disabled={!selectedNode || busy}
-                    >
-                      <Zap size={15} />
-                      Scan Scope
-                    </button>
-                  </div>
-                </div>
-
-                {ipDetail ? (
+            <div className="content-body">
+              {activeTab === "device" ? (
+                ipDetail ? (
                   <NetworkPathDetail detail={ipDetail} onScan={() => openScanDialog("ip", selectedNode)} />
                 ) : (
-                  <>
-                    <DeviceStatusOverview
-                      counts={selectedCounts}
-                      total={countTotal(selectedCounts)}
-                      selectedLabel={selectedNode?.label || "Organization"}
-                      targetCount={selectedIps.length}
-                      onOpenStatus={(type) => void openStatusDetails(type)}
-                    />
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="ni-work-body registry-mode">
-                <div className="content-head">
-                  <div>
-                    <h2>Network Device Registry</h2>
-                    <p>
-                      Showing {manualFilteredRows.length === 0 ? 0 : (manualPage - 1) * pageSize + 1}-
-                      {Math.min(manualPage * pageSize, manualFilteredRows.length)} of {manualFilteredRows.length} devices
-                    </p>
-                  </div>
+                  <DeviceStatusOverview
+                    counts={selectedCounts}
+                    total={countTotal(selectedCounts)}
+                    selectedLabel={selectedNode?.label || "Organization"}
+                    targetCount={selectedIps.length}
+                    onOpenStatus={(type) => void openStatusDetails(type)}
+                  />
+                )
+              ) : (
+                <>
+                  <DeviceRegistryTable
+                    rows={manualPageRows}
+                    page={manualPage}
+                    selectedId={editingDevice?.id || null}
+                    loading={manualLoading}
+                    onEdit={openEditDevice}
+                    onDelete={(device) => setDeleteTarget(device)}
+                  />
 
-                  <div className="content-actions">
-                    <label className="section-search">
-                      <Search size={16} />
-                      <input
-                        placeholder="Search device, brand, location..."
-                        value={manualSearch}
-                        onChange={(event) => setManualSearch(event.target.value)}
-                      />
-                      {manualSearch && (
-                        <button type="button" onClick={() => setManualSearch("")}> 
-                          <X size={13} />
-                        </button>
-                      )}
-                    </label>
-
-                    <select className="setting-select" value={manualStatusFilter} onChange={(event) => setManualStatusFilter(event.target.value as "All" | ManualDeviceStatus)}>
-                      <option value="All">All status</option>
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                      <option value="Maintenance">Maintenance</option>
-                    </select>
-
-                    <button type="button" className="soft-btn" onClick={() => void loadManualDevices()} disabled={manualLoading || busy}>
-                      {manualLoading ? <Loader2 size={15} className="ni-spin" /> : <RefreshCw size={15} />}
-                      Refresh
-                    </button>
-
-                    <button type="button" className="primary-btn" onClick={openAddDevice} disabled={busy}>
-                      <Plus size={16} />
-                      Add New
-                    </button>
-                  </div>
-                </div>
-
-                <DeviceRegistryTable
-                  rows={manualPageRows}
-                  page={manualPage}
-                  selectedId={editingDevice?.id || null}
-                  loading={manualLoading}
-                  onEdit={openEditDevice}
-                  onDelete={(device) => setDeleteTarget(device)}
-                />
-
-                <Pagination page={manualPage} totalPages={manualTotalPages} totalRows={manualFilteredRows.length} pageSize={pageSize} itemLabel="devices" onChange={setManualPage} />
-              </div>
-            )}
-          </section>
+                  <Pagination page={manualPage} totalPages={manualTotalPages} totalRows={manualFilteredRows.length} pageSize={pageSize} itemLabel="devices" onChange={setManualPage} />
+                </>
+              )}
+            </div>
+          </main>
         </section>
       </div>
 
@@ -1125,7 +1263,14 @@ export default function NetworkInventory() {
       )}
       {recordDetail && <RecordDetailModal detail={recordDetail} onClose={() => setRecordDetail(null)} />}
       {scanDialog && <ScanJobModal dialog={scanDialog} busy={busy} targetCount={scanDialog.mode === "all" ? totalNetworkRecords : collectIpTargets(scanDialog.node).length} onClose={() => setScanDialog(null)} onSubmit={(commandType, scheduleTime, description) => void submitScan(commandType, scheduleTime, description)} />}
-      {busy && <div className="settings-toast settings-toast-info"><Loader2 size={14} className="ni-spin" /> Processing...</div>}
+      {busy && (
+        <div className="settings-toast-layer">
+          <div className="settings-toast settings-toast-info">
+            <span className="settings-toast-icon"><Loader2 size={16} /></span>
+            <div><strong>Processing</strong><span>Please wait...</span></div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -1142,34 +1287,33 @@ function DeleteDeviceConfirmModal({
   onConfirm: () => void;
 }) {
   return (
-    <div className="settings-confirm-backdrop open" onMouseDown={busy ? undefined : onCancel}>
-      <section className="settings-confirm-modal is-danger" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="delete-device-title">
-        <button type="button" className="modal-close" onClick={onCancel} disabled={busy} aria-label="Close delete confirmation">
-          <X size={16} />
-        </button>
-
-        <div className="pricing-confirm-icon">
-          <Trash2 size={22} />
-        </div>
-        <span className="eyebrow">Please confirm</span>
-        <h2 id="delete-device-title">Remove network device?</h2>
+    <div className="settings-confirm-backdrop" onMouseDown={busy ? undefined : onCancel}>
+      <section className="settings-confirm-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="delete-device-title">
+        <h3 id="delete-device-title">Remove network device?</h3>
         <p>This action will remove the selected device from Network Device Registry.</p>
-
-        <div className="settings-helper-card">
+        <div className="settings-helper-card my-3">
           <strong>{device.deviceName}</strong>
           <span>{device.deviceBrand || "-"} • {device.location || "-"} • {device.deviceStatus || "-"}</span>
         </div>
-
         <div className="settings-confirm-actions">
-          <button type="button" className="soft-btn" onClick={onCancel} disabled={busy}>
-            Cancel
-          </button>
+          <button type="button" className="soft-btn" onClick={onCancel} disabled={busy}>Cancel</button>
           <button type="button" className="danger-btn" onClick={onConfirm} disabled={busy}>
-            {busy ? <Loader2 size={15} className="ni-spin" /> : <Trash2 size={15} />}
+            {busy ? <Loader2 size={15} /> : <Trash2 size={15} />}
             Remove
           </button>
         </div>
       </section>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, note, icon }: { label: string; value: ReactNode; note: ReactNode; icon: ReactNode }) {
+  return (
+    <div className="score-box ema-kpi-card text-start" title={`${label}: ${value}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{note}</small>
+      <i className="d-none">{icon}</i>
     </div>
   );
 }
@@ -1195,38 +1339,30 @@ function NetworkTree({
   const isOpen = forceOpen || expandedIds.has(node.id);
   const total = countTotal(node.counts);
   const isLeafIp = isIpAddress(node.label);
-
-  const selectOnly = () => {
-    onSelect(node);
-  };
-
-  const toggleOnly = (event: MouseEvent) => {
-    event.stopPropagation();
-    if (hasChildren) onToggle(node);
-    else onSelect(node);
-  };
+  const isSelected = selectedNodeId === node.id;
+  const Icon = isLeafIp ? Monitor : isOpen ? FolderOpen : Folder;
 
   return (
-    <div className="ema-sidebar-tree-branch">
+    <div className={cx("d-grid gap-2", level > 0 && "ms-3")}>
       <button
         type="button"
-        className={cx("ni-tree-row", level === 0 && "root", isLeafIp && "device-leaf", selectedNodeId === node.id && "selected")}
-        style={{ paddingLeft: `${14 + level * 18}px` }}
-        onClick={selectOnly}
+        className={cx("setting-btn", isSelected && "active")}
+        onClick={() => {
+          if (hasChildren) onToggle(node);
+          onSelect(node);
+        }}
         title={node.label}
       >
-        <span className={cx("ni-tree-toggle", !hasChildren && "leaf")} onClick={toggleOnly}>
-          {hasChildren ? isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : <ChevronRight size={13} />}
+        <span className="setting-icon"><Icon /></span>
+        <span>
+          <strong>{node.label}</strong>
+          <small>{isLeafIp ? "IP endpoint" : isOpen ? "Click to collapse scope" : "Click to expand scope"}</small>
         </span>
-        <span className="ema-sidebar-tree-icon" onClick={toggleOnly}>
-          {isLeafIp ? <Monitor size={15} className="ni-tree-icon device" /> : isOpen ? <FolderOpen size={15} className="ni-tree-icon" /> : <Folder size={15} className="ni-tree-icon" />}
-        </span>
-        <strong>{node.label}</strong>
-        <span className="ema-sidebar-tree-count">{total}</span>
+        {total > 0 && <b>{total.toLocaleString()}</b>}
       </button>
 
       {hasChildren && isOpen && (
-        <div className="ema-sidebar-tree-children">
+        <div className="d-grid gap-2 ms-3">
           {(node.children || []).map((child) => (
             <NetworkTree
               key={child.id}
@@ -1246,17 +1382,18 @@ function NetworkTree({
 }
 
 function WorkgroupStatisticList({ rows, selected, onSelect }: { rows: WorkgroupStat[]; selected: string; onSelect: (name: string) => void }) {
-  if (!rows.length) return <EmptyState title="No statistics found" subtitle="Workgroup count API returned no rows yet." />;
+  if (!rows.length) return <div className="settings-helper-card">No statistics found.</div>;
 
   return (
-    <div className="policy-list">
+    <div className="d-grid gap-2">
       {rows.map((row) => (
-        <button key={row.name} type="button" className={cx("ni-stat-card", selected === row.name && "selected")} onClick={() => onSelect(row.name)}>
-          <div>
+        <button key={row.name} type="button" className={cx("setting-btn", selected === row.name && "active")} onClick={() => onSelect(row.name)}>
+          <span className="setting-icon"><Database /></span>
+          <span>
             <strong>{row.name}</strong>
-            <span>{row.registered} registered • {row.notRegistered} not registered</span>
-          </div>
-          <em>{row.total}</em>
+            <small>{row.registered} registered • {row.notRegistered} not registered</small>
+          </span>
+          <b>{row.total.toLocaleString()}</b>
         </button>
       ))}
     </div>
@@ -1277,30 +1414,27 @@ function DeviceStatusOverview({
   onOpenStatus: (type: CountKey) => void;
 }) {
   const rows: Array<{ type: CountKey; label: string; description: string; count: number; tone: string; actionLabel: string; icon: typeof CheckCircle2 }> = [
-    { type: "registered", label: "Registered Agent", description: "nPoints client agent exists and is registered for this IP scope.", count: counts.registered, tone: "success", actionLabel: "View registered devices", icon: CheckCircle2 },
-    { type: "notRegistered", label: "Not Registered", description: "Client agent exists but registration status is not completed.", count: counts.notRegistered, tone: "danger", actionLabel: "View not registered devices", icon: AlertCircle },
-    { type: "notInstalled", label: "Not Installed", description: "Detected network object without nPoints agent installed.", count: counts.notInstalled, tone: "warning", actionLabel: "View not installed devices", icon: Activity },
+    { type: "registered", label: "Registered Agent", description: "nPoints client agent exists and is registered for this IP scope.", count: counts.registered, tone: "active", actionLabel: "View registered devices", icon: CheckCircle2 },
+    { type: "notRegistered", label: "Not Registered", description: "Client agent exists but registration status is not completed.", count: counts.notRegistered, tone: "locked", actionLabel: "View not registered devices", icon: AlertCircle },
+    { type: "notInstalled", label: "Not Installed", description: "Detected network object without nPoints agent installed.", count: counts.notInstalled, tone: "review", actionLabel: "View not installed devices", icon: Activity },
     { type: "otherDevice", label: "Other Device", description: "Router, switch, printer, SNMP or other discovered network device.", count: counts.otherDevice, tone: "info", actionLabel: "View other devices", icon: Router },
   ];
 
   return (
-    <div className="content-body">
-      <div className="settings-score users-hero-score">
-        <div>
-          <span>Selected Scope</span>
-          <strong>{total}</strong>
-          <small>{selectedLabel} • {targetCount} scan target(s)</small>
-        </div>
+    <div className="d-grid gap-3">
+      <div className="settings-helper-card">
+        <strong>Selected Scope</strong>
+        <span>{selectedLabel} • {targetCount.toLocaleString()} scan target(s) • {total.toLocaleString()} network object(s)</span>
       </div>
 
       <div className="pricing-table-card table-responsive">
-        <table className="ni-table ni-status-table table table-hover align-middle mb-0">
+        <table className="table table-hover align-middle mb-0">
           <thead>
             <tr>
               <th>Status</th>
               <th>Description</th>
               <th>Count</th>
-              <th>Action</th>
+              <th className="text-end">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -1309,21 +1443,20 @@ function DeviceStatusOverview({
               return (
                 <tr key={row.type}>
                   <td>
-                    <div className={cx("ni-status-name", row.tone)}>
+                    <div className="user-name">
+                      <span className="user-mini-avatar"><Icon size={14} /></span>
                       <span>
-                        <Icon size={16} />
+                        <strong>{row.label}</strong>
+                        <small>{row.actionLabel}</small>
                       </span>
-                      <strong>{row.label}</strong>
                     </div>
                   </td>
                   <td>{row.description}</td>
-                  <td>
-                    <strong className={cx("ni-count-badge", row.tone)}>{row.count}</strong>
-                  </td>
-                  <td>
+                  <td><span className={cx("user-pill", row.tone)}>{row.count.toLocaleString()}</span></td>
+                  <td className="text-end">
                     <button
                       type="button"
-                      className="ni-inline-action ni-icon-action soft-btn"
+                      className="mini-btn icon-only edit"
                       onClick={() => onOpenStatus(row.type)}
                       aria-label={row.actionLabel}
                       title={row.actionLabel}
@@ -1361,12 +1494,12 @@ function StatusDetailModal({
             <h2>{detail.title}</h2>
             <p>{detail.totalRecords} record(s) • paginated detail list.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close status detail">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close status detail">
             <X size={18} />
           </button>
         </div>
-        <div className="user-modal-body">
-          <StatusDetailTable detail={detail} onPage={onPage} onOpenRecord={onOpenRecord} />
+        <div className="user-modal-body content-body">
+          <div className="wide"><StatusDetailTable detail={detail} onPage={onPage} onOpenRecord={onOpenRecord} /></div>
         </div>
       </section>
     </div>
@@ -1451,17 +1584,17 @@ function StatusDetailTable({
   };
 
   return (
-    <div className="content-body">
+    <div className="d-grid gap-3">
       <div className="content-head">
         <div>
           <h3>{detail.title}</h3>
           <span>{detail.totalRecords} record(s) • source: {detail.source}</span>
         </div>
-        {detail.loading && <Loader2 size={17} className="ni-spin" />}
+        {detail.loading && <Loader2 size={17} className="spinner-border spinner-border-sm" />}
       </div>
 
-      <div className="content-toolbar">
-        <label className="ni-search-box ni-detail-search section-search">
+      <div className="user-access-commandbar">
+        <label className="section-search user-search-inline">
           <Search size={16} />
           <input
             value={searchText}
@@ -1475,14 +1608,14 @@ function StatusDetailTable({
           )}
         </label>
 
-        <select className="ni-detail-select setting-select" value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)}>
+        <select className="setting-select" value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)}>
           <option value="All">All agents</option>
           {agentOptions.map((option) => (
             <option value={option} key={option}>Agent {option}</option>
           ))}
         </select>
 
-        <select className="ni-detail-select setting-select" value={workgroupFilter} onChange={(event) => setWorkgroupFilter(event.target.value)}>
+        <select className="setting-select" value={workgroupFilter} onChange={(event) => setWorkgroupFilter(event.target.value)}>
           <option value="All">All workgroups</option>
           {workgroupOptions.map((option) => (
             <option value={option} key={option}>{option}</option>
@@ -1490,18 +1623,18 @@ function StatusDetailTable({
         </select>
 
         {isFiltering && (
-          <button type="button" className="ni-detail-clear soft-btn" onClick={clearFilters}>
+          <button type="button" className="soft-btn" onClick={clearFilters}>
             Clear
           </button>
         )}
 
-        <span className="ni-detail-result-pill">
+        <span className="user-pill info">
           {visibleTotalRows} shown
         </span>
       </div>
 
       <div className="pricing-table-card table-responsive">
-        <table className="ni-table ni-detail-list-table table table-hover align-middle mb-0">
+        <table className="table table-hover align-middle mb-0">
           <thead>
             <tr>
               <th>#</th>
@@ -1519,8 +1652,8 @@ function StatusDetailTable({
               <tr key={`${row.ipAddress || row.computerName || "row"}-${activePage}-${index}`}>
                 <td>{String((activePage - 1) * statusDetailPageSize + index + 1).padStart(2, "0")}</td>
                 <td>
-                  <div className="ni-device-name">
-                    <span className={cx("ni-dot", detail.type === "registered" ? "" : detail.type === "notInstalled" ? "maintenance" : "inactive")} />
+                  <div className="user-name">
+                    <span className="user-mini-avatar"><Monitor size={13} /></span>
                     <div>
                       <strong>{row.computerName || row.username || "-"}</strong>
                       <small>{row.username || row.email || "-"}</small>
@@ -1533,7 +1666,7 @@ function StatusDetailTable({
                 <td>{row.clientAgent || "-"}</td>
                 <td>{row.recentSearchTime || row.lastConnection || "-"}</td>
                 <td>
-                  <button type="button" className="ni-inline-action soft-btn" onClick={() => onOpenRecord(row)}>
+                  <button type="button" className="mini-btn" onClick={() => onOpenRecord(row)}>
                     <Eye size={13} />
                     Detail
                   </button>
@@ -1570,7 +1703,7 @@ function NetworkPathDetail({ detail, onScan }: { detail: IpDetailState; onScan: 
   if (!detail) return null;
 
   return (
-    <div className="content-body">
+    <div className="d-grid gap-3">
       <div className="content-head">
         <div>
           <h2>DEVICE STATUS : {detail.ip}</h2>
@@ -1583,7 +1716,7 @@ function NetworkPathDetail({ detail, onScan }: { detail: IpDetailState; onScan: 
       </div>
 
       <div className="pricing-table-card table-responsive">
-        <table className="ni-path-detail-table table table-hover align-middle mb-0">
+        <table className="table table-hover align-middle mb-0">
           <thead>
             <tr>
               <th>nPoints Agent</th>
@@ -1621,7 +1754,7 @@ function DeviceRegistryTable({
 }) {
   return (
     <div className="pricing-table-card table-responsive">
-      <table className="ni-table ni-registry-table table table-hover align-middle mb-0">
+      <table className="table table-hover align-middle mb-0">
         <thead>
           <tr>
             <th>#</th>
@@ -1641,8 +1774,8 @@ function DeviceRegistryTable({
             <tr key={device.id} className={selectedId === device.id ? "selected" : ""}>
               <td>{String((page - 1) * pageSize + index + 1).padStart(2, "0")}</td>
               <td>
-                <div className="ni-device-name">
-                  <span className={cx("ni-dot", statusTone(device.deviceStatus))} />
+                <div className="user-name">
+                  <span className="user-mini-avatar"><Router size={13} /></span>
                   <div>
                     <strong>{device.deviceName}</strong>
                     <small>{device.location}</small>
@@ -1651,7 +1784,7 @@ function DeviceRegistryTable({
               </td>
               <td>{device.deviceBrand}</td>
               <td>
-                <span className={cx("ni-status-pill mini", statusTone(device.deviceStatus))}>{device.deviceStatus}</span>
+                <span className={cx("user-pill", statusTone(device.deviceStatus) === "inactive" ? "locked" : statusTone(device.deviceStatus) === "maintenance" ? "review" : "active")}>{device.deviceStatus}</span>
               </td>
               <td>{device.deviceVersion}</td>
               <td>{device.location}</td>
@@ -1659,11 +1792,11 @@ function DeviceRegistryTable({
               <td>{device.patchDate}</td>
               <td>{device.remarks || "-"}</td>
               <td>
-                <div className="ni-row-actions">
-                  <button type="button" className="ni-icon-action soft-btn" title="Edit device" aria-label={`Edit ${device.deviceName}`} onClick={() => onEdit(device)}>
+                <div className="user-row-action-wrap clean justify-content-end">
+                  <button type="button" className="mini-btn icon-only edit" title="Edit device" aria-label={`Edit ${device.deviceName}`} onClick={() => onEdit(device)}>
                     <Edit3 size={15} aria-hidden="true" />
                   </button>
-                  <button type="button" className="ni-icon-action danger danger-btn" title="Remove device" aria-label={`Remove ${device.deviceName}`} onClick={() => onDelete(device)}>
+                  <button type="button" className="mini-btn icon-only delete" title="Remove device" aria-label={`Remove ${device.deviceName}`} onClick={() => onDelete(device)}>
                     <Trash2 size={15} aria-hidden="true" />
                   </button>
                 </div>
@@ -1682,7 +1815,7 @@ function DeviceRegistryTable({
           {loading && (
             <tr>
               <td colSpan={10}>
-                <EmptyState icon="loading" title="Loading network devices" subtitle="Reading /api/network/network-device-status." />
+                <EmptyState icon="loading" title="Loading network devices" subtitle="Preparing network device records." />
               </td>
             </tr>
           )}
@@ -1711,29 +1844,28 @@ function Pagination({
   const safePage = Math.min(Math.max(1, page || 1), safeTotalPages);
   const from = totalRows === 0 || !pageSize ? 0 : (safePage - 1) * pageSize + 1;
   const to = totalRows === 0 || !pageSize ? 0 : Math.min(safePage * pageSize, totalRows);
-  const pageText = pageSize ? `${from}-${to} of ${totalRows} ${itemLabel}` : `Page ${safePage} of ${safeTotalPages} · ${totalRows} ${itemLabel}`;
+  const pageText = pageSize ? `${from}-${to} of ${totalRows} ${itemLabel}` : `${totalRows} ${itemLabel}`;
 
   return (
-    <div className="uam-pagination global-style">
-      <div className="ni-pagination-meta ema-pagination-meta uam-page-summary-final">
-        <span>{pageText}</span>
-      </div>
-      <div className="uam-pagination-controls global-style" aria-label="Network inventory pagination">
-        <button type="button" disabled={safePage <= 1} onClick={() => onChange(1)} aria-label="First page">
-          <ChevronsLeft size={15} />
+    <footer className="uam-pagination global-style">
+      <span className="uam-page-summary">Page {safePage} of {safeTotalPages}</span>
+      <span className="uam-page-status">{pageText}</span>
+      <nav className="uam-pagination-controls global-style" aria-label="Network inventory pagination">
+        <button className="uam-page-icon" type="button" disabled={safePage <= 1} onClick={() => onChange(1)} aria-label="First page">
+          <ChevronsLeft size={14} />
         </button>
-        <button type="button" disabled={safePage <= 1} onClick={() => onChange(Math.max(1, safePage - 1))} aria-label="Previous page">
-          <ChevronLeft size={15} />
+        <button className="uam-page-icon" type="button" disabled={safePage <= 1} onClick={() => onChange(Math.max(1, safePage - 1))} aria-label="Previous page">
+          <ChevronLeft size={14} />
         </button>
-        <b>{safePage}</b>
-        <button type="button" disabled={safePage >= safeTotalPages} onClick={() => onChange(Math.min(safeTotalPages, safePage + 1))} aria-label="Next page">
-          <ChevronRight size={15} />
+        <b className="uam-page-current">{safePage}</b>
+        <button className="uam-page-icon" type="button" disabled={safePage >= safeTotalPages} onClick={() => onChange(Math.min(safeTotalPages, safePage + 1))} aria-label="Next page">
+          <ChevronRight size={14} />
         </button>
-        <button type="button" disabled={safePage >= safeTotalPages} onClick={() => onChange(safeTotalPages)} aria-label="Last page">
-          <ChevronsRight size={15} />
+        <button className="uam-page-icon" type="button" disabled={safePage >= safeTotalPages} onClick={() => onChange(safeTotalPages)} aria-label="Last page">
+          <ChevronsRight size={14} />
         </button>
-      </div>
-    </div>
+      </nav>
+    </footer>
   );
 }
 
@@ -1757,24 +1889,24 @@ function AddFolderModal({
 
   return (
     <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <form className="ni-modal ni-folder-modal user-modal advanced ema-kb-form" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+      <form className="user-modal advanced" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="user-modal-head">
           <div>
             <span>Organization Tree</span>
             <h2>Add Folder</h2>
             <p>Add a folder under {parentLabel}. This keeps the hierarchy action separate from network scan jobs.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close add folder">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close add folder">
             <X size={18} />
           </button>
         </div>
 
-        <div className="user-modal-body">
-          <label className="ni-field ni-field-wide ema-form-field-wide">
+        <div className="user-modal-body content-body">
+          <label className="form-field wide">
             <span>Folder Name</span>
-            <input required value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="Example: Data Centre / Server Room / Branch A" autoFocus />
+            <input required value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="Example: Data Centre / Server Room / Branch A" className="setting-input" autoFocus />
           </label>
-          <div className="ni-inline-note">
+          <div className="settings-helper-card wide">
             <strong>Parent:</strong>
             <span>{parentLabel}</span>
           </div>
@@ -1785,7 +1917,7 @@ function AddFolderModal({
             Cancel
           </button>
           <button type="submit" className="primary-btn" disabled={busy}>
-            {busy ? <Loader2 size={16} className="ni-spin" /> : <Plus size={16} />}
+            {busy ? <Loader2 size={16} className="spinner-border spinner-border-sm" /> : <Plus size={16} />}
             Add Folder
           </button>
         </div>
@@ -1827,32 +1959,32 @@ function DeviceFormModal({
 
   return (
     <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <form className="ni-modal user-modal advanced ema-kb-form" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+      <form className="user-modal advanced" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="user-modal-head">
           <div>
             <span>{mode === "edit" ? "Edit Network Device" : "Register Network Device"}</span>
             <h2>{mode === "edit" ? device?.deviceName || "Edit Device" : "Add New Device"}</h2>
-            <p>{mode === "edit" ? "Update manual device status through the CRUD API." : "Register a router, switch, access point, firewall or other network device."}</p>
+            <p>{mode === "edit" ? "Update the selected network device record." : "Register a router, switch, access point, firewall or other network device."}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close form">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close form">
             <X size={18} />
           </button>
         </div>
 
-        <div className="user-modal-body">
-          <label className="ni-field ni-field-wide ema-form-field-wide">
+        <div className="user-modal-body content-body">
+          <label className="form-field wide">
             <span>Device Name</span>
-            <input required value={form.deviceName} onChange={(event) => update("deviceName", event.target.value)} placeholder="Core Router 01" />
+            <input required value={form.deviceName} onChange={(event) => update("deviceName", event.target.value)} placeholder="Core Router 01" className="setting-input" />
           </label>
 
-          <div className="ni-form-grid form-grid">
-            <label className="ni-field">
+          <div className="form-grid wide">
+            <label className="form-field">
               <span>Device Brand</span>
-              <input value={form.deviceBrand} onChange={(event) => update("deviceBrand", event.target.value)} placeholder="Cisco / ASUS / Fortinet" />
+              <input value={form.deviceBrand} onChange={(event) => update("deviceBrand", event.target.value)} placeholder="Cisco / ASUS / Fortinet" className="setting-input" />
             </label>
-            <label className="ni-field">
+            <label className="form-field">
               <span>Device Status</span>
-              <select value={form.deviceStatus} onChange={(event) => update("deviceStatus", event.target.value)}>
+              <select className="setting-select" value={form.deviceStatus} onChange={(event) => update("deviceStatus", event.target.value)}>
                 <option>Active</option>
                 <option>Inactive</option>
                 <option>Maintenance</option>
@@ -1860,31 +1992,31 @@ function DeviceFormModal({
             </label>
           </div>
 
-          <div className="ni-form-grid form-grid">
-            <label className="ni-field">
+          <div className="form-grid wide">
+            <label className="form-field">
               <span>Version</span>
-              <input value={form.deviceVersion} onChange={(event) => update("deviceVersion", event.target.value)} placeholder="V2.0" />
+              <input value={form.deviceVersion} onChange={(event) => update("deviceVersion", event.target.value)} placeholder="V2.0" className="setting-input" />
             </label>
-            <label className="ni-field">
+            <label className="form-field">
               <span>Patch Date</span>
-              <input value={form.patchDate} onChange={(event) => update("patchDate", event.target.value)} type="date" />
+              <input value={form.patchDate} onChange={(event) => update("patchDate", event.target.value)} type="date" className="setting-input" />
             </label>
           </div>
 
-          <div className="ni-form-grid form-grid">
-            <label className="ni-field">
+          <div className="form-grid wide">
+            <label className="form-field">
               <span>Location</span>
-              <input value={form.location} onChange={(event) => update("location", event.target.value)} placeholder="Server Room / HQ" />
+              <input value={form.location} onChange={(event) => update("location", event.target.value)} placeholder="Server Room / HQ" className="setting-input" />
             </label>
-            <label className="ni-field">
+            <label className="form-field">
               <span>Purpose</span>
-              <input value={form.purpose} onChange={(event) => update("purpose", event.target.value)} placeholder="Router / Switch / Firewall" />
+              <input value={form.purpose} onChange={(event) => update("purpose", event.target.value)} placeholder="Router / Switch / Firewall" className="setting-input" />
             </label>
           </div>
 
-          <label className="ni-field ni-field-wide ema-form-field-wide">
+          <label className="form-field wide">
             <span>Remarks</span>
-            <textarea value={form.remarks} onChange={(event) => update("remarks", event.target.value)} rows={3} placeholder="Operational note or device description" />
+            <textarea value={form.remarks} onChange={(event) => update("remarks", event.target.value)} rows={3} placeholder="Operational note or device description" className="setting-textarea" />
           </label>
         </div>
 
@@ -1893,7 +2025,7 @@ function DeviceFormModal({
             Cancel
           </button>
           <button type="submit" className="primary-btn" disabled={busy}>
-            {busy ? <Loader2 size={16} className="ni-spin" /> : mode === "edit" ? <Edit3 size={16} /> : <Plus size={16} />}
+            {busy ? <Loader2 size={16} className="spinner-border spinner-border-sm" /> : mode === "edit" ? <Edit3 size={16} /> : <Plus size={16} />}
             {mode === "edit" ? "Save Changes" : "Add Device"}
           </button>
         </div>
@@ -1910,14 +2042,14 @@ function RecordDetailModal({ detail, onClose }: { detail: NonNullable<RecordDeta
           <div>
             <span>{detail.source}</span>
             <h2>{detail.title}</h2>
-            <p>Backend raw detail from Network Inventory API.</p>
+            <p>Detailed network inventory information.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close detail">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close detail">
             <X size={18} />
           </button>
         </div>
-        <div className="user-modal-body">
-          <table className="ni-record-table">
+        <div className="user-modal-body content-body">
+          <table className="table table-hover align-middle mb-0">
             <tbody>
               {detail.rows.map(([key, value]) => (
                 <tr key={key}>
@@ -1963,20 +2095,20 @@ function ScanJobModal({
 
   return (
     <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <form className="ni-modal ni-scan-modal user-modal advanced ema-kb-form" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+      <form className="user-modal advanced" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="user-modal-head">
           <div>
             <span>Network Inventory Scan Job</span>
             <h2>{dialog.mode === "all" ? "Scan All Network IPs" : dialog.mode === "subnet" ? `Scan Subnet ${dialog.node?.label || ""}` : `Scan IP ${dialog.ipAddress || dialog.node?.label || ""}`}</h2>
-            <p>Creates Job_Type 10600 / Job_Command 1800 for the endpoint agent pickup flow.</p>
+            <p>Creates a network scan job for the selected scope.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close scan modal">
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close scan modal">
             <X size={18} />
           </button>
         </div>
 
-        <div className="user-modal-body">
-          <div className="ni-scan-summary-grid">
+        <div className="user-modal-body content-body">
+          <div className="audit-kpi-strip wide">
             <div>
               <span>Scan Mode</span>
               <strong>{dialog.mode.toUpperCase()}</strong>
@@ -1991,24 +2123,24 @@ function ScanJobModal({
             </div>
           </div>
 
-          <div className="ni-form-grid form-grid">
-            <label className="ni-field">
+          <div className="form-grid wide">
+            <label className="form-field">
               <span>Command Type</span>
-              <select value={commandType} onChange={(event) => setCommandType(event.target.value as CommandType)}>
+              <select className="setting-select" value={commandType} onChange={(event) => setCommandType(event.target.value as CommandType)}>
                 <option value="push">Push Now</option>
                 <option value="schedule">Schedule</option>
               </select>
             </label>
 
-            <label className="ni-field">
+            <label className="form-field">
               <span>Schedule Time</span>
-              <input type="datetime-local" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} disabled={commandType !== "schedule"} required={commandType === "schedule"} />
+              <input type="datetime-local" value={scheduleTime} onChange={(event) => setScheduleTime(event.target.value)} disabled={commandType !== "schedule"} required={commandType === "schedule"} className="setting-input" />
             </label>
           </div>
 
-          <label className="ni-field ni-field-wide ema-form-field-wide">
+          <label className="form-field wide">
             <span>Description</span>
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} />
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="setting-textarea" />
           </label>
         </div>
 
@@ -2017,7 +2149,7 @@ function ScanJobModal({
             Cancel
           </button>
           <button type="submit" className="primary-btn" disabled={busy}>
-            {busy ? <Loader2 size={16} className="ni-spin" /> : <Play size={16} />}
+            {busy ? <Loader2 size={16} className="spinner-border spinner-border-sm" /> : <Play size={16} />}
             Create Scan Job
           </button>
         </div>
@@ -2028,8 +2160,8 @@ function ScanJobModal({
 
 function EmptyState({ icon, title, subtitle }: { icon?: "loading"; title: string; subtitle: string }) {
   return (
-    <div className="ni-empty-table table table-hover align-middle mb-0-empty-panel">
-      {icon === "loading" ? <Loader2 size={28} className="ni-spin" /> : <Database size={28} />}
+    <div className="settings-helper-card text-center py-4">
+      {icon === "loading" ? <Loader2 size={28} className="spinner-border spinner-border-sm" /> : <Database size={28} />}
       <strong>{title}</strong>
       <span>{subtitle}</span>
     </div>
