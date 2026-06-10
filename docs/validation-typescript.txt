@@ -1,0 +1,2 @@
+src/pages/Report.tsx: parsed ok
+src/utils/reportPdfCanvas.ts: parsed ok

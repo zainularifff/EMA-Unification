@@ -439,7 +439,9 @@ async function updateEmaLoginFailure(pool, userID) {
 */
 
 function emaUserRequires2FA(user) {
-    return user?.RequireMFA === true || user?.RequireMFA === 1 || user?.TwoFactorEnabled === true || user?.TwoFactorEnabled === 1;
+    // RequireMFA is the policy switch controlled by User Access Management.
+    // TwoFactorEnabled only means the user has completed authenticator setup before.
+    return user?.RequireMFA === true || user?.RequireMFA === 1;
 }
 
 function mapEmaTwoFactorUser(user) {
@@ -1196,6 +1198,51 @@ async function tableColumnExists(pool, tableName, columnName) {
     return result.recordset.length > 0;
 }
 
+async function hasBiosInventoryTables(pool) {
+    try {
+        const [hasCurrent, hasValue] = await Promise.all([
+            tableExists(pool, "TSHI_OBJECT_CURRENT"),
+            tableExists(pool, "TSHI_OBJECT_VALUE")
+        ]);
+
+        return hasCurrent && hasValue;
+    } catch (err) {
+        console.warn("BIOS inventory table check skipped:", err.message);
+        return false;
+    }
+}
+
+function getBiosSqlFragments(rootAlias = "a", connectionAlias = rootAlias, includeBios = false) {
+    if (!includeBios) {
+        return {
+            select: `CAST(NULL AS NVARCHAR(100)) AS BiosDate,
+        CAST(NULL AS INT) AS PCAge`,
+            join: ""
+        };
+    }
+
+    const parsedBiosDate = `COALESCE(
+            TRY_CONVERT(date, biosValue.Object_Value_Str, 120),
+            TRY_CONVERT(date, biosValue.Object_Value_Str, 103),
+            TRY_CONVERT(date, biosValue.Object_Value_Str, 101),
+            TRY_CONVERT(date, biosValue.Object_Value_Str)
+        )`;
+
+    return {
+        select: `biosValue.Object_Value_Str AS BiosDate,
+        CASE
+            WHEN ${parsedBiosDate} IS NULL THEN NULL
+            ELSE DATEDIFF(YEAR, ${parsedBiosDate}, ISNULL(${connectionAlias}.ConnectionTime, GETDATE()))
+        END AS PCAge`,
+        join: `
+        LEFT JOIN TSHI_OBJECT_CURRENT biosCurrent WITH (NOLOCK)
+            ON ${rootAlias}.Object_Root_Idn = biosCurrent.Object_Root_Idn
+           AND biosCurrent.Object_Field_Idn = 14
+        LEFT JOIN TSHI_OBJECT_VALUE biosValue WITH (NOLOCK)
+            ON biosValue.Object_Value_Idn = biosCurrent.Object_Value_Idn`
+    };
+}
+
 async function getDepartmentsRecursive(pool, parentID){
     let query = `
 SELECT DISTINCT
@@ -1253,6 +1300,8 @@ async function getAssetsByRelationID(pool, relationID) {
     //         .input("RelationID", sql.Int, relationID)
     //         .execute(query);
 
+    const biosFragments = getBiosSqlFragments("a", "a", await hasBiosInventoryTables(pool));
+
     const query = `
 declare @Object_Rel_Idn int = @RelationID;
 SELECT
@@ -1265,9 +1314,11 @@ SELECT
         a.Model,
         a.ConnectionTime,
         case when a.ConnectionStatus=1 then 'Online' else 'Offline' end as ConnectionStatus,
-        a.IP
+        a.IP,
+        ${biosFragments.select}
     FROM TS_OBJECT_ROOT a
         left join TS_OBJECT_RELATION b on a.Object_Rel_Idn=b.Object_Rel_Idn
+        ${biosFragments.join}
     WHERE a.Object_Rel_Idn = @Object_Rel_Idn
 union
     select 
@@ -1280,7 +1331,9 @@ union
         a.DeviceModelName as Model,
         a.DeviceTimeStamp as ConnectionTime,
         a.ConnectionStatus as ConnectionStatus,
-        case when a.DeviceLocalIPAddress is null or a.DeviceLocalIPAddress='' then a.DeviceIPAddress else a.DeviceLocalIPAddress end as IP
+        case when a.DeviceLocalIPAddress is null or a.DeviceLocalIPAddress='' then a.DeviceIPAddress else a.DeviceLocalIPAddress end as IP,
+        CAST(NULL AS NVARCHAR(100)) AS BiosDate,
+        CAST(NULL AS INT) AS PCAge
     from TSMDM_ASSET a
         left join TSMDM_OBJECT_RELATION b on a.MDM_Asset_Idn=b.MDM_Asset_Idn
         left join TS_OBJECT_RELATION c on b.Object_Rel_Idn=c.Object_Rel_Idn
@@ -1416,6 +1469,15 @@ function sdInferAssetBrand(...values) {
     return found ? found.brand : "";
 }
 
+function sdNormalizeAssetPcAge(value) {
+    if (value === undefined || value === null || value === "") return null;
+
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue)) return null;
+
+    return Math.max(0, Math.floor(numberValue));
+}
+
 function sdNormalizeAssetRow(row) {
     const model = sdAssetText(row.model || row.Model || row.DeviceModelName || row.machineType || row.MachineType);
     const os = sdAssetText(row.os || row.OS || row.PlatformType || row.deviceType || row.DeviceType, "-");
@@ -1424,6 +1486,8 @@ function sdNormalizeAssetRow(row) {
         "-"
     );
     const brand = sdAssetText(row.brand || row.Brand || row.manufacturer || row.Manufacturer || sdInferAssetBrand(row.brand, row.Manufacturer, model, name));
+    const biosDate = sdAssetText(row.biosDate || row.BiosDate || row.BIOSDate || row.bios_date);
+    const pcAge = sdNormalizeAssetPcAge(row.pcAge ?? row.PCAge ?? row.PcAge ?? row.pc_age);
 
     return {
         ...row,
@@ -1441,7 +1505,11 @@ function sdNormalizeAssetRow(row) {
         deviceType: sdAssetText(row.deviceType || row.DeviceType || os, os),
         ipAddress: sdAssetText(row.ipAddress || row.IP || row.DeviceIPAddress || row.DeviceLocalIPAddress),
         customerName: sdAssetText(row.customerName || row.CustomerName || row.Object_Full_Name || row.department),
-        department: sdAssetText(row.department || row.Object_Full_Name || row.customerName || row.CustomerName)
+        department: sdAssetText(row.department || row.Object_Full_Name || row.customerName || row.CustomerName),
+        biosDate: biosDate || "-",
+        BiosDate: biosDate || null,
+        pcAge,
+        PCAge: pcAge
     };
 }
 
@@ -1454,6 +1522,8 @@ async function handleServiceDeskAssets(req, res) {
         const request = pool.request();
         request.input("SearchText", sql.NVarChar(255), `%${search}%`);
         request.input("CustomerName", sql.NVarChar(255), customerName);
+
+        const serviceDeskBiosFragments = getBiosSqlFragments("r", "r", await hasBiosInventoryTables(pool));
 
         const result = await request.query(`
             SELECT TOP 500
@@ -1473,6 +1543,8 @@ async function handleServiceDeskAssets(req, res) {
                 END AS ipAddress,
                 ISNULL(rel.Object_Full_Name, '') AS customerName,
                 ISNULL(rel.Object_Full_Name, '') AS department,
+                CAST(NULL AS NVARCHAR(100)) AS BiosDate,
+                CAST(NULL AS INT) AS PCAge,
                 'MDM' AS source
             FROM TSMDM_ASSET a WITH (NOLOCK)
             LEFT JOIN TSMDM_OBJECT_RELATION mor WITH (NOLOCK)
@@ -1512,10 +1584,12 @@ async function handleServiceDeskAssets(req, res) {
                 ISNULL(r.IP, '') AS ipAddress,
                 ISNULL(rel.Object_Full_Name, '') AS customerName,
                 ISNULL(rel.Object_Full_Name, '') AS department,
+                ${serviceDeskBiosFragments.select},
                 'EM' AS source
             FROM TS_OBJECT_ROOT r WITH (NOLOCK)
             LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
                 ON r.Object_Rel_Idn = rel.Object_Rel_Idn
+            ${serviceDeskBiosFragments.join}
             WHERE
                 (
                     @SearchText = '%%'
@@ -1537,6 +1611,10 @@ async function handleServiceDeskAssets(req, res) {
         let data = (result.recordset || []).map(sdNormalizeAssetRow);
 
         if (data.length === 0 && await tableExists(pool, "HD_Assets")) {
+            const hasHdAssetBiosDate = await tableColumnExists(pool, "HD_Assets", "BiosDate").catch(() => false);
+            const hasHdAssetPcAge = await tableColumnExists(pool, "HD_Assets", "PCAge").catch(() => false);
+            const hdBiosSelect = hasHdAssetBiosDate ? "BiosDate AS BiosDate" : "CAST(NULL AS NVARCHAR(100)) AS BiosDate";
+            const hdPcAgeSelect = hasHdAssetPcAge ? "PCAge AS PCAge" : "CAST(NULL AS INT) AS PCAge";
             const hdRequest = pool.request();
             hdRequest.input("SearchText", sql.NVarChar(255), `%${search}%`);
             hdRequest.input("CustomerName", sql.NVarChar(255), customerName);
@@ -1555,6 +1633,8 @@ async function handleServiceDeskAssets(req, res) {
                     OS AS os,
                     IP AS ipAddress,
                     CustomerName AS department,
+                    ${hdBiosSelect},
+                    ${hdPcAgeSelect},
                     'HD' AS source
                 FROM HD_Assets WITH (NOLOCK)
                 WHERE
@@ -4384,6 +4464,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
         const status = accountLocked ? "Locked" : normalizeEmaUserStatus(req.body.status);
         const roleNames = getRequestedEmaRoles(req.body);
         const passwordText = String(req.body.password || req.body.newPassword || "").trim();
+        const requestedRequireMFA = parseEmaBit(req.body.requireMFA ?? req.body.mfa, false);
 
         if (!fullName && !username) {
             return res.status(400).json({ success: false, message: "Full name or username is required." });
@@ -4424,7 +4505,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
             .input("PhoneNo", sql.NVarChar, req.body.phoneNo || "")
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
-            .input("RequireMFA", sql.Bit, parseEmaBit(req.body.requireMFA ?? req.body.mfa, false) ? 1 : 0)
+            .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
@@ -4519,6 +4600,7 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
         }
 
         const passwordHash = passwordText ? await bcrypt.hash(passwordText, 10) : null;
+        const requestedRequireMFA = parseEmaBit(req.body.requireMFA ?? req.body.mfa, false);
 
         const pool = await sql.connect(dbConfig);
         await assertEmaUsersTable(pool);
@@ -4541,6 +4623,21 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
             return res.status(409).json({ success: false, message: "Username or email already exists." });
         }
 
+        const currentUserResult = await pool.request()
+            .input("UserID", sql.Int, userID)
+            .query(`
+                SELECT TOP 1 RequireMFA, TwoFactorEnabled, TwoFactorSecret
+                FROM EMA_Users WITH (NOLOCK)
+                WHERE UserID = @UserID;
+            `);
+
+        if (currentUserResult.recordset.length === 0) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        const currentRequireMFA = currentUserResult.recordset[0].RequireMFA === true || currentUserResult.recordset[0].RequireMFA === 1;
+        const resetMfaEnrollment = !requestedRequireMFA || (requestedRequireMFA && !currentRequireMFA);
+
         const passwordUpdateClause = passwordHash
             ? `,
                     PasswordHash = @PasswordHash,
@@ -4559,7 +4656,8 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
             .input("PhoneNo", sql.NVarChar, req.body.phoneNo || "")
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
-            .input("RequireMFA", sql.Bit, parseEmaBit(req.body.requireMFA ?? req.body.mfa, false) ? 1 : 0)
+            .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
+            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
@@ -4586,6 +4684,10 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
                     Status = @Status,
                     IsActive = @IsActive,
                     RequireMFA = @RequireMFA,
+                    TwoFactorEnabled = CASE WHEN @ResetMfaEnrollment = 1 THEN 0 ELSE TwoFactorEnabled END,
+                    TwoFactorSecret = CASE WHEN @ResetMfaEnrollment = 1 THEN NULL ELSE TwoFactorSecret END,
+                    TwoFactorVerifiedAt = CASE WHEN @ResetMfaEnrollment = 1 THEN NULL ELSE TwoFactorVerifiedAt END,
+                    TwoFactorResetAt = CASE WHEN @ResetMfaEnrollment = 1 THEN GETDATE() ELSE TwoFactorResetAt END,
                     AccountLocked = @AccountLocked,
                     LockReason = @LockReason,
                     AccessStartDate = @AccessStartDate,
@@ -4736,13 +4838,33 @@ app.put("/api/settings/users/:id/mfa", authenticateToken, async (req, res) => {
         const pool = await sql.connect(dbConfig);
         await assertEmaUsersTable(pool);
 
+        const currentUserResult = await pool.request()
+            .input("UserID", sql.Int, userID)
+            .query(`
+                SELECT TOP 1 RequireMFA, TwoFactorEnabled, TwoFactorSecret
+                FROM EMA_Users WITH (NOLOCK)
+                WHERE UserID = @UserID;
+            `);
+
+        if (currentUserResult.recordset.length === 0) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        const currentRequireMFA = currentUserResult.recordset[0].RequireMFA === true || currentUserResult.recordset[0].RequireMFA === 1;
+        const resetMfaEnrollment = !requireMFA || (requireMFA && !currentRequireMFA);
+
         const result = await pool.request()
             .input("UserID", sql.Int, userID)
             .input("RequireMFA", sql.Bit, requireMFA ? 1 : 0)
+            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
             .input("UpdatedBy", sql.NVarChar, req.user?.userID || "system")
             .query(`
                 UPDATE EMA_Users
                 SET RequireMFA = @RequireMFA,
+                    TwoFactorEnabled = CASE WHEN @ResetMfaEnrollment = 1 THEN 0 ELSE TwoFactorEnabled END,
+                    TwoFactorSecret = CASE WHEN @ResetMfaEnrollment = 1 THEN NULL ELSE TwoFactorSecret END,
+                    TwoFactorVerifiedAt = CASE WHEN @ResetMfaEnrollment = 1 THEN NULL ELSE TwoFactorVerifiedAt END,
+                    TwoFactorResetAt = CASE WHEN @ResetMfaEnrollment = 1 THEN GETDATE() ELSE TwoFactorResetAt END,
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
@@ -4751,6 +4873,7 @@ app.put("/api/settings/users/:id/mfa", authenticateToken, async (req, res) => {
             `);
 
         if (result.recordset.length === 0) return res.status(404).json({ success: false, message: "User not found." });
+
         const data = mapEmaUserResponse(result.recordset[0]);
         await logEmaAudit(pool, req, requireMFA ? "Enabled MFA for EMA user" : "Disabled MFA for EMA user", "User Access Management", "Success", data);
         return res.json({ success: true, data });
@@ -12581,6 +12704,146 @@ function softInvText(value) {
     return String(value).trim();
 }
 
+function softInvCleanText(value, fallback = "") {
+    if (value === undefined || value === null) return fallback;
+
+    const text = String(value)
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!text || text === "-" || /^(null|undefined|n\/?a|na|not available|not collected)$/i.test(text)) {
+        return fallback;
+    }
+
+    return text;
+}
+
+function softInvFirstText(...values) {
+    for (const value of values) {
+        const text = softInvCleanText(value);
+        if (text) return text;
+    }
+    return "";
+}
+
+function softInvIsGuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(softInvCleanText(value));
+}
+
+function softInvNormalizeSoftwareNameValue(value, fallback = "") {
+    let text = softInvCleanText(value, fallback);
+
+    if (softInvIsGuid(text)) {
+        text = softInvCleanText(fallback);
+    }
+
+    if (!text) return "-";
+
+    const lower = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+    if (lower === "zoom" || lower.includes("zoom workplace")) return "Zoom Workplace";
+    if (lower.includes("google chrome")) return "Google Chrome";
+    if (lower.includes("microsoft edge")) return "Microsoft Edge";
+    if (lower.includes("microsoft onedrive") || lower === "onedrive") return "Microsoft OneDrive";
+    if (lower.includes("tightvnc")) return "TightVNC";
+
+    if (lower.includes("adobe acrobat") && /64[ -]?bit/.test(lower)) return "Adobe Acrobat (64-bit)";
+    if (lower.includes("adobe acrobat")) return "Adobe Acrobat";
+
+    return text;
+}
+
+function softInvNormalizeCategoryName(value) {
+    const text = softInvCleanText(value, "Unclassified");
+    const lower = text.toLowerCase();
+
+    if (["others", "other categories", "tools", "uncategorized", "unknown"].includes(lower)) {
+        return "Unclassified";
+    }
+
+    return text;
+}
+
+function softInvNormalizeOs(value, platformType = "") {
+    const os = softInvCleanText(value);
+    const platform = softInvCleanText(platformType);
+
+    if (os && os !== platform) return os;
+    if (/windows/i.test(platform)) return "Windows";
+    if (/android/i.test(platform)) return "Android";
+    if (/ios|ipad/i.test(platform)) return "iOS";
+    if (/mac|darwin/i.test(platform)) return "macOS";
+
+    return platform || "-";
+}
+
+function softInvNormalizeRow(row = {}) {
+    const fallbackSoftwareName = softInvFirstText(
+        row.RawSoftwareID,
+        row.SoftwareID,
+        row.Id,
+        row.id
+    );
+
+    const softwareName = softInvNormalizeSoftwareNameValue(
+        softInvFirstText(
+            row.SoftwareName,
+            row.softwareName,
+            row.SWUNI_Name,
+            row.SWUNI_Alias,
+            row.Name,
+            row.name,
+            row.RawSoftwareName
+        ),
+        fallbackSoftwareName
+    );
+
+    const categoryName = softInvNormalizeCategoryName(
+        softInvFirstText(row.CategoryName, row.categoryName, row.Category, row.category, row.SW_CATEGORY)
+    );
+
+    const publisher = softInvCleanText(row.Publisher || row.publisher || row.Description || row.description);
+    const version = softInvCleanText(row.Version || row.version || row.SWUNI_Version || row.FileVersion);
+    const assetTag = softInvFirstText(row.AssetTag, row.assetTag, row.DeviceName, row.DeviceID, row.ComputerName, row.Object_DeviceID, row.AssetID, row.assetId) || "-";
+    const computerName = softInvFirstText(row.ComputerName, row.computerName, row.DeviceName, row.deviceName, assetTag) || assetTag;
+    const machineType = softInvFirstText(row.MachineType, row.machineType, row.DeviceType, row.deviceType, row.PlatformType, row.platformType) || "-";
+    const os = softInvNormalizeOs(
+        softInvFirstText(row.OS, row.os, row.OperatingSystem, row.operatingSystem),
+        softInvFirstText(row.PlatformType, row.platformType, machineType)
+    );
+    const customerName = softInvFirstText(row.CustomerName, row.customerName, row.Object_Full_Name, row.Department, row.department, row.Object_Client_Name);
+    const department = softInvFirstText(row.Department, row.department, row.Object_Full_Name, customerName);
+
+    return {
+        ...row,
+        SoftwareName: softwareName,
+        softwareName,
+        CategoryName: categoryName,
+        categoryName,
+        Publisher: publisher,
+        publisher,
+        Version: version,
+        version,
+        AssetTag: assetTag,
+        assetTag,
+        ComputerName: computerName,
+        computerName,
+        MachineType: machineType,
+        machineType,
+        OS: os,
+        os,
+        CustomerName: customerName,
+        customerName,
+        Department: department,
+        department
+    };
+}
+
+function softInvNormalizeRows(data) {
+    return Array.isArray(data) ? data.map(softInvNormalizeRow) : [];
+}
+
 function softInvSendWrapped(res, data, meta = {}) {
     return res.json({
         success: true,
@@ -12604,6 +12867,8 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 OR base.CategoryName LIKE @SearchText
                 OR base.PlatformType LIKE @SearchText
                 OR base.Description LIKE @SearchText
+                OR base.CustomerName LIKE @SearchText
+                OR base.DeviceModelName LIKE @SearchText
             )
         `;
     }
@@ -12627,6 +12892,7 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 asset.ConnectionStatus,
                 asset.DeviceIPAddress,
                 asset.DeviceLocalIPAddress,
+                relInfo.Object_Full_Name AS CustomerName,
 
                 ISNULL(NULLIF(LTRIM(RTRIM(cat.CategoryName)), ''), 'Unclassified') AS CategoryName,
 
@@ -12648,6 +12914,15 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 ON sw.DeviceID = asset.DeviceID
             LEFT JOIN TS_SW_CATEGORY cat WITH (NOLOCK)
                 ON sw.SW_CATEGORY = cat.CategoryID
+            OUTER APPLY (
+                SELECT TOP 1 rel.Object_Full_Name
+                FROM TSMDM_OBJECT_RELATION mor WITH (NOLOCK)
+                INNER JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
+                    ON mor.Object_Rel_Idn = rel.Object_Rel_Idn
+                WHERE mor.MDM_Asset_Idn = asset.MDM_Asset_Idn
+                  AND ISNULL(rel.Object_Rel_Deleted, 0) = 0
+                ORDER BY rel.Object_Full_Name ASC
+            ) relInfo
         )
         SELECT
             CleanSoftwareName AS SoftwareID,
@@ -12664,7 +12939,7 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
             ISNULL(DeviceName, '-') AS ComputerName,
             ISNULL(PlatformType, '-') AS MachineType,
             ISNULL(PlatformType, '-') AS OS,
-            '' AS CustomerName,
+            ISNULL(CustomerName, '') AS CustomerName,
 
             CASE
                 WHEN DeviceLocalIPAddress IS NULL OR DeviceLocalIPAddress = ''
@@ -12672,7 +12947,7 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 ELSE DeviceLocalIPAddress
             END AS IP,
 
-            '' AS Department,
+            ISNULL(CustomerName, '') AS Department,
             ISNULL(CAST(ConnectionStatus AS VARCHAR(100)), '-') AS AgentStatus,
             'MDM' AS Object_Agent,
             ISNULL(DeviceID, '-') AS Object_DeviceID,
@@ -12708,7 +12983,7 @@ async function handleSoftwareInventoryList(req, res) {
                 SWName: { type: sql.VarChar(255), value: swname }
             });
 
-            return softInvSendWrapped(res, data, { scope: "client", clientID });
+            return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "client", clientID });
         }
 
         if (relationID) {
@@ -12717,11 +12992,11 @@ async function handleSoftwareInventoryList(req, res) {
                 SWName: { type: sql.VarChar(255), value: swname }
             });
 
-            return softInvSendWrapped(res, data, { scope: "relation", relationID });
+            return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "relation", relationID });
         }
 
         const data = await getMdmSoftwareInventory(pool, swname);
-        return res.json(data);
+        return res.json(softInvNormalizeRows(data));
 
     } catch (err) {
         console.error("GET /api/software error:", err);
@@ -12749,7 +13024,7 @@ async function handleSoftwareCategories(req, res) {
 
         return res.json(
             (result.recordset || [])
-                .map((row) => row.CategoryName)
+                .map((row) => softInvNormalizeCategoryName(row.CategoryName))
                 .filter(Boolean)
         );
 
@@ -12840,7 +13115,7 @@ app.get("/api/software/client/:clientID", authenticateToken, async (req, res) =>
             SWName: { type: sql.VarChar(255), value: swname }
         });
 
-        return softInvSendWrapped(res, data, { scope: "client", clientID });
+        return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "client", clientID });
     } catch (err) {
         console.error("GET /api/software/client/:clientID error:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve client software list", error: err.message });
@@ -12873,7 +13148,7 @@ app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
             DeviceID: { type: sql.VarChar(255), value: deviceID }
         });
 
-        return softInvSendWrapped(res, data, { scope: "mdm", deviceID });
+        return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "mdm", deviceID });
     } catch (err) {
         console.error("GET /api/software/mdm/:deviceID error:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve MDM software list", error: err.message });
@@ -12919,7 +13194,7 @@ app.get("/api/software/relation/:relationID/installed", authenticateToken, async
             }
         );
 
-        return softInvSendWrapped(res, data, { scope: "relation", relationID, mode, procedure });
+        return softInvSendWrapped(res, isDeviceListMode ? softInvNormalizeRows(data) : data, { scope: "relation", relationID, mode, procedure });
     } catch (err) {
         console.error("GET /api/software/relation/:relationID/installed error:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve installed software statistics", error: err.message });

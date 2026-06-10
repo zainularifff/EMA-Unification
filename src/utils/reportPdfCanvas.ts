@@ -289,32 +289,71 @@ function pdfReportPackName(payload: ReportPayload) {
   return raw.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+
 function buildPdfCoverOnlyPage(payload: ReportPayload, filters: ReportFilters, mode: "executive" | "generic") {
   const generated = formatDateTime(payload.generatedAt);
-  const period = payload.narrative.period || filters.dateRange;
-  const scope = payload.narrative.scope || "All Sites";
-  const title = payload.report.title || "EMA Report";
-  const intro = payload.report.description || payload.narrative.executiveSummary || "Prepared from the current EMA operational dataset.";
-  const label = mode === "executive" ? "Management-ready report pack" : "Operational report pack";
+  const period = payload.narrative?.period || filters.dateRange || "Current period";
+  const scope = payload.narrative?.scope || "All Sites";
+  const title = payload.report?.title || "EMA Report";
+  const intro = payload.report?.description || payload.narrative?.executiveSummary || "Prepared from the current EMA operational dataset.";
+  const label = mode === "executive" ? "Management board report" : "Operational report";
+  const endpointTotal = pdfNumber(payload, ["endpointTotal", "totalEndpoints", "assets", "totalNodes"], 0);
+  const online = pdfNumber(payload, ["onlineEndpoints", "online"], 0);
+  const offline = pdfNumber(payload, ["offlineEndpoints", "offline"], 0);
+  const stale = pdfNumber(payload, ["staleEndpoints", "stale"], 0);
+  const openTickets = pdfNumber(payload, ["openTickets", "tickets"], 0);
+  const sla = pdfNumber(payload, ["slaBreachCandidates", "slaBreaches", "slaBreached"], 0);
+  const software = pdfNumber(payload, ["softwareRows", "softwareRecords", "totalSoftwareRecords"], 0);
+  const score = pdfNumber(payload, ["operationalScore", "score"], 0);
+  const onlineRate = endpointTotal ? Math.round((online / Math.max(endpointTotal, 1)) * 100) : pdfNumber(payload, ["onlineRate"], 0);
+  const narrative = payload.narrative?.executiveSummary || payload.narrative?.managementConclusion || intro;
 
   return `
-    <section class="pdf-cover-page pdf-cover-${mode}">
-      <header class="pdf-cover-brand-row">
-        <div class="pdf-cover-brand-mark">E</div>
-        <div><strong>EMA Unified System</strong><small>${pdfText(pdfReportPackName(payload), 70)}</small></div>
+    <section class="pdf-title-sheet pdf-title-${mode}">
+      <header class="pdf-report-header">
+        <div class="pdf-brand-lockup">
+          <div class="pdf-brand-seal">EMA</div>
+          <div>
+            <strong>EMA Unified System</strong>
+            <span>${pdfText(pdfReportPackName(payload), 76)}</span>
+          </div>
+        </div>
+        <div class="pdf-document-label">
+          <span>${pdfText(label, 42)}</span>
+          <b>${pdfText(filters.outputFormat || "PDF", 22)}</b>
+        </div>
       </header>
 
-      <div class="pdf-cover-title-block">
-        <span>${pdfText(label, 60)}</span>
-        <h1>${pdfText(title, 100)}</h1>
-        <p>${pdfText(intro, 240)}</p>
+      <div class="pdf-title-grid">
+        <div class="pdf-title-copy">
+          <span class="pdf-report-kicker">${pdfText(label, 58)}</span>
+          <h1>${pdfText(title, 120)}</h1>
+          <p>${pdfText(intro, 300)}</p>
+        </div>
+        <aside class="pdf-score-panel">
+          <small>Operational Score</small>
+          <strong>${pdfEscape(score)}%</strong>
+          <span>Composite posture based on endpoint availability, SLA exposure and reporting quality.</span>
+        </aside>
       </div>
 
-      <div class="pdf-cover-meta-table">
-        <div><small>Prepared On</small><b>${pdfEscape(generated)}</b></div>
-        <div><small>Scope</small><b>${pdfText(scope, 70)}</b></div>
-        <div><small>Period</small><b>${pdfText(period, 60)}</b></div>
-        <div><small>Output</small><b>${pdfText(filters.outputFormat || "PDF", 30)}</b></div>
+      <div class="pdf-title-kpi-grid">
+        <div><small>Endpoint Estate</small><b>${pdfEscape(endpointTotal)}</b><span>${pdfEscape(onlineRate)}% online / ${pdfEscape(offline)} offline</span></div>
+        <div><small>Telemetry Watch</small><b>${pdfEscape(stale)}</b><span>Stale or missing last-seen endpoint(s)</span></div>
+        <div><small>Service Desk</small><b>${pdfEscape(openTickets)}</b><span>${pdfEscape(sla)} SLA breach candidate(s)</span></div>
+        <div><small>Software Inventory</small><b>${pdfEscape(software)}</b><span>Inventory records in scope</span></div>
+      </div>
+
+      <div class="pdf-management-brief">
+        <div>
+          <span class="pdf-eyebrow">Management Brief</span>
+          <p>${pdfText(narrative, 460)}</p>
+        </div>
+        <div class="pdf-meta-list">
+          <div><small>Prepared On</small><b>${pdfEscape(generated)}</b></div>
+          <div><small>Scope</small><b>${pdfText(scope, 72)}</b></div>
+          <div><small>Period</small><b>${pdfText(period, 72)}</b></div>
+        </div>
       </div>
     </section>
     <div class="pdf-page-break"></div>
@@ -412,9 +451,651 @@ function buildGenericPrintableHtml(payload: ReportPayload, filters: ReportFilter
   `;
 }
 
-export function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilters) {
+function pdfSafeSections(payload: ReportPayload) {
+  return Array.isArray(payload.sections) ? payload.sections : [];
+}
+
+function pdfSectionByKeyword(payload: ReportPayload, keywords: string[]) {
+  const lowered = keywords.map((item) => item.toLowerCase());
+  return pdfSafeSections(payload).find((section) => {
+    const text = `${section.type || ""} ${section.title || ""}`.toLowerCase();
+    return lowered.some((keyword) => text.includes(keyword));
+  });
+}
+
+function pdfMetricValue(payload: ReportPayload, keys: string[], fallback: unknown = "-") {
+  for (const key of keys) {
+    const value = payload.metrics?.[key];
+    if (value !== undefined && value !== null && value !== "") return value;
+  }
+  return fallback;
+}
+
+function pdfLogoLockup(label: string, value: string) {
+  return `<div class="pdf-logo-lockup"><span>${pdfText(label, 40)}</span><strong>${pdfText(value, 70)}</strong></div>`;
+}
+
+function pdfMiniMetric(label: string, value: unknown, note = "") {
+  return `<article class="pdf-mini-metric"><small>${pdfText(label, 42)}</small><strong>${pdfText(value, 40)}</strong><span>${pdfText(note, 90)}</span></article>`;
+}
+
+function pdfMiniInfoRows(rows: Array<[string, unknown, string?]>) {
+  return `
+    <div class="pdf-info-grid">
+      ${rows.map(([label, value, note]) => `
+        <div>
+          <small>${pdfText(label, 54)}</small>
+          <b>${pdfText(value, 80)}</b>
+          ${note ? `<span>${pdfText(note, 120)}</span>` : ""}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function pdfSectionPage(sectionNo: string, title: string, subtitle: string, body: string, className = "") {
+  return `
+    <section class="pdf-section pdf-client-section ${className}">
+      <div class="pdf-client-section-head">
+        <span>${pdfText(sectionNo, 8)}</span>
+        <div><h2>${pdfText(title, 90)}</h2><p>${pdfText(subtitle, 180)}</p></div>
+      </div>
+      ${body}
+    </section>
+  `;
+}
+
+
+function buildClientRiskResourceCover(payload: ReportPayload, filters: ReportFilters) {
+  const generated = formatDateTime(payload.generatedAt);
+  const scope = payload.narrative?.scope || "All Sites";
+  const period = payload.narrative?.period || filters.dateRange || "Current period";
+  const title = payload.report?.title || "Client Risk & Resource Planning Report";
+  const intro = payload.report?.description || payload.narrative?.executiveSummary || "Subscription, endpoint management, resource planning and application risk review.";
+  const totalNodes = pdfMetricValue(payload, ["totalNodes", "totalEndpoints", "endpointTotal"], 0);
+  const serviceType = pdfMetricValue(payload, ["serviceType"], "Subscribe / Purchase");
+  const version = pdfMetricValue(payload, ["version", "systemVersion"], "EMA System");
+  const score = pdfMetricValue(payload, ["operationalScore", "score"], 0);
+
+  return `
+    <section class="pdf-title-sheet pdf-client-title-sheet">
+      <header class="pdf-client-lockups">
+        <div class="pdf-logo-box"><small>Client</small><strong>${pdfText(scope, 50)}</strong><span>Logo placeholder</span></div>
+        <div class="pdf-logo-box"><small>Solution</small><strong>EMA Unified System</strong><span>Risk & Resource Planning</span></div>
+        <div class="pdf-logo-box"><small>Prepared By</small><strong>Worldtech Solutions</strong><span>Management report</span></div>
+      </header>
+
+      <div class="pdf-title-grid">
+        <div class="pdf-title-copy">
+          <span class="pdf-report-kicker">Client Risk & Resource Planning Pack</span>
+          <h1>${pdfText(title, 120)}</h1>
+          <p>${pdfText(intro, 320)}</p>
+        </div>
+        <aside class="pdf-score-panel">
+          <small>Readiness Score</small>
+          <strong>${pdfEscape(score)}%</strong>
+          <span>Based on current endpoint, software, service desk and data-quality evidence.</span>
+        </aside>
+      </div>
+
+      <div class="pdf-title-kpi-grid">
+        <div><small>Service Type</small><b>${pdfText(serviceType, 28)}</b><span>Subscription / purchase profile</span></div>
+        <div><small>Version</small><b>${pdfText(version, 28)}</b><span>Solution package</span></div>
+        <div><small>Total Nodes</small><b>${pdfEscape(totalNodes)}</b><span>Endpoint estate in scope</span></div>
+        <div><small>Report Period</small><b>${pdfText(period, 28)}</b><span>${pdfEscape(generated)}</span></div>
+      </div>
+
+      <div class="pdf-management-brief">
+        <div>
+          <span class="pdf-eyebrow">Management Purpose</span>
+          <p>Prepared for client review covering subscription summary, endpoint management, endpoint aging, OS compliance, resource planning and application risk.</p>
+        </div>
+        <div class="pdf-meta-list">
+          <div><small>Prepared For</small><b>${pdfText(scope, 72)}</b></div>
+          <div><small>Prepared By</small><b>Worldtech Solutions</b></div>
+          <div><small>Output</small><b>${pdfText(filters.outputFormat || "PDF", 30)}</b></div>
+        </div>
+      </div>
+    </section>
+    <div class="pdf-page-break"></div>
+  `;
+}
+
+function buildReportIndexPage(items: string[]) {
+  return `
+    <section class="pdf-section pdf-index-page">
+      <div class="pdf-client-section-head">
+        <span>00</span>
+        <div><h2>Report Contents</h2><p>Client Risk & Resource Planning Pack section flow.</p></div>
+      </div>
+      <div class="pdf-index-grid">
+        ${items.map((item, index) => `<div><b>${String(index + 1).padStart(2, "0")}</b><span>${pdfText(item, 80)}</span></div>`).join("")}
+      </div>
+    </section>
+    <div class="pdf-page-break"></div>
+  `;
+}
+
+function buildSubscriptionSummarySection(payload: ReportPayload, filters: ReportFilters) {
+  const section = pdfSectionByKeyword(payload, ["subscription", "contract", "integration"]);
+  const rows = section?.rows?.length ? section.rows : [
+    { item: "Service Type", value: pdfMetricValue(payload, ["serviceType"], "Subscribe / Purchase"), note: "Confirm subscription or purchased service package." },
+    { item: "Version", value: pdfMetricValue(payload, ["version", "systemVersion"], "EMA System"), note: "Solution/package version in use." },
+    { item: "Start Contract", value: pdfMetricValue(payload, ["contractStart"], "To be configured"), note: "Contract source not configured in current dataset." },
+    { item: "End Contract", value: pdfMetricValue(payload, ["contractEnd"], "To be configured"), note: "Contract source not configured in current dataset." },
+    { item: "Total Nodes", value: pdfMetricValue(payload, ["totalNodes", "totalEndpoints"], 0), note: "Endpoint estate in current scope." },
+    { item: "Integration Consideration", value: pdfMetricValue(payload, ["integrationStatus"], "Consider Integration"), note: "Link subscription/licensing source for stronger reporting." }
+  ];
+
+  return pdfSectionPage("01", "Subscription Summary / Consider Integration", "Service type, version, contract period, total nodes and integration consideration.", tableRowsHtml({ type: "table", title: "Subscription Summary", rows, columns: ["item", "value", "note"] }, 12, 3));
+}
+
+function buildEndpointManagementSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["endpoint management", "management basic", "endpoint coverage"]);
+  const total = pdfMetricValue(payload, ["totalNodes", "totalEndpoints"], 0);
+  const windows = pdfMetricValue(payload, ["windowsEndpoints", "windowsEndpointTotal"], "-");
+  const onlineRate = pdfMetricValue(payload, ["onlineRate"], 0);
+  const rows = section?.rows?.length ? section.rows : [
+    { label: "PC / Endpoint", value: total, note: "Total managed endpoint records." },
+    { label: "Windows OS", value: windows, note: "Windows endpoint coverage where platform is available." },
+    { label: "Coverage", value: `${onlineRate}%`, note: "Online coverage rate in selected scope." },
+    { label: "Benefits", value: "Visibility / inventory / compliance", note: "Endpoint management value summary." }
+  ];
+  return pdfSectionPage("02", "Endpoint Management", "Basic information for PC, Windows OS, endpoint coverage, benefits and endpoint type.", `<div class="pdf-kpi-grid pdf-client-kpis">${rows.slice(0, 4).map((row) => pdfMiniMetric(row.label, row.value, row.note)).join("")}</div>${sectionRowsHtml(section, 12)}`);
+}
+
+function buildEndpointAnalyticsSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["endpoint analytics", "endpoint type", "endpoint by type"]);
+  const fallback = pdfSectionByKeyword(payload, ["endpoint health", "endpoint distribution", "health mix"]);
+  const active = section || fallback;
+  return pdfSectionPage("03", "Endpoint Analytics Result", "Total endpoint type, source and status distribution.", active ? `<div class="pdf-bars">${barListHtml(active, 10)}</div>` : `<div class="pdf-empty">No endpoint analytics rows returned.</div>`);
+}
+
+function buildLocationDepartmentSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["location", "department", "site"]);
+  return pdfSectionPage("04", "Location / Department", "Grouping endpoint estate by location or department.", section ? `<div class="pdf-bars">${barListHtml(section, 12)}</div>${tableRowsHtml(section, 18, 4)}` : `<div class="pdf-empty">No location or department grouping returned.</div>`);
+}
+
+function buildEndpointAgingSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["aging", "replacement", "lifecycle"]);
+  return pdfSectionPage("05", "Endpoint Aging", "Endpoint aging and refresh candidate view by location.", section ? tableRowsHtml(section, 24, 6) : `<div class="pdf-empty">No aging rows returned. Connect BIOS date, purchase date or lifecycle data for richer aging evidence.</div>`);
+}
+
+function buildOsComplianceSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["os compliance", "supported os", "unsupported os", "platform"]);
+  return pdfSectionPage("06", "OS Supported / OS Compliance", "Windows and supported OS compliance summary.", section ? tableRowsHtml(section, 24, 5) : `<div class="pdf-empty">No OS compliance rows returned.</div>`);
+}
+
+function buildResourcePlanningSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["resource planning", "brand", "model", "replacement"]);
+  return pdfSectionPage("07", "Resources Planning", "Focus brand PC, model concentration and replacement planning.", section ? `<div class="pdf-bars">${barListHtml(section, 10)}</div>${tableRowsHtml(section, 24, 6)}` : `<div class="pdf-empty">No resource planning rows returned.</div>`);
+}
+
+function buildApplicationPurchasingSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["application purchasing", "microsoft", "adobe", "purchasing"]);
+  return pdfSectionPage("08", "Application Based On Purchasing", "Microsoft / Adobe and purchased application evidence.", section ? tableRowsHtml(section, 24, 6) : `<div class="pdf-empty">No Microsoft / Adobe purchasing rows returned.</div>`);
+}
+
+function buildSensitiveApplicationSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["sensitive", "remote tools", "remote application"]);
+  return pdfSectionPage("09", "Sensitive Application", "Remote tools and sensitive access application review.", section ? riskTableHtml(section.rows || [], 24) : `<div class="pdf-empty">No sensitive application rows returned.</div>`, "pdf-sensitive-section");
+}
+
+function buildSoftwareRiskSection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["games", "antivirus", "unwanted", "unauthorized", "software risk"]);
+  return pdfSectionPage("10", "Games / Antivirus / Unwanted / Unauthorized Software", "Software risk summary for games, antivirus, unwanted and unauthorized applications.", section ? tableRowsHtml(section, 30, 6) : `<div class="pdf-empty">No software risk rows returned.</div>`);
+}
+
+function buildBrowserVulnerabilitySection(payload: ReportPayload) {
+  const section = pdfSectionByKeyword(payload, ["browser", "vulnerability", "chrome", "edge", "firefox"]);
+  return pdfSectionPage("11", "Browser Vulnerability", "Browser inventory and outdated browser candidate summary.", section ? tableRowsHtml(section, 24, 6) : `<div class="pdf-empty">No browser vulnerability rows returned.</div>`);
+}
+
+function buildManagementSummarySection(payload: ReportPayload, filters: ReportFilters) {
+  const findingRows = (payload.narrative?.keyFindings || []).slice(0, 8).map((finding, index) => ({ no: String(index + 1).padStart(2, "0"), finding, priority: index < 2 ? "High" : "Monitor" }));
+  return pdfSectionPage("12", "Management Summary", "Overall finding summary and recommended management actions.", `
+    <p class="pdf-lead">${pdfText(payload.narrative?.managementConclusion || payload.narrative?.executiveSummary || "Overall management summary generated from available system data.", 420)}</p>
+    ${tableRowsHtml({ type: "table", title: "Key Findings", rows: findingRows, columns: ["no", "finding", "priority"] }, 8, 3)}
+    ${filters.includeRecommendation ? recommendationsTableHtml(payload.recommendations || [], 12) : ""}
+  `);
+}
+
+function buildClientRiskResourcePrintableHtml(payload: ReportPayload, filters: ReportFilters) {
+  return `
+    ${buildClientRiskResourceCover(payload, filters)}
+    ${buildReportIndexPage([
+      "Subscription Summary / Consider Integration",
+      "Endpoint Management",
+      "Endpoint Analytics Result",
+      "Location / Department",
+      "Endpoint Aging",
+      "OS Supported / OS Compliance",
+      "Resources Planning",
+      "Application Based On Purchasing",
+      "Sensitive Application",
+      "Games / Antivirus / Unwanted / Unauthorized Software",
+      "Browser Vulnerability",
+      "Management Summary"
+    ])}
+    ${buildSubscriptionSummarySection(payload, filters)}
+    ${buildEndpointManagementSection(payload)}
+    ${buildEndpointAnalyticsSection(payload)}
+    ${buildLocationDepartmentSection(payload)}
+    ${buildEndpointAgingSection(payload)}
+    ${buildOsComplianceSection(payload)}
+    ${buildResourcePlanningSection(payload)}
+    ${buildApplicationPurchasingSection(payload)}
+    ${buildSensitiveApplicationSection(payload)}
+    ${buildSoftwareRiskSection(payload)}
+    ${buildBrowserVulnerabilitySection(payload)}
+    ${buildManagementSummarySection(payload, filters)}
+  `;
+}
+
+
+function buildSystemOverallPrintableHtml(payload: ReportPayload, filters: ReportFilters) {
+  const kpis = printableKpis(payload);
+  const chartSections = pdfSafeSections(payload).filter((section) => ["bar", "donut"].includes(section.type));
+  const tableSections = pdfSafeSections(payload).filter((section) => section.type === "table");
+  const riskSection = pdfSectionByKeyword(payload, ["risk", "attention", "quality"]);
+  const findings = (payload.narrative?.keyFindings || []).slice(0, 6).map((finding, index) => ({
+    no: String(index + 1).padStart(2, "0"),
+    finding,
+    priority: index < 2 ? "High" : "Monitor"
+  }));
+
+  return `
+    ${buildPdfCoverOnlyPage(payload, filters, "executive")}
+
+    <section class="pdf-section pdf-exec-dashboard">
+      <div class="pdf-section-head">
+        <div><h2>Executive Dashboard</h2><p>Board-level view of system posture, endpoint estate, service pressure and software coverage.</p></div>
+        <span>Overview</span>
+      </div>
+      <div class="pdf-kpi-grid pdf-client-kpis">${kpis.slice(0, 6).map((item) => pdfMiniMetric(item.label, item.value, item.note)).join("")}</div>
+      <div class="pdf-two-column-block">
+        <div>
+          <span class="pdf-eyebrow">Management Interpretation</span>
+          <p class="pdf-lead">${pdfText(payload.narrative?.executiveSummary || payload.narrative?.managementConclusion || "Overall system information summary generated from available EMA data.", 520)}</p>
+        </div>
+        <div>
+          <span class="pdf-eyebrow">Key Findings</span>
+          ${tableRowsHtml({ type: "table", title: "Key Findings", rows: findings, columns: ["no", "finding", "priority"] }, 6, 3)}
+        </div>
+      </div>
+    </section>
+
+    ${filters.includeChart ? chartSections.slice(0, 6).map((section, index) => pdfSectionPage(String(index + 2).padStart(2, "0"), section.title, "System distribution and trend summary.", `<div class="pdf-bars">${barListHtml(section, 10)}</div>`)).join("") : ""}
+    ${riskSection && filters.includeTable ? pdfSectionPage("08", "Risk & Data Quality Summary", "Management attention items and reporting confidence.", riskTableHtml(riskSection.rows || [], 24), "pdf-sensitive-section") : ""}
+    ${filters.includeTable ? tableSections.slice(0, 4).map((section, index) => pdfSectionPage(String(index + 9).padStart(2, "0"), section.title, "Detailed evidence table from the current system dataset.", tableRowsHtml(section, 30, 7), "pdf-table-section")).join("") : ""}
+    ${filters.includeRecommendation ? pdfSectionPage("99", "Top Management Actions", "Recommended next actions across modules.", recommendationsTableHtml(payload.recommendations || [], 12)) : ""}
+  `;
+}
+
+function buildDataOnlyPrintableHtml(payload: ReportPayload, filters: ReportFilters) {
+  const sections = pdfSafeSections(payload);
+  const chartSections = sections.filter((section) => ["bar", "donut"].includes(section.type));
+  const tableSections = sections.filter((section) => section.type === "table" || Array.isArray(section.rows));
+  const dataSources = payload.dataSources || [];
+
+  return `
+    ${buildPdfCoverOnlyPage(payload, { ...filters, includeSummary: false, includeRecommendation: false }, "generic")}
+    <section class="pdf-section pdf-summary-section">
+      <div class="pdf-section-head"><div><h2>Standard Data Report</h2><p>Direct data output from EMA System. AI analysis and management recommendations are disabled for non-Summary reports.</p></div><span>Data Only</span></div>
+      <div class="pdf-summary-layout">
+        <div>
+          <span class="pdf-eyebrow">No AI Analysis</span>
+          <h2>${pdfText(payload.report?.title || "Data Report", 90)}</h2>
+          <p>${pdfText(payload.report?.description || "Generated from selected filters and available source records.", 300)}</p>
+        </div>
+        ${tableRowsHtml({ type: "table", title: "Data Sources", rows: dataSources, columns: ["name", "table", "rows"] }, 12, 3)}
+      </div>
+    </section>
+    ${filters.includeChart ? chartSections.map((section, index) => `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(section.title, 80)}</h2><p>System distribution based on selected filters.</p></div><span>Chart</span></div><div class="pdf-bars">${barListHtml(section)}</div></section>`).join("") : ""}
+    ${filters.includeTable ? tableSections.slice(0, 8).map((section) => `<section class="pdf-section pdf-table-section"><div class="pdf-section-head"><div><h2>${pdfText(section.title, 80)}</h2><p>Detail rows rendered as selectable table data.</p></div><span>Table</span></div>${tableRowsHtml(section, 36)}</section>`).join("") : ""}
+  `;
+}
+
+function isSummaryPdf(payload: ReportPayload) {
+  return String(payload.report?.type || "").toLowerCase() === "summary" && payload.aiAnalysisEnabled !== false;
+}
+
+function isRiskResourcePdf(payload: ReportPayload, filters: ReportFilters) {
+  if (!isSummaryPdf(payload)) return false;
+  const selected = String(filters.pdfDesign || "auto").toLowerCase();
+  const reportId = String(payload.report?.id || "").toLowerCase();
+  return selected === "risk-resource" || ["client-summary-rnr", "resource-planning-brand-summary"].includes(reportId);
+}
+
+function isSystemOverallPdf(payload: ReportPayload, filters: ReportFilters) {
+  if (!isSummaryPdf(payload)) return false;
+  const selected = String(filters.pdfDesign || "auto").toLowerCase();
+  const reportId = String(payload.report?.id || "").toLowerCase();
+  return selected === "system-summary" || reportId === "system-overall-summary";
+}
+
+export 
+function buildProfessionalPdfCss() {
+  return `
+    @page { size: A4 portrait; margin: 12mm; }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #eef2f7;
+      color: #101f36;
+      font-family: "Segoe UI", Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body { width: 210mm; min-height: 297mm; }
+    .pdf-pack { width: 186mm; margin: 0 auto; padding: 0; display: flex; flex-direction: column; gap: 6mm; }
+    .pdf-page-break { page-break-after: always; break-after: page; height: 0; }
+
+    /* hard reset for older experimental cover classes */
+    .pdf-cover-wave,
+    .pdf-cover-arc,
+    .pdf-cover-dots,
+    .pdf-client-cover-bg,
+    .pdf-cover-page::before,
+    .pdf-cover-page::after,
+    .pdf-client-cover-page::before,
+    .pdf-client-cover-page::after { display: none !important; content: none !important; }
+    .pdf-cover-page,
+    .pdf-client-cover-page { background: #fff !important; }
+
+    .pdf-title-sheet,
+    .pdf-section {
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid #d8e0ec;
+      border-radius: 4mm;
+      box-shadow: 0 8px 22px rgba(16, 31, 54, .07);
+      overflow: hidden;
+    }
+
+    .pdf-title-sheet {
+      min-height: 273mm;
+      padding: 12mm;
+      page-break-after: always;
+      break-after: page;
+      display: flex;
+      flex-direction: column;
+      gap: 8mm;
+      position: relative;
+    }
+    .pdf-title-sheet::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3mm;
+      background: #173b66;
+    }
+
+    .pdf-report-header,
+    .pdf-client-lockups {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6mm;
+      align-items: center;
+      padding-top: 3mm;
+    }
+    .pdf-client-lockups { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+    .pdf-brand-lockup { display: flex; gap: 4mm; align-items: center; min-width: 0; }
+    .pdf-brand-seal {
+      width: 16mm;
+      height: 16mm;
+      border-radius: 4mm;
+      display: grid;
+      place-items: center;
+      background: #173b66;
+      color: #fff;
+      font-size: 8pt;
+      font-weight: 900;
+      letter-spacing: .04em;
+    }
+    .pdf-brand-lockup strong,
+    .pdf-logo-box strong { display: block; color: #101f36; font-size: 11pt; line-height: 1.25; }
+    .pdf-brand-lockup span,
+    .pdf-logo-box span,
+    .pdf-document-label span {
+      display: block;
+      margin-top: 1mm;
+      color: #6c7e96;
+      font-size: 7pt;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .pdf-document-label {
+      border: 1px solid #d8e0ec;
+      border-radius: 3mm;
+      padding: 3mm 4mm;
+      text-align: right;
+      min-width: 36mm;
+      background: #f8fafc;
+    }
+    .pdf-document-label b { display: block; margin-top: 1mm; color: #173b66; font-size: 10pt; }
+    .pdf-logo-box {
+      min-height: 25mm;
+      border: 1px solid #d8e0ec;
+      border-radius: 3mm;
+      padding: 4mm;
+      background: #fbfdff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .pdf-logo-box small { display: block; color: #1d4ed8; font-size: 7pt; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+
+    .pdf-title-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 46mm;
+      gap: 8mm;
+      align-items: stretch;
+      padding: 8mm 0 2mm;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .pdf-report-kicker,
+    .pdf-eyebrow,
+    .pdf-section-head > span,
+    .pdf-meta-row span {
+      display: inline-flex;
+      width: fit-content;
+      color: #1d4ed8;
+      background: #edf4ff;
+      border: 1px solid #c8dbff;
+      border-radius: 999px;
+      padding: 1.5mm 3mm;
+      font-size: 6.8pt;
+      font-weight: 900;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .pdf-title-copy h1 {
+      margin: 5mm 0 0;
+      color: #101f36;
+      font-size: 30pt;
+      line-height: 1.08;
+      letter-spacing: -.045em;
+      font-weight: 850;
+    }
+    .pdf-title-copy p,
+    .pdf-lead {
+      margin: 4mm 0 0;
+      color: #52667f;
+      font-size: 10.2pt;
+      line-height: 1.55;
+      font-weight: 600;
+    }
+    .pdf-score-panel {
+      border: 1px solid #d8e0ec;
+      border-radius: 4mm;
+      padding: 5mm;
+      background: linear-gradient(180deg, #f8fbff, #ffffff);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 42mm;
+    }
+    .pdf-score-panel small,
+    .pdf-title-kpi-grid small,
+    .pdf-meta-list small,
+    .pdf-mini-metric small,
+    .pdf-cover-summary-card small {
+      display: block;
+      color: #6c7e96;
+      font-size: 6.7pt;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+    .pdf-score-panel strong { display: block; margin: 2mm 0; color: #1d4ed8; font-size: 34pt; line-height: 1; letter-spacing: -.04em; }
+    .pdf-score-panel span,
+    .pdf-title-kpi-grid span,
+    .pdf-mini-metric span { color: #5d6f86; font-size: 7.6pt; line-height: 1.35; font-weight: 700; }
+
+    .pdf-title-kpi-grid,
+    .pdf-kpi-grid,
+    .pdf-cover-summary-card,
+    .pdf-client-cover-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 3mm;
+    }
+    .pdf-title-kpi-grid div,
+    .pdf-mini-metric,
+    .pdf-cover-summary-card div {
+      border: 1px solid #d8e0ec;
+      border-radius: 3mm;
+      padding: 4mm;
+      background: #ffffff;
+      min-height: 23mm;
+    }
+    .pdf-title-kpi-grid b,
+    .pdf-mini-metric strong,
+    .pdf-cover-summary-card b {
+      display: block;
+      margin: 1.4mm 0 .8mm;
+      color: #101f36;
+      font-size: 17pt;
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .pdf-management-brief {
+      margin-top: auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 56mm;
+      gap: 6mm;
+      padding-top: 6mm;
+      border-top: 1px solid #e2e8f0;
+    }
+    .pdf-management-brief p { margin: 3mm 0 0; color: #40546f; font-size: 9.4pt; line-height: 1.55; font-weight: 600; }
+    .pdf-meta-list { display: grid; gap: 2.5mm; }
+    .pdf-meta-list div { border-left: 2px solid #173b66; padding-left: 3mm; }
+    .pdf-meta-list b { display: block; margin-top: 1mm; color: #101f36; font-size: 8.6pt; line-height: 1.3; }
+
+    .pdf-section { padding: 7mm; break-inside: avoid; page-break-inside: avoid; }
+    .pdf-table-section { break-inside: auto; page-break-inside: auto; overflow: visible; }
+    .pdf-section-head,
+    .pdf-client-section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 5mm;
+      align-items: start;
+      padding-bottom: 3mm;
+      margin-bottom: 5mm;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .pdf-client-section-head { grid-template-columns: 14mm minmax(0, 1fr); align-items: center; }
+    .pdf-client-section-head > span,
+    .pdf-section-number {
+      width: 11mm;
+      height: 11mm;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #173b66;
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 900;
+    }
+    .pdf-section-head h2,
+    .pdf-client-section-head h2 { margin: 0; color: #101f36; font-size: 16pt; line-height: 1.15; letter-spacing: -.025em; }
+    .pdf-section-head p,
+    .pdf-client-section-head p { margin: 1.5mm 0 0; color: #64748b; font-size: 8.5pt; line-height: 1.4; font-weight: 600; }
+
+    .pdf-summary-layout,
+    .pdf-two-column-block { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 5mm; align-items: start; }
+    .pdf-exec-dashboard { border-top: 1.6mm solid #1d4ed8; }
+    .pdf-sensitive-section { border-top: 1.6mm solid #dc2626; }
+
+    .pdf-table-box { width: 100%; overflow: visible; }
+    .pdf-real-table { width: 100%; border-collapse: collapse; font-size: 7.8pt; color: #21324a; }
+    .pdf-real-table th {
+      background: #f1f5f9;
+      color: #50647d;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-size: 6.6pt;
+      font-weight: 900;
+      text-align: left;
+      padding: 2.5mm;
+      border: 1px solid #dbe3ee;
+    }
+    .pdf-real-table td { padding: 2.4mm; border: 1px solid #dbe3ee; vertical-align: top; line-height: 1.35; }
+    .pdf-real-table tbody tr:nth-child(even) td { background: #fbfdff; }
+    .pdf-metric-table td:nth-child(2) { color: #101f36; font-weight: 900; font-size: 10pt; white-space: nowrap; }
+    .pdf-table-note { margin: 3mm 0 0; color: #64748b; font-size: 7.4pt; font-weight: 700; }
+    .pdf-empty { border: 1px dashed #bfccdc; border-radius: 3mm; padding: 5mm; background: #f8fafc; color: #64748b; font-size: 8.5pt; font-weight: 700; }
+
+    .pdf-bars { display: grid; gap: 2.5mm; }
+    .pdf-bar-row { display: grid; grid-template-columns: minmax(0, 1fr) 18mm 58mm; gap: 3mm; align-items: center; color: #21324a; font-size: 8pt; font-weight: 700; }
+    .pdf-bar-row b { color: #101f36; text-align: right; }
+    .pdf-bar-row i { height: 4mm; display: block; background: #e7edf6; border-radius: 999px; overflow: hidden; }
+    .pdf-bar-row em { height: 100%; display: block; background: #1d4ed8; border-radius: 999px; }
+
+    .pdf-focus-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; }
+    .pdf-focus-card,
+    .pdf-evidence-card { border: 1px solid #d8e0ec; border-radius: 3mm; padding: 4mm; background: #fbfdff; }
+    .pdf-focus-card h3 { margin: 2mm 0 1.5mm; color: #101f36; font-size: 11pt; }
+    .pdf-focus-card p,
+    .pdf-focus-card div { margin: 0; color: #52667f; font-size: 8pt; line-height: 1.4; }
+    .pdf-severity,
+    .pdf-risk-pill { display: inline-flex; align-items: center; border-radius: 999px; background: #fff1f2; color: #be123c; padding: 1mm 2mm; font-size: 6.8pt; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; }
+    .pdf-risk-pill { background: #eef5ff; color: #1d4ed8; }
+    .pdf-index-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3mm; }
+    .pdf-index-grid div { border: 1px solid #d8e0ec; border-radius: 3mm; padding: 4mm; background: #fbfdff; display: grid; grid-template-columns: 12mm 1fr; gap: 3mm; align-items: center; }
+    .pdf-index-grid b { color: #1d4ed8; font-size: 13pt; }
+    .pdf-index-grid span { color: #21324a; font-size: 8.2pt; font-weight: 750; }
+
+    @media print {
+      html, body { background: #ffffff; }
+      .pdf-pack { width: 186mm; margin: 0 auto; gap: 0; }
+      .pdf-title-sheet,
+      .pdf-section { box-shadow: none !important; border-color: #d8e0ec; }
+      .pdf-section { margin-bottom: 6mm; }
+    }
+  `;
+}
+
+function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilters) {
+  const effectiveFilters = isSummaryPdf(payload)
+    ? filters
+    : { ...filters, includeSummary: false, includeRecommendation: false, pdfDesign: "generic" };
   const isExecutive = /executive/i.test(`${payload.report.id} ${payload.report.title} ${payload.report.category || ""}`);
-  const content = isExecutive ? buildExecutivePrintableHtml(payload, filters) : buildGenericPrintableHtml(payload, filters);
+  const content = !isSummaryPdf(payload)
+    ? buildDataOnlyPrintableHtml(payload, effectiveFilters)
+    : isRiskResourcePdf(payload, effectiveFilters)
+      ? buildClientRiskResourcePrintableHtml(payload, effectiveFilters)
+      : isSystemOverallPdf(payload, effectiveFilters)
+        ? buildSystemOverallPrintableHtml(payload, effectiveFilters)
+        : isExecutive
+          ? buildExecutivePrintableHtml(payload, effectiveFilters)
+          : buildGenericPrintableHtml(payload, effectiveFilters);
   return `
 <!doctype html>
 <html>
@@ -423,101 +1104,7 @@ export function buildRegeneratedReportHtml(payload: ReportPayload, filters: Repo
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${pdfText(payload.report.title, 90)}</title>
   <style>
-    @page { size: A4 portrait; margin: 10mm; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; background: #eef3f8; color: #17233c; font-family: "Segoe UI", Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { width: 210mm; min-height: 297mm; }
-    .pdf-pack { width: 190mm; margin: 0 auto; display: flex; flex-direction: column; gap: 6mm; }
-    .pdf-page-break { page-break-after: always; break-after: page; height: 0; }
-    .pdf-cover-page { position: relative; width: 190mm; min-height: 277mm; overflow: hidden; border: 1px solid #d9e3f0; border-radius: 7mm; background: linear-gradient(180deg,#ffffff 0%,#fbfdff 100%); padding: 13mm; page-break-after: always; }
-    .pdf-cover-executive { --pdf-cover-primary:#18324f; --pdf-cover-accent:#d3a84e; }
-    .pdf-cover-generic { --pdf-cover-primary:#143b72; --pdf-cover-accent:#4f8df7; }
-    .pdf-cover-brand-row { position: relative; z-index: 2; display: flex; align-items: center; gap: 4mm; color: #182c45; }
-    .pdf-cover-brand-mark { width: 13mm; height: 13mm; border: 1px solid #d5deeb; border-radius: 4mm; display: grid; place-items: center; color: var(--pdf-cover-primary); background:#fff; font-weight: 900; }
-    .pdf-cover-brand-row strong { display:block; font-size: 15pt; line-height: 1.1; }
-    .pdf-cover-brand-row small { display:block; margin-top: 1mm; color:#718096; font-size: 7pt; text-transform: uppercase; letter-spacing: .14em; font-weight: 900; }
-    .pdf-cover-title-block { position: relative; z-index: 2; max-width: 112mm; min-height: 178mm; display: flex; flex-direction: column; justify-content: center; }
-    .pdf-cover-title-block span { width: fit-content; padding: 2.2mm 4mm; border:1px solid #d9e3f0; border-radius:999px; background:#fff; color: var(--pdf-cover-primary); font-size: 7pt; font-weight: 900; letter-spacing:.11em; text-transform: uppercase; }
-    .pdf-cover-title-block h1 { margin: 7mm 0 0; color:#1d2f45; font-size: 35pt; line-height:.98; letter-spacing:-.055em; }
-    .pdf-cover-title-block p { margin: 6mm 0 0; max-width: 92mm; color:#58677b; font-size: 11pt; line-height:1.58; font-weight: 600; }
-    .pdf-cover-meta-table { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 3mm; padding-top: 6mm; border-top: 1px solid #dfe7f2; }
-    .pdf-cover-meta-table div { min-width:0; }
-    .pdf-cover-meta-table small { display:block; color:#718096; text-transform: uppercase; letter-spacing:.1em; font-size: 7pt; font-weight: 900; }
-    .pdf-cover-meta-table b { display:block; margin-top:1.5mm; color:#1d2f45; font-size:8.5pt; line-height:1.3; }
-    .pdf-cover-wave { position:absolute; left:-28mm; top:-24mm; width:140mm; height:72mm; border-top:1mm solid rgba(24,50,79,.14); border-radius:50%; box-shadow:0 4mm 0 rgba(24,50,79,.08),0 8mm 0 rgba(24,50,79,.08),0 12mm 0 rgba(24,50,79,.08),0 16mm 0 rgba(24,50,79,.08),0 20mm 0 rgba(24,50,79,.08),0 24mm 0 rgba(24,50,79,.08),0 28mm 0 rgba(24,50,79,.08); }
-    .pdf-cover-arc { position:absolute; right:-38mm; bottom:-52mm; border-radius:50%; pointer-events:none; }
-    .pdf-cover-arc.arc-primary { width:156mm; height:156mm; border:15mm solid var(--pdf-cover-primary); }
-    .pdf-cover-arc.arc-gold { width:136mm; height:136mm; right:-30mm; bottom:-43mm; border:7mm solid var(--pdf-cover-accent); opacity:.9; }
-    .pdf-cover-dots { position:absolute; width:26mm; height:26mm; background-image:radial-gradient(circle, rgba(89,108,136,.42) 1.1mm, transparent 1.2mm); background-size:8mm 8mm; opacity:.42; }
-    .pdf-cover-dots.dots-left { left:14mm; bottom:16mm; }
-    .pdf-cover-dots.dots-right { right:62mm; top:72mm; }
-    .pdf-summary-layout { display:grid; grid-template-columns: 62mm minmax(0,1fr); gap: 7mm; align-items:start; }
-    .pdf-summary-layout h2 { margin: 2mm 0 3mm; }
-    .pdf-metric-table td:nth-child(2) { font-weight: 900; white-space: nowrap; width: 24mm; }
-    .pdf-cover, .pdf-section { width: 100%; background: #fff; border: 1px solid #d9e3f0; border-radius: 5mm; overflow: hidden; box-shadow: 0 2mm 8mm rgba(15,35,71,.06); }
-    .pdf-cover { min-height: 68mm; display: grid; grid-template-columns: 25mm 1fr 42mm; gap: 6mm; align-items: stretch; padding: 7mm; background: linear-gradient(180deg,#ffffff 0%,#f8fbff 100%); border-top: 5mm solid #143b72; }
-    .pdf-generic-cover { grid-template-columns: 25mm 1fr; }
-    .pdf-cover-mark { width: 18mm; height: 18mm; border-radius: 5mm; display: grid; place-items: center; background: #143b72; color: #fff; font-size: 9pt; font-weight: 900; letter-spacing: .08em; }
-    .pdf-cover-copy { min-width: 0; }
-    .pdf-eyebrow, .pdf-section-head > span, .pdf-kpi-grid small, .pdf-cover-score small, .pdf-meta-row span { text-transform: uppercase; letter-spacing: .11em; font-size: 7pt; font-weight: 900; color: #667996; }
-    .pdf-cover-copy h1 { margin: 3mm 0 2mm; font-size: 28pt; line-height: 1.04; letter-spacing: -.055em; color: #0f2347; }
-    .pdf-cover-copy p { max-width: 118mm; margin: 0; color: #42526e; font-size: 10pt; line-height: 1.45; font-weight: 650; }
-    .pdf-meta-row { display: flex; flex-wrap: wrap; gap: 2mm; margin-top: 5mm; }
-    .pdf-meta-row span { border: 1px solid #d9e3f0; border-radius: 999px; padding: 1.7mm 3mm; background: #fff; color: #3d4d66; }
-    .pdf-cover-score { align-self: stretch; border: 1px solid #d9e3f0; border-radius: 4mm; background: #f8fbff; padding: 5mm; display: flex; flex-direction: column; justify-content: center; }
-    .pdf-cover-score strong { display: block; margin: 2mm 0; font-size: 27pt; line-height: 1; color: #1d4ed8; }
-    .pdf-cover-score span { color: #4b5d78; font-size: 8.5pt; font-weight: 800; }
-    .pdf-section { padding: 6mm; break-inside: avoid; page-break-inside: avoid; }
-    .pdf-table-section { break-inside: auto; page-break-inside: auto; overflow: visible; }
-    .pdf-section-head { display: flex; justify-content: space-between; gap: 5mm; align-items: flex-start; padding-bottom: 3mm; margin-bottom: 4mm; border-bottom: 1px solid #d9e3f0; }
-    .pdf-section-head h2 { margin: 0 0 1mm; color: #0f2347; font-size: 15pt; line-height: 1.15; letter-spacing: -.035em; }
-    .pdf-section-head p, .pdf-lead { margin: 0; color: #5c6d86; font-size: 9pt; line-height: 1.5; }
-    .pdf-section-head > span { white-space: nowrap; border: 1px solid #cbd8ea; border-radius: 999px; padding: 1.6mm 3mm; color: #1d4ed8; background: #f4f7ff; }
-    .pdf-kpi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 3mm; }
-    .pdf-kpi-grid article { min-height: 26mm; border: 1px solid #dbe5f1; border-radius: 4mm; padding: 4mm; background: #fbfdff; }
-    .pdf-kpi-grid article strong { display: block; margin: 1.5mm 0 1mm; color: #0f2347; font-size: 18pt; line-height: 1; }
-    .pdf-kpi-grid article span { display: block; color: #52647e; font-size: 8pt; line-height: 1.35; font-weight: 750; }
-    .pdf-lead { margin-bottom: 4mm; font-size: 9.5pt; color: #263a59; }
-    .pdf-bars { display: flex; flex-direction: column; gap: 2.5mm; }
-    .pdf-bar-row { display: grid; grid-template-columns: 44mm 16mm 1fr; gap: 3mm; align-items: center; font-size: 8pt; font-weight: 800; color: #314765; }
-    .pdf-bar-row i { display: block; height: 4.5mm; border-radius: 999px; overflow: hidden; background: #edf3fb; }
-    .pdf-bar-row em { display: block; height: 100%; border-radius: inherit; background: #2563eb; }
-    .pdf-table-box { border: 1px solid #d6e2f2; border-radius: 3mm; overflow: hidden; background: #fff; }
-    .pdf-compact-table-box { margin-top: 3mm; }
-    .pdf-real-table { width: 100%; border-collapse: collapse; border-spacing: 0; table-layout: fixed; font-size: 7.6pt; line-height: 1.35; }
-    .pdf-real-table thead { display: table-header-group; }
-    .pdf-real-table tr { break-inside: avoid; page-break-inside: avoid; }
-    .pdf-real-table th, .pdf-real-table td { text-align: left; padding: 2.15mm 2.4mm; border-bottom: 1px solid #e5edf7; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
-    .pdf-real-table th { background: #f1f6ff; color: #34496a; text-transform: uppercase; font-size: 6.8pt; letter-spacing: .075em; font-weight: 900; }
-    .pdf-real-table tbody tr:nth-child(even) td { background: #fbfdff; }
-    .pdf-real-table tbody tr:last-child td { border-bottom: 0; }
-    .pdf-finding-table th:nth-child(1), .pdf-finding-table td:nth-child(1) { width: 13mm; text-align: center; }
-    .pdf-finding-table th:nth-child(3), .pdf-finding-table td:nth-child(3) { width: 28mm; }
-    .pdf-risk-data-table th:nth-child(1) { width: 25%; }
-    .pdf-risk-data-table th:nth-child(2) { width: 17%; }
-    .pdf-risk-data-table th:nth-child(3) { width: 31%; }
-    .pdf-risk-data-table th:nth-child(4) { width: 27%; }
-    .pdf-action-table th:nth-child(1) { width: 18%; }
-    .pdf-action-table th:nth-child(2) { width: 46%; }
-    .pdf-action-table th:nth-child(3), .pdf-action-table th:nth-child(4) { width: 18%; }
-    .pdf-risk-pill { display: inline-flex; max-width: 100%; border-radius: 999px; padding: 1.1mm 2mm; background: #eef4ff; color: #1d4ed8; font-size: 6.8pt; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-    .pdf-table-note { margin-top: 3mm !important; color: #6b7c94 !important; font-size: 7.5pt !important; font-weight: 800; }
-    .pdf-empty { padding: 5mm; border: 1px dashed #cbd8ea; border-radius: 4mm; color: #6b7c94; background: #fbfdff; }
-
-    .pdf-cover-wave, .pdf-cover-arc, .pdf-cover-dots { display: none !important; }
-    .pdf-cover-page { min-height: auto !important; height: auto !important; padding: 14mm !important; border-radius: 5mm !important; page-break-after: always; background: linear-gradient(135deg,#ffffff 0%,#f8fbff 62%,#eef6ff 100%) !important; }
-    .pdf-cover-brand-row { margin-bottom: 20mm !important; }
-    .pdf-cover-title-block { min-height: auto !important; max-width: none !important; display: block !important; padding: 0 0 20mm !important; }
-    .pdf-cover-title-block h1 { max-width: 142mm !important; margin-top: 6mm !important; color: #0f2347 !important; font-size: 30pt !important; line-height: 1.06 !important; letter-spacing: -.04em !important; }
-    .pdf-cover-title-block p { max-width: 130mm !important; color:#52647e !important; font-size: 10.5pt !important; line-height:1.55 !important; }
-    .pdf-cover-meta-table { grid-template-columns: repeat(4,minmax(0,1fr)) !important; padding-top: 6mm !important; }
-    @media print {
-      html, body { width: auto; background: #fff !important; }
-      .pdf-pack { width: 190mm; margin: 0 auto; }
-      .pdf-cover, .pdf-section { box-shadow: none !important; }
-      .pdf-section { break-inside: avoid; page-break-inside: avoid; }
-      .pdf-table-section { break-inside: auto; page-break-inside: auto; }
-    }
+    ${buildProfessionalPdfCss()}
   </style>
 </head>
 <body>

@@ -62,7 +62,7 @@ const navSections: NavSection[] = [
       { label: "Software Distribution", path: "/software-distribution", icon: PackageCheck },
       { label: "Patch Management", path: "/patch-management", icon: ShieldCheck },
       { label: "Internet Metering", path: "/internet-metering", icon: Globe2 },
-      { label: "Network Metering", path: "/network-metering", icon: Network },
+      { label: "Network Inventory", path: "/network-inventory", icon: Network },
       { label: "Task List", path: "/tasklist", icon: ClipboardList },
     ],
   },

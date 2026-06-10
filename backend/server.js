@@ -4464,7 +4464,6 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
         const status = accountLocked ? "Locked" : normalizeEmaUserStatus(req.body.status);
         const roleNames = getRequestedEmaRoles(req.body);
         const passwordText = String(req.body.password || req.body.newPassword || "").trim();
-        const requestedRequireMFA = parseEmaBit(req.body.requireMFA ?? req.body.mfa, false);
 
         if (!fullName && !username) {
             return res.status(400).json({ success: false, message: "Full name or username is required." });
@@ -4506,6 +4505,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
             .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
+            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
@@ -4656,8 +4656,7 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
             .input("PhoneNo", sql.NVarChar, req.body.phoneNo || "")
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
-            .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
-            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
+            .input("RequireMFA", sql.Bit, parseEmaBit(req.body.requireMFA ?? req.body.mfa, false) ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
@@ -18997,6 +18996,8 @@ const EMA_REPORT_CATALOG = [
     icon: "chart",
     items: [
       { id: "executive-summary", title: "Executive Summary Report", description: "Overall management view for endpoint, risk, support and compliance.", type: "Summary", source: "Assets + Service Desk + Software + Jobs + Geolocation", outputs: ["PDF", "PowerPoint"] },
+      { id: "system-overall-summary", title: "System Overall Summary Report", description: "Overall information across endpoint, asset lifecycle, software, service desk, location, risk and data quality.", type: "Summary", source: "Assets + Service Desk + Software + Jobs + Geolocation + Data Quality", outputs: ["PDF", "PowerPoint", "Excel"] },
+      { id: "client-summary-rnr", title: "Client Risk & Resource Planning Report", description: "Client-facing report pack for subscription, endpoint management, OS compliance, resource planning, application risk and browser vulnerability watch.", type: "Summary", source: "Endpoint Inventory + Subscription + Asset Pricing + Software Inventory", outputs: ["PDF", "PowerPoint", "Excel"] },
       { id: "ema-operations-overview", title: "EMA Operations Overview", description: "High-level operational performance and endpoint health overview.", type: "Summary", source: "Device Registry + Task List", outputs: ["PDF"] },
       { id: "risk-attention-summary", title: "Risk & Attention Summary", description: "Major risk items requiring management attention.", type: "Risk", source: "Device Status + Service Desk SLA + Data Quality", outputs: ["PDF"] },
       { id: "monthly-management-dashboard", title: "Monthly Management Dashboard Report", description: "Monthly KPI snapshot based on dashboard and operational data.", type: "Summary", source: "Management Dashboard + Report Aggregation", outputs: ["PDF", "PowerPoint"] },
@@ -19025,7 +19026,8 @@ const EMA_REPORT_CATALOG = [
       { id: "aging-device", title: "Aging Device Report", description: "Devices above age threshold or replacement candidate.", type: "Detail", source: "Hardware Inventory", outputs: ["Excel"] },
       { id: "hardware-inventory", title: "Hardware Inventory Report", description: "CPU, RAM, storage, model and manufacturer breakdown.", type: "Detail", source: "Hardware Inventory", outputs: ["Excel"] },
       { id: "missing-hardware-information", title: "Missing Hardware Information Report", description: "Devices with incomplete hardware data.", type: "Detail", source: "Data Quality", outputs: ["Excel"] },
-      { id: "asset-replacement-planning", title: "Asset Replacement Planning Report", description: "Devices that may require refresh planning.", type: "Summary", source: "Lifecycle + Risk", outputs: ["PDF", "Excel"] }
+      { id: "asset-replacement-planning", title: "Asset Replacement Planning Report", description: "Devices that may require refresh planning.", type: "Summary", source: "Lifecycle + Risk", outputs: ["PDF", "Excel"] },
+      { id: "resource-planning-brand-summary", title: "Resource Planning Brand Summary", description: "Brand, model, endpoint type, aging candidate and estimated replacement cost planning.", type: "Summary", source: "Endpoint Inventory + Asset Pricing", outputs: ["PDF", "Excel"] }
     ]
   },
   {
@@ -19700,6 +19702,183 @@ function erBuildDerivedRows(data) {
   };
 }
 
+function erInferAssetBrand(row = {}) {
+  const text = `${erText(row.brand)} ${erText(row.manufacturer)} ${erText(row.model)} ${erText(row.deviceName)} ${erText(row.platform)}`.toLowerCase();
+  const rules = [
+    { brand: "Dell", keys: ["dell", "latitude", "optiplex", "precision", "vostro", "inspiron", "xps"] },
+    { brand: "HP", keys: ["hewlett", "hp ", "probook", "elitebook", "zbook", "pavilion", "compaq"] },
+    { brand: "Lenovo", keys: ["lenovo", "thinkpad", "thinkcentre", "ideapad", "legion"] },
+    { brand: "Apple", keys: ["apple", "macbook", "imac", "mac mini", "mac pro"] },
+    { brand: "Microsoft", keys: ["surface"] },
+    { brand: "Acer", keys: ["acer", "aspire", "travelmate", "predator"] },
+    { brand: "ASUS", keys: ["asus", "zenbook", "vivobook", "rog "] },
+    { brand: "Samsung", keys: ["samsung", "galaxy"] },
+    { brand: "Huawei", keys: ["huawei", "matebook"] },
+    { brand: "Toshiba", keys: ["toshiba", "dynabook"] }
+  ];
+  const found = rules.find((rule) => rule.keys.some((key) => text.includes(key)));
+  return found ? found.brand : "Unspecified";
+}
+
+function erInferEndpointType(row = {}) {
+  const text = `${erText(row.platform)} ${erText(row.model)} ${erText(row.deviceName)}`.toLowerCase();
+  if (["server", "windows server"].some((word) => text.includes(word))) return "Server";
+  if (["phone", "android", "ios", "iphone", "ipad", "tablet"].some((word) => text.includes(word))) return "Mobile / Tablet";
+  if (["laptop", "notebook", "latitude", "thinkpad", "elitebook", "probook", "surface", "macbook", "zenbook", "vivobook"].some((word) => text.includes(word))) return "Laptop";
+  if (["desktop", "optiplex", "thinkcentre", "workstation", "precision"].some((word) => text.includes(word))) return "Desktop";
+  return "Endpoint";
+}
+
+function erSoftwareName(row = {}) {
+  return erLowerText(row.softwareName || row.name || row.description);
+}
+
+function erSoftwareMatches(row, words) {
+  const text = `${erSoftwareName(row)} ${erLowerText(row.categoryName)} ${erLowerText(row.description)} ${erLowerText(row.visibilityStatus)}`;
+  return words.some((word) => text.includes(String(word).toLowerCase()));
+}
+
+function erRowsByBucket(rows, keyFn, mapFn, limit = 100) {
+  const groups = new Map();
+  for (const row of rows || []) {
+    const key = erText(keyFn(row), "Unspecified");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return [...groups.entries()]
+    .map(([label, groupedRows]) => mapFn(label, groupedRows))
+    .sort((a, b) => erNumber(b.total || b.count || b.value, 0) - erNumber(a.total || a.count || a.value, 0))
+    .slice(0, limit);
+}
+
+function erBuildRnrDerivedRows(data, derivedRows = null) {
+  const { metrics, assets, software } = data;
+  const d = derivedRows || erBuildDerivedRows(data);
+  const now = new Date();
+  const staleCutoff = new Date();
+  staleCutoff.setDate(staleCutoff.getDate() - 90);
+  const oldBrowserCutoff = new Date();
+  oldBrowserCutoff.setDate(oldBrowserCutoff.getDate() - 60);
+
+  const assetsWithPlanning = (assets || []).map((asset) => ({
+    ...asset,
+    brand: erInferAssetBrand(asset),
+    endpointType: erInferEndpointType(asset),
+    location: erText(asset.site, "Unmapped"),
+    agingCandidate: !asset.lastSeen || new Date(asset.lastSeen) < staleCutoff || !erText(asset.model),
+    planningReason: [
+      !asset.lastSeen || new Date(asset.lastSeen) < staleCutoff ? "Aging/stale telemetry" : "",
+      !erText(asset.model) ? "Missing model" : "",
+      !erText(asset.site) ? "Unmapped location" : ""
+    ].filter(Boolean).join(", ") || "Monitor"
+  }));
+
+  const byBrand = erBucketCount(assetsWithPlanning, (a) => a.brand, 12);
+  const byEndpointType = erBucketCount(assetsWithPlanning, (a) => a.endpointType, 8);
+  const windowsRows = assetsWithPlanning.filter((a) => erLowerText(a.platform).includes("windows"));
+  const unsupportedWindowsRows = windowsRows.filter((a) => ["windows xp", "windows 7", "windows 8", "2008", "2012", "legacy", "unsupported"].some((word) => erLowerText(a.platform).includes(word)));
+
+  const locationRows = erRowsByBucket(assetsWithPlanning, (a) => a.location, (location, rows) => ({
+    location,
+    total: rows.length,
+    online: rows.filter((row) => erIsOnline(row.status)).length,
+    offline: rows.filter((row) => !erIsOnline(row.status)).length,
+    staleOrAging: rows.filter((row) => row.agingCandidate).length,
+    action: rows.some((row) => row.agingCandidate) ? "Review aging/stale endpoints by location." : "Monitor"
+  }), 25);
+
+  const agingByLocationRows = erRowsByBucket(assetsWithPlanning.filter((a) => a.agingCandidate), (a) => a.location, (location, rows) => ({
+    location,
+    agingCandidate: rows.length,
+    topBrand: erBucketCount(rows, (row) => row.brand, 1)[0]?.label || "Unspecified",
+    sampleEndpoint: rows[0]?.deviceName || "-",
+    action: "Validate refresh/replacement requirement."
+  }), 25);
+
+  const osComplianceRows = erBucketCount(assetsWithPlanning, (a) => a.platform || "Unknown OS", 20).map((row) => {
+    const text = erLowerText(row.label);
+    const isWindows = text.includes("windows");
+    const unsupported = ["xp", "windows 7", "windows 8", "2008", "2012", "legacy", "unsupported"].some((word) => text.includes(word));
+    return {
+      os: row.label,
+      endpoints: row.value,
+      scope: isWindows ? "Windows" : "Other / unknown",
+      complianceStatus: unsupported ? "Unsupported / Review" : isWindows ? "Supported / Monitor" : "Validate",
+      action: unsupported ? "Plan OS upgrade or exception approval." : "Maintain OS evidence."
+    };
+  });
+
+  const resourcePlanningBrandRows = erRowsByBucket(assetsWithPlanning, (a) => a.brand, (brand, rows) => ({
+    brand,
+    totalEndpoint: rows.length,
+    laptop: rows.filter((row) => row.endpointType === "Laptop").length,
+    desktop: rows.filter((row) => row.endpointType === "Desktop").length,
+    agingCandidate: rows.filter((row) => row.agingCandidate).length,
+    recommendedAction: rows.some((row) => row.agingCandidate) ? "Prioritise refresh planning for this brand." : "Monitor lifecycle."
+  }), 15);
+
+  const microsoftRows = (software || []).filter((s) => erSoftwareMatches(s, ["microsoft", "office", "m365", "365", "teams", "onedrive", "outlook", "word", "excel", "powerpoint", "visio", "project"]));
+  const adobeRows = (software || []).filter((s) => erSoftwareMatches(s, ["adobe", "acrobat", "photoshop", "illustrator", "indesign", "creative cloud", "premiere"]));
+  const remoteToolRows = (software || []).filter((s) => erSoftwareMatches(s, ["anydesk", "teamviewer", "ultraviewer", "vnc", "remote utilities", "chrome remote desktop", "remote desktop", "logmein", "splashtop", "rustdesk"]));
+  const gamesRows = (software || []).filter((s) => erSoftwareMatches(s, ["game", "steam", "epic games", "battle.net", "riot", "roblox", "minecraft", "garena", "gog"]));
+  const antivirusRows = (software || []).filter((s) => erSoftwareMatches(s, ["antivirus", "anti-virus", "defender", "kaspersky", "symantec", "trend micro", "sophos", "crowdstrike", "sentinelone", "eset", "mcafee", "avast", "avg"]));
+  const unwantedRows = (software || []).filter((s) => erSoftwareMatches(s, ["toolbar", "adware", "unwanted", "pup", "miner", "torrent", "utorrent", "bittorrent", "coupon", "optimizer", "driver booster"]));
+  const browserRows = (software || []).filter((s) => erSoftwareMatches(s, ["chrome", "edge", "firefox", "browser", "opera", "brave"]));
+  const browserVulnerabilityRows = browserRows.filter((s) => {
+    const dt = erSqlDate(s.lastUpdated, null);
+    return !dt || dt < oldBrowserCutoff || erSoftwareMatches(s, ["old", "outdated", "legacy", "vulnerable", "update required"]);
+  });
+
+  const applicationPurchasingRows = [
+    ...erBucketCount(microsoftRows, (s) => s.softwareName || "Microsoft Application", 15).map((row) => ({ vendor: "Microsoft", application: row.label, installCount: row.value, licenseStatus: "Check purchasing baseline", action: "Validate against Microsoft purchase/licence records." })),
+    ...erBucketCount(adobeRows, (s) => s.softwareName || "Adobe Application", 15).map((row) => ({ vendor: "Adobe", application: row.label, installCount: row.value, licenseStatus: "Check purchasing baseline", action: "Validate against Adobe purchase/licence records." }))
+  ].slice(0, 30);
+
+  const sensitiveApplicationRows = erBucketCount(remoteToolRows, (s) => s.softwareName || "Remote Tool", 20).map((row) => ({
+    area: row.label,
+    severity: "High",
+    finding: `${row.value} endpoint software record(s) matched remote tool indicators.`,
+    action: "Approve, remove or document exception for remote access tooling."
+  }));
+
+  const softwareRiskRows = [
+    ...erBucketCount(gamesRows, (s) => s.softwareName || "Game", 20).map((row) => ({ category: "Games", softwareName: row.label, count: row.value, risk: "Productivity / policy", action: "Remove or approve exception." })),
+    ...erBucketCount(antivirusRows, (s) => s.softwareName || "Antivirus", 20).map((row) => ({ category: "Antivirus", softwareName: row.label, count: row.value, risk: "Protection evidence", action: "Validate standard antivirus coverage." })),
+    ...erBucketCount(unwantedRows, (s) => s.softwareName || "Unwanted Software", 20).map((row) => ({ category: "Unwanted Software", softwareName: row.label, count: row.value, risk: "Cleanup required", action: "Review and remove if not approved." })),
+    ...erBucketCount(d.unauthorizedSoftwareRows, (s) => s.softwareName || "Unauthorized Software", 20).map((row) => ({ category: "Unauthorized Software", softwareName: row.label, count: row.value, risk: "Compliance", action: "Approve, remove or investigate." }))
+  ].slice(0, 60);
+
+  return {
+    byBrand,
+    byEndpointType,
+    assetsWithPlanning,
+    windowsRows,
+    unsupportedWindowsRows,
+    locationRows,
+    agingByLocationRows,
+    osComplianceRows,
+    resourcePlanningBrandRows,
+    microsoftRows,
+    adobeRows,
+    applicationPurchasingRows,
+    remoteToolRows,
+    sensitiveApplicationRows,
+    gamesRows,
+    antivirusRows,
+    unwantedRows,
+    browserRows,
+    browserVulnerabilityRows,
+    softwareRiskRows,
+    clientSummarySections: [
+      { section: "Subscription", value: metrics.totalEndpoints, note: "Total nodes in current endpoint estate." },
+      { section: "Endpoint Management", value: metrics.onlineRate + "%", note: "Online endpoint coverage." },
+      { section: "Resource Planning", value: byBrand.length, note: "Detected PC brand group(s)." },
+      { section: "Application Risk", value: softwareRiskRows.length, note: "Software risk row(s)." },
+      { section: "Browser Vulnerability", value: browserVulnerabilityRows.length, note: "Browser update candidate row(s)." }
+    ]
+  };
+}
+
 function erFindingsForReport(report, data) {
   const { metrics, assets, incidents, software, jobs, geo } = data;
   const d = erBuildDerivedRows(data);
@@ -19728,6 +19907,80 @@ function erFindingsForReport(report, data) {
         erRiskSection("Management Attention Areas", erRiskRows(metrics)),
         erTableSection("Executive Attention List", d.actionQueueRows.slice(0, 20), ["source", "item", "severity", "action", "owner"])
       ];
+
+    case "system-overall-summary":
+      return [
+        erKpiSection("System Overall KPI Snapshot", [
+          { label: "Operational Score", value: `${metrics.operationalScore}%`, note: "Composite system posture." },
+          { label: "Endpoint Estate", value: metrics.totalEndpoints, note: `${metrics.onlineRate}% online rate.` },
+          { label: "Software Records", value: metrics.totalSoftwareRecords, note: `${metrics.distinctSoftware} distinct software name(s).` },
+          { label: "Open Tickets", value: metrics.openTickets, note: `${metrics.slaBreached} SLA breach candidate(s).` },
+          { label: "Geo Records", value: metrics.geolocationRecords, note: `${metrics.geolocationDevices} tracked device(s).` },
+          { label: "Data Quality Issues", value: metrics.missingIp + metrics.missingModel + metrics.missingMapping, note: "Missing IP, model or mapping." }
+        ]),
+        erBarSection("Endpoint Health Mix", [
+          { label: "Online", value: metrics.onlineEndpoints },
+          { label: "Offline", value: metrics.offlineEndpoints },
+          { label: "Stale", value: metrics.staleEndpoints }
+        ]),
+        erBarSection("Endpoint by Location / Department", d.bySite),
+        erBarSection("Software by Category", d.softwareByCategory),
+        erBarSection("Service Desk by Status", d.ticketsByStatus),
+        erRiskSection("Risk & Data Quality Summary", erRiskRows(metrics)),
+        erTableSection("System Management Action Queue", d.actionQueueRows.slice(0, 40), ["source", "item", "severity", "action", "owner"])
+      ];
+
+    case "client-summary-rnr": {
+      const rnr = erBuildRnrDerivedRows(data, d);
+      return [
+        erKpiSection("Subscription Summary", [
+          { label: "Service Type", value: "Subscribe / Purchase", note: "Confirm service profile from contract source." },
+          { label: "Version", value: "EMA System", note: "Solution / package version." },
+          { label: "Total Nodes", value: metrics.totalEndpoints, note: "Endpoint estate in selected scope." },
+          { label: "Integration", value: "Consider Integration", note: "Connect subscription / contract data source for stronger report evidence." }
+        ]),
+        erTableSection("Subscription / Contract Summary", [
+          { item: "Service Type", value: "Subscribe / Purchase", note: "Confirm subscription or purchased service package." },
+          { item: "Version", value: "EMA System", note: "Current solution package reference." },
+          { item: "Start Contract", value: "To be configured", note: "Contract source not available in current report query." },
+          { item: "End Contract", value: "To be configured", note: "Contract source not available in current report query." },
+          { item: "Total Nodes", value: metrics.totalEndpoints, note: "Total endpoint records in current scope." },
+          { item: "Integration Consideration", value: "Consider Integration", note: "Integrate subscription/licensing source for final client report." }
+        ], ["item", "value", "note"]),
+        erKpiSection("Endpoint Management", [
+          { label: "PC / Endpoint", value: metrics.totalEndpoints, note: "Unified EM + MDM estate." },
+          { label: "Windows OS", value: rnr.windowsRows.length, note: "Windows endpoints where platform evidence is available." },
+          { label: "Coverage", value: `${metrics.onlineRate}%`, note: "Online endpoint coverage." },
+          { label: "Benefits", value: "Inventory / visibility / compliance", note: "Endpoint management value summary." }
+        ]),
+        erBarSection("Endpoint Analytics Result - Total Type Endpoint", rnr.byEndpointType),
+        erTableSection("Location / Department Grouping", rnr.locationRows, ["location", "total", "online", "offline", "staleOrAging", "action"]),
+        erTableSection("Endpoint Aging by Location", rnr.agingByLocationRows, ["location", "agingCandidate", "topBrand", "sampleEndpoint", "action"]),
+        erTableSection("OS Supported / OS Compliance - Windows", rnr.osComplianceRows, ["os", "endpoints", "scope", "complianceStatus", "action"]),
+        erBarSection("Resources Planning - Focus Brand PC", rnr.byBrand),
+        erTableSection("Resource Planning Brand Detail", rnr.resourcePlanningBrandRows, ["brand", "totalEndpoint", "laptop", "desktop", "agingCandidate", "recommendedAction"]),
+        erTableSection("Application Based on Purchasing - Microsoft / Adobe", rnr.applicationPurchasingRows, ["vendor", "application", "installCount", "licenseStatus", "action"]),
+        erRiskSection("Sensitive Application - Remote Tools", rnr.sensitiveApplicationRows),
+        erTableSection("Games / Antivirus / Unwanted / Unauthorized Software", rnr.softwareRiskRows, ["category", "softwareName", "count", "risk", "action"]),
+        erTableSection("Browser Vulnerability", rnr.browserVulnerabilityRows.slice(0, 100), softwareCols)
+      ];
+    }
+
+    case "resource-planning-brand-summary": {
+      const rnr = erBuildRnrDerivedRows(data, d);
+      return [
+        erKpiSection("Resource Planning KPI", [
+          { label: "Endpoint Estate", value: metrics.totalEndpoints, note: "Total endpoint baseline." },
+          { label: "Brand Groups", value: rnr.byBrand.length, note: "Detected brand group(s)." },
+          { label: "Aging Candidate", value: rnr.assetsWithPlanning.filter((a) => a.agingCandidate).length, note: "Based on stale telemetry or missing model evidence." },
+          { label: "Location Groups", value: rnr.locationRows.length, note: "Location/department grouping." }
+        ]),
+        erBarSection("Resources Planning - Focus Brand PC", rnr.byBrand),
+        erTableSection("Resource Planning Brand Detail", rnr.resourcePlanningBrandRows, ["brand", "totalEndpoint", "laptop", "desktop", "agingCandidate", "recommendedAction"]),
+        erTableSection("Endpoint Aging by Location", rnr.agingByLocationRows, ["location", "agingCandidate", "topBrand", "sampleEndpoint", "action"]),
+        erTableSection("Replacement Candidate Evidence", d.replacementRows.slice(0, 100), ["deviceName", "source", "site", "platform", "model", "status", "reason", "priorityScore"])
+      ];
+    }
 
     case "ema-operations-overview":
       return [
@@ -20181,6 +20434,36 @@ function erJobStatusLabel(statusCode) {
   return map[Number(statusCode)] || `Status ${statusCode}`;
 }
 
+function erIsSummaryReport(report) {
+  return String(report?.type || "").trim().toLowerCase() === "summary";
+}
+
+function erUseAiAnalysis(report, filters = {}) {
+  return erIsSummaryReport(report) && filters.useAiAnalysis !== false;
+}
+
+function erBuildDataOnlyNarrative(report, data, filters) {
+  const m = data.metrics;
+  const periodText = erText(filters.dateRange, "Current Month").replace(/-/g, " ");
+  const siteText = erNumber(filters.relationID, 0) ? `selected site ID ${filters.relationID}` : "all sites";
+  const sourceCount = [data.assets, data.incidents, data.software, data.jobs, data.geo]
+    .reduce((sum, rows) => sum + (Array.isArray(rows) ? rows.length : 0), 0);
+
+  return {
+    title: report.title,
+    period: periodText,
+    scope: siteText,
+    executiveSummary: `${report.title} was generated in standard data-report mode for ${siteText} and ${periodText}. AI analysis is only enabled for Summary reports.`,
+    keyFindings: [
+      `${sourceCount} source row(s) were returned across the selected system dataset.`,
+      `${m.totalEndpoints} endpoint record(s), ${m.totalTickets} ticket record(s), ${m.totalSoftwareRecords} software record(s), ${m.totalJobs} job record(s) and ${m.totalGeoRecords} geolocation record(s) are available in this payload.`,
+      "Use the detail tables/export output for operational review, reconciliation and evidence checking."
+    ],
+    managementConclusion: "This is a data-only report. No AI-generated management analysis or recommendation has been produced for this non-Summary report.",
+    recommendations: []
+  };
+}
+
 function erBuildNarrative(report, data, filters) {
   const m = data.metrics;
   const d = erBuildDerivedRows(data);
@@ -20444,6 +20727,29 @@ function erRecommendationRows(report, m, data = null) {
   const add = (priority, action) => rows.push({ priority, action });
 
   switch (report.id) {
+    case "system-overall-summary":
+      if (m.staleEndpoints > 0) add("Priority 1", `Review ${m.staleEndpoints} stale endpoint(s) and restore telemetry freshness.`);
+      if (m.slaBreached > 0) add("Priority 2", `Escalate ${m.slaBreached} SLA breach candidate ticket(s).`);
+      if (m.totalSoftwareRecords > 0) add("Priority 3", "Review software inventory, unauthorized software and browser update candidates.");
+      if (m.missingMapping > 0) add("Priority 4", `Clean ${m.missingMapping} missing location/department mapping record(s).`);
+      break;
+    case "client-summary-rnr":
+      if (m.totalEndpoints > 0) add("Priority 1", `Confirm subscription node count against ${m.totalEndpoints} discovered endpoint record(s).`);
+      if (m.staleEndpoints > 0) add("Priority 2", `Review ${m.staleEndpoints} stale endpoint(s) before final RNR sign-off.`);
+      if (data) {
+        const rnr = erBuildRnrDerivedRows(data, d || erBuildDerivedRows(data));
+        if (rnr.sensitiveApplicationRows.length) add("Priority 3", `Review ${rnr.sensitiveApplicationRows.length} sensitive remote tool group(s).`);
+        if (rnr.browserVulnerabilityRows.length) add("Priority 4", `Update or validate ${rnr.browserVulnerabilityRows.length} browser vulnerability candidate record(s).`);
+      }
+      break;
+    case "resource-planning-brand-summary":
+      if (data) {
+        const rnr = erBuildRnrDerivedRows(data, d || erBuildDerivedRows(data));
+        const agingCount = rnr.assetsWithPlanning.filter((asset) => asset.agingCandidate).length;
+        if (agingCount) add("Priority 1", `Prioritise ${agingCount} aging/replacement candidate endpoint(s) by brand and location.`);
+        if (rnr.byBrand.length) add("Priority 2", `Validate resource planning budget by ${rnr.byBrand.length} detected brand group(s).`);
+      }
+      break;
     case "executive-summary":
     case "monthly-management-dashboard":
       if (m.staleEndpoints > 0) add("Priority 1", `Assign endpoint owner to review ${m.staleEndpoints} stale endpoint(s).`);
@@ -20560,17 +20866,32 @@ async function erBuildReportPayload(pool, reportId, filters = {}, mode = "previe
 
   const metrics = erBuildMetrics({ assets, incidents, software, jobs, geo });
   const data = { assets, incidents, software, jobs, geo, metrics };
+  const useAiAnalysis = erUseAiAnalysis(report, filters);
+  const effectiveFilters = {
+    ...filters,
+    useAiAnalysis,
+    includeSummary: useAiAnalysis ? filters.includeSummary !== false : false,
+    includeRecommendation: useAiAnalysis ? filters.includeRecommendation !== false : false,
+    pdfDesign: useAiAnalysis ? erText(filters.pdfDesign, "auto") : "generic"
+  };
+  const derivedRows = erBuildDerivedRows(data);
+  const rnrRows = erBuildRnrDerivedRows(data, derivedRows);
   const sections = erBuildReportTables(report, data);
-  const recommendations = erRecommendationRows(report, metrics, data);
+  const recommendations = useAiAnalysis ? erRecommendationRows(report, metrics, data) : [];
+  const narrative = useAiAnalysis
+    ? erBuildNarrative(report, data, effectiveFilters)
+    : erBuildDataOnlyNarrative(report, data, effectiveFilters);
 
   return {
     success: true,
     mode,
     generatedAt: new Date().toISOString(),
     report,
-    filters,
+    filters: effectiveFilters,
+    aiAnalysisEnabled: useAiAnalysis,
+    reportingMode: useAiAnalysis ? "ai-summary" : "data-only",
     metrics,
-    narrative: erBuildNarrative(report, data, filters),
+    narrative,
     sections,
     recommendations,
     exportData: {
@@ -20578,7 +20899,13 @@ async function erBuildReportPayload(pool, reportId, filters = {}, mode = "previe
       incidents,
       software,
       jobs,
-      geo
+      geo,
+      clientSummarySections: rnrRows.clientSummarySections,
+      resourcePlanningModels: rnrRows.resourcePlanningBrandRows,
+      resourcePlanningBrandSummary: rnrRows.resourcePlanningBrandRows,
+      applicationPurchasing: rnrRows.applicationPurchasingRows,
+      sensitiveApplications: rnrRows.sensitiveApplicationRows,
+      browserVulnerability: rnrRows.browserVulnerabilityRows
     },
     dataSources: [
       { name: "Endpoint Inventory", table: "TS_OBJECT_ROOT / TSMDM_ASSET", rows: assets.length },
@@ -20599,6 +20926,8 @@ function erReadFilters(req) {
     deviceGroup: erNormalizeReportFilter(req.body?.deviceGroup ?? req.query?.deviceGroup, "all"),
     status: erNormalizeReportFilter(req.body?.status ?? req.query?.status, "all"),
     outputFormat: erText(req.body?.outputFormat ?? req.query?.outputFormat, "PDF"),
+    pdfDesign: erText(req.body?.pdfDesign ?? req.query?.pdfDesign, "auto"),
+    useAiAnalysis: req.body?.useAiAnalysis !== false && req.query?.useAiAnalysis !== "false",
     includeChart: req.body?.includeChart !== false && req.query?.includeChart !== "false",
     includeSummary: req.body?.includeSummary !== false && req.query?.includeSummary !== "false",
     includeTable: req.body?.includeTable !== false && req.query?.includeTable !== "false",
