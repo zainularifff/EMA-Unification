@@ -439,7 +439,9 @@ async function updateEmaLoginFailure(pool, userID) {
 */
 
 function emaUserRequires2FA(user) {
-    return user?.RequireMFA === true || user?.RequireMFA === 1 || user?.TwoFactorEnabled === true || user?.TwoFactorEnabled === 1;
+    // RequireMFA is the policy switch controlled by User Access Management.
+    // TwoFactorEnabled only means the user has completed authenticator setup before.
+    return user?.RequireMFA === true || user?.RequireMFA === 1;
 }
 
 function mapEmaTwoFactorUser(user) {
@@ -4664,6 +4666,10 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
                     Status = @Status,
                     IsActive = @IsActive,
                     RequireMFA = @RequireMFA,
+                    TwoFactorEnabled = CASE WHEN @RequireMFA = 1 THEN TwoFactorEnabled ELSE 0 END,
+                    TwoFactorSecret = CASE WHEN @RequireMFA = 1 THEN TwoFactorSecret ELSE NULL END,
+                    TwoFactorVerifiedAt = CASE WHEN @RequireMFA = 1 THEN TwoFactorVerifiedAt ELSE NULL END,
+                    TwoFactorResetAt = CASE WHEN @RequireMFA = 1 THEN TwoFactorResetAt ELSE GETDATE() END,
                     AccountLocked = @AccountLocked,
                     LockReason = @LockReason,
                     AccessStartDate = @AccessStartDate,
@@ -4821,6 +4827,10 @@ app.put("/api/settings/users/:id/mfa", authenticateToken, async (req, res) => {
             .query(`
                 UPDATE EMA_Users
                 SET RequireMFA = @RequireMFA,
+                    TwoFactorEnabled = CASE WHEN @RequireMFA = 1 THEN TwoFactorEnabled ELSE 0 END,
+                    TwoFactorSecret = CASE WHEN @RequireMFA = 1 THEN TwoFactorSecret ELSE NULL END,
+                    TwoFactorVerifiedAt = CASE WHEN @RequireMFA = 1 THEN TwoFactorVerifiedAt ELSE NULL END,
+                    TwoFactorResetAt = CASE WHEN @RequireMFA = 1 THEN TwoFactorResetAt ELSE GETDATE() END,
                     UpdatedAt = GETDATE(),
                     UpdatedBy = @UpdatedBy
                 OUTPUT
@@ -4829,6 +4839,7 @@ app.put("/api/settings/users/:id/mfa", authenticateToken, async (req, res) => {
             `);
 
         if (result.recordset.length === 0) return res.status(404).json({ success: false, message: "User not found." });
+
         const data = mapEmaUserResponse(result.recordset[0]);
         await logEmaAudit(pool, req, requireMFA ? "Enabled MFA for EMA user" : "Disabled MFA for EMA user", "User Access Management", "Success", data);
         return res.json({ success: true, data });
