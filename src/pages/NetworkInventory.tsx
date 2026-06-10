@@ -138,6 +138,119 @@ const emptyCounts: NetworkCounts = {
 const pageSize = 8;
 const statusDetailPageSize = 10;
 
+const NETWORK_INVENTORY_PAGE_CSS = `
+html.network-inventory-page-active,
+body.network-inventory-page-active,
+body.network-inventory-page-active #root {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+
+body.network-inventory-page-active .ema-main,
+body.network-inventory-page-active .ema-content,
+body.network-inventory-page-active .ema-content-area,
+body.network-inventory-page-active .app-main,
+body.network-inventory-page-active .app-content,
+body.network-inventory-page-active .layout-main,
+body.network-inventory-page-active .layout-content,
+body.network-inventory-page-active .main,
+body.network-inventory-page-active .main-content,
+body.network-inventory-page-active main {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+
+body.network-inventory-page-active .ema-page,
+body.network-inventory-page-active .page-content,
+body.network-inventory-page-active .content,
+body.network-inventory-page-active .content-area,
+body.network-inventory-page-active .dashboard-page,
+body.network-inventory-page-active .dashboard-content,
+body.network-inventory-page-active .page-container,
+body.network-inventory-page-active .router-content {
+  height: calc(100dvh - 76px) !important;
+  max-height: calc(100dvh - 76px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #f4f8fc !important;
+}
+
+body.network-inventory-page-active .settings-module-root.ema-module-root,
+body.network-inventory-page-active .network-inventory-page {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin: 0 !important;
+  color: #0f172a !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
+    radial-gradient(circle at 98% 18%, rgba(14, 165, 233, 0.06), transparent 26rem),
+    linear-gradient(135deg, #eef4fb 0%, #f8fbff 46%, #e8eff7 100%) !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.network-inventory-page-active .settings-module-root.ema-module-root::before,
+body.network-inventory-page-active .network-inventory-page::before {
+  content: "";
+  position: fixed;
+  inset: 76px 0 0 0;
+  pointer-events: none;
+  opacity: .28;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, .07) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 78%, transparent 100%);
+}
+
+body.network-inventory-page-active .settings-module-root.ema-module-root::-webkit-scrollbar,
+body.network-inventory-page-active .network-inventory-page::-webkit-scrollbar {
+  width: 6px;
+}
+
+body.network-inventory-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-track,
+body.network-inventory-page-active .network-inventory-page::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, .55);
+  border-radius: 999px;
+}
+
+body.network-inventory-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-thumb,
+body.network-inventory-page-active .network-inventory-page::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, .65);
+  border: 1px solid rgba(226, 232, 240, .55);
+  border-radius: 999px;
+}
+
+body.network-inventory-page-active .settings-layout,
+body.network-inventory-page-active .settings-content,
+body.network-inventory-page-active .content-shell,
+body.network-inventory-page-active .settings-hero {
+  position: relative;
+  z-index: 1;
+}
+
+body.network-inventory-page-active .settings-menu,
+body.network-inventory-page-active .settings-hero,
+body.network-inventory-page-active .content-shell,
+body.network-inventory-page-active .ema-panel-surface,
+body.network-inventory-page-active .pricing-table-card,
+body.network-inventory-page-active .settings-helper-card {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+}
+`;
+
+
 function cx(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(" ");
 }
@@ -547,6 +660,29 @@ function formatScheduleTime(value: string) {
 }
 
 export default function NetworkInventory() {
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    document.documentElement.classList.add("network-inventory-page-active");
+    document.body.classList.add("network-inventory-page-active");
+    document.documentElement.classList.remove("itops-dashboard-page-active", "md-dashboard-page-active", "md-management-dashboard-active");
+    document.body.classList.remove("itops-dashboard-page-active", "md-dashboard-page-active", "md-management-dashboard-active");
+
+    window.dispatchEvent(new CustomEvent("ema-topbar-meta", {
+      detail: {
+        path: window.location.pathname,
+        title: "Network Inventory",
+        subtitle: "Monitor IP records, workgroups and network coverage.",
+        searchPlaceholder: "Search IP, hostname, subnet or workgroup...",
+      },
+    }));
+
+    return () => {
+      document.documentElement.classList.remove("network-inventory-page-active");
+      document.body.classList.remove("network-inventory-page-active");
+      window.dispatchEvent(new CustomEvent("ema-topbar-meta", { detail: null }));
+    };
+  }, []);
   const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
   const [treeMode, setTreeMode] = useState<NetworkTreeMode>("organization");
   const [hierarchy, setHierarchy] = useState<NetworkHierarchyNode | null>(null);
@@ -913,7 +1049,9 @@ export default function NetworkInventory() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="users">
+    <>
+      <style>{NETWORK_INVENTORY_PAGE_CSS}</style>
+      <main className="settings-module-root ema-settings-pro ema-module-root network-inventory-page container-fluid p-3 p-xl-4" data-section="network">
       {notice && (
         <div className="settings-toast-layer">
           <div className="settings-toast settings-toast-success" role="status" aria-live="polite">
@@ -1204,7 +1342,8 @@ export default function NetworkInventory() {
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </>
   );
 }
 

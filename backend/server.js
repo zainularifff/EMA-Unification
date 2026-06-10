@@ -85,6 +85,82 @@ function shouldBypassDashboardCache(req) {
     return refresh === '1' || refresh === 'true' || refresh === 'yes';
 }
 
+
+// ============================================================
+// GENERIC LIGHTWEIGHT GET RESPONSE CACHE
+// Used for data-heavy module pages such as Software Inventory.
+// Cache is scoped by authenticated user + full URL and can be bypassed with
+// ?refresh=1, ?noCache=1 or ?nocache=1.
+// ============================================================
+const SOFTWARE_CACHE_TTL_MS = Number(process.env.SOFTWARE_CACHE_TTL_MS || 180000);
+
+function readTimedResponseCache(key, enabledTtlMs) {
+    if (!key || enabledTtlMs <= 0) return null;
+    const entry = dashboardResponseCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.createdAt > entry.ttlMs) {
+        dashboardResponseCache.delete(key);
+        return null;
+    }
+    return cloneDashboardPayload(entry.data);
+}
+
+function writeTimedResponseCache(key, data, ttlMs) {
+    if (!key || data === undefined || data === null || ttlMs <= 0) return;
+    dashboardResponseCache.set(key, {
+        createdAt: Date.now(),
+        ttlMs,
+        data: cloneDashboardPayload(data)
+    });
+}
+
+function clearTimedResponseCache(prefix) {
+    if (!prefix) {
+        dashboardResponseCache.clear();
+        return;
+    }
+
+    for (const key of dashboardResponseCache.keys()) {
+        if (String(key).startsWith(prefix)) dashboardResponseCache.delete(key);
+    }
+}
+
+function buildTimedResponseCacheKey(namespace, req) {
+    const userKey = [
+        req?.user?.authSource || 'auth',
+        req?.user?.emaUserID || req?.user?.console_Idn || req?.user?.userID || 'anonymous'
+    ].join(':');
+
+    return `${namespace}:${req.method}:${userKey}:${req.originalUrl || req.url || ''}`;
+}
+
+function createTimedGetCacheMiddleware(namespace, ttlMs) {
+    return function timedGetCacheMiddleware(req, res, next) {
+        const activeTtlMs = Number(ttlMs || 0);
+        if (req.method !== 'GET' || activeTtlMs <= 0 || shouldBypassDashboardCache(req)) {
+            return next();
+        }
+
+        const cacheKey = buildTimedResponseCacheKey(namespace, req);
+        const cachedPayload = readTimedResponseCache(cacheKey, activeTtlMs);
+        if (cachedPayload !== null && cachedPayload !== undefined) {
+            return res.json(cachedPayload);
+        }
+
+        const originalJson = res.json.bind(res);
+        res.json = function cachedJson(payload) {
+            if (res.statusCode >= 200 && res.statusCode < 300 && payload !== undefined && payload?.success !== false) {
+                writeTimedResponseCache(cacheKey, payload, activeTtlMs);
+            }
+            return originalJson(payload);
+        };
+
+        return next();
+    };
+}
+
+const softwareCacheMiddleware = createTimedGetCacheMiddleware('software', SOFTWARE_CACHE_TTL_MS);
+
 if (compression) {
     app.use(compression({
         threshold: 1024
@@ -13292,14 +13368,14 @@ async function handleSoftwareDebugSummary(req, res) {
     }
 }
 
-app.get("/api/software", authenticateToken, handleSoftwareInventoryList);
-app.get("/api/software/categories", authenticateToken, handleSoftwareCategories);
-app.get("/api/software/debug/summary", authenticateToken, handleSoftwareDebugSummary);
+app.get("/api/software", authenticateToken, softwareCacheMiddleware, handleSoftwareInventoryList);
+app.get("/api/software/categories", authenticateToken, softwareCacheMiddleware, handleSoftwareCategories);
+app.get("/api/software/debug/summary", authenticateToken, softwareCacheMiddleware, handleSoftwareDebugSummary);
 
 // Compatibility aliases, in case old frontend/service uses software-inventory wording.
-app.get("/api/software-inventory", authenticateToken, handleSoftwareInventoryList);
-app.get("/api/software-inventory/categories", authenticateToken, handleSoftwareCategories);
-app.get("/api/software-inventory/debug/summary", authenticateToken, handleSoftwareDebugSummary);
+app.get("/api/software-inventory", authenticateToken, softwareCacheMiddleware, handleSoftwareInventoryList);
+app.get("/api/software-inventory/categories", authenticateToken, softwareCacheMiddleware, handleSoftwareCategories);
+app.get("/api/software-inventory/debug/summary", authenticateToken, softwareCacheMiddleware, handleSoftwareDebugSummary);
 
 
 // ============================================================
@@ -13324,7 +13400,7 @@ function softAdvNormalizeExtension(value) {
 }
 
 // Device Hierarchy > click one EM/Windows device > Installed Software list
-app.get("/api/software/client/:clientID", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const swname = softAdvNormalizeSearchValue(req.query.swname || req.query.search || req.query.q);
@@ -13347,7 +13423,7 @@ app.get("/api/software/client/:clientID", authenticateToken, async (req, res) =>
 });
 
 // MDM device software list
-app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
+app.get("/api/software/mdm/:deviceID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const deviceID = softAdvNormalizeSearchValue(req.params.deviceID);
         if (!deviceID) {
@@ -13380,7 +13456,7 @@ app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
 });
 
 // Relation installed software statistics and drilldowns.
-app.get("/api/software/relation/:relationID/installed", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/installed", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "summary1").toLowerCase();
@@ -13426,7 +13502,7 @@ app.get("/api/software/relation/:relationID/installed", authenticateToken, async
 });
 
 // Relation package/license statistics and drilldowns.
-app.get("/api/software/relation/:relationID/packages", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/packages", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "stat1").toLowerCase();
@@ -13471,7 +13547,7 @@ app.get("/api/software/relation/:relationID/packages", authenticateToken, async 
 });
 
 // Application Package / License Status by selected client.
-app.get("/api/software/client/:clientID/packages", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/packages", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "package").toLowerCase();
@@ -13494,7 +13570,7 @@ app.get("/api/software/client/:clientID/packages", authenticateToken, async (req
 });
 
 // File Extension statistics/list by relation.
-app.get("/api/software/relation/:relationID/files", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/files", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "stat").toLowerCase();
@@ -13531,7 +13607,7 @@ app.get("/api/software/relation/:relationID/files", authenticateToken, async (re
 });
 
 // File Extension list by selected client/device.
-app.get("/api/software/client/:clientID/files", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/files", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const extension = softAdvNormalizeExtension(req.query.extension || req.query.ext);
@@ -13558,7 +13634,7 @@ app.get("/api/software/client/:clientID/files", authenticateToken, async (req, r
 });
 
 // Software registry report/stat endpoint.
-app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
 
@@ -13579,7 +13655,7 @@ app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, async 
 });
 
 // Software registry detail endpoint by client.
-app.get("/api/software/client/:clientID/swr-detail", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/swr-detail", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
 
@@ -13599,7 +13675,7 @@ app.get("/api/software/client/:clientID/swr-detail", authenticateToken, async (r
     }
 });
 
-app.get("/api/software/stats", authenticateToken, async (req, res) => {
+app.get("/api/software/stats", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = softAdvParseOptionalInt(req.query.relationID, 0);
         const swname = softAdvNormalizeSearchValue(req.query.swname || req.query.search || req.query.q);
@@ -13636,7 +13712,7 @@ app.get("/api/software/stats", authenticateToken, async (req, res) => {
     }
 });
 
-app.get("/api/software/extensions", authenticateToken, async (req, res) => {
+app.get("/api/software/extensions", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     return res.json({
         success: true,
         totalRecords: 3,
@@ -14133,6 +14209,7 @@ async function handleSoftInventoryScan(req, res) {
 
         await transaction.commit();
         transaction = null;
+        clearTimedResponseCache('software:');
 
         return res.status(201).json({
             success: true,
@@ -14180,7 +14257,7 @@ app.post("/api/software/scan", authenticateToken, handleSoftInventoryScan);
 
 
 // Old relation based route. Must stay after /categories and /debug/summary.
-app.get("/api/software/:relationID", authenticateToken, async (req, res) => {
+app.get("/api/software/:relationID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     req.query.relationID = req.params.relationID;
     return handleSoftwareInventoryList(req, res);
 });

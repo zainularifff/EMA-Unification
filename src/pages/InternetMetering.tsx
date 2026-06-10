@@ -150,6 +150,119 @@ const URL_RULE_PAGE_SIZE = 10;
 
 const INTERNET_METERING_CACHE_TTL = 5 * 60 * 1000;
 
+const INTERNET_METERING_PAGE_CSS = `
+html.internet-metering-page-active,
+body.internet-metering-page-active,
+body.internet-metering-page-active #root {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+
+body.internet-metering-page-active .ema-main,
+body.internet-metering-page-active .ema-content,
+body.internet-metering-page-active .ema-content-area,
+body.internet-metering-page-active .app-main,
+body.internet-metering-page-active .app-content,
+body.internet-metering-page-active .layout-main,
+body.internet-metering-page-active .layout-content,
+body.internet-metering-page-active .main,
+body.internet-metering-page-active .main-content,
+body.internet-metering-page-active main {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+
+body.internet-metering-page-active .ema-page,
+body.internet-metering-page-active .page-content,
+body.internet-metering-page-active .content,
+body.internet-metering-page-active .content-area,
+body.internet-metering-page-active .dashboard-page,
+body.internet-metering-page-active .dashboard-content,
+body.internet-metering-page-active .page-container,
+body.internet-metering-page-active .router-content {
+  height: calc(100dvh - 76px) !important;
+  max-height: calc(100dvh - 76px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #f4f8fc !important;
+}
+
+body.internet-metering-page-active .settings-module-root.ema-module-root,
+body.internet-metering-page-active .internet-metering-page {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin: 0 !important;
+  color: #0f172a !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
+    radial-gradient(circle at 98% 18%, rgba(14, 165, 233, 0.06), transparent 26rem),
+    linear-gradient(135deg, #eef4fb 0%, #f8fbff 46%, #e8eff7 100%) !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.internet-metering-page-active .settings-module-root.ema-module-root::before,
+body.internet-metering-page-active .internet-metering-page::before {
+  content: "";
+  position: fixed;
+  inset: 76px 0 0 0;
+  pointer-events: none;
+  opacity: .28;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, .07) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 78%, transparent 100%);
+}
+
+body.internet-metering-page-active .settings-module-root.ema-module-root::-webkit-scrollbar,
+body.internet-metering-page-active .internet-metering-page::-webkit-scrollbar {
+  width: 6px;
+}
+
+body.internet-metering-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-track,
+body.internet-metering-page-active .internet-metering-page::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, .55);
+  border-radius: 999px;
+}
+
+body.internet-metering-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-thumb,
+body.internet-metering-page-active .internet-metering-page::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, .65);
+  border: 1px solid rgba(226, 232, 240, .55);
+  border-radius: 999px;
+}
+
+body.internet-metering-page-active .settings-layout,
+body.internet-metering-page-active .settings-content,
+body.internet-metering-page-active .content-shell,
+body.internet-metering-page-active .settings-hero {
+  position: relative;
+  z-index: 1;
+}
+
+body.internet-metering-page-active .settings-menu,
+body.internet-metering-page-active .settings-hero,
+body.internet-metering-page-active .content-shell,
+body.internet-metering-page-active .ema-panel-surface,
+body.internet-metering-page-active .pricing-table-card,
+body.internet-metering-page-active .settings-helper-card {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+}
+`;
+
+
 function readInternetMeteringCache<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key);
@@ -689,6 +802,30 @@ function DetailModal({ row, onClose }: { row: InternetUsageRow; onClose: () => v
 }
 
 export default function InternetMetering() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    document.documentElement.classList.add('internet-metering-page-active');
+    document.body.classList.add('internet-metering-page-active');
+    document.documentElement.classList.remove('itops-dashboard-page-active', 'md-dashboard-page-active', 'md-management-dashboard-active', 'network-inventory-page-active', 'patch-management-page-active');
+    document.body.classList.remove('itops-dashboard-page-active', 'md-dashboard-page-active', 'md-management-dashboard-active', 'network-inventory-page-active', 'patch-management-page-active');
+
+    window.dispatchEvent(new CustomEvent('ema-topbar-meta', {
+      detail: {
+        path: window.location.pathname,
+        title: 'Internet Metering',
+        subtitle: 'Monitor device web usage, usage results and URL rules.',
+        searchPlaceholder: 'Search domain, URL, device, user or rule ID...',
+      },
+    }));
+
+    return () => {
+      document.documentElement.classList.remove('internet-metering-page-active');
+      document.body.classList.remove('internet-metering-page-active');
+      window.dispatchEvent(new CustomEvent('ema-topbar-meta', { detail: null }));
+    };
+  }, []);
+
   const [orgRoot, setOrgRoot] = useState<TreeNodeType>({ id: 'all-devices', label: 'All Devices', type: 'all', children: [], childrenLoaded: false });
   const [selectedScope, setSelectedScope] = useState<TreeNodeType>({ id: 'all-devices', label: 'All Devices', type: 'all', children: [], childrenLoaded: false });
   const [urlRoot, setUrlRoot] = useState<TreeNodeType>({ id: 'url-root', label: 'Domain Rules', type: 'url-folder', children: [], childrenLoaded: true });
@@ -1255,7 +1392,9 @@ export default function InternetMetering() {
   };
 
   return (
-    <main data-section="users" className="settings-module-root ema-settings-pro ema-module-root internet-metering-module container-fluid p-3 p-xl-4">
+    <>
+      <style>{INTERNET_METERING_PAGE_CSS}</style>
+      <main data-section="internet-metering" className="settings-module-root ema-settings-pro ema-module-root internet-metering-module internet-metering-page container-fluid p-3 p-xl-4">
       {toast && (
         <div className="settings-toast-layer">
           <div className="settings-toast settings-toast-success">
@@ -1650,6 +1789,7 @@ export default function InternetMetering() {
       )}
 
       {detailRow && <DetailModal row={detailRow} onClose={() => setDetailRow(null)} />}
-    </main>
+      </main>
+    </>
   );
 }

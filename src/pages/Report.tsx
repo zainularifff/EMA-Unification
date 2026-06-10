@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import "../styles/ema-layout.css";
+import worldtechLogoColor from "../assets/logo-worldtech-color.png";
+import npointsLogo from "../assets/npoints-logo.png";
+
+const PDF_COMPANY_LOGO_SRC = worldtechLogoColor;
+const PDF_SOLUTION_LOGO_SRC = npointsLogo;
 
 type ReportType = "Summary" | "Detail" | "Audit" | "Compliance" | "Risk" | string;
 
@@ -2488,9 +2493,15 @@ function buildPdfCoverOnlyPage(payload: ReportPayload, filters: ReportFilters, m
       <div class="pdf-cover-dots dots-left"></div>
       <div class="pdf-cover-dots dots-right"></div>
 
-      <header class="pdf-cover-brand-row">
-        <div class="pdf-cover-brand-mark">E</div>
-        <div><strong>EMA Unified System</strong><small>${pdfText(pdfReportPackName(payload), 70)}</small></div>
+      <header class="pdf-cover-brand-row pdf-logo-brand-row">
+        <div class="pdf-brand-solution">
+          <img class="pdf-solution-logo" src="${pdfEscape(PDF_SOLUTION_LOGO_SRC)}" alt="nPoints solution logo" />
+          <div class="pdf-brand-title"><strong>EMA Unified System</strong><small>${pdfText(pdfReportPackName(payload), 70)}</small></div>
+        </div>
+        <div class="pdf-brand-company">
+          <small>Prepared by</small>
+          <img class="pdf-company-logo" src="${pdfEscape(PDF_COMPANY_LOGO_SRC)}" alt="Worldtech company logo" />
+        </div>
       </header>
 
       <div class="pdf-cover-title-block">
@@ -2507,7 +2518,6 @@ function buildPdfCoverOnlyPage(payload: ReportPayload, filters: ReportFilters, m
         <div><small>Output</small><b>${pdfText(filters.outputFormat || "PDF", 30)}</b></div>
       </div>
     </section>
-    <div class="pdf-page-break"></div>
   `;
 }
 
@@ -2521,48 +2531,111 @@ function buildPdfMetricTable(payload: ReportPayload) {
   const software = pdfNumber(payload, ["softwareRows", "softwareRecords", "totalSoftwareRecords"], 0);
   const score = pdfNumber(payload, ["operationalScore", "score"], 0);
   const onlineRate = endpointTotal ? Math.round((online / Math.max(endpointTotal, 1)) * 100) : pdfNumber(payload, ["onlineRate"], 0);
+  const posture = score < 50 || onlineRate < 70 || sla > 0 ? "Critical" : score < 75 || stale > 0 ? "Watch" : "Stable";
+  const telemetryLabel = stale > 0 ? "Weak" : "Healthy";
+  const serviceLabel = sla > 0 ? "Breach Watch" : openTickets > 0 ? "Active Queue" : "Controlled";
   const rows = [
-    ["Board Score", `${score}%`, "Composite management posture"],
-    ["Endpoint Estate", endpointTotal, `${online} online / ${offline} offline`],
-    ["Online Rate", `${onlineRate}%`, `${stale} stale or missing telemetry`],
-    ["Service Desk", openTickets, `${sla} SLA breach candidate(s)`],
-    ["Software", software, "Inventory records in scope"]
+    ["Management Posture", posture, `${score}% board score based on availability, SLA exposure and reporting quality.`],
+    ["Endpoint Reachability", `${onlineRate}%`, `${online} online / ${offline} offline or not online from ${endpointTotal} endpoint(s).`],
+    ["Telemetry Confidence", telemetryLabel, `${stale} endpoint(s) with stale or missing last-seen telemetry.`],
+    ["Service Desk Exposure", serviceLabel, `${openTickets} open ticket(s), including ${sla} SLA breach candidate(s).`],
+    ["Software Visibility", software, "Software inventory records available for governance and cleanup review."]
   ];
 
   return `
     <table class="pdf-real-table pdf-metric-table">
-      <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
-      <tbody>${rows.map((row) => `<tr><td>${pdfText(row[0], 60)}</td><td>${pdfText(row[1], 40)}</td><td>${pdfText(row[2], 100)}</td></tr>`).join("")}</tbody>
+      <thead><tr><th>Signal</th><th>Status</th><th>Management Reading</th></tr></thead>
+      <tbody>${rows.map((row) => `<tr><td>${pdfText(row[0], 60)}</td><td>${pdfText(row[1], 42)}</td><td>${pdfText(row[2], 135)}</td></tr>`).join("")}</tbody>
     </table>
   `;
 }
 
+function buildExecutiveBrief(payload: ReportPayload) {
+  const endpointTotal = pdfNumber(payload, ["endpointTotal", "totalEndpoints", "assets"], 0);
+  const online = pdfNumber(payload, ["onlineEndpoints", "online"], 0);
+  const offline = pdfNumber(payload, ["offlineEndpoints", "offline"], 0);
+  const stale = pdfNumber(payload, ["staleEndpoints", "stale"], 0);
+  const openTickets = pdfNumber(payload, ["openTickets", "tickets"], 0);
+  const sla = pdfNumber(payload, ["slaBreachCandidates", "slaBreaches", "slaBreached"], 0);
+  const software = pdfNumber(payload, ["softwareRows", "softwareRecords", "totalSoftwareRecords"], 0);
+  const score = pdfNumber(payload, ["operationalScore", "score"], 0);
+  const onlineRate = endpointTotal ? Math.round((online / Math.max(endpointTotal, 1)) * 100) : pdfNumber(payload, ["onlineRate"], 0);
+  const critical = score < 50 || onlineRate < 70 || sla > 0;
+  const headline = critical
+    ? "Immediate management attention is required"
+    : score < 75 || stale > 0
+      ? "Operational posture requires close management follow-up"
+      : "Operational posture is controlled and ready for routine review";
+
+  const paragraphs = [
+    `The current report scope covers ${endpointTotal} endpoint(s). ${online} endpoint(s) are online while ${offline} are offline or not online, producing a ${onlineRate}% reachability position. This is the strongest signal in the report because endpoint availability directly affects support visibility, compliance evidence and the ability to execute corrective action.`,
+    `${stale} endpoint(s) have stale or missing last-seen telemetry. Management should treat this as a reporting-confidence issue, not only a technical agent issue, because delayed telemetry can hide ownership gaps, unmanaged devices and outdated inventory evidence.`,
+    `${openTickets} service desk ticket(s) remain open and ${sla} item(s) appear to have passed SLA due date. The recommended response is to prioritise breached records, validate assignment ownership and rebalance the support queue before the next reporting cycle.`,
+    `${software} software inventory record(s) are available in scope. This provides enough evidence to extend the next review into software governance, licence cleanup, sensitive tools and browser/application exposure once endpoint availability has been stabilised.`
+  ];
+
+  const signals = [
+    { label: "Continuity Risk", value: offline > 0 ? "High" : "Low", note: `${offline} offline / not online endpoint(s)` },
+    { label: "Telemetry Confidence", value: stale > 0 ? "Weak" : "Good", note: `${stale} stale or missing signal(s)` },
+    { label: "SLA Exposure", value: sla > 0 ? "Action" : "Monitor", note: `${sla} breach candidate(s)` },
+    { label: "Governance Evidence", value: software > 0 ? "Available" : "Limited", note: `${software} software record(s)` }
+  ];
+
+  return { headline, paragraphs, signals };
+}
+
+function executiveFindingsTableHtml(payload: ReportPayload, limit = 8) {
+  const endpointTotal = pdfNumber(payload, ["endpointTotal", "totalEndpoints", "assets"], 0);
+  const online = pdfNumber(payload, ["onlineEndpoints", "online"], 0);
+  const offline = pdfNumber(payload, ["offlineEndpoints", "offline"], 0);
+  const stale = pdfNumber(payload, ["staleEndpoints", "stale"], 0);
+  const openTickets = pdfNumber(payload, ["openTickets", "tickets"], 0);
+  const sla = pdfNumber(payload, ["slaBreachCandidates", "slaBreaches", "slaBreached"], 0);
+  const software = pdfNumber(payload, ["softwareRows", "softwareRecords", "totalSoftwareRecords"], 0);
+  const score = pdfNumber(payload, ["operationalScore", "score"], 0);
+  const onlineRate = endpointTotal ? Math.round((online / Math.max(endpointTotal, 1)) * 100) : pdfNumber(payload, ["onlineRate"], 0);
+  const seeded = [
+    { finding: `Endpoint availability is below management comfort level: ${online} of ${endpointTotal} endpoint(s) are online and ${offline} are offline or not online.`, priority: onlineRate < 70 ? "High" : "Monitor" },
+    { finding: `Telemetry freshness requires clean-up: ${stale} endpoint(s) have stale or missing last-seen records, reducing reporting confidence.`, priority: stale > 0 ? "High" : "Low" },
+    { finding: `Service desk exposure remains visible: ${openTickets} open ticket(s) with ${sla} SLA breach candidate(s) need owner validation and escalation tracking.`, priority: sla > 0 ? "High" : openTickets > 0 ? "Medium" : "Low" },
+    { finding: `The current management score is ${score}%, indicating that availability, SLA pressure and data quality must be improved before the estate can be considered healthy.`, priority: score < 50 ? "High" : score < 75 ? "Medium" : "Low" },
+    { finding: `Software evidence is available through ${software} inventory record(s), enabling follow-up review on licence usage, sensitive tools and application governance.`, priority: software > 0 ? "Medium" : "Monitor" }
+  ];
+  const narrative = (payload.narrative.keyFindings || []).map((finding, index) => ({ finding, priority: index < 2 ? "High" : "Monitor" }));
+  const unique = [...seeded, ...narrative].filter((item, index, list) => list.findIndex((candidate) => candidate.finding === item.finding) === index).slice(0, limit);
+  return `<table class="pdf-real-table pdf-finding-table"><thead><tr><th>No</th><th>Management Finding</th><th>Priority</th></tr></thead><tbody>${unique.map((item, index) => `<tr><td>${String(index + 1).padStart(2, "0")}</td><td>${pdfText(item.finding, 240)}</td><td><span class="pdf-risk-pill">${pdfText(item.priority, 24)}</span></td></tr>`).join("")}</tbody></table>`;
+}
+
 function buildExecutivePrintableHtml(payload: ReportPayload, filters: ReportFilters) {
   const barSection = payload.sections.find((section) => ["bar", "donut"].includes(section.type));
+  const brief = buildExecutiveBrief(payload);
 
   return `
     ${buildPdfCoverOnlyPage(payload, filters, "executive")}
 
-    <section class="pdf-section pdf-summary-section">
-      <div class="pdf-section-head"><div><h2>Management Snapshot</h2><p>High-level operating posture for the selected reporting scope.</p></div><span>Page 2</span></div>
-      <div class="pdf-summary-layout">
-        <div>
-          <span class="pdf-eyebrow">Executive Summary</span>
-          <h2>${pdfText(payload.narrative.title || payload.report.title, 90)}</h2>
-          <p>${pdfText(payload.narrative.executiveSummary || payload.narrative.managementConclusion, 300)}</p>
+    <section class="pdf-section pdf-summary-section pdf-executive-brief-section">
+      <div class="pdf-section-head"><div><h2>Management Snapshot</h2><p>Management-level operating risk, service continuity and data confidence summary.</p></div><span>Page 2</span></div>
+      <div class="pdf-summary-layout pdf-exec-summary-layout">
+        <div class="pdf-summary-copy">
+          <span class="pdf-eyebrow">Executive Management Brief</span>
+          <h2>${pdfText(brief.headline, 110)}</h2>
+          ${brief.paragraphs.map((paragraph) => `<p class="pdf-justified">${pdfText(paragraph, 520)}</p>`).join("")}
         </div>
         ${buildPdfMetricTable(payload)}
+      </div>
+      <div class="pdf-exec-signal-grid">
+        ${brief.signals.map((signal) => `<article><span>${pdfText(signal.label, 36)}</span><strong>${pdfText(signal.value, 28)}</strong><p>${pdfText(signal.note, 76)}</p></article>`).join("")}
       </div>
     </section>
 
     <section class="pdf-section">
-      <div class="pdf-section-head"><div><h2>Key Findings</h2><p>Priority observations converted into management-ready findings.</p></div><span>Focus</span></div>
-      <table class="pdf-real-table"><thead><tr><th>No</th><th>Finding</th></tr></thead><tbody>${payload.narrative.keyFindings.slice(0, 6).map((item, index) => `<tr><td>${String(index + 1).padStart(2, "0")}</td><td>${pdfText(item, 220)}</td></tr>`).join("")}</tbody></table>
+      <div class="pdf-section-head"><div><h2>Key Findings</h2><p>Critical findings are prioritised for management action and review ownership.</p></div><span>Focus</span></div>
+      ${executiveFindingsTableHtml(payload, 8)}
     </section>
 
     ${filters.includeChart ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>${pdfText(barSection?.title || "Operational Distribution", 80)}</h2><p>Visual summary rendered as PDF-safe chart rows.</p></div><span>Chart</span></div><div class="pdf-bars">${barListHtml(barSection)}</div></section>` : ""}
     ${filters.includeTable ? `<section class="pdf-section pdf-table-section"><div class="pdf-section-head"><div><h2>Board Attention Focus</h2><p>Priority management attention items rendered as a proper decision table.</p></div><span>Decision Focus</span></div>${riskTableHtml(((sectionByType(payload, "risk")?.rows || payload.recommendations || []) as Record<string, any>[]), 12)}</section>` : ""}
-    ${filters.includeRecommendation ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>Recommended Actions</h2><p>Follow-up actions generated from current findings.</p></div><span>Action Plan</span></div>${tableRowsHtml({ type: "table", title: "Actions", rows: payload.recommendations || [] }, 10)}</section>` : ""}
+    ${filters.includeRecommendation ? `<section class="pdf-section"><div class="pdf-section-head"><div><h2>Recommended Actions</h2><p>Follow-up actions generated from current findings.</p></div><span>Action Plan</span></div>${recommendationsTableHtml(payload.recommendations || [], 10)}</section>` : ""}
   `;
 }
 
@@ -2668,14 +2741,20 @@ function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilte
     .pdf-pack { width: 190mm; margin: 0 auto; display: block; }
     .pdf-pack > * + * { margin-top: 6mm; }
     .pdf-page-break { page-break-after: always; break-after: page; height: 0; margin: 0 !important; }
-    .pdf-cover-page { position: relative; width: 190mm; min-height: 255mm; overflow: hidden; border: 1px solid #d9e3f0; border-radius: 7mm; background: linear-gradient(180deg,#ffffff 0%,#fbfdff 100%); padding: 13mm; page-break-after: always; break-after: page; margin-bottom: 0; }
-    .pdf-cover-executive { --pdf-cover-primary:#18324f; --pdf-cover-accent:#d3a84e; }
-    .pdf-cover-generic { --pdf-cover-primary:#143b72; --pdf-cover-accent:#4f8df7; }
-    .pdf-cover-brand-row { position: relative; z-index: 2; display: flex; align-items: center; gap: 4mm; color: #182c45; }
+    .pdf-cover-page { position: relative; width: 190mm; min-height: 255mm; overflow: hidden; border: 1px solid #c8d7ea; border-radius: 7mm; background: radial-gradient(circle at 88% 12%, rgba(80,155,71,.18) 0, transparent 34%), radial-gradient(circle at 78% 82%, rgba(20,75,122,.16) 0, transparent 36%), linear-gradient(135deg,#ffffff 0%,#f3f8ff 54%,#eefaf5 100%); padding: 12mm; page-break-after: always; break-after: page; margin-bottom: 0; }
+    .pdf-cover-executive { --pdf-cover-primary:#144b7a; --pdf-cover-accent:#4e9a44; }
+    .pdf-cover-generic { --pdf-cover-primary:#144b7a; --pdf-cover-accent:#4e9a44; }
+    .pdf-cover-brand-row { position: relative; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; gap: 8mm; color: #182c45; }
+    .pdf-logo-brand-row { padding: 3.5mm 4mm; border: 1px solid rgba(203,216,234,.88); border-radius: 5mm; background: rgba(255,255,255,.86); box-shadow: 0 4mm 12mm rgba(15,35,71,.06); }
+    .pdf-brand-solution { display: flex; align-items: center; gap: 5mm; min-width: 0; }
+    .pdf-solution-logo { width: 76mm; max-height: 24mm; object-fit: contain; object-position: left center; display: block; }
+    .pdf-brand-title { min-width: 0; padding-left: 4mm; border-left: 1px solid #d8e3f0; }
+    .pdf-brand-company { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; min-width: 46mm; gap: 1.5mm; }
+    .pdf-company-logo { width: 47mm; max-height: 12mm; object-fit: contain; object-position: right center; display: block; }
     .pdf-cover-brand-mark { width: 13mm; height: 13mm; border: 1px solid #d5deeb; border-radius: 4mm; display: grid; place-items: center; color: var(--pdf-cover-primary); background:#fff; font-weight: 900; }
-    .pdf-cover-brand-row strong { display:block; font-size: 15pt; line-height: 1.1; }
-    .pdf-cover-brand-row small { display:block; margin-top: 1mm; color:#718096; font-size: 7pt; text-transform: uppercase; letter-spacing: .14em; font-weight: 900; }
-    .pdf-cover-title-block { position: relative; z-index: 2; max-width: 112mm; min-height: 156mm; display: flex; flex-direction: column; justify-content: center; }
+    .pdf-cover-brand-row strong { display:block; font-size: 13pt; line-height: 1.1; }
+    .pdf-cover-brand-row small { display:block; margin-top: 1mm; color:#718096; font-size: 6.6pt; text-transform: uppercase; letter-spacing: .14em; font-weight: 900; }
+    .pdf-cover-title-block { position: relative; z-index: 2; max-width: 112mm; min-height: 142mm; display: flex; flex-direction: column; justify-content: center; }
     .pdf-cover-title-block span { width: fit-content; padding: 2.2mm 4mm; border:1px solid #d9e3f0; border-radius:999px; background:#fff; color: var(--pdf-cover-primary); font-size: 7pt; font-weight: 900; letter-spacing:.11em; text-transform: uppercase; }
     .pdf-cover-title-block h1 { margin: 7mm 0 0; color:#1d2f45; font-size: 35pt; line-height:.98; letter-spacing:-.055em; }
     .pdf-cover-title-block p { margin: 6mm 0 0; max-width: 92mm; color:#58677b; font-size: 11pt; line-height:1.58; font-weight: 600; }
@@ -2694,8 +2773,22 @@ function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilte
     .pdf-cover-dots.dots-right { right:62mm; top:72mm; }
     .pdf-summary-layout { display:grid; grid-template-columns: 62mm minmax(0,1fr); gap: 7mm; align-items:start; }
     .pdf-summary-layout h2 { margin: 2mm 0 3mm; }
+    .pdf-executive-brief-section { border-top-color: #144b7a; background: radial-gradient(circle at 95% 10%, rgba(78,154,68,.10), transparent 30%), linear-gradient(180deg,#ffffff 0%,#f6fbff 100%); }
+    .pdf-exec-summary-layout { grid-template-columns: 77mm minmax(0,1fr); gap: 7mm; }
+    .pdf-summary-copy h2 { font-size: 19pt; line-height: 1.18; margin: 2mm 0 4mm; color: #102b4c; }
+    .pdf-summary-copy p { color: #24384f; font-size: 8.8pt; line-height: 1.55; font-weight: 720; margin: 0 0 3mm; }
+    .pdf-justified { text-align: justify; text-justify: inter-word; hyphens: auto; }
+    .pdf-exec-signal-grid { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3mm; margin-top: 5mm; }
+    .pdf-exec-signal-grid article { border: 1px solid #dbe5f1; border-radius: 3.5mm; padding: 3.2mm; background: linear-gradient(180deg,#fbfdff,#f0f8ff); min-height: 25mm; box-shadow: inset 0 1.5mm 0 rgba(20,75,122,.05); }
+    .pdf-exec-signal-grid span { display:block; color:#667996; text-transform:uppercase; letter-spacing:.09em; font-size: 6.5pt; font-weight: 900; }
+    .pdf-exec-signal-grid strong { display:block; margin: 1.3mm 0 1mm; color:#0f2347; font-size: 12.5pt; line-height:1.05; }
+    .pdf-exec-signal-grid p { margin:0; color:#4f617a; font-size: 7.3pt; line-height:1.38; font-weight:750; }
+    .pdf-metric-table th:nth-child(1), .pdf-metric-table td:nth-child(1) { width: 33%; }
+    .pdf-metric-table th:nth-child(2), .pdf-metric-table td:nth-child(2) { width: 22%; }
+    .pdf-metric-table th:nth-child(3), .pdf-metric-table td:nth-child(3) { width: 45%; }
     .pdf-metric-table td:nth-child(2) { font-weight: 900; white-space: nowrap; width: 24mm; }
-    .pdf-cover, .pdf-section { width: 100%; background: #fff; border: 1px solid #d9e3f0; border-radius: 5mm; overflow: hidden; box-shadow: 0 2mm 8mm rgba(15,35,71,.06); }
+    .pdf-metric-table th:nth-child(2), .pdf-metric-table td:nth-child(2) { width: 22%; }
+    .pdf-cover, .pdf-section { width: 100%; background: radial-gradient(circle at 100% 0%, rgba(78,154,68,.06) 0, transparent 34%), linear-gradient(180deg,#ffffff 0%,#f7fbff 100%); border: 1px solid #d4e1f0; border-top: 1.5mm solid #144b7a; border-radius: 5mm; overflow: hidden; box-shadow: 0 2mm 8mm rgba(15,35,71,.06); }
     .pdf-cover { min-height: 68mm; display: grid; grid-template-columns: 25mm 1fr 42mm; gap: 6mm; align-items: stretch; padding: 7mm; background: linear-gradient(180deg,#ffffff 0%,#f8fbff 100%); border-top: 5mm solid #143b72; }
     .pdf-generic-cover { grid-template-columns: 25mm 1fr; }
     .pdf-cover-mark { width: 18mm; height: 18mm; border-radius: 5mm; display: grid; place-items: center; background: #143b72; color: #fff; font-size: 9pt; font-weight: 900; letter-spacing: .08em; }
@@ -2710,7 +2803,7 @@ function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilte
     .pdf-cover-score span { color: #4b5d78; font-size: 8.5pt; font-weight: 800; }
     .pdf-section { padding: 6mm; break-inside: avoid; page-break-inside: avoid; }
     .pdf-table-section { break-inside: auto; page-break-inside: auto; overflow: visible; }
-    .pdf-section-head { display: flex; justify-content: space-between; gap: 5mm; align-items: flex-start; padding-bottom: 3mm; margin-bottom: 4mm; border-bottom: 1px solid #d9e3f0; }
+    .pdf-section-head { display: flex; justify-content: space-between; gap: 5mm; align-items: flex-start; padding: 0 0 3mm; margin-bottom: 4mm; border-bottom: 1px solid #d9e3f0; }
     .pdf-section-head h2 { margin: 0 0 1mm; color: #0f2347; font-size: 15pt; line-height: 1.15; letter-spacing: -.035em; }
     .pdf-section-head p, .pdf-lead { margin: 0; color: #5c6d86; font-size: 9pt; line-height: 1.5; }
     .pdf-section-head > span { white-space: nowrap; border: 1px solid #cbd8ea; border-radius: 999px; padding: 1.6mm 3mm; color: #1d4ed8; background: #f4f7ff; }
@@ -2722,7 +2815,7 @@ function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilte
     .pdf-bars { display: flex; flex-direction: column; gap: 2.5mm; }
     .pdf-bar-row { display: grid; grid-template-columns: 44mm 16mm 1fr; gap: 3mm; align-items: center; font-size: 8pt; font-weight: 800; color: #314765; }
     .pdf-bar-row i { display: block; height: 4.5mm; border-radius: 999px; overflow: hidden; background: #edf3fb; }
-    .pdf-bar-row em { display: block; height: 100%; border-radius: inherit; background: #2563eb; }
+    .pdf-bar-row em { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#144b7a,#2f80ed,#4e9a44); }
     .pdf-table-box { border: 1px solid #d6e2f2; border-radius: 3mm; overflow: hidden; background: #fff; }
     .pdf-compact-table-box { margin-top: 3mm; }
     .pdf-real-table { width: 100%; border-collapse: collapse; border-spacing: 0; table-layout: fixed; font-size: 7.6pt; line-height: 1.35; }
@@ -2749,6 +2842,7 @@ function buildRegeneratedReportHtml(payload: ReportPayload, filters: ReportFilte
       body { padding: 0 !important; }
       .pdf-pack { width: 190mm; margin: 0 auto; }
       .pdf-cover, .pdf-section, .pdf-cover-page { box-shadow: none !important; }
+      .pdf-page-break { display: none !important; page-break-after: auto !important; break-after: auto !important; }
       .pdf-section { break-inside: avoid; page-break-inside: avoid; }
       .pdf-table-section { break-inside: auto; page-break-inside: auto; }
     }

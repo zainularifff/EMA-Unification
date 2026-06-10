@@ -1,4 +1,4 @@
-import api, { unwrapArray, unwrapData, type QueryParams } from "./apiClient";
+import api, { unwrapArray, unwrapData, type ApiRequestConfig, type QueryParams } from "./apiClient";
 
 export type AnyRecord = Record<string, any>;
 
@@ -28,33 +28,33 @@ export type AssetItem = AnyRecord & {
   Object_PR_Idn?: number | string;
 };
 
-export async function getDepartments() {
-  const payload = await api.get("/api/departments");
+export async function getDepartments(config: ApiRequestConfig = {}) {
+  const payload = await api.get("/api/departments", { cacheTtlMs: 300_000, ...config });
   return unwrapData<DepartmentNode[]>(payload, []);
 }
 
-export async function getDepartmentChildren(parentID: number | string) {
-  const payload = await api.get(`/api/departments/${parentID}`);
+export async function getDepartmentChildren(parentID: number | string, config: ApiRequestConfig = {}) {
+  const payload = await api.get(`/api/departments/${parentID}`, { cacheTtlMs: 180_000, ...config });
   return unwrapData<{ departments?: DepartmentNode[]; assets?: AssetItem[] }>(payload, { departments: [], assets: [] });
 }
 
-export async function getAssetsByRelationID(relationID: number | string) {
-  const payload = await api.get(`/api/assets/${relationID}`);
+export async function getAssetsByRelationID(relationID: number | string, config: ApiRequestConfig = {}) {
+  const payload = await api.get(`/api/assets/${relationID}`, { cacheTtlMs: 180_000, ...config });
   return unwrapArray<AssetItem>(payload);
 }
 
-export async function getAssets(params?: QueryParams) {
-  const payload = await api.get("/api/assets", { params });
+export async function getAssets(params?: QueryParams, config: ApiRequestConfig = {}) {
+  const payload = await api.get("/api/assets", { cacheTtlMs: 120_000, ...config, params });
   return unwrapArray<AssetItem>(payload);
 }
 
-export async function getHardwareInventoryAssets(params?: QueryParams) {
-  const payload = await api.get("/api/hardware-inventory/assets", { params });
+export async function getHardwareInventoryAssets(params?: QueryParams, config: ApiRequestConfig = {}) {
+  const payload = await api.get("/api/hardware-inventory/assets", { cacheTtlMs: 180_000, ...config, params });
   return unwrapArray<AssetItem>(payload);
 }
 
-export async function getAssetDetail(objectAgent: string, assetId: number | string) {
-  const payload = await api.get(`/api/asset/${encodeURIComponent(objectAgent)}/${encodeURIComponent(String(assetId))}`);
+export async function getAssetDetail(objectAgent: string, assetId: number | string, config: ApiRequestConfig = {}) {
+  const payload = await api.get(`/api/asset/${encodeURIComponent(objectAgent)}/${encodeURIComponent(String(assetId))}`, { cacheTtlMs: 120_000, ...config });
   return unwrapData<AnyRecord>(payload, {});
 }
 

@@ -192,8 +192,144 @@ const toScopeParams = (selection: ScopeSelection): OnlinePatchScopeParams => ({
   Object_Root_Idn: selection.Object_Root_Idn,
 });
 
+const PATCH_MANAGEMENT_PAGE_CSS = `
+html.patch-management-page-active,
+body.patch-management-page-active,
+body.patch-management-page-active #root {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+
+body.patch-management-page-active .ema-main,
+body.patch-management-page-active .ema-content,
+body.patch-management-page-active .ema-content-area,
+body.patch-management-page-active .app-main,
+body.patch-management-page-active .app-content,
+body.patch-management-page-active .layout-main,
+body.patch-management-page-active .layout-content,
+body.patch-management-page-active .main,
+body.patch-management-page-active .main-content,
+body.patch-management-page-active main {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  background: #f4f8fc !important;
+}
+
+body.patch-management-page-active .ema-page,
+body.patch-management-page-active .page-content,
+body.patch-management-page-active .content,
+body.patch-management-page-active .content-area,
+body.patch-management-page-active .dashboard-page,
+body.patch-management-page-active .dashboard-content,
+body.patch-management-page-active .page-container,
+body.patch-management-page-active .router-content {
+  height: calc(100dvh - 76px) !important;
+  max-height: calc(100dvh - 76px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: #f4f8fc !important;
+}
+
+body.patch-management-page-active .settings-module-root.ema-module-root,
+body.patch-management-page-active .patch-management-page {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin: 0 !important;
+  color: #0f172a !important;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
+    radial-gradient(circle at 98% 18%, rgba(14, 165, 233, 0.06), transparent 26rem),
+    linear-gradient(135deg, #eef4fb 0%, #f8fbff 46%, #e8eff7 100%) !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.patch-management-page-active .settings-module-root.ema-module-root::before,
+body.patch-management-page-active .patch-management-page::before {
+  content: "";
+  position: fixed;
+  inset: 76px 0 0 0;
+  pointer-events: none;
+  opacity: .28;
+  background-image:
+    linear-gradient(rgba(100, 116, 139, .08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 116, 139, .07) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 78%, transparent 100%);
+}
+
+body.patch-management-page-active .settings-module-root.ema-module-root::-webkit-scrollbar,
+body.patch-management-page-active .patch-management-page::-webkit-scrollbar {
+  width: 6px;
+}
+
+body.patch-management-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-track,
+body.patch-management-page-active .patch-management-page::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, .55);
+  border-radius: 999px;
+}
+
+body.patch-management-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-thumb,
+body.patch-management-page-active .patch-management-page::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, .65);
+  border: 1px solid rgba(226, 232, 240, .55);
+  border-radius: 999px;
+}
+
+body.patch-management-page-active .settings-layout,
+body.patch-management-page-active .settings-content,
+body.patch-management-page-active .content-shell,
+body.patch-management-page-active .settings-hero {
+  position: relative;
+  z-index: 1;
+}
+
+body.patch-management-page-active .settings-menu,
+body.patch-management-page-active .settings-hero,
+body.patch-management-page-active .content-shell,
+body.patch-management-page-active .ema-panel-surface,
+body.patch-management-page-active .pricing-table-card,
+body.patch-management-page-active .settings-helper-card {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+}
+`;
+
 
 function PatchManagement() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    document.documentElement.classList.add('patch-management-page-active');
+    document.body.classList.add('patch-management-page-active');
+    document.documentElement.classList.remove('itops-dashboard-page-active', 'md-dashboard-page-active', 'md-management-dashboard-active', 'network-inventory-page-active', 'internet-metering-page-active');
+    document.body.classList.remove('itops-dashboard-page-active', 'md-dashboard-page-active', 'md-management-dashboard-active', 'network-inventory-page-active', 'internet-metering-page-active');
+
+    window.dispatchEvent(new CustomEvent('ema-topbar-meta', {
+      detail: {
+        path: window.location.pathname,
+        title: 'Patch Management',
+        subtitle: 'Review update coverage, scan endpoints and install missing patches.',
+        searchPlaceholder: 'Search KB, update title, device, severity or patch status...',
+      },
+    }));
+
+    return () => {
+      document.documentElement.classList.remove('patch-management-page-active');
+      document.body.classList.remove('patch-management-page-active');
+      window.dispatchEvent(new CustomEvent('ema-topbar-meta', { detail: null }));
+    };
+  }, []);
+
   const [mode, setMode] = useState<PatchMode>('online');
   const [activeTab, setActiveTab] = useState<PatchTab>('status');
   const [departments, setDepartments] = useState<DepartmentNode[]>([]);
@@ -476,7 +612,9 @@ function PatchManagement() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="patch-management">
+    <>
+      <style>{PATCH_MANAGEMENT_PAGE_CSS}</style>
+      <main className="settings-module-root ema-settings-pro ema-module-root patch-management-page container-fluid p-3 p-xl-4" data-section="patch-management">
       {toast && <PatchToast toast={toast} onClose={() => setToast(null)} />}
 
       <div className="settings-layout d-grid gap-3">
@@ -661,7 +799,8 @@ function PatchManagement() {
           onConfirm={runConfirmedAction}
         />
       )}
-    </main>
+      </main>
+    </>
   );
 }
 

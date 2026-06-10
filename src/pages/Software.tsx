@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -129,6 +129,10 @@ type ToastState = {
   title: string;
   message: string;
 } | null;
+
+type LoadOptions = {
+  forceRefresh?: boolean;
+};
 
 type ApiRowsPayload = unknown[] | { data?: unknown[] | Record<string, unknown>; success?: boolean; totalRecords?: number };
 
@@ -498,6 +502,7 @@ export default function Software() {
   const [treeLoading, setTreeLoading] = useState(false);
   const [treeError, setTreeError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [osFilter, setOsFilter] = useState("all");
@@ -520,13 +525,14 @@ export default function Software() {
     }
   };
 
-  const loadSoftwareInventory = async () => {
+  const loadSoftwareInventory = async (options: LoadOptions = {}) => {
     setLoading(true);
     setApiError("");
 
+    const requestConfig = options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined;
     const [softwareResult, categoriesResult] = await Promise.allSettled([
-      softwareService.getSoftware() as Promise<ApiSoftwareRecord[]>,
-      softwareService.getSoftwareCategories() as Promise<string[]>,
+      softwareService.getSoftware(undefined, requestConfig) as Promise<ApiSoftwareRecord[]>,
+      softwareService.getSoftwareCategories(requestConfig) as Promise<string[]>,
     ]);
 
     if (softwareResult.status === "fulfilled") {
@@ -547,11 +553,11 @@ export default function Software() {
     setLoading(false);
   };
 
-  const loadDepartmentTree = async () => {
+  const loadDepartmentTree = async (options: LoadOptions = {}) => {
     setTreeLoading(true);
     setTreeError("");
     try {
-      const departments = await softwareService.getDepartments() as DepartmentNode[];
+      const departments = await softwareService.getDepartments(options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined) as DepartmentNode[];
       setDeviceTree(buildDeviceTreeFromDepartments(departments));
     } catch (error) {
       const message = "Organization view is not available right now.";
@@ -564,7 +570,19 @@ export default function Software() {
 
   useEffect(() => {
     void loadSoftwareInventory();
-    void loadDepartmentTree();
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (idleWindow.requestIdleCallback) {
+      const idleId = idleWindow.requestIdleCallback(() => void loadDepartmentTree(), { timeout: 1200 });
+      return () => idleWindow.cancelIdleCallback?.(idleId);
+    }
+
+    const timer = window.setTimeout(() => void loadDepartmentTree(), 250);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -586,7 +604,7 @@ export default function Software() {
   const osOptions = useMemo(() => uniqueValues(softwareRecords, "os"), [softwareRecords]);
 
   const baseFilteredRecords = useMemo(() => {
-    const lowerSearch = searchTerm.trim().toLowerCase();
+    const lowerSearch = deferredSearchTerm.trim().toLowerCase();
     return softwareRecords.filter((record) => {
       const searchable = [record.softwareName, record.category, record.publisher, record.description, record.version, record.assetTag, record.deviceName, record.machineType, record.os, record.username, record.ip, record.department].join(" ").toLowerCase();
       return (!lowerSearch || searchable.includes(lowerSearch)) &&
@@ -594,7 +612,7 @@ export default function Software() {
         (typeFilter === "all" || record.machineType === typeFilter) &&
         (osFilter === "all" || record.os === osFilter);
     });
-  }, [softwareRecords, searchTerm, categoryFilter, typeFilter, osFilter]);
+  }, [softwareRecords, deferredSearchTerm, categoryFilter, typeFilter, osFilter]);
 
   const filteredRecords = useMemo(() => {
     let rows = [...baseFilteredRecords];
@@ -614,7 +632,7 @@ export default function Software() {
   const currentTableRows = selected.tableKey === "registry" ? [] : tableRows[selected.tableKey];
   const filteredTableRows = useMemo(() => {
     if (selected.tableKey === "registry") return [];
-    const lowerSearch = searchTerm.trim().toLowerCase();
+    const lowerSearch = deferredSearchTerm.trim().toLowerCase();
     let rows = tableRows[selected.tableKey].filter((row) => !lowerSearch || row.join(" ").toLowerCase().includes(lowerSearch));
     if (tableSort) {
       rows = [...rows].sort((a, b) => {
@@ -626,7 +644,7 @@ export default function Software() {
       });
     }
     return rows;
-  }, [selected.tableKey, tableRows, searchTerm, tableSort]);
+  }, [selected.tableKey, tableRows, deferredSearchTerm, tableSort]);
 
   const activeRowsCount = selected.tableKey === "registry" ? filteredRecords.length : filteredTableRows.length;
   const isDataLoading = selected.tableKey === "registry" ? loading : tableLoading;
@@ -706,23 +724,25 @@ export default function Software() {
     });
   };
 
-  const loadSoftwarePayloadForTable = async (tableKey: Exclude<TableKey, "registry">, relationID: number): Promise<ApiRowsPayload> => {
+  const loadSoftwarePayloadForTable = async (tableKey: Exclude<TableKey, "registry">, relationID: number, options: LoadOptions = {}): Promise<ApiRowsPayload> => {
+    const requestConfig = options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined;
+
     if (tableKey === "licenseStatus") {
-      return softwareService.getSoftwarePackagesByRelation(relationID, { mode: "stat1" }) as Promise<ApiRowsPayload>;
+      return softwareService.getSoftwarePackagesByRelation(relationID, { mode: "stat1" }, requestConfig) as Promise<ApiRowsPayload>;
     }
 
     if (tableKey === "fileExtensionExe" || tableKey === "fileExtensionDll" || tableKey === "fileExtensionIni") {
-      return softwareService.getSoftwareFilesByRelation(relationID, { mode: "list", extension: getExtensionFromTableKey(tableKey) }) as Promise<ApiRowsPayload>;
+      return softwareService.getSoftwareFilesByRelation(relationID, { mode: "list", extension: getExtensionFromTableKey(tableKey) }, requestConfig) as Promise<ApiRowsPayload>;
     }
 
-    return softwareService.getInstalledSoftwareByRelation(relationID, { mode: "summary1" }) as Promise<ApiRowsPayload>;
+    return softwareService.getInstalledSoftwareByRelation(relationID, { mode: "summary1" }, requestConfig) as Promise<ApiRowsPayload>;
   };
 
-  const loadRowsForTable = async (tableKey: Exclude<TableKey, "registry">, relationID = currentRelationId) => {
+  const loadRowsForTable = async (tableKey: Exclude<TableKey, "registry">, relationID = currentRelationId, options: LoadOptions = {}) => {
     setTableLoading(true);
     setTableError("");
     try {
-      const payload = await loadSoftwarePayloadForTable(tableKey, relationID);
+      const payload = await loadSoftwarePayloadForTable(tableKey, relationID, options);
       const rows = rowsToTableRows(tableKey, unwrapRows(payload));
       setTableRows((prev) => ({ ...prev, [tableKey]: rows }));
       return rows;
@@ -737,15 +757,16 @@ export default function Software() {
     }
   };
 
-  const loadRowsForDevice = async (node: TreeNode) => {
+  const loadRowsForDevice = async (node: TreeNode, options: LoadOptions = {}) => {
     if (!node.assetId) return;
     setTableLoading(true);
     setTableError("");
     try {
       const agent = (node.objectAgent || "EM").toUpperCase();
+      const requestConfig = options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined;
       const payload = agent === "MDM" && node.objectDeviceId
-        ? await softwareService.getSoftwareByMdmDevice(node.objectDeviceId)
-        : await softwareService.getSoftwareByClient(node.assetId);
+        ? await softwareService.getSoftwareByMdmDevice(node.objectDeviceId, undefined, requestConfig)
+        : await softwareService.getSoftwareByClient(node.assetId, undefined, requestConfig);
       const rows = rowsToTableRows("installedSoftware", unwrapRows(payload));
       setTableRows((prev) => ({ ...prev, installedSoftware: rows }));
       setSelected({ mode: "device", tableKey: "installedSoftware", label: node.label, relationId: node.relationId, assetId: node.assetId, objectAgent: node.objectAgent, objectDeviceId: node.objectDeviceId });
@@ -891,14 +912,15 @@ export default function Software() {
 
   const refreshCurrentView = async () => {
     if (selected.tableKey === "registry") {
-      await loadSoftwareInventory();
+      await loadSoftwareInventory({ forceRefresh: true });
+      void loadDepartmentTree({ forceRefresh: true });
       return;
     }
     if (selected.mode === "device" && selectedDevice) {
-      await loadRowsForDevice(selectedDevice);
+      await loadRowsForDevice(selectedDevice, { forceRefresh: true });
       return;
     }
-    await loadRowsForTable(selected.tableKey, selected.relationId ?? currentRelationId);
+    await loadRowsForTable(selected.tableKey, selected.relationId ?? currentRelationId, { forceRefresh: true });
   };
 
   const exportCurrentView = () => {
