@@ -30446,23 +30446,278 @@ function mdParseGeminiStory(answer, overview = {}) {
     }
 }
 
-async function handleManagementDashboardStorytelling(req, res) {
+/*
+|--------------------------------------------------------------------------
+| MANAGEMENT DASHBOARD DAILY AI STORYTELLING CACHE
+|--------------------------------------------------------------------------
+| Gemini must never block dashboard loading.
+| This endpoint returns cached insight only and refreshes Gemini in background
+| at most once per day.
+*/
+
+const MD_STORY_MODULE_KEY = "management-dashboard";
+const mdStoryGenerationLocks = new Set();
+const mdStoryMemoryCache = new Map();
+
+function mdStoryDateKey(date = new Date()) {
+    return date.toISOString().slice(0, 10);
+}
+
+function mdStoryTomorrowRefreshAt(date = new Date()) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + 1);
+    next.setHours(Number(process.env.AI_INSIGHT_REFRESH_HOUR || 8), 0, 0, 0);
+    return next;
+}
+
+function mdStoryPendingPayload(reason = "") {
+    const now = new Date();
+    return {
+        status: "AI insight is being prepared",
+        tone: "blue",
+        headline: "Daily AI insight is being generated",
+        summary: "Dashboard data is available now. The AI-assisted summary will refresh in the background and appear once ready.",
+        narrative: "The dashboard is not waiting for the AI service, so operational data can continue loading without delay.",
+        keySignals: [
+            "Live dashboard data remains available",
+            "AI summary refresh runs in the background",
+            "Insight is generated once daily"
+        ],
+        boardRecommendation: "Use the live dashboard metrics first while the daily AI insight is being prepared.",
+        actionItems: [
+            "Review dashboard KPI and risk cards",
+            "Check the insight panel again shortly",
+            "Continue using cached insight when available"
+        ],
+        source: "pending",
+        cacheStatus: "pending",
+        refreshPolicy: "AI-generated insight is refreshed once daily.",
+        generatedAt: null,
+        nextRefreshAt: mdStoryTomorrowRefreshAt(now).toISOString(),
+        isStale: true,
+        message: reason || "AI insight refresh is running in the background."
+    };
+}
+
+function mdStoryDecorate(payload = {}, meta = {}) {
+    const now = new Date();
+    const generatedAt = payload.generatedAt || meta.generatedAt || null;
+    const nextRefreshAt = payload.nextRefreshAt || meta.nextRefreshAt || mdStoryTomorrowRefreshAt(now).toISOString();
+
+    return {
+        ...payload,
+        cacheStatus: meta.cacheStatus || payload.cacheStatus || "ready",
+        refreshPolicy: payload.refreshPolicy || "AI-generated insight is refreshed once daily.",
+        generatedAt,
+        nextRefreshAt,
+        isStale: Boolean(meta.isStale ?? payload.isStale),
+        model: meta.model || payload.model || undefined,
+        hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+        fallbackReason: meta.fallbackReason || payload.fallbackReason || undefined
+    };
+}
+
+async function mdEnsureStoryCacheTable(pool) {
+    await pool.request().query(`
+        IF OBJECT_ID('dbo.EMA_AI_Insight_Cache', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_AI_Insight_Cache (
+                InsightID INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                ModuleKey NVARCHAR(100) NOT NULL,
+                InsightDate DATE NOT NULL,
+                Status NVARCHAR(30) NOT NULL DEFAULT 'ready',
+                InsightJson NVARCHAR(MAX) NOT NULL,
+                Source NVARCHAR(50) NULL,
+                ModelName NVARCHAR(100) NULL,
+                FallbackReason NVARCHAR(MAX) NULL,
+                ErrorMessage NVARCHAR(MAX) NULL,
+                GeneratedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                NextRefreshAt DATETIME2 NULL,
+                CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+            );
+
+            CREATE UNIQUE INDEX UX_EMA_AI_Insight_Cache_Module_Date
+                ON dbo.EMA_AI_Insight_Cache (ModuleKey, InsightDate);
+        END
+    `);
+}
+
+function mdMemoryCacheGet(moduleKey = MD_STORY_MODULE_KEY) {
+    const todayKey = `${moduleKey}:${mdStoryDateKey()}`;
+    const today = mdStoryMemoryCache.get(todayKey);
+    if (today) return { ...today, cacheStatus: "ready", isStale: false };
+
+    const prefix = `${moduleKey}:`;
+    const latest = Array.from(mdStoryMemoryCache.entries())
+        .filter(([key]) => key.startsWith(prefix))
+        .sort(([a], [b]) => b.localeCompare(a))[0]?.[1];
+
+    if (latest) return { ...latest, cacheStatus: "stale", isStale: true };
+    return null;
+}
+
+function mdMemoryCacheSet(moduleKey, insightDate, payload) {
+    mdStoryMemoryCache.set(`${moduleKey}:${insightDate}`, payload);
+}
+
+async function mdGetCachedStory(pool, moduleKey = MD_STORY_MODULE_KEY) {
+    try {
+        await mdEnsureStoryCacheTable(pool);
+
+        const result = await pool.request()
+            .input("ModuleKey", sql.NVarChar(100), moduleKey)
+            .input("Today", sql.Date, new Date())
+            .query(`
+                SELECT TOP 1
+                    ModuleKey,
+                    InsightDate,
+                    Status,
+                    InsightJson,
+                    Source,
+                    ModelName,
+                    FallbackReason,
+                    GeneratedAt,
+                    NextRefreshAt,
+                    CASE WHEN InsightDate = @Today THEN 0 ELSE 1 END AS IsStale
+                FROM dbo.EMA_AI_Insight_Cache WITH (NOLOCK)
+                WHERE ModuleKey = @ModuleKey
+                ORDER BY
+                    CASE WHEN InsightDate = @Today THEN 0 ELSE 1 END ASC,
+                    InsightDate DESC,
+                    GeneratedAt DESC;
+            `);
+
+        const row = result.recordset?.[0];
+        if (!row) return mdMemoryCacheGet(moduleKey);
+
+        const payload = JSON.parse(row.InsightJson || "{}");
+        const cacheStatus = row.IsStale ? "stale" : "ready";
+
+        const decorated = mdStoryDecorate(payload, {
+            cacheStatus,
+            isStale: Boolean(row.IsStale),
+            model: row.ModelName,
+            generatedAt: row.GeneratedAt ? new Date(row.GeneratedAt).toISOString() : payload.generatedAt,
+            nextRefreshAt: row.NextRefreshAt ? new Date(row.NextRefreshAt).toISOString() : payload.nextRefreshAt,
+            fallbackReason: row.FallbackReason
+        });
+
+        mdMemoryCacheSet(moduleKey, mdStoryDateKey(new Date(row.InsightDate)), decorated);
+        return decorated;
+    } catch (err) {
+        console.warn("Management dashboard AI cache read fallback:", err.message || err);
+        return mdMemoryCacheGet(moduleKey);
+    }
+}
+
+async function mdSaveCachedStory(pool, moduleKey, payload, meta = {}) {
+    const now = new Date();
+    const insightDate = mdStoryDateKey(now);
+    const decorated = mdStoryDecorate(payload, {
+        cacheStatus: "ready",
+        isStale: false,
+        model: meta.model,
+        generatedAt: payload.generatedAt || now.toISOString(),
+        nextRefreshAt: payload.nextRefreshAt || mdStoryTomorrowRefreshAt(now).toISOString(),
+        fallbackReason: meta.fallbackReason
+    });
+
+    mdMemoryCacheSet(moduleKey, insightDate, decorated);
+
+    try {
+        await mdEnsureStoryCacheTable(pool);
+
+        await pool.request()
+            .input("ModuleKey", sql.NVarChar(100), moduleKey)
+            .input("InsightDate", sql.Date, now)
+            .input("Status", sql.NVarChar(30), "ready")
+            .input("InsightJson", sql.NVarChar(sql.MAX), JSON.stringify(decorated))
+            .input("Source", sql.NVarChar(50), decorated.source || "local")
+            .input("ModelName", sql.NVarChar(100), meta.model || decorated.model || null)
+            .input("FallbackReason", sql.NVarChar(sql.MAX), meta.fallbackReason || decorated.fallbackReason || null)
+            .input("GeneratedAt", sql.DateTime2, new Date(decorated.generatedAt || now))
+            .input("NextRefreshAt", sql.DateTime2, new Date(decorated.nextRefreshAt || mdStoryTomorrowRefreshAt(now)))
+            .query(`
+                MERGE dbo.EMA_AI_Insight_Cache WITH (HOLDLOCK) AS target
+                USING (SELECT @ModuleKey AS ModuleKey, @InsightDate AS InsightDate) AS source
+                    ON target.ModuleKey = source.ModuleKey
+                   AND target.InsightDate = source.InsightDate
+                WHEN MATCHED THEN
+                    UPDATE SET
+                        Status = @Status,
+                        InsightJson = @InsightJson,
+                        Source = @Source,
+                        ModelName = @ModelName,
+                        FallbackReason = @FallbackReason,
+                        ErrorMessage = NULL,
+                        GeneratedAt = @GeneratedAt,
+                        NextRefreshAt = @NextRefreshAt,
+                        UpdatedAt = SYSUTCDATETIME()
+                WHEN NOT MATCHED THEN
+                    INSERT (ModuleKey, InsightDate, Status, InsightJson, Source, ModelName, FallbackReason, GeneratedAt, NextRefreshAt)
+                    VALUES (@ModuleKey, @InsightDate, @Status, @InsightJson, @Source, @ModelName, @FallbackReason, @GeneratedAt, @NextRefreshAt);
+            `);
+    } catch (err) {
+        console.warn("Management dashboard AI cache save skipped:", err.message || err);
+    }
+
+    return decorated;
+}
+
+async function mdMarkStoryCacheError(pool, moduleKey, error) {
+    try {
+        await mdEnsureStoryCacheTable(pool);
+        await pool.request()
+            .input("ModuleKey", sql.NVarChar(100), moduleKey)
+            .input("InsightDate", sql.Date, new Date())
+            .input("ErrorMessage", sql.NVarChar(sql.MAX), error?.message || String(error || "Unknown AI refresh error"))
+            .query(`
+                IF EXISTS (
+                    SELECT 1 FROM dbo.EMA_AI_Insight_Cache
+                    WHERE ModuleKey = @ModuleKey
+                      AND InsightDate = @InsightDate
+                )
+                BEGIN
+                    UPDATE dbo.EMA_AI_Insight_Cache
+                    SET Status = 'error',
+                        ErrorMessage = @ErrorMessage,
+                        UpdatedAt = SYSUTCDATETIME()
+                    WHERE ModuleKey = @ModuleKey
+                      AND InsightDate = @InsightDate;
+                END
+            `);
+    } catch (err) {
+        console.warn("Management dashboard AI cache error mark skipped:", err.message || err);
+    }
+}
+
+async function mdGenerateStoryInBackground(moduleKey = MD_STORY_MODULE_KEY, options = {}) {
+    if (mdStoryGenerationLocks.has(moduleKey)) return;
+
+    mdStoryGenerationLocks.add(moduleKey);
+
     try {
         const pool = await sql.connect(dbConfig);
+
+        if (!options.force) {
+            const cached = await mdGetCachedStory(pool, moduleKey);
+            if (cached && cached.cacheStatus === "ready") return;
+        }
+
         const context = await mdLoadDashboardContext(pool);
-        const overview = mdBuildOverviewPayload(context.assets, context.incidents, context.rule);
+        const overview = mdBuildOverviewPayload(context.assets, context.incidents, context.rule, context);
         const fallback = mdStoryFallback(overview);
 
         if (!process.env.GEMINI_API_KEY) {
-            return res.json({
-                success: true,
-                data: fallback,
+            await mdSaveCachedStory(pool, moduleKey, fallback, {
                 model: "local-executive-rule",
-                hasGeminiKey: false
+                fallbackReason: "GEMINI_API_KEY is not configured."
             });
+            return;
         }
 
-        const aiContext = mdBuildStoryAiContext(req, overview);
+        const aiContext = mdBuildStoryAiContext({ user: options.user || {} }, overview);
         const prompt = [
             "Generate an executive storytelling block for the Management Dashboard.",
             "Return JSON only. Do not use markdown.",
@@ -30478,34 +30733,99 @@ async function handleManagementDashboardStorytelling(req, res) {
             const answer = await askGeminiWithEmaContext(prompt, aiContext, []);
             const story = mdParseGeminiStory(answer, overview) || fallback;
 
-            return res.json({
-                success: true,
-                data: story,
-                model: GEMINI_MODEL,
-                hasGeminiKey: true
+            await mdSaveCachedStory(pool, moduleKey, story, {
+                model: GEMINI_MODEL
             });
         } catch (geminiErr) {
-            console.warn("Management dashboard Gemini storytelling fallback:", getGeminiErrorMessage(geminiErr));
-            return res.json({
-                success: true,
-                data: mdStoryFallback(overview, getGeminiErrorMessage(geminiErr)),
+            const reason = getGeminiErrorMessage(geminiErr);
+            console.warn("Management dashboard Gemini daily insight fallback:", reason);
+
+            await mdSaveCachedStory(pool, moduleKey, mdStoryFallback(overview, reason), {
                 model: "local-executive-rule",
-                hasGeminiKey: true,
-                geminiFallback: true
+                fallbackReason: reason
             });
+
+            await mdMarkStoryCacheError(pool, moduleKey, geminiErr);
         }
     } catch (err) {
-        console.error("GET /api/management-dashboard/storytelling error:", err);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to build management dashboard storytelling.",
-            error: err.message
+        console.error("Management dashboard AI background refresh error:", err.message || err);
+    } finally {
+        mdStoryGenerationLocks.delete(moduleKey);
+    }
+}
+
+function mdTriggerStoryRefresh(moduleKey = MD_STORY_MODULE_KEY, options = {}) {
+    setImmediate(() => {
+        mdGenerateStoryInBackground(moduleKey, options).catch((err) => {
+            console.error("Management dashboard AI refresh job failed:", err.message || err);
+        });
+    });
+}
+
+async function handleManagementDashboardStorytelling(req, res) {
+    const moduleKey = MD_STORY_MODULE_KEY;
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        const force = String(req.query.force || req.body?.force || "").toLowerCase() === "true";
+        const cached = force ? null : await mdGetCachedStory(pool, moduleKey);
+
+        if (force || !cached || cached.cacheStatus !== "ready") {
+            mdTriggerStoryRefresh(moduleKey, {
+                force,
+                user: req.user
+            });
+        }
+
+        if (cached) {
+            return res.json({
+                success: true,
+                data: cached,
+                model: cached.model || (cached.source === "gemini" ? GEMINI_MODEL : "local-executive-rule"),
+                hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+                cacheStatus: cached.cacheStatus,
+                refreshPolicy: "AI-generated insight is refreshed once daily."
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: mdStoryPendingPayload(),
+            model: "pending-background-refresh",
+            hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+            cacheStatus: "pending",
+            refreshPolicy: "AI-generated insight is refreshed once daily."
+        });
+    } catch (err) {
+        console.error("GET /api/management-dashboard/storytelling cache error:", err);
+        mdTriggerStoryRefresh(moduleKey, { user: req.user });
+
+        return res.json({
+            success: true,
+            data: mdStoryPendingPayload("Cached AI insight is temporarily unavailable. Background refresh has been queued."),
+            model: "pending-background-refresh",
+            hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+            cacheStatus: "pending",
+            refreshPolicy: "AI-generated insight is refreshed once daily."
         });
     }
 }
 
 app.get("/api/management-dashboard/storytelling", authenticateToken, handleManagementDashboardStorytelling);
 app.post("/api/management-dashboard/storytelling", authenticateToken, handleManagementDashboardStorytelling);
+
+app.post("/api/management-dashboard/storytelling/refresh", authenticateToken, async (req, res) => {
+    mdTriggerStoryRefresh(MD_STORY_MODULE_KEY, {
+        force: true,
+        user: req.user
+    });
+
+    return res.status(202).json({
+        success: true,
+        message: "AI insight refresh has been queued. The dashboard will continue showing cached insight until refresh is complete.",
+        refreshPolicy: "AI-generated insight is refreshed once daily."
+    });
+});
 
 /*
 |--------------------------------------------------------------------------

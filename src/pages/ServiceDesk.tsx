@@ -711,6 +711,7 @@ type ServiceDeskSelectProps = {
   ariaLabel?: string;
   className?: string;
   menuClassName?: string;
+  style?: CSSProperties;
   onChange: (value: string) => void;
   onOpen?: () => void;
 };
@@ -723,6 +724,7 @@ function ServiceDeskSelect({
   ariaLabel,
   className = '',
   menuClassName = '',
+  style,
   onChange,
   onOpen,
 }: ServiceDeskSelectProps) {
@@ -779,17 +781,18 @@ function ServiceDeskSelect({
     };
 
     const handleResize = () => updateMenuPosition();
+    const handleScroll = () => setOpen(false);
 
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
     window.addEventListener('resize', handleResize);
-    window.addEventListener('scroll', handleResize, true);
+    window.addEventListener('scroll', handleScroll, true);
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('scroll', handleResize, true);
+      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [open, value, options.length]);
 
@@ -830,7 +833,7 @@ function ServiceDeskSelect({
     : null;
 
   return (
-    <div className={cn('uam-filter-dropdown setting-select-dropdown', open && 'open', disabled && 'disabled', className)}>
+    <div className={cn('uam-filter-dropdown setting-select-dropdown', open && 'open', disabled && 'disabled', className)} style={style}>
       <button
         ref={triggerRef}
         className="uam-filter-trigger setting-select-trigger"
@@ -1339,6 +1342,8 @@ export default function ServiceDesk() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(emptyAdvancedFilters());
   const [now, setNow] = useState(new Date());
+  const serviceDeskIsScrollingRef = useRef(false);
+  const serviceDeskScrollTimerRef = useRef<number | null>(null);
 
   const [formData, setFormData] = useState<any>(emptyForm());
   const [clientAssets, setClientAssets] = useState<any[]>([]);
@@ -1460,8 +1465,45 @@ export default function ServiceDesk() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 30000);
+    const timer = window.setInterval(() => {
+      // Do not refresh SLA timer while the user is scrolling.
+      // This prevents full Service Desk re-render during scroll.
+      if (!serviceDeskIsScrollingRef.current) {
+        setNow(new Date());
+      }
+    }, 120000);
+
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const markScrolling = () => {
+      serviceDeskIsScrollingRef.current = true;
+      document.documentElement.classList.add('service-desk-is-scrolling');
+
+      if (serviceDeskScrollTimerRef.current) {
+        window.clearTimeout(serviceDeskScrollTimerRef.current);
+      }
+
+      serviceDeskScrollTimerRef.current = window.setTimeout(() => {
+        serviceDeskIsScrollingRef.current = false;
+        document.documentElement.classList.remove('service-desk-is-scrolling');
+        serviceDeskScrollTimerRef.current = null;
+      }, 180);
+    };
+
+    window.addEventListener('scroll', markScrolling, { passive: true, capture: true });
+
+    return () => {
+      window.removeEventListener('scroll', markScrolling, true);
+
+      if (serviceDeskScrollTimerRef.current) {
+        window.clearTimeout(serviceDeskScrollTimerRef.current);
+      }
+
+      serviceDeskIsScrollingRef.current = false;
+      document.documentElement.classList.remove('service-desk-is-scrolling');
+    };
   }, []);
 
   useEffect(() => {
@@ -1551,16 +1593,17 @@ export default function ServiceDesk() {
 
     updateAssetDropdownPosition();
 
-    const handlePositionUpdate = () => updateAssetDropdownPosition();
+    const handleResize = () => updateAssetDropdownPosition();
+    const handleScroll = () => setShowAssetDropdown(false);
 
-    window.addEventListener('resize', handlePositionUpdate);
-    window.addEventListener('scroll', handlePositionUpdate, true);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('scroll', handleScroll, true);
 
     return () => {
-      window.removeEventListener('resize', handlePositionUpdate);
-      window.removeEventListener('scroll', handlePositionUpdate, true);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleScroll, true);
     };
-  }, [showAssetDropdown, assetSearchTerm, clientAssets.length]);
+  }, [showAssetDropdown]);
 
   useEffect(() => {
     if (!selectedIncidentId) return undefined;
@@ -3210,15 +3253,7 @@ export default function ServiceDesk() {
     '52px minmax(112px, .86fr) 106px minmax(132px, 1fr) minmax(96px, .72fr) minmax(220px, 1.55fr) 102px minmax(118px, .92fr) 104px 108px 104px';
   const ticketTableMinWidth = '100%';
 
-  if (isLoading) {
-    return (
-      <div className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4 d-grid place-items-center text-center">
-        <Loader2 className="ema-spin" size={28} />
-        <strong>Loading Service Desk</strong>
-        <span>Loading incident queue...</span>
-      </div>
-    );
-  }
+  const showInitialTicketLoading = isLoading && incidents.length === 0;
 
   // Service Desk uses the existing Settings layout/classes.
   return (
@@ -3299,13 +3334,63 @@ export default function ServiceDesk() {
           grid-template-columns: minmax(0, 1fr) max-content !important;
         }
 
+        main[data-section="service-desk"] .service-desk-list-panel {
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
         main[data-section="service-desk"] .service-desk-commandbar {
+          order: 0 !important;
           display: grid !important;
           grid-template-columns: minmax(260px, 1fr) 150px 150px 150px max-content !important;
           align-items: center !important;
           gap: .55rem !important;
           overflow: visible !important;
           padding: .95rem 1rem !important;
+          margin: 0 0 .75rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-advanced-panel {
+          order: 1 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-list-panel > .content-body {
+          order: 2 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-list-panel > .uam-pagination.global-style {
+          order: 3 !important;
+        }
+
+        /* Keep Service Desk filters at the top of the ticket registry.
+           Some shared/global toolbar styles can push content-toolbar/users-toolbar
+           near the pagination area. This local override forces the intended order. */
+        main[data-section="service-desk"] .service-desk-list-panel {
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-list-panel > .service-desk-commandbar {
+          order: -30 !important;
+          position: relative !important;
+          top: auto !important;
+          right: auto !important;
+          bottom: auto !important;
+          left: auto !important;
+          transform: none !important;
+          margin: 0 0 .75rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-list-panel > .service-desk-advanced-panel {
+          order: -20 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-list-panel > .content-body {
+          order: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-list-panel > .uam-pagination.global-style {
+          order: 10 !important;
         }
 
         main[data-section="service-desk"] .service-desk-commandbar .section-search {
@@ -3451,6 +3536,29 @@ export default function ServiceDesk() {
           overflow-x: hidden !important;
           overflow-y: hidden !important;
           scrollbar-gutter: auto !important;
+          contain: layout paint !important;
+          transform: translateZ(0) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-list-panel > .content-body {
+          contain: layout paint !important;
+        }
+
+        html.service-desk-is-scrolling main[data-section="service-desk"] .service-desk-table-wrap *,
+        html.service-desk-is-scrolling main[data-section="service-desk"] .service-desk-commandbar *,
+        html.service-desk-is-scrolling main[data-section="service-desk"] .uam-pagination * {
+          transition: none !important;
+          animation: none !important;
+          box-shadow: none !important;
+        }
+
+        html.service-desk-is-scrolling main[data-section="service-desk"] .user-row,
+        html.service-desk-is-scrolling main[data-section="service-desk"] .user-row:hover,
+        html.service-desk-is-scrolling main[data-section="service-desk"] .mini-btn,
+        html.service-desk-is-scrolling main[data-section="service-desk"] .soft-btn {
+          transform: none !important;
+          transition: none !important;
+          box-shadow: none !important;
         }
 
         main[data-section="service-desk"] .service-desk-table-wrap .user-row {
@@ -3535,6 +3643,66 @@ export default function ServiceDesk() {
 
         main[data-section="service-desk"] .uam-pagination-info {
           text-align: center !important;
+        }
+
+
+        /* Service Desk ticket registry: filter must live ABOVE the table, not near pagination. */
+        main[data-section="service-desk"] .service-desk-ticket-registry-body {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: stretch !important;
+          gap: .75rem !important;
+          overflow: hidden !important;
+          padding-top: .85rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-registry-body > .service-desk-top-filterbar {
+          order: -1000 !important;
+          position: relative !important;
+          inset: auto !important;
+          transform: none !important;
+          display: grid !important;
+          grid-template-columns: minmax(260px, 1fr) 150px 150px 150px max-content !important;
+          align-items: center !important;
+          gap: .55rem !important;
+          width: calc(100% - 1.5rem) !important;
+          margin: 0 .75rem .1rem !important;
+          padding: 0 !important;
+          overflow: visible !important;
+          background: transparent !important;
+          border: 0 !important;
+          box-shadow: none !important;
+          z-index: 20 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-registry-body > .service-desk-advanced-panel {
+          order: -900 !important;
+          width: calc(100% - 1.5rem) !important;
+          margin: 0 .75rem .1rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-registry-body > .settings-empty-state,
+        main[data-section="service-desk"] .service-desk-ticket-registry-body > .service-desk-table-wrap {
+          order: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-top-filterbar .section-search {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-top-filterbar .service-desk-command-actions {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          gap: .42rem !important;
+          flex-wrap: nowrap !important;
+          min-width: max-content !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-top-filterbar .primary-btn {
+          white-space: nowrap !important;
         }
 
         @media (max-width: 1480px) {
@@ -4171,10 +4339,13 @@ export default function ServiceDesk() {
         <div className="content-shell ema-panel-surface roles-content-shell">
 
         {viewMode === 'list' && (
-          <section className="content-panel clean">
+          <section className="content-panel clean service-desk-list-panel">
+            <div className="content-body service-desk-ticket-registry-body">
+
             <div
-              className="content-toolbar users-toolbar service-desk-commandbar"
+              className="service-desk-top-filterbar"
               style={{
+                order: -1000,
                 display: 'grid',
                 gridTemplateColumns: 'minmax(260px, 1fr) 150px 150px 150px 150px max-content',
                 alignItems: 'center',
@@ -4285,6 +4456,7 @@ export default function ServiceDesk() {
               </div>
             </div>
 
+
             {showAdvanced && (
               <div className="settings-helper-card service-desk-advanced-panel">
                 <div className="service-desk-advanced-head">
@@ -4387,8 +4559,17 @@ export default function ServiceDesk() {
               </div>
             )}
 
-            <div className="content-body">
-              {paginatedIncidents.length === 0 ? (
+              {showInitialTicketLoading ? (
+                <div className="settings-empty-state">
+                  <div className="setting-icon mx-auto">
+                    <Loader2 size={26} className="ema-spin" />
+                  </div>
+                  <strong>Loading service desk tickets...</strong>
+                  <span>
+                    The Service Desk interface is ready. Ticket data is loading from /api/incidents in the background.
+                  </span>
+                </div>
+              ) : paginatedIncidents.length === 0 ? (
                 <div className="settings-empty-state">
                   <div className="setting-icon mx-auto">
                     <Ticket size={26} />

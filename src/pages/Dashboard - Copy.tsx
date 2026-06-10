@@ -257,27 +257,6 @@ type ItOpsDashboardData = {
   attentionQueue: AttentionItem[];
 };
 
-type DailyAiInsight = {
-  status: string;
-  tone?: CardTone;
-  headline: string;
-  summary: string;
-  narrative?: string;
-  keySignals?: string[];
-  boardRecommendation?: string;
-  actionItems?: string[];
-  source?: string;
-  cacheStatus?: string;
-  refreshPolicy?: string;
-  generatedAt?: string | null;
-  nextRefreshAt?: string | null;
-  isStale?: boolean;
-  message?: string;
-  model?: string;
-  hasGeminiKey?: boolean;
-  fallbackReason?: string;
-};
-
 type FocusCard = {
   id: string;
   label: string;
@@ -633,47 +612,6 @@ async function fetchItOpsDashboardData() {
   return normalizeDashboardData(payload?.data ?? payload);
 }
 
-
-async function fetchDailyDashboardInsight(): Promise<DailyAiInsight> {
-  const token = getStoredAccessToken();
-  const headers = new Headers({ Accept: 'application/json' });
-  if (token) headers.set('Authorization', `Bearer ${token}`);
-
-  const response = await fetch(`${API_BASE_URL}/api/management-dashboard/storytelling`, {
-    headers,
-    credentials: 'include',
-  });
-
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || payload?.message || `Daily AI insight failed: ${response.status}`);
-  }
-
-  const data = payload?.data ?? payload ?? {};
-
-  return {
-    status: String(data.status || 'Daily AI Insight'),
-    tone: (data.tone || 'blue') as CardTone,
-    headline: String(data.headline || 'Daily AI insight is being prepared'),
-    summary: String(data.summary || data.message || 'The dashboard remains available while AI insight refreshes in the background.'),
-    narrative: data.narrative ? String(data.narrative) : undefined,
-    keySignals: Array.isArray(data.keySignals) ? data.keySignals.map(String).slice(0, 4) : [],
-    boardRecommendation: data.boardRecommendation ? String(data.boardRecommendation) : undefined,
-    actionItems: Array.isArray(data.actionItems) ? data.actionItems.map(String).slice(0, 3) : [],
-    source: data.source ? String(data.source) : undefined,
-    cacheStatus: String(data.cacheStatus || payload.cacheStatus || 'ready'),
-    refreshPolicy: String(data.refreshPolicy || payload.refreshPolicy || 'AI-generated insight is refreshed once daily.'),
-    generatedAt: data.generatedAt || null,
-    nextRefreshAt: data.nextRefreshAt || null,
-    isStale: Boolean(data.isStale),
-    message: data.message ? String(data.message) : undefined,
-    model: data.model || payload.model,
-    hasGeminiKey: Boolean(data.hasGeminiKey ?? payload.hasGeminiKey),
-    fallbackReason: data.fallbackReason ? String(data.fallbackReason) : undefined,
-  };
-}
-
 function exportJsonFile(name: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -716,47 +654,6 @@ function EmptyState({ label = 'No live data returned from API yet.' }: { label?:
       <Database size={18} />
       <span>{label}</span>
     </div>
-  );
-}
-
-
-function DailyAiInsightPanel({
-  insight,
-  loading,
-  error,
-  onRefresh,
-}: {
-  insight: DailyAiInsight | null;
-  loading: boolean;
-  error: string;
-  onRefresh: () => void;
-}) {
-  const cacheStatus = insight?.cacheStatus || (loading ? 'loading' : 'pending');
-  const statusLabel = insight?.isStale ? 'Latest available insight' : cacheStatus === 'ready' ? 'Daily AI insight' : 'AI insight refresh';
-
-  return (
-    <section className={`itops-pro-ai-panel itops-pro-ai-panel-${insight?.tone || 'blue'}`}>
-      <div className="itops-pro-ai-icon">
-        {loading ? <Loader2 size={20} className="itops-pro-spin" /> : error ? <AlertTriangle size={20} /> : <Sparkles size={20} />}
-      </div>
-      <div className="itops-pro-ai-content">
-        <div className="itops-pro-ai-meta">
-          <span>{statusLabel}</span>
-          <span>{insight?.refreshPolicy || 'AI-generated insight is refreshed once daily.'}</span>
-        </div>
-        <h3>{insight?.headline || (loading ? 'Loading cached AI insight...' : 'Daily AI insight is being prepared')}</h3>
-        <p>{error || insight?.summary || 'Dashboard data is available now. AI insight will update in the background without blocking the page.'}</p>
-        <div className="itops-pro-ai-foot">
-          <span>Last updated: {formatDateLabel(insight?.generatedAt)}</span>
-          <span>Next refresh: {formatDateLabel(insight?.nextRefreshAt)}</span>
-          {insight?.source && <span>Source: {insight.source === 'gemini' ? 'AI assisted' : insight.source}</span>}
-        </div>
-      </div>
-      <button type="button" className="itops-pro-ai-refresh" onClick={onRefresh} disabled={loading} title="Reload cached AI insight">
-        {loading ? <Loader2 size={15} className="itops-pro-spin" /> : <RefreshCw size={15} />}
-        Refresh insight
-      </button>
-    </section>
   );
 }
 
@@ -1109,9 +1006,6 @@ export default function ITOperationsDashboard() {
   const [dashboardData, setDashboardData] = useState<ItOpsDashboardData>(EMPTY_DASHBOARD_DATA);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [dailyAiInsight, setDailyAiInsight] = useState<DailyAiInsight | null>(null);
-  const [isInsightLoading, setIsInsightLoading] = useState(false);
-  const [insightError, setInsightError] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('All Departments');
   const [search, setSearch] = useState('');
   const [activeView, setActiveView] = useState<string | null>(null);
@@ -1158,21 +1052,6 @@ export default function ITOperationsDashboard() {
   }, [activeView, viewHistory]);
   const pageRef = useRef<HTMLDivElement | null>(null);
 
-  const loadDailyAiInsight = useCallback(async () => {
-    setIsInsightLoading(true);
-    setInsightError('');
-
-    try {
-      const insight = await fetchDailyDashboardInsight();
-      setDailyAiInsight(insight);
-    } catch (loadError) {
-      console.warn('Daily AI insight could not be loaded:', loadError);
-      setInsightError(loadError instanceof Error ? loadError.message : 'Daily AI insight is temporarily unavailable.');
-    } finally {
-      setIsInsightLoading(false);
-    }
-  }, []);
-
   const loadDashboard = useCallback(async () => {
     setIsLoading(true);
     setError('');
@@ -1192,10 +1071,6 @@ export default function ITOperationsDashboard() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
-
-  useEffect(() => {
-    void loadDailyAiInsight();
-  }, [loadDailyAiInsight]);
 
   useEffect(() => {
     const pageElement = pageRef.current;
@@ -2361,13 +2236,6 @@ export default function ITOperationsDashboard() {
         </div>
       )}
 
-      <DailyAiInsightPanel
-        insight={dailyAiInsight}
-        loading={isInsightLoading}
-        error={insightError}
-        onRefresh={() => void loadDailyAiInsight()}
-      />
-
       {renderCommandMode()}
 
       <section className="itops-pro-quick-grid">
@@ -2493,106 +2361,6 @@ body:has(.itops-pro-page) .router-content {
 .itops-pro-command-grid,
 .itops-pro-level-grid,
 .itops-pro-quick-grid,
-
-.itops-pro-ai-panel {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 16px;
-  margin: 18px 0;
-  padding: 16px 18px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-}
-
-.itops-pro-ai-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 18px;
-  color: #ffffff;
-  background: linear-gradient(135deg, #2563eb, #38bdf8);
-}
-
-.itops-pro-ai-content h3,
-.itops-pro-ai-content p {
-  margin: 0;
-}
-
-.itops-pro-ai-content h3 {
-  margin-top: 4px;
-  color: #0f172a;
-  font-size: 17px;
-  font-weight: 950;
-  letter-spacing: -0.02em;
-}
-
-.itops-pro-ai-content p {
-  margin-top: 4px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.45;
-}
-
-.itops-pro-ai-meta,
-.itops-pro-ai-foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.itops-pro-ai-foot {
-  margin-top: 9px;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 800;
-}
-
-.itops-pro-ai-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid #dbe3ef;
-  border-radius: 999px;
-  color: #0f172a;
-  background: #ffffff;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.itops-pro-ai-refresh:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-
-.itops-pro-ai-panel-amber .itops-pro-ai-icon { background: linear-gradient(135deg, #d97706, #fbbf24); }
-.itops-pro-ai-panel-red .itops-pro-ai-icon { background: linear-gradient(135deg, #dc2626, #fb7185); }
-.itops-pro-ai-panel-green .itops-pro-ai-icon { background: linear-gradient(135deg, #059669, #34d399); }
-.itops-pro-ai-panel-purple .itops-pro-ai-icon { background: linear-gradient(135deg, #7c3aed, #c084fc); }
-
-@media (max-width: 900px) {
-  .itops-pro-ai-panel {
-    grid-template-columns: 1fr;
-  }
-
-  .itops-pro-ai-refresh {
-    width: fit-content;
-  }
-}
-
 .itops-pro-error,
 .itops-pro-loading {
   position: relative;
