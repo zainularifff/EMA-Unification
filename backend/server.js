@@ -4464,6 +4464,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
         const status = accountLocked ? "Locked" : normalizeEmaUserStatus(req.body.status);
         const roleNames = getRequestedEmaRoles(req.body);
         const passwordText = String(req.body.password || req.body.newPassword || "").trim();
+        const requestedRequireMFA = parseEmaBit(req.body.requireMFA ?? req.body.mfa, false);
 
         if (!fullName && !username) {
             return res.status(400).json({ success: false, message: "Full name or username is required." });
@@ -4505,7 +4506,6 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
             .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
-            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
@@ -4656,7 +4656,8 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
             .input("PhoneNo", sql.NVarChar, req.body.phoneNo || "")
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
-            .input("RequireMFA", sql.Bit, parseEmaBit(req.body.requireMFA ?? req.body.mfa, false) ? 1 : 0)
+            .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
+            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
