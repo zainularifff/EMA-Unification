@@ -41,6 +41,126 @@ const { getMdmConfig } = require("./src/utils/mdmConfig");
 
 const app = express();
 
+
+// ============================================================
+// LIGHTWEIGHT DASHBOARD RESPONSE CACHE
+// Keeps expensive dashboard aggregation from running repeatedly
+// when users navigate between dashboards or refresh the same page.
+// Bypass with ?refresh=1 or ?noCache=1.
+// ============================================================
+const DASHBOARD_CACHE_TTL_MS = Number(process.env.DASHBOARD_CACHE_TTL_MS || 120000);
+const dashboardResponseCache = new Map();
+
+function cloneDashboardPayload(value) {
+    if (value === undefined || value === null) return value;
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch (err) {
+        return value;
+    }
+}
+
+function readDashboardCache(key) {
+    if (!key || DASHBOARD_CACHE_TTL_MS <= 0) return null;
+    const entry = dashboardResponseCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.createdAt > entry.ttlMs) {
+        dashboardResponseCache.delete(key);
+        return null;
+    }
+    return cloneDashboardPayload(entry.data);
+}
+
+function writeDashboardCache(key, data, ttlMs = DASHBOARD_CACHE_TTL_MS) {
+    if (!key || !data || ttlMs <= 0) return;
+    dashboardResponseCache.set(key, {
+        createdAt: Date.now(),
+        ttlMs,
+        data: cloneDashboardPayload(data)
+    });
+}
+
+function shouldBypassDashboardCache(req) {
+    const refresh = String(req?.query?.refresh || req?.query?.noCache || req?.query?.nocache || '').toLowerCase();
+    return refresh === '1' || refresh === 'true' || refresh === 'yes';
+}
+
+
+// ============================================================
+// GENERIC LIGHTWEIGHT GET RESPONSE CACHE
+// Used for data-heavy module pages such as Software Inventory.
+// Cache is scoped by authenticated user + full URL and can be bypassed with
+// ?refresh=1, ?noCache=1 or ?nocache=1.
+// ============================================================
+const SOFTWARE_CACHE_TTL_MS = Number(process.env.SOFTWARE_CACHE_TTL_MS || 180000);
+
+function readTimedResponseCache(key, enabledTtlMs) {
+    if (!key || enabledTtlMs <= 0) return null;
+    const entry = dashboardResponseCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.createdAt > entry.ttlMs) {
+        dashboardResponseCache.delete(key);
+        return null;
+    }
+    return cloneDashboardPayload(entry.data);
+}
+
+function writeTimedResponseCache(key, data, ttlMs) {
+    if (!key || data === undefined || data === null || ttlMs <= 0) return;
+    dashboardResponseCache.set(key, {
+        createdAt: Date.now(),
+        ttlMs,
+        data: cloneDashboardPayload(data)
+    });
+}
+
+function clearTimedResponseCache(prefix) {
+    if (!prefix) {
+        dashboardResponseCache.clear();
+        return;
+    }
+
+    for (const key of dashboardResponseCache.keys()) {
+        if (String(key).startsWith(prefix)) dashboardResponseCache.delete(key);
+    }
+}
+
+function buildTimedResponseCacheKey(namespace, req) {
+    const userKey = [
+        req?.user?.authSource || 'auth',
+        req?.user?.emaUserID || req?.user?.console_Idn || req?.user?.userID || 'anonymous'
+    ].join(':');
+
+    return `${namespace}:${req.method}:${userKey}:${req.originalUrl || req.url || ''}`;
+}
+
+function createTimedGetCacheMiddleware(namespace, ttlMs) {
+    return function timedGetCacheMiddleware(req, res, next) {
+        const activeTtlMs = Number(ttlMs || 0);
+        if (req.method !== 'GET' || activeTtlMs <= 0 || shouldBypassDashboardCache(req)) {
+            return next();
+        }
+
+        const cacheKey = buildTimedResponseCacheKey(namespace, req);
+        const cachedPayload = readTimedResponseCache(cacheKey, activeTtlMs);
+        if (cachedPayload !== null && cachedPayload !== undefined) {
+            return res.json(cachedPayload);
+        }
+
+        const originalJson = res.json.bind(res);
+        res.json = function cachedJson(payload) {
+            if (res.statusCode >= 200 && res.statusCode < 300 && payload !== undefined && payload?.success !== false) {
+                writeTimedResponseCache(cacheKey, payload, activeTtlMs);
+            }
+            return originalJson(payload);
+        };
+
+        return next();
+    };
+}
+
+const softwareCacheMiddleware = createTimedGetCacheMiddleware('software', SOFTWARE_CACHE_TTL_MS);
+
 if (compression) {
     app.use(compression({
         threshold: 1024
@@ -1277,6 +1397,123 @@ WHERE a.Object_PR_Idn = @parentID
     return departments;
 }
 
+
+async function getAllHardwareInventoryAssets(pool, options = {}) {
+    const limit = Math.max(1, Math.min(parseInt(options.limit, 10) || 10000, 50000));
+    const relationID = parseInt(options.relationID, 10) || 0;
+    const searchText = normalizeAuthValue(options.search || options.q || "");
+
+    const [hasEmAssets, hasMdmAssets, hasRelation, hasMdmRelation, hasMdmMapping, includeBios] = await Promise.all([
+        tableExists(pool, "TS_OBJECT_ROOT"),
+        tableExists(pool, "TSMDM_ASSET"),
+        tableExists(pool, "TS_OBJECT_RELATION"),
+        tableExists(pool, "TSMDM_OBJECT_RELATION"),
+        tableExists(pool, "TSMDM_TS_OBJECT_MAPPING"),
+        hasBiosInventoryTables(pool)
+    ]);
+
+    if (!hasEmAssets && !hasMdmAssets) return [];
+
+    const parts = [];
+
+    if (hasEmAssets) {
+        const biosFragments = getBiosSqlFragments("em", "em", includeBios);
+        parts.push(`
+            SELECT
+                em.Object_Root_Idn AS _Idn,
+                'EM' AS Object_Agent,
+                em.Object_DeviceID,
+                em.ComputerName,
+                ${hasRelation ? "rel.Object_Full_Name" : "CAST(NULL AS NVARCHAR(500))"} AS Object_Full_Name,
+                ${hasRelation ? "rel.Object_Rel_Name" : "CAST(NULL AS NVARCHAR(255))"} AS Object_Rel_Name,
+                CAST(em.Object_Rel_Idn AS INT) AS Object_Rel_Idn,
+                ${hasRelation ? "CAST(rel.Object_PR_Idn AS INT)" : "CAST(NULL AS INT)"} AS Object_PR_Idn,
+                'Windows' AS PlatformType,
+                em.Model,
+                em.ConnectionTime,
+                CASE WHEN em.ConnectionStatus = 1 THEN 'Online' ELSE 'Offline' END AS ConnectionStatus,
+                em.IP,
+                ${biosFragments.select}
+            FROM TS_OBJECT_ROOT em WITH (NOLOCK)
+            ${hasRelation ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON em.Object_Rel_Idn = rel.Object_Rel_Idn" : ""}
+            ${biosFragments.join}
+            WHERE ISNULL(em.Object_Root_Idn, 0) > 0
+              AND (@RelationID = 0 OR em.Object_Rel_Idn = @RelationID)
+        `);
+    }
+
+    if (hasMdmAssets) {
+        const mdmRelationJoin = hasMdmRelation
+            ? "LEFT JOIN TSMDM_OBJECT_RELATION mor WITH (NOLOCK) ON mdm.MDM_Asset_Idn = mor.MDM_Asset_Idn"
+            : "";
+        const relationJoin = hasMdmRelation && hasRelation
+            ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON mor.Object_Rel_Idn = rel.Object_Rel_Idn"
+            : "";
+        const relationSelect = hasMdmRelation ? "CAST(mor.Object_Rel_Idn AS INT)" : "CAST(NULL AS INT)";
+        const mappingExclude = hasMdmMapping
+            ? "AND NOT EXISTS (SELECT 1 FROM TSMDM_TS_OBJECT_MAPPING map WITH (NOLOCK) WHERE map.MDM_Asset_Idn = mdm.MDM_Asset_Idn)"
+            : "";
+        parts.push(`
+            SELECT
+                mdm.MDM_Asset_Idn AS _Idn,
+                'MDM' AS Object_Agent,
+                mdm.DeviceID AS Object_DeviceID,
+                mdm.DeviceName AS ComputerName,
+                ${hasMdmRelation && hasRelation ? "rel.Object_Full_Name" : "CAST(NULL AS NVARCHAR(500))"} AS Object_Full_Name,
+                ${hasMdmRelation && hasRelation ? "rel.Object_Rel_Name" : "CAST(NULL AS NVARCHAR(255))"} AS Object_Rel_Name,
+                ${relationSelect} AS Object_Rel_Idn,
+                ${hasMdmRelation && hasRelation ? "CAST(rel.Object_PR_Idn AS INT)" : "CAST(NULL AS INT)"} AS Object_PR_Idn,
+                ISNULL(NULLIF(mdm.PlatformType, ''), 'MDM') AS PlatformType,
+                mdm.DeviceModelName AS Model,
+                mdm.DeviceTimeStamp AS ConnectionTime,
+                ISNULL(NULLIF(CAST(mdm.ConnectionStatus AS NVARCHAR(100)), ''), 'Unknown') AS ConnectionStatus,
+                CASE
+                    WHEN mdm.DeviceLocalIPAddress IS NULL OR mdm.DeviceLocalIPAddress = '' THEN mdm.DeviceIPAddress
+                    ELSE mdm.DeviceLocalIPAddress
+                END AS IP,
+                CAST(NULL AS NVARCHAR(100)) AS BiosDate,
+                CAST(NULL AS INT) AS PCAge
+            FROM TSMDM_ASSET mdm WITH (NOLOCK)
+            ${mdmRelationJoin}
+            ${relationJoin}
+            WHERE ISNULL(mdm.MDM_Asset_Idn, 0) > 0
+              AND (@RelationID = 0 ${hasMdmRelation ? "OR mor.Object_Rel_Idn = @RelationID" : ""})
+              ${mappingExclude}
+        `);
+    }
+
+    if (parts.length === 0) return [];
+
+    const result = await pool.request()
+        .input("Limit", sql.Int, limit)
+        .input("RelationID", sql.Int, relationID)
+        .input("SearchText", sql.NVarChar(255), searchText)
+        .query(`
+            ;WITH Assets AS (
+                ${parts.join("\nUNION ALL\n")}
+            )
+            SELECT TOP (@Limit) *
+            FROM Assets
+            WHERE
+                @SearchText = ''
+                OR ComputerName LIKE '%' + @SearchText + '%'
+                OR Object_DeviceID LIKE '%' + @SearchText + '%'
+                OR Model LIKE '%' + @SearchText + '%'
+                OR PlatformType LIKE '%' + @SearchText + '%'
+                OR IP LIKE '%' + @SearchText + '%'
+                OR Object_Full_Name LIKE '%' + @SearchText + '%'
+            ORDER BY ISNULL(Object_Full_Name, ''), ISNULL(ComputerName, Object_DeviceID), Object_Agent;
+        `);
+
+    return (result.recordset || []).map(row => {
+        const mappedRow = {};
+        Object.keys(row).forEach(columnName => {
+            mappedRow[columnName] = row[columnName];
+        });
+        return mappedRow;
+    });
+}
+
 async function getAssetsByRelationID(pool, relationID) {
     // let query = "";
     // switch (process.env.PROJECT_NAME) {
@@ -1440,7 +1677,7 @@ WHERE a.Object_PR_Idn = @parentID
 // GET /api/assets
 // Used by Service Desk asset lookup.
 // Important: this route must stay BEFORE /api/assets/:relationID.
-// Source priority: TSMDM_ASSET + TS_OBJECT_ROOT only.
+// Source priority: TSMDM_ASSET + TS_OBJECT_ROOT, fallback HD_Assets.
 function sdAssetText(value, fallback = "") {
     if (value === undefined || value === null) return fallback;
     const text = String(value).trim();
@@ -1504,7 +1741,7 @@ function sdNormalizeAssetRow(row) {
         OS: os,
         deviceType: sdAssetText(row.deviceType || row.DeviceType || os, os),
         ipAddress: sdAssetText(row.ipAddress || row.IP || row.DeviceIPAddress || row.DeviceLocalIPAddress),
-        requesterName: sdAssetText(row.requesterName || row.RequesterName || row.Object_Full_Name || row.department),
+        RequesterName: sdAssetText(row.requesterName || row.RequesterName || row.Object_Full_Name || row.department),
         department: sdAssetText(row.department || row.Object_Full_Name || row.requesterName || row.RequesterName),
         biosDate: biosDate || "-",
         BiosDate: biosDate || null,
@@ -1610,6 +1847,56 @@ async function handleServiceDeskAssets(req, res) {
 
         let data = (result.recordset || []).map(sdNormalizeAssetRow);
 
+        if (data.length === 0 && await tableExists(pool, "HD_Assets")) {
+            const hasHdAssetBiosDate = await tableColumnExists(pool, "HD_Assets", "BiosDate").catch(() => false);
+            const hasHdAssetPcAge = await tableColumnExists(pool, "HD_Assets", "PCAge").catch(() => false);
+            const hdBiosSelect = hasHdAssetBiosDate ? "BiosDate AS BiosDate" : "CAST(NULL AS NVARCHAR(100)) AS BiosDate";
+            const hdPcAgeSelect = hasHdAssetPcAge ? "PCAge AS PCAge" : "CAST(NULL AS INT) AS PCAge";
+            const hdRequest = pool.request();
+            hdRequest.input("SearchText", sql.NVarChar(255), `%${search}%`);
+            hdRequest.input("RequesterName", sql.NVarChar(255), requesterName);
+
+            const hdResult = await hdRequest.query(`
+                SELECT TOP 500
+                    AssetID AS id,
+                    AssetID AS assetId,
+                    AssetTag AS assetTag,
+                    AssetTag AS name,
+                    AssetTag AS computerName,
+                    RequesterName AS requesterName,
+                    DeviceType AS deviceType,
+                    Brand AS brand,
+                    Model AS model,
+                    OS AS os,
+                    IP AS ipAddress,
+                    RequesterName AS department,
+                    ${hdBiosSelect},
+                    ${hdPcAgeSelect},
+                    'HD' AS source
+                FROM HD_Assets WITH (NOLOCK)
+                WHERE
+                    (
+                        @SearchText = '%%'
+                        OR AssetID LIKE @SearchText
+                        OR AssetTag LIKE @SearchText
+                        OR RequesterName LIKE @SearchText
+                        OR DeviceType LIKE @SearchText
+                        OR Brand LIKE @SearchText
+                        OR Model LIKE @SearchText
+                        OR OS LIKE @SearchText
+                        OR IP LIKE @SearchText
+                    )
+                    AND
+                    (
+                        @RequesterName = ''
+                        OR RequesterName = @RequesterName
+                        OR RequesterName LIKE '%' + @RequesterName + '%'
+                    )
+                ORDER BY AssetTag ASC;
+            `);
+
+            data = (hdResult.recordset || []).map(sdNormalizeAssetRow);
+        }
 
         return res.json(data);
     } catch (err) {
@@ -1870,6 +2157,34 @@ app.put("/api/assets/:objectAgent/:assetId/department", authenticateToken, handl
 app.patch("/api/assets/:objectAgent/:assetId/department", authenticateToken, handleMoveAssetDepartment);
 
 
+
+// GET /api/hardware-inventory/assets
+// Optimized Hardware Inventory loader. Returns all EM + unmapped MDM assets in one request
+// so the frontend does not need to call /api/assets/:relationID for every department.
+app.get("/api/hardware-inventory/assets", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const data = await getAllHardwareInventoryAssets(pool, {
+            limit: req.query.limit,
+            relationID: req.query.relationID || req.query.departmentID,
+            search: req.query.search || req.query.q
+        });
+
+        return res.json({
+            success: true,
+            totalRecords: data.length,
+            data
+        });
+    } catch (err) {
+        console.error("GET /api/hardware-inventory/assets error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve hardware inventory assets",
+            error: err.message
+        });
+    }
+});
+
 // GET /api/assets/:relationID
 app.get("/api/assets/:relationID", authenticateToken, async (req, res) => {
     try {
@@ -1959,75 +2274,100 @@ async function getEMAData(pool, Object_Root_Idn) {
     }
 }
 
-async function getTSMDMData(pool, MDM_Asset_Idn) {
+async function executeOptionalAssetQuery(pool, label, query, inputs = {}) {
     try {
-        const [
-            hwMainInfo,
-            diskDrives,
-            additionalMac,
-            phoneSignal
-
-        ] = await Promise.all([
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_HWMainInfo,
-                {
-                    input_MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            ),
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_DISKDRIVES_WINDOWS,
-                {
-                    MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            ),
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_AdditionalMac,
-                {
-                    MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            ),
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_PhoneSignal,
-                {
-                    input_MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            )
-
-        ]);
-
-        const responseObject = {
-            HWMainInfo: hwMainInfo,
-            DiskDrives: diskDrives,
-            AdditionalMac: additionalMac,
-            PhoneSignal: phoneSignal
+        return {
+            rows: await executeQuery(pool, query, inputs),
+            error: null
         };
-
-        return responseObject;
-
     } catch (err) {
-        console.error("getTSMDMData Error:", err);
-        throw err;
+        console.warn(`Optional asset detail query skipped (${label}):`, err.message);
+        return {
+            rows: [],
+            error: err.message
+        };
     }
+}
+
+async function getTSMDMData(pool, MDM_Asset_Idn) {
+    const [
+        hwMainInfoResult,
+        diskDrivesResult,
+        additionalMacResult,
+        phoneSignalResult
+    ] = await Promise.all([
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM HWMainInfo",
+            queries_TSMDM.query_HWMainInfo,
+            {
+                input_MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        ),
+
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM DiskDrives",
+            queries_TSMDM.query_DISKDRIVES_WINDOWS,
+            {
+                MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        ),
+
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM AdditionalMac",
+            queries_TSMDM.query_AdditionalMac,
+            {
+                MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        ),
+
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM PhoneSignal",
+            queries_TSMDM.query_PhoneSignal,
+            {
+                input_MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        )
+    ]);
+
+    const detailErrors = {
+        HWMainInfo: hwMainInfoResult.error,
+        DiskDrives: diskDrivesResult.error,
+        AdditionalMac: additionalMacResult.error,
+        PhoneSignal: phoneSignalResult.error
+    };
+
+    const responseObject = {
+        HWMainInfo: hwMainInfoResult.rows,
+        DiskDrives: diskDrivesResult.rows,
+        AdditionalMac: additionalMacResult.rows,
+        PhoneSignal: phoneSignalResult.rows
+    };
+
+    const activeErrors = Object.fromEntries(
+        Object.entries(detailErrors).filter(([, error]) => Boolean(error))
+    );
+
+    if (Object.keys(activeErrors).length) {
+        responseObject.DetailErrors = activeErrors;
+    }
+
+    return responseObject;
 }
 
 // GET /api/asset/:objectAgent/:assetId
@@ -2052,18 +2392,28 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
 
         const pool = await sql.connect(dbConfig);
 
+        const normalizedObjectAgent = String(objectAgent).trim().toUpperCase();
+
         let data = {};
-        if (objectAgent=='EM') {
+        if (normalizedObjectAgent === 'EM') {
             data = await getEMAData(pool, assetId);
 
-            let MDM_Asset_Idn = data['HWMainInfo'][0].MDM_Asset_Idn;
-            if (MDM_Asset_Idn)
-                data['MDM'] = await getTSMDMData(pool, MDM_Asset_Idn);
-            else
-                data['MDM'] = [];
-        }
-        else if (objectAgent=='MDM')
+            const hwMainInfoRows = Array.isArray(data.HWMainInfo) ? data.HWMainInfo : [];
+            const MDM_Asset_Idn = hwMainInfoRows[0]?.MDM_Asset_Idn;
+
+            if (MDM_Asset_Idn) {
+                data.MDM = await getTSMDMData(pool, MDM_Asset_Idn);
+            } else {
+                data.MDM = [];
+            }
+        } else if (normalizedObjectAgent === 'MDM') {
             data = await getTSMDMData(pool, assetId);
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: "Unsupported object agent. Expected EM or MDM."
+            });
+        }
 
         return res.json({
             success: true,
@@ -2075,7 +2425,8 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
 
         return res.status(500).json({
             success: false,
-            message: "Failed to retrieve asset data"
+            message: "Failed to retrieve asset data",
+            error: err.message
         });
     }
 });
@@ -2095,7 +2446,7 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
 
 // GET /api/clients
 // Incidents.tsx needs clients.getAll(). This route derives clients
-// from EMA_Incidents so it works even when there is no separate HD_Clients table.
+// from HD_Incidents so it works even when there is no separate HD_Clients table.
 app.get('/api/clients', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -2110,7 +2461,7 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
                 SELECT DISTINCT
                     ISNULL(NULLIF(RequesterID, ''), RequesterName) as RequesterID,
                     RequesterName
-                FROM EMA_Incidents
+                FROM HD_Incidents
                 WHERE RequesterName IS NOT NULL AND RequesterName <> ''
             ) c
             ORDER BY RequesterName
@@ -2253,14 +2604,6 @@ app.delete('/api/roles/:id', authenticateToken, async (req, res) => {
 
 
 
-
-function normalizeServiceDeskIncidentStatus(value, fallback = 'Awaiting') {
-    const text = String(value || '').trim();
-    if (!text) return fallback;
-    if (text.toLowerCase() === 'solved') return 'Resolved';
-    return text;
-}
-
 // ============================================================
 // INCIDENTS API
 // ============================================================
@@ -2275,7 +2618,7 @@ app.get('/api/incidents', authenticateToken, async (req, res) => {
                 Title as title,
                 Description as description,
                 Priority as priority,
-                CASE WHEN Status = 'Solved' THEN 'Resolved' ELSE Status END as status,
+                Status as status,
                 Category as category,
                 CreatedAt as createdAt,
                 RequesterID as requesterId,
@@ -2292,8 +2635,9 @@ app.get('/api/incidents', authenticateToken, async (req, res) => {
                 ResolvedAt as resolvedAt,
                 RootCause as rootCause,
                 ActionPlan as actionPlan,
-                AdditionalMemo as additionalMemo
-            FROM EMA_Incidents
+                AdditionalMemo as additionalMemo,
+                Remarks as remarks
+            FROM HD_Incidents
             ORDER BY CreatedAt DESC
         `);
         res.json(result.recordset);
@@ -2316,7 +2660,7 @@ app.get('/api/incidents/:id', authenticateToken, async (req, res) => {
                     Title as title,
                     Description as description,
                     Priority as priority,
-                    CASE WHEN Status = 'Solved' THEN 'Resolved' ELSE Status END as status,
+                    Status as status,
                     Category as category,
                     CreatedAt as createdAt,
                     RequesterID as requesterId,
@@ -2333,8 +2677,9 @@ app.get('/api/incidents/:id', authenticateToken, async (req, res) => {
                     ResolvedAt as resolvedAt,
                     RootCause as rootCause,
                     ActionPlan as actionPlan,
-                    AdditionalMemo as additionalMemo
-                FROM EMA_Incidents
+                    AdditionalMemo as additionalMemo,
+                    Remarks as remarks
+                FROM HD_Incidents
                 WHERE IncidentID = @id
             `);
         
@@ -2354,7 +2699,8 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
         id, title, description, priority, status, category, createdAt, 
         requesterId, requesterName, deviceType, assetId, subcategory, 
         incidentDetail, reporterId, slaDue, assignedTo, assignedLevel, 
-        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo
+        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo, 
+        remarks 
     } = req.body;
     
     try {
@@ -2364,7 +2710,7 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
             .input('title', sql.NVarChar, title || '')
             .input('description', sql.NVarChar, description || '')
             .input('priority', sql.NVarChar, priority || 'Medium')
-            .input('status', sql.NVarChar, normalizeServiceDeskIncidentStatus(status, 'Awaiting'))
+            .input('status', sql.NVarChar, status || 'Awaiting')
             .input('category', sql.NVarChar, category || '')
             .input('createdAt', sql.NVarChar, createdAt || new Date().toISOString())
             .input('requesterId', sql.NVarChar, requesterId || '')
@@ -2382,17 +2728,20 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
             .input('rootCause', sql.NVarChar, rootCause || '')
             .input('actionPlan', sql.NVarChar, actionPlan || '')
             .input('additionalMemo', sql.NVarChar, additionalMemo || '')
+            .input('remarks', sql.NVarChar, remarks || '')
             .query(`
-                INSERT INTO EMA_Incidents (
+                INSERT INTO HD_Incidents (
                     IncidentID, Title, Description, Priority, Status, Category, CreatedAt, 
                     RequesterID, RequesterName, DeviceType, AssetID, Subcategory, 
                     IncidentDetail, ReporterID, SlaDue, AssignedTo, AssignedLevel, 
-                    FirstResponseAt, ResolvedAt, RootCause, ActionPlan, AdditionalMemo
+                    FirstResponseAt, ResolvedAt, RootCause, ActionPlan, AdditionalMemo, 
+                    Remarks
                 ) VALUES (
                     @id, @title, @description, @priority, @status, @category, @createdAt,
                     @requesterId, @requesterName, @deviceType, @assetId, @subcategory,
                     @incidentDetail, @reporterId, @slaDue, @assignedTo, @assignedLevel,
-                    @firstResponseAt, @resolvedAt, @rootCause, @actionPlan, @additionalMemo
+                    @firstResponseAt, @resolvedAt, @rootCause, @actionPlan, @additionalMemo,
+                    @remarks
                 )
             `);
         res.json({ success: true, id, ...req.body });
@@ -2409,7 +2758,8 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
         title, description, priority, status, category, createdAt,
         requesterId, requesterName, deviceType, assetId, subcategory,
         incidentDetail, reporterId, slaDue, assignedTo, assignedLevel,
-        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo
+        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo,
+        remarks
     } = req.body;
     
     try {
@@ -2419,9 +2769,9 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
             .input('title', sql.NVarChar, title || '')
             .input('description', sql.NVarChar, description || '')
             .input('priority', sql.NVarChar, priority || 'Medium')
-            .input('status', sql.NVarChar, normalizeServiceDeskIncidentStatus(status, 'Awaiting'))
+            .input('status', sql.NVarChar, status || 'Awaiting')
             .input('category', sql.NVarChar, category || '')
-            .input('createdAt', sql.NVarChar, createdAt || null)
+            .input('createdAt', sql.NVarChar, createdAt)
             .input('requesterId', sql.NVarChar, requesterId || '')
             .input('requesterName', sql.NVarChar, requesterName || '')
             .input('deviceType', sql.NVarChar, deviceType || '')
@@ -2437,14 +2787,15 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
             .input('rootCause', sql.NVarChar, rootCause || '')
             .input('actionPlan', sql.NVarChar, actionPlan || '')
             .input('additionalMemo', sql.NVarChar, additionalMemo || '')
+            .input('remarks', sql.NVarChar, remarks || '')
             .query(`
-                UPDATE EMA_Incidents SET
+                UPDATE HD_Incidents SET
                     Title = @title,
                     Description = @description,
                     Priority = @priority,
                     Status = @status,
                     Category = @category,
-                    CreatedAt = COALESCE(NULLIF(@createdAt, ''), CreatedAt),
+                    CreatedAt = @createdAt,
                     RequesterID = @requesterId,
                     RequesterName = @requesterName,
                     DeviceType = @deviceType,
@@ -2459,7 +2810,8 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
                     ResolvedAt = @resolvedAt,
                     RootCause = @rootCause,
                     ActionPlan = @actionPlan,
-                    AdditionalMemo = @additionalMemo
+                    AdditionalMemo = @additionalMemo,
+                    Remarks = @remarks
                 WHERE IncidentID = @id
             `);
         res.json({ success: true, id, ...req.body });
@@ -2474,50 +2826,9 @@ app.delete('/api/incidents/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const pool = await sql.connect(dbConfig);
-
-        const attachmentResult = await pool.request()
-            .input('id', sql.NVarChar, id)
-            .query(`
-                IF OBJECT_ID('dbo.EMA_IncidentAttachments', 'U') IS NOT NULL
-                BEGIN
-                    SELECT FilePath
-                    FROM EMA_IncidentAttachments
-                    WHERE IncidentID = @id;
-                END
-                ELSE
-                BEGIN
-                    SELECT CAST(NULL AS NVARCHAR(1000)) AS FilePath
-                    WHERE 1 = 0;
-                END
-            `);
-
         await pool.request()
             .input('id', sql.NVarChar, id)
-            .query(`
-                IF OBJECT_ID('dbo.EMA_IncidentAttachments', 'U') IS NOT NULL
-                BEGIN
-                    DELETE FROM EMA_IncidentAttachments
-                    WHERE IncidentID = @id;
-                END;
-
-                DELETE FROM EMA_Incidents
-                WHERE IncidentID = @id;
-            `);
-
-        for (const attachment of attachmentResult.recordset || []) {
-            const storedPath = String(attachment.FilePath || '').trim();
-            if (!storedPath) continue;
-
-            const relativePath = storedPath.replace(/^\/api\/uploads\//i, 'uploads/').replace(/^\/+/, '');
-            const physicalPath = path.join(__dirname, relativePath);
-
-            try {
-                if (fs.existsSync(physicalPath)) fs.unlinkSync(physicalPath);
-            } catch (fileErr) {
-                console.warn(`Failed to delete attachment file for incident ${id}:`, fileErr.message);
-            }
-        }
-
+            .query('DELETE FROM HD_Incidents WHERE IncidentID = @id');
         res.json({ success: true, message: 'Deleted' });
     } catch (err) {
         console.error('DELETE /api/incidents/:id error:', err);
@@ -2540,7 +2851,7 @@ app.get('/api/incident-config', authenticateToken, async (req, res) => {
                 ResponseTimeMin as responseTimeMin,
                 ResolutionTimeHrs as resolutionTimeHrs,
                 EscalationPolicy as escalationPolicy
-            FROM EMA_SLA_Configs
+            FROM HD_SLA_Configs
             ORDER BY ConfigID`);
         res.json(result.recordset);
     } catch (err) {
@@ -2561,7 +2872,7 @@ app.get('/api/incident-config/working-hours', authenticateToken, async (req, res
                 EndTime as endTime,
                 AutoResponseMsg as autoResponseMsg,
                 SortOrder as sortOrder
-            FROM EMA_WorkingHours
+            FROM HD_WorkingHours
             ORDER BY SortOrder
         `);
         res.json(result.recordset);
@@ -2579,7 +2890,7 @@ app.get('/api/incident-config/visibility', authenticateToken, async (req, res) =
                 FieldName as fieldName,
                 IsEnabled as isEnabled,
                 Label as label
-            FROM EMA_VisibilityConfig
+            FROM HD_VisibilityConfig
         `);
         const config = {};
         result.recordset.forEach(r => {
@@ -2607,9 +2918,9 @@ app.get('/api/incident-categories', authenticateToken, async (req, res) => {
                 s.Name as subName,
                 d.DetailID as detailId,
                 d.Name as detailName
-            FROM EMA_IncidentCategories c
-            LEFT JOIN EMA_IncidentSubcategories s ON c.CategoryID = s.CategoryID
-            LEFT JOIN EMA_IncidentDetails d ON s.SubcategoryID = d.SubcategoryID
+            FROM HD_IncidentCategories c
+            LEFT JOIN HD_IncidentSubcategories s ON c.CategoryID = s.CategoryID
+            LEFT JOIN HD_IncidentDetails d ON s.SubcategoryID = d.SubcategoryID
             ORDER BY c.Name, s.Name, d.Name
         `);
 
@@ -2653,7 +2964,7 @@ app.get('/api/knowledge-base', authenticateToken, async (req, res) => {
                 Resolution as resolution,
                 CreatedAt as createdAt,
                 UpdatedAt as updatedAt
-            FROM EMA_KnowledgeBase
+            FROM HD_KnowledgeBase
             ORDER BY CreatedAt DESC
         `);
         res.json(result.recordset);
@@ -2672,7 +2983,7 @@ app.post('/api/knowledge-base', authenticateToken, async (req, res) => {
             .input('incidentDetails', sql.NVarChar, incidentDetails || '')
             .input('resolution', sql.NVarChar, resolution || '')
             .query(`
-                INSERT INTO EMA_KnowledgeBase (Title, IncidentDetails, Resolution)
+                INSERT INTO HD_KnowledgeBase (Title, IncidentDetails, Resolution)
                 OUTPUT INSERTED.KBID
                 VALUES (@title, @incidentDetails, @resolution)
             `);
@@ -2694,7 +3005,7 @@ app.put('/api/knowledge-base/:id', authenticateToken, async (req, res) => {
             .input('incidentDetails', sql.NVarChar, incidentDetails || '')
             .input('resolution', sql.NVarChar, resolution || '')
             .query(`
-                UPDATE EMA_KnowledgeBase 
+                UPDATE HD_KnowledgeBase 
                 SET Title = @title, 
                     IncidentDetails = @incidentDetails, 
                     Resolution = @resolution, 
@@ -2714,7 +3025,7 @@ app.delete('/api/knowledge-base/:id', authenticateToken, async (req, res) => {
         const pool = await sql.connect(dbConfig);
         await pool.request()
             .input('id', sql.Int, id)
-            .query('DELETE FROM EMA_KnowledgeBase WHERE KBID = @id');
+            .query('DELETE FROM HD_KnowledgeBase WHERE KBID = @id');
         res.json({ success: true, message: 'Deleted' });
     } catch (err) {
         console.error('DELETE /api/knowledge-base/:id error:', err);
@@ -2741,55 +3052,18 @@ const storage = multer.diskStorage({
         cb(null, uniqueSuffix + ext);
     }
 });
-const INCIDENT_ATTACHMENT_MAX_FILES = 3;
-const INCIDENT_ATTACHMENT_MAX_MB = 10;
-const INCIDENT_ATTACHMENT_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_MB * 1024 * 1024;
-const INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_BYTES;
-
-const upload = multer({ storage, limits: { fileSize: INCIDENT_ATTACHMENT_MAX_BYTES } });
+const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } });
 
 app.use('/api/uploads', express.static(uploadsDir));
 
 app.post('/api/incidents/:id/attachments', authenticateToken, upload.single('file'), async (req, res) => {
     const incidentId = req.params.id;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
+    
     try {
         const pool = await sql.connect(dbConfig);
-
-        const countResult = await pool.request()
-            .input('incidentId', sql.NVarChar, incidentId)
-            .query(`
-                SELECT
-                    COUNT(1) AS totalFiles,
-                    ISNULL(SUM(ISNULL(FileSize, 0)), 0) AS totalSize
-                FROM EMA_IncidentAttachments
-                WHERE IncidentID = @incidentId
-            `);
-
-        const totalFiles = Number(countResult.recordset?.[0]?.totalFiles || 0);
-        const totalSize = Number(countResult.recordset?.[0]?.totalSize || 0);
-
-        if (totalFiles >= INCIDENT_ATTACHMENT_MAX_FILES) {
-            if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-
-            return res.status(400).json({
-                success: false,
-                message: `Maximum ${INCIDENT_ATTACHMENT_MAX_FILES} attachments are allowed per ticket.`
-            });
-        }
-
-        if (totalSize + Number(req.file.size || 0) > INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES) {
-            if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-
-            return res.status(400).json({
-                success: false,
-                message: `Total attachment size cannot exceed ${INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_MB}MB per ticket.`
-            });
-        }
-
         const filePath = `/api/uploads/incidents/${req.file.filename}`;
-
+        
         await pool.request()
             .input('incidentId', sql.NVarChar, incidentId)
             .input('filename', sql.NVarChar, req.file.filename)
@@ -2797,10 +3071,10 @@ app.post('/api/incidents/:id/attachments', authenticateToken, upload.single('fil
             .input('fileSize', sql.BigInt, req.file.size)
             .input('filePath', sql.NVarChar, filePath)
             .query(`
-                INSERT INTO EMA_IncidentAttachments (IncidentID, Filename, OriginalName, FileSize, FilePath)
+                INSERT INTO HD_IncidentAttachments (IncidentID, Filename, OriginalName, FileSize, FilePath)
                 VALUES (@incidentId, @filename, @originalName, @fileSize, @filePath)
             `);
-
+        
         const attachment = {
             filename: req.file.filename,
             originalName: req.file.originalname,
@@ -2810,7 +3084,6 @@ app.post('/api/incidents/:id/attachments', authenticateToken, upload.single('fil
         };
         res.json(attachment);
     } catch (err) {
-        if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error('POST attachments error:', err);
         res.status(500).json({ error: 'Failed to save attachment', message: err.message });
     }
@@ -2830,7 +3103,7 @@ app.get('/api/incidents/:id/attachments', authenticateToken, async (req, res) =>
                     FileSize as size,
                     FilePath as url,
                     UploadedAt as uploadedAt
-                FROM EMA_IncidentAttachments
+                FROM HD_IncidentAttachments
                 WHERE IncidentID = @incidentId
                 ORDER BY UploadedAt DESC
             `);
@@ -2850,7 +3123,7 @@ app.delete('/api/incidents/:id/attachments/:filename', authenticateToken, async 
         const fileResult = await pool.request()
             .input('incidentId', sql.NVarChar, id)
             .input('filename', sql.NVarChar, filename)
-            .query('SELECT FilePath FROM EMA_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
+            .query('SELECT FilePath FROM HD_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
         
         if (fileResult.recordset.length > 0) {
             const filePath = path.join(__dirname, fileResult.recordset[0].FilePath.replace('/api/uploads/', 'uploads/'));
@@ -2860,7 +3133,7 @@ app.delete('/api/incidents/:id/attachments/:filename', authenticateToken, async 
         await pool.request()
             .input('incidentId', sql.NVarChar, id)
             .input('filename', sql.NVarChar, filename)
-            .query('DELETE FROM EMA_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
+            .query('DELETE FROM HD_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
         
         res.json({ message: 'Deleted' });
     } catch (err) {
@@ -2951,7 +3224,7 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 Title as title,
                 Description as description,
                 Priority as priority,
-                CASE WHEN Status = 'Solved' THEN 'Resolved' ELSE Status END as status,
+                Status as status,
                 Category as category,
                 CreatedAt as createdAt,
                 RequesterID as requesterId,
@@ -2968,8 +3241,9 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 ResolvedAt as resolvedAt,
                 RootCause as rootCause,
                 ActionPlan as actionPlan,
-                AdditionalMemo as additionalMemo
-            FROM EMA_Incidents
+                AdditionalMemo as additionalMemo,
+                Remarks as remarks
+            FROM HD_Incidents
             WHERE 1=1
         `;
         
@@ -2999,7 +3273,12 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 request.input(`assetTag${paramCounter}`, sql.NVarChar, `%${keyword.assetTag}%`);
                 paramCounter++;
             }
-            // IP address filter removed because legacy asset table is no longer used.
+            if (keyword.ipAddress) {
+                // IP address would need to join with Assets table
+                conditions.push(`EXISTS (SELECT 1 FROM HD_Assets WHERE HD_Assets.AssetID = HD_Incidents.AssetID AND HD_Assets.IP LIKE @ip${paramCounter})`);
+                request.input(`ip${paramCounter}`, sql.NVarChar, `%${keyword.ipAddress}%`);
+                paramCounter++;
+            }
         }
 
         // 2. Date Range
@@ -3045,7 +3324,19 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 conditions.push(`DeviceType = @deviceType`);
                 request.input('deviceType', sql.NVarChar, asset.deviceType);
             }
-            // Brand/model filter removed because legacy asset table is no longer used.
+            // Brand and Model would need to join with Assets table
+            if (asset.brand || asset.model) {
+                let assetJoinCondition = '';
+                if (asset.brand) {
+                    assetJoinCondition += ` AND a.Brand = @brand`;
+                    request.input('brand', sql.NVarChar, asset.brand);
+                }
+                if (asset.model) {
+                    assetJoinCondition += ` AND a.Model = @model`;
+                    request.input('model', sql.NVarChar, asset.model);
+                }
+                conditions.push(`EXISTS (SELECT 1 FROM HD_Assets a WHERE a.AssetID = HD_Incidents.AssetID ${assetJoinCondition})`);
+            }
         }
 
         // 6. Assignment
@@ -3064,11 +3355,11 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
         if (slaStatus && slaStatus !== 'All') {
             const now = new Date().toISOString();
             if (slaStatus === 'On Time') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue > GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
+                conditions.push(`SlaDue IS NOT NULL AND SlaDue > GETDATE() AND Status != 'Resolved'`);
             } else if (slaStatus === 'Near Due') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue <= DATEADD(hour, 24, GETDATE()) AND SlaDue > GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
+                conditions.push(`SlaDue IS NOT NULL AND SlaDue <= DATEADD(hour, 24, GETDATE()) AND SlaDue > GETDATE() AND Status != 'Resolved'`);
             } else if (slaStatus === 'Overdue') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue < GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
+                conditions.push(`SlaDue IS NOT NULL AND SlaDue < GETDATE() AND Status != 'Resolved'`);
             }
         }
 
@@ -3099,23 +3390,6 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
         });
     }
 });
-
-// ============================================================
-// USER TYPES API - DISABLED
-// ============================================================
-// Service Desk no longer uses HD_UserTypes. Keep these endpoints disabled so
-// old frontend calls do not query the removed/unused HD_UserTypes table.
-function disabledUserTypesApi(req, res) {
-    return res.status(410).json({
-        success: false,
-        message: 'User Type API is disabled. Service Desk no longer uses HD_UserTypes.'
-    });
-}
-
-app.get('/api/user-types', authenticateToken, disabledUserTypesApi);
-app.post('/api/user-types', authenticateToken, disabledUserTypesApi);
-app.put('/api/user-types/:id', authenticateToken, disabledUserTypesApi);
-app.delete('/api/user-types/:id', authenticateToken, disabledUserTypesApi);
 
 // ============================================================
 // ENGINEER AVAILABILITY API - EMA_Users ONLY
@@ -5363,12 +5637,11 @@ app.post("/api/settings/clients", authenticateToken, async (req, res) => {
         const result = await pool.request()
             .input("FullName", sql.NVarChar, req.body.fullName || "")
             .input("ShortName", sql.NVarChar, req.body.shortName || "")
-            .input("Sector", sql.NVarChar, req.body.sector || "")
             .input("ContactEmail", sql.NVarChar, req.body.contactEmail || "")
             .query(`
-                INSERT INTO EMA_Clients (FullName, ShortName, Sector, ContactEmail)
-                OUTPUT INSERTED.ClientID as id, INSERTED.FullName as fullName, INSERTED.ShortName as shortName, INSERTED.Sector as sector, INSERTED.ContactEmail as contactEmail
-                VALUES (@FullName, @ShortName, @Sector, @ContactEmail)
+                INSERT INTO EMA_Clients (FullName, ShortName, ContactEmail)
+                OUTPUT INSERTED.ClientID as id, INSERTED.FullName as fullName, INSERTED.ShortName as shortName, INSERTED.ContactEmail as contactEmail
+                VALUES (@FullName, @ShortName, @ContactEmail)
             `);
 
         await logEmaAudit(pool, req, "Created Client", "Client Directory", "Success", { client: req.body.fullName });
@@ -5386,13 +5659,11 @@ app.put("/api/settings/clients/:id", authenticateToken, async (req, res) => {
             .input("ClientID", sql.Int, parseInt(req.params.id))
             .input("FullName", sql.NVarChar, req.body.fullName || "")
             .input("ShortName", sql.NVarChar, req.body.shortName || "")
-            .input("Sector", sql.NVarChar, req.body.sector || "")
             .input("ContactEmail", sql.NVarChar, req.body.contactEmail || "")
             .query(`
                 UPDATE EMA_Clients
                 SET FullName = @FullName,
                     ShortName = @ShortName,
-                    Sector = @Sector,
                     ContactEmail = @ContactEmail,
                     UpdatedAt = GETDATE()
                 WHERE ClientID = @ClientID
@@ -5433,7 +5704,7 @@ app.delete("/api/settings/clients/:id", authenticateToken, async (req, res) => {
 // /api/settings/incident-config/categories
 // ============================================================
 
-// SLA CONFIG - uses EMA_SLA_Configs
+// SLA CONFIG - uses HD_SLA_Configs
 app.get("/api/settings/incident-config/sla", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -5446,7 +5717,7 @@ app.get("/api/settings/incident-config/sla", authenticateToken, async (req, res)
                 ResponseTimeMin as responseTimeMin,
                 ResolutionTimeHrs as resolutionTimeHrs,
                 EscalationPolicy as escalationPolicy
-            FROM EMA_SLA_Configs
+            FROM HD_SLA_Configs
             ORDER BY ConfigID
         `);
 
@@ -5477,7 +5748,7 @@ app.put("/api/settings/incident-config/sla", authenticateToken, async (req, res)
                 .input("ResolutionTimeHrs", sql.Int, parseInt(item.resolutionTimeHrs) || 0)
                 .input("EscalationPolicy", sql.NVarChar, item.escalationPolicy || "")
                 .query(`
-                    UPDATE EMA_SLA_Configs
+                    UPDATE HD_SLA_Configs
                     SET
                         Label = @Label,
                         ResponseTimeMin = @ResponseTimeMin,
@@ -5501,7 +5772,7 @@ app.put("/api/settings/incident-config/sla", authenticateToken, async (req, res)
     }
 });
 
-// WORKING HOURS - uses EMA_WorkingHours
+// WORKING HOURS - uses HD_WorkingHours
 app.get("/api/settings/incident-config/working-hours", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -5517,7 +5788,7 @@ app.get("/api/settings/incident-config/working-hours", authenticateToken, async 
                 Is24Hours as is24Hours,
                 AutoResponseMsg as autoResponseMsg,
                 SortOrder as sortOrder
-            FROM EMA_WorkingHours
+            FROM HD_WorkingHours
             ORDER BY SortOrder
         `);
 
@@ -5547,7 +5818,7 @@ app.put("/api/settings/incident-config/working-hours", authenticateToken, async 
                 .input("StartTime", sql.NVarChar, item.start || "09:00")
                 .input("EndTime", sql.NVarChar, item.end || "18:00")
                 .query(`
-                    UPDATE EMA_WorkingHours
+                    UPDATE HD_WorkingHours
                     SET
                         IsRestDay = @IsRestDay,
                         Is24Hours = 0,
@@ -5571,7 +5842,7 @@ app.put("/api/settings/incident-config/working-hours", authenticateToken, async 
     }
 });
 
-// FIELD VISIBILITY - uses EMA_VisibilityConfig
+// FIELD VISIBILITY - uses HD_VisibilityConfig
 app.get("/api/settings/incident-config/fields", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -5582,7 +5853,7 @@ app.get("/api/settings/incident-config/fields", authenticateToken, async (req, r
                 FieldName as [key],
                 ISNULL(Label, FieldName) as label,
                 IsEnabled as enabled
-            FROM EMA_VisibilityConfig
+            FROM HD_VisibilityConfig
             ORDER BY FieldName
         `);
 
@@ -5610,7 +5881,7 @@ app.put("/api/settings/incident-config/fields", authenticateToken, async (req, r
                 .input("FieldName", sql.NVarChar, item.key || item.id)
                 .input("IsEnabled", sql.Bit, item.enabled ? 1 : 0)
                 .query(`
-                    UPDATE EMA_VisibilityConfig
+                    UPDATE HD_VisibilityConfig
                     SET
                         IsEnabled = @IsEnabled
                     WHERE FieldName = @FieldName
@@ -5631,7 +5902,7 @@ app.put("/api/settings/incident-config/fields", authenticateToken, async (req, r
     }
 });
 
-// CATEGORY HIERARCHY - uses EMA_IncidentCategories, EMA_IncidentSubcategories, EMA_IncidentDetails
+// CATEGORY HIERARCHY - uses HD_IncidentCategories, HD_IncidentSubcategories, HD_IncidentDetails
 app.get("/api/settings/incident-config/categories", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -5644,11 +5915,11 @@ app.get("/api/settings/incident-config/categories", authenticateToken, async (re
                 s.Name as subcategoryName,
                 d.DetailID as detailId,
                 d.Name as detailName
-            FROM EMA_IncidentCategories c
-            LEFT JOIN EMA_IncidentSubcategories s
+            FROM HD_IncidentCategories c
+            LEFT JOIN HD_IncidentSubcategories s
                 ON c.CategoryID = s.CategoryID
                 AND ISNULL(s.IsActive, 1) = 1
-            LEFT JOIN EMA_IncidentDetails d
+            LEFT JOIN HD_IncidentDetails d
                 ON s.SubcategoryID = d.SubcategoryID
                 AND ISNULL(d.IsActive, 1) = 1
             WHERE ISNULL(c.IsActive, 1) = 1
@@ -5721,7 +5992,7 @@ app.post("/api/settings/incident-config/categories", authenticateToken, async (r
         const result = await pool.request()
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                INSERT INTO EMA_IncidentCategories
+                INSERT INTO HD_IncidentCategories
                 (
                     Name,
                     IsActive,
@@ -5772,7 +6043,7 @@ app.put("/api/settings/incident-config/categories/:id", authenticateToken, async
             .input("CategoryID", sql.Int, parseInt(req.params.id))
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                UPDATE EMA_IncidentCategories
+                UPDATE HD_IncidentCategories
                 SET
                     Name = @Name,
                     UpdatedAt = GETDATE()
@@ -5800,7 +6071,7 @@ app.delete("/api/settings/incident-config/categories/:id", authenticateToken, as
         await pool.request()
             .input("CategoryID", sql.Int, parseInt(req.params.id))
             .query(`
-                DELETE FROM EMA_IncidentCategories
+                DELETE FROM HD_IncidentCategories
                 WHERE CategoryID = @CategoryID
             `);
 
@@ -5835,7 +6106,7 @@ app.post("/api/settings/incident-config/categories/:categoryId/subcategories", a
             .input("CategoryID", sql.Int, parseInt(req.params.categoryId))
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                INSERT INTO EMA_IncidentSubcategories
+                INSERT INTO HD_IncidentSubcategories
                 (
                     CategoryID,
                     Name,
@@ -5888,7 +6159,7 @@ app.put("/api/settings/incident-config/subcategories/:id", authenticateToken, as
             .input("SubcategoryID", sql.Int, parseInt(req.params.id))
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                UPDATE EMA_IncidentSubcategories
+                UPDATE HD_IncidentSubcategories
                 SET
                     Name = @Name,
                     UpdatedAt = GETDATE()
@@ -5916,7 +6187,7 @@ app.delete("/api/settings/incident-config/subcategories/:id", authenticateToken,
         await pool.request()
             .input("SubcategoryID", sql.Int, parseInt(req.params.id))
             .query(`
-                DELETE FROM EMA_IncidentSubcategories
+                DELETE FROM HD_IncidentSubcategories
                 WHERE SubcategoryID = @SubcategoryID
             `);
 
@@ -5951,7 +6222,7 @@ app.post("/api/settings/incident-config/subcategories/:subcategoryId/details", a
             .input("SubcategoryID", sql.Int, parseInt(req.params.subcategoryId))
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                INSERT INTO EMA_IncidentDetails
+                INSERT INTO HD_IncidentDetails
                 (
                     SubcategoryID,
                     Name,
@@ -6004,7 +6275,7 @@ app.put("/api/settings/incident-config/details/:id", authenticateToken, async (r
             .input("DetailID", sql.Int, parseInt(req.params.id))
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                UPDATE EMA_IncidentDetails
+                UPDATE HD_IncidentDetails
                 SET
                     Name = @Name,
                     UpdatedAt = GETDATE()
@@ -6032,7 +6303,7 @@ app.delete("/api/settings/incident-config/details/:id", authenticateToken, async
         await pool.request()
             .input("DetailID", sql.Int, parseInt(req.params.id))
             .query(`
-                DELETE FROM EMA_IncidentDetails
+                DELETE FROM HD_IncidentDetails
                 WHERE DetailID = @DetailID
             `);
 
@@ -12992,14 +13263,14 @@ async function handleSoftwareDebugSummary(req, res) {
     }
 }
 
-app.get("/api/software", authenticateToken, handleSoftwareInventoryList);
-app.get("/api/software/categories", authenticateToken, handleSoftwareCategories);
-app.get("/api/software/debug/summary", authenticateToken, handleSoftwareDebugSummary);
+app.get("/api/software", authenticateToken, softwareCacheMiddleware, handleSoftwareInventoryList);
+app.get("/api/software/categories", authenticateToken, softwareCacheMiddleware, handleSoftwareCategories);
+app.get("/api/software/debug/summary", authenticateToken, softwareCacheMiddleware, handleSoftwareDebugSummary);
 
 // Compatibility aliases, in case old frontend/service uses software-inventory wording.
-app.get("/api/software-inventory", authenticateToken, handleSoftwareInventoryList);
-app.get("/api/software-inventory/categories", authenticateToken, handleSoftwareCategories);
-app.get("/api/software-inventory/debug/summary", authenticateToken, handleSoftwareDebugSummary);
+app.get("/api/software-inventory", authenticateToken, softwareCacheMiddleware, handleSoftwareInventoryList);
+app.get("/api/software-inventory/categories", authenticateToken, softwareCacheMiddleware, handleSoftwareCategories);
+app.get("/api/software-inventory/debug/summary", authenticateToken, softwareCacheMiddleware, handleSoftwareDebugSummary);
 
 
 // ============================================================
@@ -13024,7 +13295,7 @@ function softAdvNormalizeExtension(value) {
 }
 
 // Device Hierarchy > click one EM/Windows device > Installed Software list
-app.get("/api/software/client/:clientID", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const swname = softAdvNormalizeSearchValue(req.query.swname || req.query.search || req.query.q);
@@ -13047,7 +13318,7 @@ app.get("/api/software/client/:clientID", authenticateToken, async (req, res) =>
 });
 
 // MDM device software list
-app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
+app.get("/api/software/mdm/:deviceID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const deviceID = softAdvNormalizeSearchValue(req.params.deviceID);
         if (!deviceID) {
@@ -13080,7 +13351,7 @@ app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
 });
 
 // Relation installed software statistics and drilldowns.
-app.get("/api/software/relation/:relationID/installed", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/installed", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "summary1").toLowerCase();
@@ -13126,7 +13397,7 @@ app.get("/api/software/relation/:relationID/installed", authenticateToken, async
 });
 
 // Relation package/license statistics and drilldowns.
-app.get("/api/software/relation/:relationID/packages", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/packages", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "stat1").toLowerCase();
@@ -13171,7 +13442,7 @@ app.get("/api/software/relation/:relationID/packages", authenticateToken, async 
 });
 
 // Application Package / License Status by selected client.
-app.get("/api/software/client/:clientID/packages", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/packages", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "package").toLowerCase();
@@ -13194,7 +13465,7 @@ app.get("/api/software/client/:clientID/packages", authenticateToken, async (req
 });
 
 // File Extension statistics/list by relation.
-app.get("/api/software/relation/:relationID/files", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/files", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "stat").toLowerCase();
@@ -13231,7 +13502,7 @@ app.get("/api/software/relation/:relationID/files", authenticateToken, async (re
 });
 
 // File Extension list by selected client/device.
-app.get("/api/software/client/:clientID/files", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/files", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const extension = softAdvNormalizeExtension(req.query.extension || req.query.ext);
@@ -13258,7 +13529,7 @@ app.get("/api/software/client/:clientID/files", authenticateToken, async (req, r
 });
 
 // Software registry report/stat endpoint.
-app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
 
@@ -13279,7 +13550,7 @@ app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, async 
 });
 
 // Software registry detail endpoint by client.
-app.get("/api/software/client/:clientID/swr-detail", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/swr-detail", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
 
@@ -13299,7 +13570,7 @@ app.get("/api/software/client/:clientID/swr-detail", authenticateToken, async (r
     }
 });
 
-app.get("/api/software/stats", authenticateToken, async (req, res) => {
+app.get("/api/software/stats", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = softAdvParseOptionalInt(req.query.relationID, 0);
         const swname = softAdvNormalizeSearchValue(req.query.swname || req.query.search || req.query.q);
@@ -13336,7 +13607,7 @@ app.get("/api/software/stats", authenticateToken, async (req, res) => {
     }
 });
 
-app.get("/api/software/extensions", authenticateToken, async (req, res) => {
+app.get("/api/software/extensions", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     return res.json({
         success: true,
         totalRecords: 3,
@@ -13833,6 +14104,7 @@ async function handleSoftInventoryScan(req, res) {
 
         await transaction.commit();
         transaction = null;
+        clearTimedResponseCache('software:');
 
         return res.status(201).json({
             success: true,
@@ -13880,7 +14152,7 @@ app.post("/api/software/scan", authenticateToken, handleSoftInventoryScan);
 
 
 // Old relation based route. Must stay after /categories and /debug/summary.
-app.get("/api/software/:relationID", authenticateToken, async (req, res) => {
+app.get("/api/software/:relationID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     req.query.relationID = req.params.relationID;
     return handleSoftwareInventoryList(req, res);
 });
@@ -19008,11 +19280,11 @@ const EMA_REPORT_CATALOG = [
     desc: "Ticket, SLA, incident trend and support workload reports.",
     icon: "ticket",
     items: [
-      { id: "ticket-status-summary", title: "Ticket Status Summary", description: "New, in progress, pending vendor and resolved ticket status.", type: "Summary", source: "EMA_Incidents", outputs: ["PDF"] },
-      { id: "sla-risk", title: "SLA Risk Report", description: "Tickets nearing or breaching SLA.", type: "Risk", source: "EMA_Incidents.SlaDue", outputs: ["Excel"] },
-      { id: "incident-trend", title: "Incident Trend Report", description: "Ticket trend by day, week or month.", type: "Summary", source: "EMA_Incidents.CreatedAt", outputs: ["PDF"] },
-      { id: "site-ticket", title: "Site Ticket Report", description: "Ticket count by branch or site.", type: "Detail", source: "EMA_Incidents.RequesterName", outputs: ["Excel"] },
-      { id: "support-workload", title: "Support Workload Report", description: "Assigned workload by support user or team.", type: "Summary", source: "EMA_Incidents.AssignedTo", outputs: ["PDF"] }
+      { id: "ticket-status-summary", title: "Ticket Status Summary", description: "New, in progress, pending vendor and resolved ticket status.", type: "Summary", source: "HD_Incidents", outputs: ["PDF"] },
+      { id: "sla-risk", title: "SLA Risk Report", description: "Tickets nearing or breaching SLA.", type: "Risk", source: "HD_Incidents.SlaDue", outputs: ["Excel"] },
+      { id: "incident-trend", title: "Incident Trend Report", description: "Ticket trend by day, week or month.", type: "Summary", source: "HD_Incidents.CreatedAt", outputs: ["PDF"] },
+      { id: "site-ticket", title: "Site Ticket Report", description: "Ticket count by branch or site.", type: "Detail", source: "HD_Incidents.RequesterName", outputs: ["Excel"] },
+      { id: "support-workload", title: "Support Workload Report", description: "Assigned workload by support user or team.", type: "Summary", source: "HD_Incidents.AssignedTo", outputs: ["PDF"] }
     ]
   },
   {
@@ -19273,7 +19545,7 @@ async function erGetAssetRows(pool, filters = {}) {
 }
 
 async function erGetIncidentRows(pool, filters = {}) {
-  if (!(await erTableExists(pool, "EMA_Incidents"))) return [];
+  if (!(await erTableExists(pool, "HD_Incidents"))) return [];
   const { startDate, endDate } = erResolveDateRange(filters);
 
   const result = await pool.request()
@@ -19293,7 +19565,7 @@ async function erGetIncidentRows(pool, filters = {}) {
         SlaDue AS slaDue,
         AssignedTo AS assignedTo,
         ResolvedAt AS resolvedAt
-      FROM EMA_Incidents WITH (NOLOCK)
+      FROM HD_Incidents WITH (NOLOCK)
       WHERE (TRY_CONVERT(datetime, CreatedAt) IS NULL OR TRY_CONVERT(datetime, CreatedAt) BETWEEN @StartDate AND DATEADD(day, 1, @EndDate))
       ORDER BY TRY_CONVERT(datetime, CreatedAt) DESC, IncidentID DESC;
     `);
@@ -19526,7 +19798,7 @@ function erBuildDerivedRows(data) {
   const ticketsByStatus = erBucketCount(incidents, (i) => i.status || "Unspecified", 10);
   const ticketsByPriority = erBucketCount(incidents, (i) => i.priority || "Unspecified", 10);
   const ticketsByCategory = erBucketCount(incidents, (i) => i.category || "Uncategorised", 10);
-  const ticketsByCustomer = erBucketCount(incidents, (i) => i.requesterName || i.deviceType || "Unassigned", 10);
+  const ticketsByRequester = erBucketCount(incidents, (i) => i.requesterName || i.deviceType || "Unassigned", 10);
   const softwareByCategory = erBucketCount(software, (s) => s.categoryName || "Unclassified", 10);
   const softwareByName = erBucketCount(software, (s) => s.softwareName || "Unknown software", 15);
   const jobsByStatus = erBucketCount(jobs, (j) => String(j.statusCode || "Unknown"), 8).map((row) => ({ ...row, label: erJobStatusLabel(row.label) }));
@@ -20290,11 +20562,11 @@ function erFindingsForReport(report, data) {
       return [
         erKpiSection("Site Ticket KPI", [
           { label: "Total Tickets", value: metrics.totalTickets, note: "Selected period baseline." },
-          { label: "Customer/Site Groups", value: d.ticketsByCustomer.length, note: "RequesterName or available site-like grouping." },
+          { label: "Requester/Site Groups", value: d.ticketsByRequester.length, note: "RequesterName or available site-like grouping." },
           { label: "Open", value: metrics.openTickets, note: "Unresolved tickets." },
           { label: "SLA Breach", value: metrics.slaBreached, note: "Past due open tickets." }
         ]),
-        erBarSection("Tickets by Customer / Site", d.ticketsByCustomer),
+        erBarSection("Tickets by Requester / Site", d.ticketsByRequester),
         erTableSection("Site Ticket Detail", incidents.slice(0, 500), ticketCols)
       ];
 
@@ -20603,7 +20875,7 @@ function erBuildNarrative(report, data, filters) {
       conclusion: "Use trend and category evidence to identify recurring support demand."
     },
     "site-ticket": {
-      summary: `${open} Site ticket reporting groups tickets by customer/site-like fields available in EMA_Incidents.`,
+      summary: `${open} Site ticket reporting groups tickets by customer/site-like fields available in HD_Incidents.`,
       findings: [`${d.ticketsByCustomer.length} customer/site group(s) were found.`, `${m.slaBreached} SLA breach candidate(s) exist in the selected period.`],
       conclusion: "Sites or customer groups with high ticket load should be reviewed for recurring endpoint issues."
     },
@@ -20834,7 +21106,7 @@ async function erBuildReportPayload(pool, reportId, filters = {}, mode = "previe
     },
     dataSources: [
       { name: "Endpoint Inventory", table: "TS_OBJECT_ROOT / TSMDM_ASSET", rows: assets.length },
-      { name: "Service Desk", table: "EMA_Incidents", rows: incidents.length },
+      { name: "Service Desk", table: "HD_Incidents", rows: incidents.length },
       { name: "Software Inventory", table: "TSMDM_SW_LIST", rows: software.length },
       { name: "Task / Job", table: "TS_JOB", rows: jobs.length },
       { name: "Geolocation", table: "TSMDM_GEOLOCATION", rows: geo.length }
@@ -23766,7 +24038,7 @@ async function getItOpsTaskSummary(pool) {
 }
 
 async function getItOpsIncidentSummary(pool) {
-    const hasIncidents = await itopsTableExists(pool, "EMA_Incidents");
+    const hasIncidents = await itopsTableExists(pool, "HD_Incidents");
 
     if (!hasIncidents) {
         return {
@@ -23802,7 +24074,7 @@ async function getItOpsIncidentSummary(pool) {
                 TRY_CONVERT(datetime, FirstResponseAt) AS FirstResponseAtDate,
                 TRY_CONVERT(datetime, ResolvedAt) AS ResolvedAtDate,
                 TRY_CONVERT(datetime, SlaDue) AS SlaDueDate
-            FROM EMA_Incidents WITH (NOLOCK)
+            FROM HD_Incidents WITH (NOLOCK)
         )
         SELECT
             COUNT(CASE WHEN LOWER(Status) NOT IN ('resolved', 'closed') THEN 1 END) AS OpenIncidents,
@@ -23818,7 +24090,7 @@ async function getItOpsIncidentSummary(pool) {
         SELECT
             ISNULL(NULLIF(Priority, ''), 'Medium') AS Priority,
             COUNT(1) AS Total
-        FROM EMA_Incidents WITH (NOLOCK)
+        FROM HD_Incidents WITH (NOLOCK)
         WHERE LOWER(ISNULL(Status, '')) NOT IN ('resolved', 'closed')
         GROUP BY ISNULL(NULLIF(Priority, ''), 'Medium');
     `);
@@ -23835,7 +24107,7 @@ async function getItOpsIncidentSummary(pool) {
                 TRY_CONVERT(datetime, CreatedAt) AS CreatedAtDate,
                 TRY_CONVERT(datetime, ResolvedAt) AS ResolvedAtDate,
                 ISNULL(Status, '') AS Status
-            FROM EMA_Incidents WITH (NOLOCK)
+            FROM HD_Incidents WITH (NOLOCK)
         )
         SELECT
             CONVERT(varchar(11), d.DayDate, 106) AS DayLabel,
@@ -23869,7 +24141,7 @@ async function getItOpsIncidentSummary(pool) {
             ISNULL(AssetID, '-') AS AssetID,
             ISNULL(NULLIF(AssignedTo, ''), NULLIF(AssignedLevel, '')) AS Owner,
             ISNULL(Status, 'Open') AS Status
-        FROM EMA_Incidents WITH (NOLOCK)
+        FROM HD_Incidents WITH (NOLOCK)
         WHERE LOWER(ISNULL(Status, '')) NOT IN ('resolved', 'closed')
         ORDER BY
             CASE ISNULL(Priority, '')
@@ -23887,7 +24159,7 @@ async function getItOpsIncidentSummary(pool) {
             COUNT(1) AS IncidentCount,
             SUM(CASE WHEN Priority = 'Critical' THEN 8 WHEN Priority = 'High' THEN 5 WHEN Priority = 'Medium' THEN 3 ELSE 1 END) AS RiskWeight,
             SUM(CASE WHEN LOWER(ISNULL(Status, '')) NOT IN ('resolved', 'closed') THEN 1 ELSE 0 END) AS OpenCount
-        FROM EMA_Incidents WITH (NOLOCK)
+        FROM HD_Incidents WITH (NOLOCK)
         WHERE AssetID IS NOT NULL AND AssetID <> ''
         GROUP BY ISNULL(NULLIF(AssetID, ''), 'Unassigned Asset')
         ORDER BY RiskWeight DESC, IncidentCount DESC;
@@ -24023,7 +24295,7 @@ async function getItOpsPatchSummary(pool) {
 async function getItOpsDepartmentRows(pool) {
     const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
     const hasEmAssets = await itopsTableExists(pool, "TS_OBJECT_ROOT");
-    const hasIncidents = await itopsTableExists(pool, "EMA_Incidents");
+    const hasIncidents = await itopsTableExists(pool, "HD_Incidents");
     const hasPatchStatus = await itopsTableExists(pool, "TS_UPDATE_ONLINE_STATUS");
 
     if (!hasRelations || !hasEmAssets) return [];
@@ -24034,7 +24306,7 @@ async function getItOpsDepartmentRows(pool) {
                 SELECT
                     RequesterName,
                     COUNT(CASE WHEN LOWER(ISNULL(Status, '')) NOT IN ('resolved', 'closed') THEN 1 END) AS OpenIncidents
-                FROM EMA_Incidents WITH (NOLOCK)
+                FROM HD_Incidents WITH (NOLOCK)
                 GROUP BY RequesterName
             ) inc
                 ON inc.RequesterName = rel.Object_Full_Name
@@ -24551,6 +24823,14 @@ function buildItOpsAttentionQueue({ incidentSummary, hardware, patchSummary, sof
 
 app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
     try {
+        const cacheKey = "itops-dashboard:v4";
+        const cachedData = shouldBypassDashboardCache(req) ? null : readDashboardCache(cacheKey);
+        if (cachedData) {
+            res.set("X-EMA-Cache", "HIT");
+            return res.json({ success: true, cached: true, data: cachedData });
+        }
+
+        res.set("X-EMA-Cache", "MISS");
         const pool = await sql.connect(dbConfig);
 
         const [
@@ -24682,7 +24962,8 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
             departmentRows
         };
 
-        return res.json({ success: true, data });
+        writeDashboardCache("itops-dashboard:v4", data);
+        return res.json({ success: true, cached: false, data });
     } catch (err) {
         console.error("GET /api/dashboard/it-operations error:", err);
         return res.status(500).json({
@@ -28073,7 +28354,7 @@ async function buildEmaAiContext(req, query) {
     const wantsGeneral =
         wantsSummary || (!wantsIncidents && !wantsAssets && !wantsRisk && !wantsKnowledge);
 
-    if ((wantsIncidents || wantsGeneral) && await tableExists(pool, "EMA_Incidents")) {
+    if ((wantsIncidents || wantsGeneral) && await tableExists(pool, "HD_Incidents")) {
         const incidentResult = await pool.request().query(`
             SELECT
                 COUNT(1) AS totalIncidents,
@@ -28085,7 +28366,7 @@ async function buildEmaAiContext(req, query) {
                      AND ISNULL(Status, '') NOT IN ('Resolved', 'Closed')
                     THEN 1 ELSE 0
                 END) AS overdueIncidents
-            FROM EMA_Incidents WITH (NOLOCK);
+            FROM HD_Incidents WITH (NOLOCK);
 
             SELECT TOP 10
                 IncidentID AS id,
@@ -28096,7 +28377,7 @@ async function buildEmaAiContext(req, query) {
                 AssignedTo AS assignedTo,
                 SlaDue AS slaDue,
                 CreatedAt AS createdAt
-            FROM EMA_Incidents WITH (NOLOCK)
+            FROM HD_Incidents WITH (NOLOCK)
             ORDER BY CreatedAt DESC;
         `);
 
@@ -28227,7 +28508,7 @@ async function buildEmaAiContext(req, query) {
         }
     }
 
-    if ((wantsKnowledge || wantsGeneral) && await tableExists(pool, "EMA_KnowledgeBase")) {
+    if ((wantsKnowledge || wantsGeneral) && await tableExists(pool, "HD_KnowledgeBase")) {
         const kbResult = await pool.request()
             .input("SearchText", sql.NVarChar(255), `%${query}%`)
             .query(`
@@ -28238,7 +28519,7 @@ async function buildEmaAiContext(req, query) {
                     Resolution AS resolution,
                     CreatedAt AS createdAt,
                     UpdatedAt AS updatedAt
-                FROM EMA_KnowledgeBase WITH (NOLOCK)
+                FROM HD_KnowledgeBase WITH (NOLOCK)
                 WHERE
                     Title LIKE @SearchText
                     OR IncidentDetails LIKE @SearchText
@@ -29241,21 +29522,62 @@ async function mdFetchPricing(pool) {
 
 async function mdFetchIncidents(pool) {
     try {
-        if (!(await tableExists(pool, "EMA_Incidents"))) return { rows: [], totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
-        const result = await pool.request().query(`SELECT TOP 30000 * FROM EMA_Incidents WITH (NOLOCK);`);
-        const rows = result.recordset || [];
-        const now = Date.now();
-        const closed = (status) => /resolved|closed|complete|cancel/i.test(mdText(status));
-        const openRows = rows.filter((row) => !closed(row.Status || row.status));
-        const slaBreached = openRows.filter((row) => {
-            const due = mdDate(row.SlaDue || row.SLADue || row.slaDue);
-            return due && due.getTime() < now;
-        }).length;
-        const highPriority = openRows.filter((row) => /high|critical|urgent|p1/i.test(mdText(row.Priority || row.priority))).length;
-        return { rows, totalTickets: rows.length, openTickets: openRows.length, slaBreached, highPriority };
+        if (!(await tableExists(pool, "HD_Incidents"))) {
+            return { rows: [], monthlyCounts: [], totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
+        }
+
+        // Keep this endpoint fast: dashboard only needs totals + monthly movement,
+        // not 30k full ticket rows in Node.js memory.
+        const result = await pool.request().query(`
+            ;WITH IncidentBase AS (
+                SELECT
+                    Status,
+                    Priority,
+                    TRY_CONVERT(datetime, CreatedAt) AS CreatedAt,
+                    TRY_CONVERT(datetime, SlaDue) AS SlaDue
+                FROM HD_Incidents WITH (NOLOCK)
+            ), OpenBase AS (
+                SELECT *
+                FROM IncidentBase
+                WHERE ISNULL(Status, '') NOT LIKE '%Resolved%'
+                  AND ISNULL(Status, '') NOT LIKE '%Closed%'
+                  AND ISNULL(Status, '') NOT LIKE '%Complete%'
+                  AND ISNULL(Status, '') NOT LIKE '%Cancel%'
+            )
+            SELECT
+                (SELECT COUNT(1) FROM IncidentBase) AS TotalTickets,
+                (SELECT COUNT(1) FROM OpenBase) AS OpenTickets,
+                (SELECT COUNT(1) FROM OpenBase WHERE SlaDue IS NOT NULL AND SlaDue < GETDATE()) AS SlaBreached,
+                (SELECT COUNT(1) FROM OpenBase WHERE Priority LIKE '%High%' OR Priority LIKE '%Critical%' OR Priority LIKE '%Urgent%' OR Priority LIKE '%P1%') AS HighPriority;
+
+            ;WITH IncidentDates AS (
+                SELECT COALESCE(TRY_CONVERT(datetime, CreatedAt), TRY_CONVERT(datetime, SlaDue)) AS EventDate
+                FROM HD_Incidents WITH (NOLOCK)
+            )
+            SELECT
+                CONVERT(char(7), EventDate, 120) AS MonthKey,
+                COUNT(1) AS ServiceRisk
+            FROM IncidentDates
+            WHERE EventDate IS NOT NULL
+              AND EventDate >= DATEADD(month, -12, GETDATE())
+            GROUP BY CONVERT(char(7), EventDate, 120)
+            ORDER BY MonthKey ASC;
+        `);
+
+        const summary = result.recordsets?.[0]?.[0] || {};
+        const monthlyCounts = result.recordsets?.[1] || [];
+
+        return {
+            rows: [],
+            monthlyCounts,
+            totalTickets: mdNumber(summary.TotalTickets),
+            openTickets: mdNumber(summary.OpenTickets),
+            slaBreached: mdNumber(summary.SlaBreached),
+            highPriority: mdNumber(summary.HighPriority)
+        };
     } catch (err) {
         console.warn("Management dashboard incidents skipped:", err.message);
-        return { rows: [], totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
+        return { rows: [], monthlyCounts: [], totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
     }
 }
 
@@ -29831,10 +30153,17 @@ function mdBuildTrend(assets, incidents, metrics, rule) {
         bucket.riskExposure += row.riskScore >= 35 ? row.replacementCost : 0;
         bucket.signals += row.riskScore >= 35 ? 1 : 0;
     });
-    (incidents.rows || []).forEach((row) => {
-        const key = mdMonthKey(row.CreatedAt || row.createdAt || row.SlaDue || row.slaDue);
-        if (map.has(key)) map.get(key).serviceRisk += 1;
-    });
+    if (Array.isArray(incidents.monthlyCounts) && incidents.monthlyCounts.length) {
+        incidents.monthlyCounts.forEach((row) => {
+            const key = mdText(row.MonthKey || row.monthKey || row.month || row.label);
+            if (map.has(key)) map.get(key).serviceRisk += mdNumber(row.ServiceRisk || row.serviceRisk || row.count, 0);
+        });
+    } else {
+        (incidents.rows || []).forEach((row) => {
+            const key = mdMonthKey(row.CreatedAt || row.createdAt || row.SlaDue || row.slaDue);
+            if (map.has(key)) map.get(key).serviceRisk += 1;
+        });
+    }
     return Array.from(map.values()).map((row) => ({
         ...row,
         financialExposure: Math.round(row.financialExposure),
@@ -30134,9 +30463,19 @@ async function mdLoadDashboardContext(pool) {
 
 app.get("/api/management-dashboard/overview", authenticateToken, async (req, res) => {
     try {
+        const cacheKey = "management-dashboard-overview:v4";
+        const cachedData = shouldBypassDashboardCache(req) ? null : readDashboardCache(cacheKey);
+        if (cachedData) {
+            res.set("X-EMA-Cache", "HIT");
+            return res.json({ success: true, cached: true, data: cachedData });
+        }
+
+        res.set("X-EMA-Cache", "MISS");
         const pool = await sql.connect(dbConfig);
         const context = await mdLoadDashboardContext(pool);
-        return res.json({ success: true, data: mdBuildOverviewPayload(context.assets, context.incidents, context.rule, context) });
+        const data = mdBuildOverviewPayload(context.assets, context.incidents, context.rule, context);
+        writeDashboardCache(cacheKey, data);
+        return res.json({ success: true, cached: false, data });
     } catch (err) {
         console.error("GET /api/management-dashboard/overview error:", err);
         return res.status(500).json({ success: false, message: "Failed to load management dashboard overview.", error: err.message });
@@ -30148,6 +30487,14 @@ app.get("/api/management-dashboard/drilldown", authenticateToken, async (req, re
         const area = mdText(req.query.area || "risk");
         const key = mdText(req.query.key || "");
         const level = mdNumber(req.query.level, 2);
+        const cacheKey = `management-dashboard-drilldown:v4:${area}:${key}:${level}`;
+        const cachedData = shouldBypassDashboardCache(req) ? null : readDashboardCache(cacheKey);
+        if (cachedData) {
+            res.set("X-EMA-Cache", "HIT");
+            return res.json({ success: true, cached: true, data: cachedData });
+        }
+
+        res.set("X-EMA-Cache", "MISS");
         const pool = await sql.connect(dbConfig);
         const context = await mdLoadDashboardContext(pool);
         const ipMap = new Map();
@@ -30155,34 +30502,33 @@ app.get("/api/management-dashboard/drilldown", authenticateToken, async (req, re
         const duplicateIpRows = Array.from(ipMap.entries()).filter(([, rows]) => rows.length > 1).flatMap(([ip, rows]) => rows.map((row) => ({ ...row, category: "Duplicate IP", riskScore: Math.max(row.riskScore, 45), riskSeverity: row.riskScore >= 70 ? row.riskSeverity : "Medium", ipAddress: ip })));
         const filtered = mdFilterDrilldownRows(context.assets, context.incidents, area, key, { ...context, duplicateIpRows });
         if (level >= 3) {
-            return res.json({
-                success: true,
-                data: {
-                    area,
-                    key,
-                    level: 3,
-                    title: `${area} evidence`,
-                    total: filtered.length,
-                    rows: filtered.sort((a, b) => b.riskScore - a.riskScore || b.replacementCost - a.replacementCost).slice(0, 500).map((row) => ({
-                        assetKey: row.assetKey,
-                        objectAgent: row.objectAgent,
-                        assetId: row.assetId,
-                        deviceName: row.deviceName,
-                        department: row.department,
-                        category: row.category,
-                        brand: row.brand,
-                        model: row.model,
-                        platform: row.platform,
-                        status: row.status,
-                        lastSeen: row.lastSeenLabel,
-                        age: row.ageLabel,
-                        ipAddress: row.ipAddress,
-                        riskScore: row.riskScore,
-                        riskSeverity: row.riskSeverity,
-                        replacementCost: row.replacementCostFmt || row.replacementCost
-                    }))
-                }
-            });
+            const data = {
+                area,
+                key,
+                level: 3,
+                title: `${area} evidence`,
+                total: filtered.length,
+                rows: filtered.sort((a, b) => b.riskScore - a.riskScore || b.replacementCost - a.replacementCost).slice(0, 500).map((row) => ({
+                    assetKey: row.assetKey,
+                    objectAgent: row.objectAgent,
+                    assetId: row.assetId,
+                    deviceName: row.deviceName,
+                    department: row.department,
+                    category: row.category,
+                    brand: row.brand,
+                    model: row.model,
+                    platform: row.platform,
+                    status: row.status,
+                    lastSeen: row.lastSeenLabel,
+                    age: row.ageLabel,
+                    ipAddress: row.ipAddress,
+                    riskScore: row.riskScore,
+                    riskSeverity: row.riskSeverity,
+                    replacementCost: row.replacementCostFmt || row.replacementCost
+                }))
+            };
+            writeDashboardCache(cacheKey, data, 90000);
+            return res.json({ success: true, cached: false, data });
         }
         const groupFn = area === "resources" ? (row) => row.category : (row) => row.department;
         const rows = mdTopGroups(filtered, groupFn, (row) => row.replacementCost, 20).map((row) => ({
@@ -30191,7 +30537,9 @@ app.get("/api/management-dashboard/drilldown", authenticateToken, async (req, re
             level3Area: area,
             level3Key: row.key
         }));
-        return res.json({ success: true, data: { area, key, level: 2, title: `${area} breakdown`, total: filtered.length, rows } });
+        const data = { area, key, level: 2, title: `${area} breakdown`, total: filtered.length, rows };
+        writeDashboardCache(cacheKey, data, 90000);
+        return res.json({ success: true, cached: false, data });
     } catch (err) {
         console.error("GET /api/management-dashboard/drilldown error:", err);
         return res.status(500).json({ success: false, message: "Failed to load management dashboard drilldown.", error: err.message });
@@ -30371,23 +30719,278 @@ function mdParseGeminiStory(answer, overview = {}) {
     }
 }
 
-async function handleManagementDashboardStorytelling(req, res) {
+/*
+|--------------------------------------------------------------------------
+| MANAGEMENT DASHBOARD DAILY AI STORYTELLING CACHE
+|--------------------------------------------------------------------------
+| Gemini must never block dashboard loading.
+| This endpoint returns cached insight only and refreshes Gemini in background
+| at most once per day.
+*/
+
+const MD_STORY_MODULE_KEY = "management-dashboard";
+const mdStoryGenerationLocks = new Set();
+const mdStoryMemoryCache = new Map();
+
+function mdStoryDateKey(date = new Date()) {
+    return date.toISOString().slice(0, 10);
+}
+
+function mdStoryTomorrowRefreshAt(date = new Date()) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + 1);
+    next.setHours(Number(process.env.AI_INSIGHT_REFRESH_HOUR || 8), 0, 0, 0);
+    return next;
+}
+
+function mdStoryPendingPayload(reason = "") {
+    const now = new Date();
+    return {
+        status: "AI insight is being prepared",
+        tone: "blue",
+        headline: "Daily AI insight is being generated",
+        summary: "Dashboard data is available now. The AI-assisted summary will refresh in the background and appear once ready.",
+        narrative: "The dashboard is not waiting for the AI service, so operational data can continue loading without delay.",
+        keySignals: [
+            "Live dashboard data remains available",
+            "AI summary refresh runs in the background",
+            "Insight is generated once daily"
+        ],
+        boardRecommendation: "Use the live dashboard metrics first while the daily AI insight is being prepared.",
+        actionItems: [
+            "Review dashboard KPI and risk cards",
+            "Check the insight panel again shortly",
+            "Continue using cached insight when available"
+        ],
+        source: "pending",
+        cacheStatus: "pending",
+        refreshPolicy: "AI-generated insight is refreshed once daily.",
+        generatedAt: null,
+        nextRefreshAt: mdStoryTomorrowRefreshAt(now).toISOString(),
+        isStale: true,
+        message: reason || "AI insight refresh is running in the background."
+    };
+}
+
+function mdStoryDecorate(payload = {}, meta = {}) {
+    const now = new Date();
+    const generatedAt = payload.generatedAt || meta.generatedAt || null;
+    const nextRefreshAt = payload.nextRefreshAt || meta.nextRefreshAt || mdStoryTomorrowRefreshAt(now).toISOString();
+
+    return {
+        ...payload,
+        cacheStatus: meta.cacheStatus || payload.cacheStatus || "ready",
+        refreshPolicy: payload.refreshPolicy || "AI-generated insight is refreshed once daily.",
+        generatedAt,
+        nextRefreshAt,
+        isStale: Boolean(meta.isStale ?? payload.isStale),
+        model: meta.model || payload.model || undefined,
+        hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+        fallbackReason: meta.fallbackReason || payload.fallbackReason || undefined
+    };
+}
+
+async function mdEnsureStoryCacheTable(pool) {
+    await pool.request().query(`
+        IF OBJECT_ID('dbo.EMA_AI_Insight_Cache', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_AI_Insight_Cache (
+                InsightID INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                ModuleKey NVARCHAR(100) NOT NULL,
+                InsightDate DATE NOT NULL,
+                Status NVARCHAR(30) NOT NULL DEFAULT 'ready',
+                InsightJson NVARCHAR(MAX) NOT NULL,
+                Source NVARCHAR(50) NULL,
+                ModelName NVARCHAR(100) NULL,
+                FallbackReason NVARCHAR(MAX) NULL,
+                ErrorMessage NVARCHAR(MAX) NULL,
+                GeneratedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                NextRefreshAt DATETIME2 NULL,
+                CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+                UpdatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+            );
+
+            CREATE UNIQUE INDEX UX_EMA_AI_Insight_Cache_Module_Date
+                ON dbo.EMA_AI_Insight_Cache (ModuleKey, InsightDate);
+        END
+    `);
+}
+
+function mdMemoryCacheGet(moduleKey = MD_STORY_MODULE_KEY) {
+    const todayKey = `${moduleKey}:${mdStoryDateKey()}`;
+    const today = mdStoryMemoryCache.get(todayKey);
+    if (today) return { ...today, cacheStatus: "ready", isStale: false };
+
+    const prefix = `${moduleKey}:`;
+    const latest = Array.from(mdStoryMemoryCache.entries())
+        .filter(([key]) => key.startsWith(prefix))
+        .sort(([a], [b]) => b.localeCompare(a))[0]?.[1];
+
+    if (latest) return { ...latest, cacheStatus: "stale", isStale: true };
+    return null;
+}
+
+function mdMemoryCacheSet(moduleKey, insightDate, payload) {
+    mdStoryMemoryCache.set(`${moduleKey}:${insightDate}`, payload);
+}
+
+async function mdGetCachedStory(pool, moduleKey = MD_STORY_MODULE_KEY) {
+    try {
+        await mdEnsureStoryCacheTable(pool);
+
+        const result = await pool.request()
+            .input("ModuleKey", sql.NVarChar(100), moduleKey)
+            .input("Today", sql.Date, new Date())
+            .query(`
+                SELECT TOP 1
+                    ModuleKey,
+                    InsightDate,
+                    Status,
+                    InsightJson,
+                    Source,
+                    ModelName,
+                    FallbackReason,
+                    GeneratedAt,
+                    NextRefreshAt,
+                    CASE WHEN InsightDate = @Today THEN 0 ELSE 1 END AS IsStale
+                FROM dbo.EMA_AI_Insight_Cache WITH (NOLOCK)
+                WHERE ModuleKey = @ModuleKey
+                ORDER BY
+                    CASE WHEN InsightDate = @Today THEN 0 ELSE 1 END ASC,
+                    InsightDate DESC,
+                    GeneratedAt DESC;
+            `);
+
+        const row = result.recordset?.[0];
+        if (!row) return mdMemoryCacheGet(moduleKey);
+
+        const payload = JSON.parse(row.InsightJson || "{}");
+        const cacheStatus = row.IsStale ? "stale" : "ready";
+
+        const decorated = mdStoryDecorate(payload, {
+            cacheStatus,
+            isStale: Boolean(row.IsStale),
+            model: row.ModelName,
+            generatedAt: row.GeneratedAt ? new Date(row.GeneratedAt).toISOString() : payload.generatedAt,
+            nextRefreshAt: row.NextRefreshAt ? new Date(row.NextRefreshAt).toISOString() : payload.nextRefreshAt,
+            fallbackReason: row.FallbackReason
+        });
+
+        mdMemoryCacheSet(moduleKey, mdStoryDateKey(new Date(row.InsightDate)), decorated);
+        return decorated;
+    } catch (err) {
+        console.warn("Management dashboard AI cache read fallback:", err.message || err);
+        return mdMemoryCacheGet(moduleKey);
+    }
+}
+
+async function mdSaveCachedStory(pool, moduleKey, payload, meta = {}) {
+    const now = new Date();
+    const insightDate = mdStoryDateKey(now);
+    const decorated = mdStoryDecorate(payload, {
+        cacheStatus: "ready",
+        isStale: false,
+        model: meta.model,
+        generatedAt: payload.generatedAt || now.toISOString(),
+        nextRefreshAt: payload.nextRefreshAt || mdStoryTomorrowRefreshAt(now).toISOString(),
+        fallbackReason: meta.fallbackReason
+    });
+
+    mdMemoryCacheSet(moduleKey, insightDate, decorated);
+
+    try {
+        await mdEnsureStoryCacheTable(pool);
+
+        await pool.request()
+            .input("ModuleKey", sql.NVarChar(100), moduleKey)
+            .input("InsightDate", sql.Date, now)
+            .input("Status", sql.NVarChar(30), "ready")
+            .input("InsightJson", sql.NVarChar(sql.MAX), JSON.stringify(decorated))
+            .input("Source", sql.NVarChar(50), decorated.source || "local")
+            .input("ModelName", sql.NVarChar(100), meta.model || decorated.model || null)
+            .input("FallbackReason", sql.NVarChar(sql.MAX), meta.fallbackReason || decorated.fallbackReason || null)
+            .input("GeneratedAt", sql.DateTime2, new Date(decorated.generatedAt || now))
+            .input("NextRefreshAt", sql.DateTime2, new Date(decorated.nextRefreshAt || mdStoryTomorrowRefreshAt(now)))
+            .query(`
+                MERGE dbo.EMA_AI_Insight_Cache WITH (HOLDLOCK) AS target
+                USING (SELECT @ModuleKey AS ModuleKey, @InsightDate AS InsightDate) AS source
+                    ON target.ModuleKey = source.ModuleKey
+                   AND target.InsightDate = source.InsightDate
+                WHEN MATCHED THEN
+                    UPDATE SET
+                        Status = @Status,
+                        InsightJson = @InsightJson,
+                        Source = @Source,
+                        ModelName = @ModelName,
+                        FallbackReason = @FallbackReason,
+                        ErrorMessage = NULL,
+                        GeneratedAt = @GeneratedAt,
+                        NextRefreshAt = @NextRefreshAt,
+                        UpdatedAt = SYSUTCDATETIME()
+                WHEN NOT MATCHED THEN
+                    INSERT (ModuleKey, InsightDate, Status, InsightJson, Source, ModelName, FallbackReason, GeneratedAt, NextRefreshAt)
+                    VALUES (@ModuleKey, @InsightDate, @Status, @InsightJson, @Source, @ModelName, @FallbackReason, @GeneratedAt, @NextRefreshAt);
+            `);
+    } catch (err) {
+        console.warn("Management dashboard AI cache save skipped:", err.message || err);
+    }
+
+    return decorated;
+}
+
+async function mdMarkStoryCacheError(pool, moduleKey, error) {
+    try {
+        await mdEnsureStoryCacheTable(pool);
+        await pool.request()
+            .input("ModuleKey", sql.NVarChar(100), moduleKey)
+            .input("InsightDate", sql.Date, new Date())
+            .input("ErrorMessage", sql.NVarChar(sql.MAX), error?.message || String(error || "Unknown AI refresh error"))
+            .query(`
+                IF EXISTS (
+                    SELECT 1 FROM dbo.EMA_AI_Insight_Cache
+                    WHERE ModuleKey = @ModuleKey
+                      AND InsightDate = @InsightDate
+                )
+                BEGIN
+                    UPDATE dbo.EMA_AI_Insight_Cache
+                    SET Status = 'error',
+                        ErrorMessage = @ErrorMessage,
+                        UpdatedAt = SYSUTCDATETIME()
+                    WHERE ModuleKey = @ModuleKey
+                      AND InsightDate = @InsightDate;
+                END
+            `);
+    } catch (err) {
+        console.warn("Management dashboard AI cache error mark skipped:", err.message || err);
+    }
+}
+
+async function mdGenerateStoryInBackground(moduleKey = MD_STORY_MODULE_KEY, options = {}) {
+    if (mdStoryGenerationLocks.has(moduleKey)) return;
+
+    mdStoryGenerationLocks.add(moduleKey);
+
     try {
         const pool = await sql.connect(dbConfig);
+
+        if (!options.force) {
+            const cached = await mdGetCachedStory(pool, moduleKey);
+            if (cached && cached.cacheStatus === "ready") return;
+        }
+
         const context = await mdLoadDashboardContext(pool);
-        const overview = mdBuildOverviewPayload(context.assets, context.incidents, context.rule);
+        const overview = mdBuildOverviewPayload(context.assets, context.incidents, context.rule, context);
         const fallback = mdStoryFallback(overview);
 
         if (!process.env.GEMINI_API_KEY) {
-            return res.json({
-                success: true,
-                data: fallback,
+            await mdSaveCachedStory(pool, moduleKey, fallback, {
                 model: "local-executive-rule",
-                hasGeminiKey: false
+                fallbackReason: "GEMINI_API_KEY is not configured."
             });
+            return;
         }
 
-        const aiContext = mdBuildStoryAiContext(req, overview);
+        const aiContext = mdBuildStoryAiContext({ user: options.user || {} }, overview);
         const prompt = [
             "Generate an executive storytelling block for the Management Dashboard.",
             "Return JSON only. Do not use markdown.",
@@ -30403,34 +31006,99 @@ async function handleManagementDashboardStorytelling(req, res) {
             const answer = await askGeminiWithEmaContext(prompt, aiContext, []);
             const story = mdParseGeminiStory(answer, overview) || fallback;
 
-            return res.json({
-                success: true,
-                data: story,
-                model: GEMINI_MODEL,
-                hasGeminiKey: true
+            await mdSaveCachedStory(pool, moduleKey, story, {
+                model: GEMINI_MODEL
             });
         } catch (geminiErr) {
-            console.warn("Management dashboard Gemini storytelling fallback:", getGeminiErrorMessage(geminiErr));
-            return res.json({
-                success: true,
-                data: mdStoryFallback(overview, getGeminiErrorMessage(geminiErr)),
+            const reason = getGeminiErrorMessage(geminiErr);
+            console.warn("Management dashboard Gemini daily insight fallback:", reason);
+
+            await mdSaveCachedStory(pool, moduleKey, mdStoryFallback(overview, reason), {
                 model: "local-executive-rule",
-                hasGeminiKey: true,
-                geminiFallback: true
+                fallbackReason: reason
             });
+
+            await mdMarkStoryCacheError(pool, moduleKey, geminiErr);
         }
     } catch (err) {
-        console.error("GET /api/management-dashboard/storytelling error:", err);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to build management dashboard storytelling.",
-            error: err.message
+        console.error("Management dashboard AI background refresh error:", err.message || err);
+    } finally {
+        mdStoryGenerationLocks.delete(moduleKey);
+    }
+}
+
+function mdTriggerStoryRefresh(moduleKey = MD_STORY_MODULE_KEY, options = {}) {
+    setImmediate(() => {
+        mdGenerateStoryInBackground(moduleKey, options).catch((err) => {
+            console.error("Management dashboard AI refresh job failed:", err.message || err);
+        });
+    });
+}
+
+async function handleManagementDashboardStorytelling(req, res) {
+    const moduleKey = MD_STORY_MODULE_KEY;
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        const force = String(req.query.force || req.body?.force || "").toLowerCase() === "true";
+        const cached = force ? null : await mdGetCachedStory(pool, moduleKey);
+
+        if (force || !cached || cached.cacheStatus !== "ready") {
+            mdTriggerStoryRefresh(moduleKey, {
+                force,
+                user: req.user
+            });
+        }
+
+        if (cached) {
+            return res.json({
+                success: true,
+                data: cached,
+                model: cached.model || (cached.source === "gemini" ? GEMINI_MODEL : "local-executive-rule"),
+                hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+                cacheStatus: cached.cacheStatus,
+                refreshPolicy: "AI-generated insight is refreshed once daily."
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: mdStoryPendingPayload(),
+            model: "pending-background-refresh",
+            hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+            cacheStatus: "pending",
+            refreshPolicy: "AI-generated insight is refreshed once daily."
+        });
+    } catch (err) {
+        console.error("GET /api/management-dashboard/storytelling cache error:", err);
+        mdTriggerStoryRefresh(moduleKey, { user: req.user });
+
+        return res.json({
+            success: true,
+            data: mdStoryPendingPayload("Cached AI insight is temporarily unavailable. Background refresh has been queued."),
+            model: "pending-background-refresh",
+            hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+            cacheStatus: "pending",
+            refreshPolicy: "AI-generated insight is refreshed once daily."
         });
     }
 }
 
 app.get("/api/management-dashboard/storytelling", authenticateToken, handleManagementDashboardStorytelling);
 app.post("/api/management-dashboard/storytelling", authenticateToken, handleManagementDashboardStorytelling);
+
+app.post("/api/management-dashboard/storytelling/refresh", authenticateToken, async (req, res) => {
+    mdTriggerStoryRefresh(MD_STORY_MODULE_KEY, {
+        force: true,
+        user: req.user
+    });
+
+    return res.status(202).json({
+        success: true,
+        message: "AI insight refresh has been queued. The dashboard will continue showing cached insight until refresh is complete.",
+        refreshPolicy: "AI-generated insight is refreshed once daily."
+    });
+});
 
 /*
 |--------------------------------------------------------------------------
