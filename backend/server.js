@@ -4834,6 +4834,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
         }
 
         const passwordHash = await bcrypt.hash(passwordText, 10);
+        const requestedRequireMFA = parseEmaBit(req.body.requireMFA ?? req.body.mfa, false);
 
         const pool = await sql.connect(dbConfig);
         await assertEmaUsersTable(pool);
@@ -4865,7 +4866,6 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
             .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
-            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
