@@ -678,29 +678,14 @@ app.post("/api/auth/login", async (req, res) => {
             const passwordValid = await bcrypt.compare(password, emaUser.PasswordHash || "");
             if (!passwordValid) {
                 await updateEmaLoginFailure(pool, emaUser.UserID);
-                await logEmaAudit(pool, req, "Failed EMA login", "Security & Auth", "Warning", {
-                    username,
-                    authSource: "EMA",
-                    reason: "Invalid password"
-                }, { entityType: "Login", entityID: String(emaUser.UserID) });
                 return res.status(401).json({ success: false, message: "Invalid username or password" });
             }
 
             if (emaUserRequires2FA(emaUser)) {
-                await logEmaAudit(pool, req, "EMA login requires 2FA", "Security & Auth", "Info", {
-                    username: emaUser.Username || emaUser.Email || username,
-                    authSource: "EMA",
-                    twoFactorSetupRequired: !normalizeAuthValue(emaUser.TwoFactorSecret)
-                }, { entityType: "Login", entityID: String(emaUser.UserID) });
                 return res.json(buildEma2faChallenge(emaUser));
             }
 
             const loginPayload = await issueEmaLoginPayload(pool, emaUser);
-
-            await logEmaAudit(pool, req, "Successful EMA login", "Security & Auth", "Success", {
-                username: emaUser.Username || emaUser.Email || username,
-                authSource: "EMA"
-            }, { entityType: "Login", entityID: String(emaUser.UserID) });
 
             return res.json({
                 success: true,
@@ -735,11 +720,6 @@ app.post("/api/auth/login", async (req, res) => {
             .query(query);
 
         if (result.recordset.length === 0) {
-            await logEmaAudit(pool, req, "Failed login", "Security & Auth", "Warning", {
-                username,
-                authSource: "Unknown",
-                reason: "User not found"
-            }, { entityType: "Login", entityID: username });
             return res.status(401).json({
                 success: false,
                 message: "Invalid username or password"
@@ -754,11 +734,6 @@ app.post("/api/auth/login", async (req, res) => {
         );
 
         if (!passwordValid) {
-            await logEmaAudit(pool, req, "Failed legacy login", "Security & Auth", "Warning", {
-                username,
-                authSource: "LEGACY",
-                reason: "Invalid password"
-            }, { entityType: "Login", entityID: String(user.Console_Idn || username) });
             return res.status(401).json({
                 success: false,
                 message: "Invalid username or password"
@@ -802,11 +777,6 @@ app.post("/api/auth/login", async (req, res) => {
         const role = user.HdRole || "Admin";
         const displayName = user.HdUsername || user.UserID;
         const permissions = buildPermissionsByRole(role);
-
-        await logEmaAudit(pool, req, "Successful legacy login", "Security & Auth", "Success", {
-            username: user.UserID || username,
-            authSource: "LEGACY"
-        }, { entityType: "Login", entityID: String(user.Console_Idn || user.UserID || username) });
 
         return res.json({
             success: true,
@@ -1048,20 +1018,7 @@ app.post("/api/auth/2fa/verify", async (req, res) => {
                 WHERE UserID = @UserID;
             `);
 
-        const refreshedUser = refreshedResult.recordset?.[0] || emaUser;
-        const loginPayload = await issueEmaLoginPayload(pool, refreshedUser);
-
-        await logEmaAudit(pool, {
-            ...req,
-            body: {
-                ...(req.body || {}),
-                username: refreshedUser.Username || refreshedUser.Email || `user-${refreshedUser.UserID}`
-            }
-        }, isSetup ? "Completed EMA 2FA setup" : "Successful EMA 2FA login", "Security & Auth", "Success", {
-            username: refreshedUser.Username || refreshedUser.Email || `user-${refreshedUser.UserID}`,
-            authSource: "EMA",
-            setup: Boolean(isSetup)
-        }, { entityType: "Login", entityID: String(refreshedUser.UserID) });
+        const loginPayload = await issueEmaLoginPayload(pool, refreshedResult.recordset?.[0] || emaUser);
 
         return res.json({
             success: true,
@@ -1261,11 +1218,6 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
         const role = user.HdRole || "Admin";
         const displayName = user.HdUsername || user.UserID;
         const permissions = buildPermissionsByRole(role);
-
-        await logEmaAudit(pool, req, "Successful legacy login", "Security & Auth", "Success", {
-            username: user.UserID || username,
-            authSource: "LEGACY"
-        }, { entityType: "Login", entityID: String(user.Console_Idn || user.UserID || username) });
 
         return res.json({
             success: true,
@@ -4220,14 +4172,6 @@ async function ensureEmaAuditLogsTable(pool) {
         UPDATE dbo.EMA_AuditLogs
         SET Action = 'Audit event'
         WHERE Action IS NULL OR LTRIM(RTRIM(Action)) = '';
-
-        IF NOT EXISTS (SELECT 1 FROM dbo.EMA_AuditLogs WITH (NOLOCK))
-        BEGIN
-            INSERT INTO dbo.EMA_AuditLogs
-            (UserName, Module, Action, Severity, Details, EntityType, EntityID, IpAddress, UserAgent, CreatedAt)
-            VALUES
-            ('system', 'Audit Logs', 'Audit log initialized', 'Info', 'EMA audit log table is ready. New login and Settings actions will appear here.', 'System', 'EMA_AuditLogs', NULL, NULL, GETDATE());
-        END;
     `);
 
     await pool.request().query(`
@@ -4279,9 +4223,6 @@ function getAuditRequestUser(req) {
         req?.user?.email ||
         req?.body?.updatedBy ||
         req?.body?.createdBy ||
-        req?.body?.username ||
-        req?.body?.userName ||
-        req?.body?.email ||
         'system',
         'system'
     );
@@ -19606,15 +19547,6 @@ async function erColumnExists(pool, tableName, columnName) {
   return result.recordset.length > 0;
 }
 
-async function erSafeReportRows(label, loader) {
-  try {
-    return await loader();
-  } catch (err) {
-    console.warn(`Report source skipped (${label}):`, err.message || err);
-    return [];
-  }
-}
-
 function erStatusText(value) {
   const text = erText(value, "Unknown");
   if (["1", "true", "online", "connected", "active"].includes(text.toLowerCase())) return "Online";
@@ -19790,80 +19722,26 @@ async function erGetIncidentRows(pool, filters = {}) {
   if (!(await erTableExists(pool, "HD_Incidents"))) return [];
   const { startDate, endDate } = erResolveDateRange(filters);
 
-  const [
-    hasTitle,
-    hasPriority,
-    hasStatus,
-    hasCategory,
-    hasCreatedAt,
-    hasCustomerName,
-    hasCustomerId,
-    hasDepartment,
-    hasDeviceType,
-    hasAssetId,
-    hasSlaDue,
-    hasAssignedTo,
-    hasResolvedAt
-  ] = await Promise.all([
-    erColumnExists(pool, "HD_Incidents", "Title"),
-    erColumnExists(pool, "HD_Incidents", "Priority"),
-    erColumnExists(pool, "HD_Incidents", "Status"),
-    erColumnExists(pool, "HD_Incidents", "Category"),
-    erColumnExists(pool, "HD_Incidents", "CreatedAt"),
-    erColumnExists(pool, "HD_Incidents", "CustomerName"),
-    erColumnExists(pool, "HD_Incidents", "CustomerID"),
-    erColumnExists(pool, "HD_Incidents", "Department"),
-    erColumnExists(pool, "HD_Incidents", "DeviceType"),
-    erColumnExists(pool, "HD_Incidents", "AssetID"),
-    erColumnExists(pool, "HD_Incidents", "SlaDue"),
-    erColumnExists(pool, "HD_Incidents", "AssignedTo"),
-    erColumnExists(pool, "HD_Incidents", "ResolvedAt")
-  ]);
-
-  const titleExpr = hasTitle ? "Title" : "CAST('' AS NVARCHAR(255))";
-  const priorityExpr = hasPriority ? "Priority" : "CAST('Medium' AS NVARCHAR(50))";
-  const statusExpr = hasStatus ? "Status" : "CAST('Open' AS NVARCHAR(50))";
-  const categoryExpr = hasCategory ? "Category" : "CAST('' AS NVARCHAR(100))";
-  const createdExpr = hasCreatedAt ? "TRY_CONVERT(datetime, CreatedAt)" : "CAST(NULL AS datetime)";
-  const customerExpr = hasCustomerName
-    ? "CustomerName"
-    : hasDepartment
-      ? "Department"
-      : hasCustomerId
-        ? "CustomerID"
-        : "CAST('' AS NVARCHAR(255))";
-  const deviceTypeExpr = hasDeviceType ? "DeviceType" : "CAST('' AS NVARCHAR(100))";
-  const assetIdExpr = hasAssetId ? "AssetID" : "CAST('' AS NVARCHAR(100))";
-  const slaDueExpr = hasSlaDue ? "SlaDue" : "CAST(NULL AS datetime)";
-  const assignedToExpr = hasAssignedTo ? "AssignedTo" : "CAST('' AS NVARCHAR(255))";
-  const resolvedAtExpr = hasResolvedAt ? "ResolvedAt" : "CAST(NULL AS datetime)";
-  const dateWhere = hasCreatedAt
-    ? `WHERE (${createdExpr} IS NULL OR ${createdExpr} BETWEEN @StartDate AND DATEADD(day, 1, @EndDate))`
-    : "";
-  const orderBy = hasCreatedAt
-    ? `ORDER BY ${createdExpr} DESC, IncidentID DESC`
-    : "ORDER BY IncidentID DESC";
-
   const result = await pool.request()
     .input("StartDate", sql.DateTime, startDate)
     .input("EndDate", sql.DateTime, endDate)
     .query(`
       SELECT TOP 2000
         IncidentID AS id,
-        ${titleExpr} AS title,
-        ${priorityExpr} AS priority,
-        ${statusExpr} AS status,
-        ${categoryExpr} AS category,
-        ${createdExpr} AS createdAt,
-        ${customerExpr} AS customerName,
-        ${deviceTypeExpr} AS deviceType,
-        ${assetIdExpr} AS assetId,
-        ${slaDueExpr} AS slaDue,
-        ${assignedToExpr} AS assignedTo,
-        ${resolvedAtExpr} AS resolvedAt
+        Title AS title,
+        Priority AS priority,
+        Status AS status,
+        Category AS category,
+        TRY_CONVERT(datetime, CreatedAt) AS createdAt,
+        CustomerName AS customerName,
+        DeviceType AS deviceType,
+        AssetID AS assetId,
+        SlaDue AS slaDue,
+        AssignedTo AS assignedTo,
+        ResolvedAt AS resolvedAt
       FROM HD_Incidents WITH (NOLOCK)
-      ${dateWhere}
-      ${orderBy};
+      WHERE (TRY_CONVERT(datetime, CreatedAt) IS NULL OR TRY_CONVERT(datetime, CreatedAt) BETWEEN @StartDate AND DATEADD(day, 1, @EndDate))
+      ORDER BY TRY_CONVERT(datetime, CreatedAt) DESC, IncidentID DESC;
     `);
 
   return result.recordset || [];
@@ -20393,28 +20271,6 @@ function erNormalizeHardwareReports(value) {
   return selected.length ? [...new Set(selected)] : EMA_HARDWARE_REPORT_IDS;
 }
 
-function erHardwareReportTitle(id) {
-  const titles = {
-    "manufacturer-brand": "Endpoint Manufacturer Brand",
-    "pc-aging": "Resources Planning - PC Aging",
-    "os-compliance": "OS Compliance",
-    "vulnerability-security": "Vulnerability & Security - Supported OS / EOL / EOS",
-    "location": "Location / Department",
-    "agent-status": "Agent Status - Connected / Not Connected"
-  };
-  return titles[id] || id;
-}
-
-function erReadHardwareSelection(req) {
-  return req.body?.hardwareReports
-    ?? req.body?.selectedHardwareReports
-    ?? req.body?.selectedHardwareReportIds
-    ?? req.body?.filters?.hardwareReports
-    ?? req.query?.hardwareReports
-    ?? req.query?.selectedHardwareReports
-    ?? req.query?.selectedHardwareReportIds;
-}
-
 function erIsUnsupportedWindowsAsset(asset = {}) {
   const text = erLowerText(asset.platform || asset.os || asset.operatingSystem);
   return ["windows xp", "windows 7", "windows 8", "2008", "2012", "legacy", "unsupported", "eol", "eos"].some((word) => text.includes(word));
@@ -20462,18 +20318,11 @@ function erBuildHardwareReportSections(data, filters = {}) {
   const selected = erNormalizeHardwareReports(filters.hardwareReports);
   const sections = [];
 
-  sections.push(erTableSection("Selected Hardware Report Scope", selected.map((id, index) => ({
-    no: String(index + 1).padStart(2, "0"),
-    report: erHardwareReportTitle(id),
-    output: "Included in preview/PDF",
-    basis: "Generated only because this hardware report card is selected."
-  })), ["no", "report", "output", "basis"]));
-
   sections.push(erKpiSection("Hardware Reporting Snapshot", [
     { label: "Endpoint Estate", value: metrics.totalEndpoints, note: "Hardware records in selected scope." },
-    { label: "Selected Reports", value: selected.length, note: selected.map(erHardwareReportTitle).join(" / ") },
-    { label: "Brand Groups", value: selected.includes("manufacturer-brand") ? rnr.byBrand.length : "Not selected", note: "Detected manufacturer / brand group(s)." },
-    { label: "Aging Candidates", value: selected.includes("pc-aging") ? rnr.assetsWithPlanning.filter((asset) => asset.agingCandidate).length : "Not selected", note: "Based on stale telemetry or missing model evidence." }
+    { label: "Selected Reports", value: selected.length, note: "Hardware report cards selected." },
+    { label: "Brand Groups", value: rnr.byBrand.length, note: "Detected manufacturer / brand group(s)." },
+    { label: "Aging Candidates", value: rnr.assetsWithPlanning.filter((asset) => asset.agingCandidate).length, note: "Based on stale telemetry or missing model evidence." }
   ]));
 
   if (selected.includes("manufacturer-brand")) {
@@ -21495,11 +21344,11 @@ function erBuildReportTables(report, data, filters = {}) {
 async function erBuildReportPayload(pool, reportId, filters = {}, mode = "preview") {
   const report = erResolveReport(reportId);
   const [assets, incidents, software, jobs, geo] = await Promise.all([
-    erSafeReportRows("Endpoint Inventory", () => erGetAssetRows(pool, filters)),
-    erSafeReportRows("Service Desk", () => erGetIncidentRows(pool, filters)),
-    erSafeReportRows("Software Inventory", () => erGetSoftwareRows(pool, filters)),
-    erSafeReportRows("Task / Job", () => erGetJobRows(pool, filters)),
-    erSafeReportRows("Geolocation", () => erGetGeoRows(pool, filters))
+    erGetAssetRows(pool, filters),
+    erGetIncidentRows(pool, filters),
+    erGetSoftwareRows(pool, filters),
+    erGetJobRows(pool, filters),
+    erGetGeoRows(pool, filters)
   ]);
 
   const metrics = erBuildMetrics({ assets, incidents, software, jobs, geo });
@@ -21570,7 +21419,7 @@ function erReadFilters(req) {
     includeSummary: req.body?.includeSummary !== false && req.query?.includeSummary !== "false",
     includeTable: req.body?.includeTable !== false && req.query?.includeTable !== "false",
     includeRecommendation: req.body?.includeRecommendation !== false && req.query?.includeRecommendation !== "false",
-    hardwareReports: erNormalizeHardwareReports(erReadHardwareSelection(req))
+    hardwareReports: erNormalizeHardwareReports(req.body?.hardwareReports ?? req.query?.hardwareReports)
   };
 }
 
@@ -22562,464 +22411,6 @@ app.put("/api/settings/pc-aging-rule", authenticateToken, async (req, res) => {
 | END PC AGING RULE APIs
 |--------------------------------------------------------------------------
 */
-
-/*
-|--------------------------------------------------------------------------
-| SETTINGS - MANAGEMENT DASHBOARD POLICY APIs
-|--------------------------------------------------------------------------
-| Tables used:
-| - EMA_ManagementPolicyProfiles
-| - EMA_ManagementPolicyValues
-| - EMA_ClientManagementPolicies
-|
-| Purpose:
-| Move dashboard risk/exposure/saving assumptions out of hardcoded backend
-| formulas and into a configurable policy profile.
-|--------------------------------------------------------------------------
-*/
-
-const MANAGEMENT_POLICY_DEFAULT_PROFILE_KEY = "default_ema_policy";
-
-const DEFAULT_MANAGEMENT_POLICY_VALUES = {
-    "risk.software.itemExposure": 150,
-    "risk.network.itemExposure": 300,
-    "risk.geo.itemExposure": 200,
-    "saving.reuse.percent": 0.25,
-    "saving.staleRecovery.perDevice": 250,
-    "saving.pricingCleanup.perAsset": 250,
-    "saving.identityCleanup.perAsset": 150,
-    "saving.slaProductivity.perBreach": 500,
-    "saving.refreshDeferment.percent": 0.15,
-    "score.network.duplicateIp": 45,
-    "score.compliance.evidenceGapWeight": 0.55,
-    "score.compliance.slaWeight": 0.25,
-    "score.health.riskWeight": 0.5,
-    "score.health.staleWeight": 0.24,
-    "score.health.offlineWeight": 0.16,
-    "score.health.slaWeight": 0.1,
-    "score.penalty.aging": 38,
-    "score.penalty.monitor": 18,
-    "score.penalty.offline": 22,
-    "score.penalty.stale": 22,
-    "score.penalty.missingIdentity": 12,
-    "score.penalty.unpriced": 6,
-    "score.risk.endpointThreshold": 35,
-    "score.risk.mediumThreshold": 40,
-    "score.risk.highThreshold": 70,
-    "score.software.sensitive": 55,
-    "score.software.unclassified": 30,
-    "score.software.stale": 18,
-    "score.network.unregistered": 42,
-    "score.network.inactive": 16,
-    "score.network.missingIp": 20,
-    "score.geo.unknown": 35,
-    "score.geo.stale": 32,
-    "score.geo.missingCoordinate": 15,
-    "telemetry.endpoint.staleDays": 14,
-    "telemetry.software.staleDays": 45,
-    "telemetry.geo.staleDays": 7
-};
-
-const MANAGEMENT_POLICY_DEFINITIONS = {
-    "risk.software.itemExposure": { unit: "RM", description: "Estimated exposure for each risky software signal." },
-    "risk.network.itemExposure": { unit: "RM", description: "Estimated exposure for each unmanaged or duplicate network signal." },
-    "risk.geo.itemExposure": { unit: "RM", description: "Estimated exposure for each stale, missing or unknown geolocation signal." },
-    "saving.reuse.percent": { unit: "ratio", description: "Percent of monitor-stage device value counted as avoidable spend." },
-    "saving.staleRecovery.perDevice": { unit: "RM", description: "Estimated recovery opportunity for each stale endpoint record." },
-    "saving.pricingCleanup.perAsset": { unit: "RM", description: "Estimated value for each asset missing pricing evidence." },
-    "saving.identityCleanup.perAsset": { unit: "RM", description: "Estimated value for each endpoint missing identity evidence." },
-    "saving.slaProductivity.perBreach": { unit: "RM", description: "Estimated service productivity loss per SLA breach candidate." },
-    "saving.refreshDeferment.percent": { unit: "ratio", description: "Percent of monitor-stage value counted as refresh deferment reserve." },
-    "score.network.duplicateIp": { unit: "points", description: "Risk score assigned to duplicate endpoint IP evidence." },
-    "score.compliance.evidenceGapWeight": { unit: "weight", description: "Compliance score weight for pricing and identity evidence gaps." },
-    "score.compliance.slaWeight": { unit: "weight", description: "Compliance score weight for SLA governance exceptions." },
-    "score.health.riskWeight": { unit: "weight", description: "Overall health penalty weight for cross-domain risk candidates." },
-    "score.health.staleWeight": { unit: "weight", description: "Overall health penalty weight for stale endpoint telemetry." },
-    "score.health.offlineWeight": { unit: "weight", description: "Overall health penalty weight for offline endpoint evidence." },
-    "score.health.slaWeight": { unit: "weight", description: "Overall health penalty weight for SLA breach candidates." },
-    "score.penalty.aging": { unit: "points", description: "Risk points added when a device crosses the aging threshold." },
-    "score.penalty.monitor": { unit: "points", description: "Risk points added when a device is in monitor-stage lifecycle." },
-    "score.penalty.offline": { unit: "points", description: "Risk points added for offline endpoint evidence." },
-    "score.penalty.stale": { unit: "points", description: "Risk points added for stale endpoint telemetry." },
-    "score.penalty.missingIdentity": { unit: "points", description: "Risk points added for missing ownership, model, name or IP evidence." },
-    "score.penalty.unpriced": { unit: "points", description: "Risk points added for assets without pricing evidence." },
-    "score.risk.endpointThreshold": { unit: "points", description: "Minimum endpoint risk score counted as dashboard risk." },
-    "score.risk.mediumThreshold": { unit: "points", description: "Risk score where severity becomes medium." },
-    "score.risk.highThreshold": { unit: "points", description: "Risk score where severity becomes high." },
-    "score.software.sensitive": { unit: "points", description: "Risk points for sensitive/risky software patterns." },
-    "score.software.unclassified": { unit: "points", description: "Risk points for unclassified software." },
-    "score.software.stale": { unit: "points", description: "Risk points for stale software evidence." },
-    "score.network.unregistered": { unit: "points", description: "Risk points for unmanaged network evidence." },
-    "score.network.inactive": { unit: "points", description: "Risk points for inactive network evidence." },
-    "score.network.missingIp": { unit: "points", description: "Risk points for weak/missing IP evidence." },
-    "score.geo.unknown": { unit: "points", description: "Risk points for unknown location evidence." },
-    "score.geo.stale": { unit: "points", description: "Risk points for stale location evidence." },
-    "score.geo.missingCoordinate": { unit: "points", description: "Risk points for missing coordinate evidence." },
-    "telemetry.endpoint.staleDays": { unit: "days", description: "Days before endpoint last connection is considered stale." },
-    "telemetry.software.staleDays": { unit: "days", description: "Days before software inventory evidence is considered stale." },
-    "telemetry.geo.staleDays": { unit: "days", description: "Days before geolocation evidence is considered stale." }
-};
-
-function mpNumber(value, fallback = 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function mpNormalizeManagementPolicyValues(input = {}) {
-    const source = input && typeof input === "object" && input.values && typeof input.values === "object" ? input.values : input;
-    const normalized = { ...DEFAULT_MANAGEMENT_POLICY_VALUES };
-
-    Object.keys(DEFAULT_MANAGEMENT_POLICY_VALUES).forEach((key) => {
-        normalized[key] = mpNumber(source?.[key], DEFAULT_MANAGEMENT_POLICY_VALUES[key]);
-    });
-
-    normalized["saving.reuse.percent"] = Math.max(0, Math.min(1, normalized["saving.reuse.percent"]));
-    normalized["score.risk.endpointThreshold"] = Math.max(1, Math.min(100, normalized["score.risk.endpointThreshold"]));
-    normalized["score.risk.mediumThreshold"] = Math.max(1, Math.min(100, normalized["score.risk.mediumThreshold"]));
-    normalized["score.risk.highThreshold"] = Math.max(1, Math.min(100, normalized["score.risk.highThreshold"]));
-    normalized["telemetry.endpoint.staleDays"] = Math.max(1, Math.min(365, normalized["telemetry.endpoint.staleDays"]));
-    normalized["telemetry.software.staleDays"] = Math.max(1, Math.min(365, normalized["telemetry.software.staleDays"]));
-    normalized["telemetry.geo.staleDays"] = Math.max(1, Math.min(365, normalized["telemetry.geo.staleDays"]));
-    normalized["saving.refreshDeferment.percent"] = Math.max(0, Math.min(1, normalized["saving.refreshDeferment.percent"]));
-    normalized["score.network.duplicateIp"] = Math.max(1, Math.min(100, normalized["score.network.duplicateIp"]));
-    normalized["score.compliance.evidenceGapWeight"] = Math.max(0, Math.min(1, normalized["score.compliance.evidenceGapWeight"]));
-    normalized["score.compliance.slaWeight"] = Math.max(0, Math.min(1, normalized["score.compliance.slaWeight"]));
-    normalized["score.health.riskWeight"] = Math.max(0, Math.min(1, normalized["score.health.riskWeight"]));
-    normalized["score.health.staleWeight"] = Math.max(0, Math.min(1, normalized["score.health.staleWeight"]));
-    normalized["score.health.offlineWeight"] = Math.max(0, Math.min(1, normalized["score.health.offlineWeight"]));
-    normalized["score.health.slaWeight"] = Math.max(0, Math.min(1, normalized["score.health.slaWeight"]));
-
-    return normalized;
-}
-
-function mdPolicyValues(policy) {
-    if (policy && typeof policy === "object" && policy.values) return mpNormalizeManagementPolicyValues(policy.values);
-    return mpNormalizeManagementPolicyValues(policy || DEFAULT_MANAGEMENT_POLICY_VALUES);
-}
-
-function mdPolicyNumber(policy, key, fallback) {
-    const values = mdPolicyValues(policy);
-    return mpNumber(values[key], fallback ?? DEFAULT_MANAGEMENT_POLICY_VALUES[key] ?? 0);
-}
-
-function mdRiskSeverity(score, policy = null) {
-    const n = mdNumber(score);
-    const highThreshold = mdPolicyNumber(policy, "score.risk.highThreshold", 70);
-    const mediumThreshold = mdPolicyNumber(policy, "score.risk.mediumThreshold", 40);
-    if (n >= highThreshold) return "High";
-    if (n >= mediumThreshold) return "Medium";
-    if (n > 0) return "Low";
-    return "Healthy";
-}
-
-async function ensureManagementPolicyTables(pool) {
-    await pool.request().query(`
-        IF OBJECT_ID('dbo.EMA_ManagementPolicyProfiles', 'U') IS NULL
-        BEGIN
-            CREATE TABLE dbo.EMA_ManagementPolicyProfiles (
-                ProfileID INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_EMA_ManagementPolicyProfiles PRIMARY KEY,
-                ProfileKey NVARCHAR(100) NOT NULL CONSTRAINT UQ_EMA_ManagementPolicyProfiles_ProfileKey UNIQUE,
-                ProfileName NVARCHAR(200) NOT NULL,
-                ScopeType NVARCHAR(50) NOT NULL CONSTRAINT DF_EMA_ManagementPolicyProfiles_ScopeType DEFAULT 'GLOBAL',
-                ScopeKey NVARCHAR(200) NOT NULL CONSTRAINT DF_EMA_ManagementPolicyProfiles_ScopeKey DEFAULT 'DEFAULT',
-                IsDefault BIT NOT NULL CONSTRAINT DF_EMA_ManagementPolicyProfiles_IsDefault DEFAULT 0,
-                IsActive BIT NOT NULL CONSTRAINT DF_EMA_ManagementPolicyProfiles_IsActive DEFAULT 1,
-                CreatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_ManagementPolicyProfiles_CreatedAt DEFAULT GETDATE(),
-                UpdatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_ManagementPolicyProfiles_UpdatedAt DEFAULT GETDATE()
-            );
-        END;
-
-        IF OBJECT_ID('dbo.EMA_ManagementPolicyValues', 'U') IS NULL
-        BEGIN
-            CREATE TABLE dbo.EMA_ManagementPolicyValues (
-                ValueID INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_EMA_ManagementPolicyValues PRIMARY KEY,
-                ProfileID INT NOT NULL,
-                AssumptionKey NVARCHAR(150) NOT NULL,
-                ValueNumber DECIMAL(18,4) NULL,
-                ValueText NVARCHAR(MAX) NULL,
-                Unit NVARCHAR(50) NULL,
-                Description NVARCHAR(500) NULL,
-                IsActive BIT NOT NULL CONSTRAINT DF_EMA_ManagementPolicyValues_IsActive DEFAULT 1,
-                CreatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_ManagementPolicyValues_CreatedAt DEFAULT GETDATE(),
-                UpdatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_ManagementPolicyValues_UpdatedAt DEFAULT GETDATE(),
-                CONSTRAINT FK_EMA_ManagementPolicyValues_Profile FOREIGN KEY (ProfileID)
-                    REFERENCES dbo.EMA_ManagementPolicyProfiles(ProfileID),
-                CONSTRAINT UQ_EMA_ManagementPolicyValues_Profile_Key UNIQUE (ProfileID, AssumptionKey)
-            );
-        END;
-
-        IF OBJECT_ID('dbo.EMA_ClientManagementPolicies', 'U') IS NULL
-        BEGIN
-            CREATE TABLE dbo.EMA_ClientManagementPolicies (
-                ClientPolicyID INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_EMA_ClientManagementPolicies PRIMARY KEY,
-                ScopeType NVARCHAR(50) NOT NULL,
-                ScopeKey NVARCHAR(200) NOT NULL,
-                ProfileID INT NOT NULL,
-                IsActive BIT NOT NULL CONSTRAINT DF_EMA_ClientManagementPolicies_IsActive DEFAULT 1,
-                EffectiveFrom DATETIME NULL,
-                EffectiveTo DATETIME NULL,
-                CreatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_ClientManagementPolicies_CreatedAt DEFAULT GETDATE(),
-                UpdatedAt DATETIME NOT NULL CONSTRAINT DF_EMA_ClientManagementPolicies_UpdatedAt DEFAULT GETDATE(),
-                CONSTRAINT FK_EMA_ClientManagementPolicies_Profile FOREIGN KEY (ProfileID)
-                    REFERENCES dbo.EMA_ManagementPolicyProfiles(ProfileID)
-            );
-
-            CREATE INDEX IX_EMA_ClientManagementPolicies_Scope
-                ON dbo.EMA_ClientManagementPolicies (ScopeType, ScopeKey, IsActive);
-        END;
-    `);
-
-    const profileResult = await pool.request()
-        .input("ProfileKey", sql.NVarChar(100), MANAGEMENT_POLICY_DEFAULT_PROFILE_KEY)
-        .query(`
-            IF NOT EXISTS (SELECT 1 FROM dbo.EMA_ManagementPolicyProfiles WHERE ProfileKey = @ProfileKey)
-            BEGIN
-                INSERT INTO dbo.EMA_ManagementPolicyProfiles
-                    (ProfileKey, ProfileName, ScopeType, ScopeKey, IsDefault, IsActive, CreatedAt, UpdatedAt)
-                VALUES
-                    (@ProfileKey, 'Default EMA Management Policy', 'GLOBAL', 'DEFAULT', 1, 1, GETDATE(), GETDATE());
-            END;
-
-            SELECT TOP 1 *
-            FROM dbo.EMA_ManagementPolicyProfiles
-            WHERE ProfileKey = @ProfileKey;
-        `);
-
-    const profile = profileResult.recordset?.[0];
-    if (!profile) throw new Error("Default management policy profile could not be created.");
-
-    for (const key of Object.keys(DEFAULT_MANAGEMENT_POLICY_VALUES)) {
-        const definition = MANAGEMENT_POLICY_DEFINITIONS[key] || {};
-        await pool.request()
-            .input("ProfileID", sql.Int, profile.ProfileID)
-            .input("AssumptionKey", sql.NVarChar(150), key)
-            .input("ValueNumber", sql.Decimal(18, 4), DEFAULT_MANAGEMENT_POLICY_VALUES[key])
-            .input("Unit", sql.NVarChar(50), definition.unit || "")
-            .input("Description", sql.NVarChar(500), definition.description || "")
-            .query(`
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM dbo.EMA_ManagementPolicyValues
-                    WHERE ProfileID = @ProfileID
-                      AND AssumptionKey = @AssumptionKey
-                )
-                BEGIN
-                    INSERT INTO dbo.EMA_ManagementPolicyValues
-                        (ProfileID, AssumptionKey, ValueNumber, Unit, Description, IsActive, CreatedAt, UpdatedAt)
-                    VALUES
-                        (@ProfileID, @AssumptionKey, @ValueNumber, @Unit, @Description, 1, GETDATE(), GETDATE());
-                END;
-            `);
-    }
-
-    return profile;
-}
-
-async function mdLoadManagementPolicy(pool) {
-    try {
-        await ensureManagementPolicyTables(pool);
-
-        const profileResult = await pool.request()
-            .input("ProfileKey", sql.NVarChar(100), MANAGEMENT_POLICY_DEFAULT_PROFILE_KEY)
-            .query(`
-                SELECT TOP 1
-                    ProfileID,
-                    ProfileKey,
-                    ProfileName,
-                    ScopeType,
-                    ScopeKey,
-                    IsDefault,
-                    IsActive,
-                    UpdatedAt
-                FROM dbo.EMA_ManagementPolicyProfiles WITH (NOLOCK)
-                WHERE ProfileKey = @ProfileKey
-                  AND IsActive = 1
-                ORDER BY IsDefault DESC, ProfileID ASC;
-            `);
-
-        const profile = profileResult.recordset?.[0];
-        if (!profile) {
-            return {
-                profile: {
-                    profileKey: MANAGEMENT_POLICY_DEFAULT_PROFILE_KEY,
-                    profileName: "Default EMA Management Policy",
-                    scopeType: "GLOBAL",
-                    scopeKey: "DEFAULT",
-                    isDefault: true,
-                    isActive: true,
-                    updatedAt: null
-                },
-                values: mpNormalizeManagementPolicyValues(DEFAULT_MANAGEMENT_POLICY_VALUES),
-                definitions: MANAGEMENT_POLICY_DEFINITIONS
-            };
-        }
-
-        const valuesResult = await pool.request()
-            .input("ProfileID", sql.Int, profile.ProfileID)
-            .query(`
-                SELECT
-                    AssumptionKey,
-                    ValueNumber,
-                    ValueText,
-                    Unit,
-                    Description,
-                    UpdatedAt
-                FROM dbo.EMA_ManagementPolicyValues WITH (NOLOCK)
-                WHERE ProfileID = @ProfileID
-                  AND IsActive = 1;
-            `);
-
-        const valueMap = {};
-        let latestUpdatedAt = profile.UpdatedAt || null;
-        for (const row of valuesResult.recordset || []) {
-            valueMap[row.AssumptionKey] = row.ValueNumber !== null && row.ValueNumber !== undefined
-                ? Number(row.ValueNumber)
-                : mpNumber(row.ValueText, DEFAULT_MANAGEMENT_POLICY_VALUES[row.AssumptionKey]);
-            if (row.UpdatedAt && (!latestUpdatedAt || new Date(row.UpdatedAt) > new Date(latestUpdatedAt))) latestUpdatedAt = row.UpdatedAt;
-        }
-
-        return {
-            profile: {
-                profileID: profile.ProfileID,
-                profileKey: profile.ProfileKey,
-                profileName: profile.ProfileName,
-                scopeType: profile.ScopeType,
-                scopeKey: profile.ScopeKey,
-                isDefault: profile.IsDefault === true || profile.IsDefault === 1,
-                isActive: profile.IsActive === true || profile.IsActive === 1,
-                updatedAt: latestUpdatedAt
-            },
-            values: mpNormalizeManagementPolicyValues(valueMap),
-            definitions: MANAGEMENT_POLICY_DEFINITIONS
-        };
-    } catch (err) {
-        console.warn("Management policy load skipped; default assumptions will be used:", err.message);
-        return {
-            profile: {
-                profileKey: MANAGEMENT_POLICY_DEFAULT_PROFILE_KEY,
-                profileName: "Default EMA Management Policy",
-                scopeType: "GLOBAL",
-                scopeKey: "DEFAULT",
-                isDefault: true,
-                isActive: true,
-                updatedAt: null
-            },
-            values: mpNormalizeManagementPolicyValues(DEFAULT_MANAGEMENT_POLICY_VALUES),
-            definitions: MANAGEMENT_POLICY_DEFINITIONS
-        };
-    }
-}
-
-app.get("/api/settings/management-policy", authenticateToken, async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const policy = await mdLoadManagementPolicy(pool);
-        return res.json({
-            success: true,
-            data: policy
-        });
-    } catch (err) {
-        console.error("GET /api/settings/management-policy error:", err);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to load management policy.",
-            error: err.message
-        });
-    }
-});
-
-app.post("/api/settings/management-policy", authenticateToken, async (req, res) => {
-    let transaction;
-    try {
-        const pool = await sql.connect(dbConfig);
-        const previousPolicy = await mdLoadManagementPolicy(pool);
-        const values = mpNormalizeManagementPolicyValues(req.body?.values || req.body || {});
-        const profile = await ensureManagementPolicyTables(pool);
-
-        transaction = new sql.Transaction(pool);
-        await transaction.begin();
-
-        for (const key of Object.keys(DEFAULT_MANAGEMENT_POLICY_VALUES)) {
-            const definition = MANAGEMENT_POLICY_DEFINITIONS[key] || {};
-            await new sql.Request(transaction)
-                .input("ProfileID", sql.Int, profile.ProfileID)
-                .input("AssumptionKey", sql.NVarChar(150), key)
-                .input("ValueNumber", sql.Decimal(18, 4), values[key])
-                .input("Unit", sql.NVarChar(50), definition.unit || "")
-                .input("Description", sql.NVarChar(500), definition.description || "")
-                .query(`
-                    IF EXISTS (
-                        SELECT 1
-                        FROM dbo.EMA_ManagementPolicyValues
-                        WHERE ProfileID = @ProfileID
-                          AND AssumptionKey = @AssumptionKey
-                    )
-                    BEGIN
-                        UPDATE dbo.EMA_ManagementPolicyValues
-                        SET ValueNumber = @ValueNumber,
-                            Unit = @Unit,
-                            Description = @Description,
-                            IsActive = 1,
-                            UpdatedAt = GETDATE()
-                        WHERE ProfileID = @ProfileID
-                          AND AssumptionKey = @AssumptionKey;
-                    END
-                    ELSE
-                    BEGIN
-                        INSERT INTO dbo.EMA_ManagementPolicyValues
-                            (ProfileID, AssumptionKey, ValueNumber, Unit, Description, IsActive, CreatedAt, UpdatedAt)
-                        VALUES
-                            (@ProfileID, @AssumptionKey, @ValueNumber, @Unit, @Description, 1, GETDATE(), GETDATE());
-                    END;
-                `);
-        }
-
-        await new sql.Request(transaction)
-            .input("ProfileID", sql.Int, profile.ProfileID)
-            .query(`
-                UPDATE dbo.EMA_ManagementPolicyProfiles
-                SET UpdatedAt = GETDATE()
-                WHERE ProfileID = @ProfileID;
-            `);
-
-        await transaction.commit();
-        transaction = null;
-
-        const nextPolicy = await mdLoadManagementPolicy(pool);
-        clearTimedResponseCache("management-dashboard");
-        await logEmaAudit(
-            pool,
-            req,
-            "Updated management dashboard policy",
-            "Management Policy",
-            "Success",
-            {
-                before: previousPolicy.values,
-                after: nextPolicy.values,
-                changes: buildAuditChangedFields(previousPolicy.values, nextPolicy.values)
-            },
-            { entityType: "ManagementPolicy", entityID: MANAGEMENT_POLICY_DEFAULT_PROFILE_KEY }
-        );
-
-        return res.json({
-            success: true,
-            message: "Management policy saved successfully.",
-            data: nextPolicy
-        });
-    } catch (err) {
-        if (transaction) {
-            try { await transaction.rollback(); } catch (rollbackErr) { console.warn("Management policy rollback failed:", rollbackErr.message); }
-        }
-        console.error("POST /api/settings/management-policy error:", err);
-        return res.status(500).json({
-            success: false,
-            message: "Failed to save management policy.",
-            error: err.message
-        });
-    }
-});
-
-
 
 // online_patching_apis_only.js
 // Extracted Online Patching API block for EMA backend.
@@ -25196,12 +24587,11 @@ async function getItOpsDepartmentRows(pool) {
     const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
     const hasEmAssets = await itopsTableExists(pool, "TS_OBJECT_ROOT");
     const hasIncidents = await itopsTableExists(pool, "HD_Incidents");
-    const hasIncidentCustomerName = hasIncidents && await itopsColumnExists(pool, "HD_Incidents", "CustomerName");
     const hasPatchStatus = await itopsTableExists(pool, "TS_UPDATE_ONLINE_STATUS");
 
     if (!hasRelations || !hasEmAssets) return [];
 
-    const incidentJoinSql = hasIncidentCustomerName
+    const incidentJoinSql = hasIncidents
         ? `
             LEFT JOIN (
                 SELECT
@@ -25229,18 +24619,14 @@ async function getItOpsDepartmentRows(pool) {
         `
         : "";
 
-    const openIncidentSelect = hasIncidentCustomerName ? "MAX(ISNULL(inc.OpenIncidents, 0))" : "0";
-    const applicablePatchSelect = hasPatchStatus ? "SUM(ISNULL(patch.ApplicablePatches, 0))" : "0";
-    const installedPatchSelect = hasPatchStatus ? "SUM(ISNULL(patch.InstalledPatches, 0))" : "0";
-
     const result = await pool.request().query(`
         SELECT TOP 8
             ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned')) AS Department,
             COUNT(DISTINCT root.Object_Root_Idn) AS Assets,
             SUM(CASE WHEN root.ConnectionStatus = 1 THEN 1 ELSE 0 END) AS OnlineAssets,
-            ${applicablePatchSelect} AS ApplicablePatches,
-            ${installedPatchSelect} AS InstalledPatches,
-            ${openIncidentSelect} AS OpenIncidents
+            SUM(ISNULL(patch.ApplicablePatches, 0)) AS ApplicablePatches,
+            SUM(ISNULL(patch.InstalledPatches, 0)) AS InstalledPatches,
+            MAX(ISNULL(inc.OpenIncidents, 0)) AS OpenIncidents
         FROM TS_OBJECT_ROOT root WITH (NOLOCK)
         LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
             ON root.Object_Rel_Idn = rel.Object_Rel_Idn
@@ -25292,12 +24678,6 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
     }
 
     if (hasAssets) {
-        const hasAssetCustomerName = await itopsColumnExists(pool, "Assets", "CustomerName").catch(() => false);
-        const hasAssetDepartment = await itopsColumnExists(pool, "Assets", "Department").catch(() => false);
-        const assetDepartmentExpr = hasAssetCustomerName
-            ? "ISNULL(NULLIF(a.CustomerName, ''), " + (hasAssetDepartment ? "ISNULL(NULLIF(a.Department, ''), 'Unmapped')" : "'Unmapped'") + ")"
-            : (hasAssetDepartment ? "ISNULL(NULLIF(a.Department, ''), 'Unmapped')" : "'Unmapped'");
-
         const supportJoin = hasOsSupport
             ? `
                 LEFT JOIN OSSupportCache osc WITH (NOLOCK)
@@ -25332,7 +24712,7 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
                 SELECT
                     a.AssetID,
                     ISNULL(NULLIF(a.ComputerName, ''), ISNULL(NULLIF(a.AssetTag, ''), a.AssetID)) AS DeviceName,
-                    ${assetDepartmentExpr} AS Department,
+                    ISNULL(NULLIF(a.CustomerName, ''), ISNULL(NULLIF(a.Department, ''), 'Unmapped')) AS Department,
                     ISNULL(NULLIF(a.Model, ''), '-') AS Model,
                     ISNULL(NULLIF(a.OS, ''), 'Unknown') AS OSName,
                     ISNULL(NULLIF(a.BiosDate, ''), '-') AS BiosDate,
@@ -25744,15 +25124,6 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
         res.set("X-EMA-Cache", "MISS");
         const pool = await sql.connect(dbConfig);
 
-        const safeItOps = async (label, fallback, loader) => {
-            try {
-                return await loader();
-            } catch (err) {
-                console.warn(`IT Operations source skipped (${label}):`, err.message || err);
-                return fallback;
-            }
-        };
-
         const [
             hardware,
             software,
@@ -25763,25 +25134,14 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
             patchSummary,
             departmentRows
         ] = await Promise.all([
-            safeItOps("hardware", { totalDevices: 0, onlineDevices: 0 }, () => getItOpsHardwareSummary(pool)),
-            safeItOps("software", { devicesWithSoftware: 0 }, () => getItOpsSoftwareSummary(pool)),
-            safeItOps("network", { registeredDevices: 0, knownIps: 0 }, () => getItOpsNetworkSummary(pool)),
-            safeItOps("geolocation", { trackedDevices: 0, staleLocations: 0 }, () => getItOpsGeoSummary(pool)),
-            safeItOps("tasks", { runningTasks: 0, failedTasks: 0, completedTasks: 0, totalTasks: 0 }, () => getItOpsTaskSummary(pool)),
-            safeItOps("service desk", {
-                openIncidents: 0,
-                overdueTickets: 0,
-                mttrMinutes: 0,
-                firstResponseMinutes: 0,
-                slaAchievement: 0,
-                priorityBreakdown: [],
-                incidentTrend: [],
-                trendSummary: { newIncidents: 0, resolved: 0, openBacklog: 0 },
-                activeAlerts: [],
-                problematicSystems: []
-            }, () => getItOpsIncidentSummary(pool)),
-            safeItOps("patch", { patchCompliance: 0, missingPatches: 0, criticalVulnerabilities: 0, patchDepartments: [] }, () => getItOpsPatchSummary(pool)),
-            safeItOps("departments", [], () => getItOpsDepartmentRows(pool))
+            getItOpsHardwareSummary(pool),
+            getItOpsSoftwareSummary(pool),
+            getItOpsNetworkSummary(pool),
+            getItOpsGeoSummary(pool),
+            getItOpsTaskSummary(pool),
+            getItOpsIncidentSummary(pool),
+            getItOpsPatchSummary(pool),
+            getItOpsDepartmentRows(pool)
         ]);
 
         const totalDevices = itopsToNumber(hardware.totalDevices);
@@ -30513,7 +29873,7 @@ async function mdFetchIncidents(pool) {
 }
 
 
-async function mdFetchSoftwareRows(pool, policy = null) {
+async function mdFetchSoftwareRows(pool) {
     try {
         if (!(await tableExists(pool, "TSMDM_SW_LIST"))) return [];
         const hasCategory = await tableExists(pool, "TS_SW_CATEGORY");
@@ -30536,7 +29896,7 @@ async function mdFetchSoftwareRows(pool, policy = null) {
             FROM TSMDM_SW_LIST sw WITH (NOLOCK)
             ${categoryJoin};
         `);
-        const staleCutoff = Date.now() - (mdPolicyNumber(policy, "telemetry.software.staleDays", 45) * 24 * 60 * 60 * 1000);
+        const staleCutoff = Date.now() - (45 * 24 * 60 * 60 * 1000);
         const riskWords = /remote admin|torrent|crypto|keygen|crack|unknown|toolbar|vpn|proxy|unauthor/i;
         return (result.recordset || []).map((row, index) => {
             const category = mdText(row.CategoryName, "Unclassified");
@@ -30545,7 +29905,7 @@ async function mdFetchSoftwareRows(pool, policy = null) {
             const isUnclassified = /unclassified|unknown|uncategor/i.test(category);
             const isStale = !searchDate || searchDate.getTime() < staleCutoff;
             const isSensitive = riskWords.test(`${softwareName} ${category}`);
-            const riskScore = Math.min(100, (isSensitive ? mdPolicyNumber(policy, "score.software.sensitive", 55) : 0) + (isUnclassified ? mdPolicyNumber(policy, "score.software.unclassified", 30) : 0) + (isStale ? mdPolicyNumber(policy, "score.software.stale", 18) : 0));
+            const riskScore = Math.min(100, (isSensitive ? 55 : 0) + (isUnclassified ? 30 : 0) + (isStale ? 18 : 0));
             return {
                 assetKey: `SW-${index}-${mdText(row.DeviceID) || softwareName}`,
                 objectAgent: "SOFTWARE",
@@ -30561,8 +29921,8 @@ async function mdFetchSoftwareRows(pool, policy = null) {
                 age: isStale ? "Stale evidence" : "Current evidence",
                 ipAddress: "",
                 riskScore,
-                riskSeverity: mdRiskSeverity(riskScore, policy),
-                replacementCost: riskScore > 0 ? mdMoneyValue(mdPolicyNumber(policy, "risk.software.itemExposure", 150)) : mdMoneyValue(0),
+                riskSeverity: riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : riskScore > 0 ? "Low" : "Healthy",
+                replacementCost: riskScore > 0 ? mdMoneyValue(150) : mdMoneyValue(0),
                 isUnclassified,
                 isStale,
                 isSensitive,
@@ -30575,7 +29935,7 @@ async function mdFetchSoftwareRows(pool, policy = null) {
     }
 }
 
-async function mdFetchNetworkRows(pool, policy = null) {
+async function mdFetchNetworkRows(pool) {
     try {
         let rows = [];
         if (typeof getNetworkInventoryRows === "function") {
@@ -30588,7 +29948,7 @@ async function mdFetchNetworkRows(pool, policy = null) {
             const owner = mdText(row.WorkGroup || row.Workgroup || row.WorkgroupName || row.GroupName || row.Object_Full_Name || row.Department, "Unmapped network");
             const registered = text.includes("registered") || text.includes("installed") || text.includes("agent") || text.includes("managed");
             const active = text.includes("active") || text.includes("online") || text.includes("up") || text.includes("alive");
-            const riskScore = Math.min(100, (!registered ? mdPolicyNumber(policy, "score.network.unregistered", 42) : 0) + (!active ? mdPolicyNumber(policy, "score.network.inactive", 16) : 0) + (!ip ? mdPolicyNumber(policy, "score.network.missingIp", 20) : 0));
+            const riskScore = Math.min(100, (!registered ? 42 : 0) + (!active ? 16 : 0) + (!ip ? 20 : 0));
             return {
                 assetKey: `NET-${index}-${ip || name}`,
                 objectAgent: "NETWORK",
@@ -30604,8 +29964,8 @@ async function mdFetchNetworkRows(pool, policy = null) {
                 age: registered ? "Mapped" : "Unmapped",
                 ipAddress: ip,
                 riskScore,
-                riskSeverity: mdRiskSeverity(riskScore, policy),
-                replacementCost: riskScore > 0 ? mdMoneyValue(mdPolicyNumber(policy, "risk.network.itemExposure", 300)) : mdMoneyValue(0),
+                riskSeverity: riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : riskScore > 0 ? "Low" : "Healthy",
+                replacementCost: riskScore > 0 ? mdMoneyValue(300) : mdMoneyValue(0),
                 registered,
                 active
             };
@@ -30616,7 +29976,7 @@ async function mdFetchNetworkRows(pool, policy = null) {
     }
 }
 
-async function mdFetchGeoRows(pool, policy = null) {
+async function mdFetchGeoRows(pool) {
     try {
         if (!(await tableExists(pool, "TSMDM_GEOLOCATION"))) return [];
         const deviceCol = await mdCol(pool, "TSMDM_GEOLOCATION", "geo", "DeviceID", "''");
@@ -30633,14 +29993,14 @@ async function mdFetchGeoRows(pool, policy = null) {
                 CAST(${longCol} AS NVARCHAR(100)) AS Longitude
             FROM TSMDM_GEOLOCATION geo WITH (NOLOCK);
         `);
-        const staleCutoff = Date.now() - (mdPolicyNumber(policy, "telemetry.geo.staleDays", 7) * 24 * 60 * 60 * 1000);
+        const staleCutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
         return (result.recordset || []).map((row, index) => {
             const location = mdText(row.LocationName, "Unknown Location");
             const time = mdDate(row.LocationTime);
             const isUnknown = !location || /unable to fetch|unknown|n\/a|null/i.test(location);
             const isStale = !time || time.getTime() < staleCutoff;
             const hasCoordinate = Boolean(mdText(row.Latitude) && mdText(row.Longitude));
-            const riskScore = Math.min(100, (isUnknown ? mdPolicyNumber(policy, "score.geo.unknown", 35) : 0) + (isStale ? mdPolicyNumber(policy, "score.geo.stale", 32) : 0) + (!hasCoordinate ? mdPolicyNumber(policy, "score.geo.missingCoordinate", 15) : 0));
+            const riskScore = Math.min(100, (isUnknown ? 35 : 0) + (isStale ? 32 : 0) + (!hasCoordinate ? 15 : 0));
             return {
                 assetKey: `GEO-${index}-${mdText(row.DeviceID) || location}`,
                 objectAgent: "GEOLOCATION",
@@ -30656,8 +30016,8 @@ async function mdFetchGeoRows(pool, policy = null) {
                 age: isStale ? "Stale evidence" : "Fresh evidence",
                 ipAddress: "",
                 riskScore,
-                riskSeverity: mdRiskSeverity(riskScore, policy),
-                replacementCost: riskScore > 0 ? mdMoneyValue(mdPolicyNumber(policy, "risk.geo.itemExposure", 200)) : mdMoneyValue(0),
+                riskSeverity: riskScore >= 70 ? "High" : riskScore >= 35 ? "Medium" : riskScore > 0 ? "Low" : "Healthy",
+                replacementCost: riskScore > 0 ? mdMoneyValue(200) : mdMoneyValue(0),
                 isUnknown,
                 isStale,
                 hasCoordinate,
@@ -30696,8 +30056,8 @@ function mdMatchPricing(asset, pricing) {
     return best;
 }
 
-function mdNormalizeAssets(rows, pricing, rule, policy = null) {
-    const staleMs = mdPolicyNumber(policy, "telemetry.endpoint.staleDays", 14) * 24 * 60 * 60 * 1000;
+function mdNormalizeAssets(rows, pricing, rule) {
+    const staleMs = 14 * 24 * 60 * 60 * 1000;
     const now = Date.now();
     const agingMin = mdNumber(rule?.agingMinYears, 5);
     const healthyMax = mdNumber(rule?.healthyMaxYears, 3);
@@ -30716,14 +30076,14 @@ function mdNormalizeAssets(rows, pricing, rule, policy = null) {
         const isExcluded = Boolean(pricingRule?.isExcluded);
         const replacementCost = isPriced && !isExcluded ? mdNumber(pricingRule.unitPrice) : 0;
         let riskScore = 0;
-        if (isAging) riskScore += mdPolicyNumber(policy, "score.penalty.aging", 38);
-        else if (isMonitor) riskScore += mdPolicyNumber(policy, "score.penalty.monitor", 18);
-        if (!isOnline) riskScore += mdPolicyNumber(policy, "score.penalty.offline", 22);
-        if (isStale) riskScore += mdPolicyNumber(policy, "score.penalty.stale", 22);
-        if (missingIdentity) riskScore += mdPolicyNumber(policy, "score.penalty.missingIdentity", 12);
-        if (!isPriced) riskScore += mdPolicyNumber(policy, "score.penalty.unpriced", 6);
+        if (isAging) riskScore += 38;
+        else if (isMonitor) riskScore += 18;
+        if (!isOnline) riskScore += 22;
+        if (isStale) riskScore += 22;
+        if (missingIdentity) riskScore += 12;
+        if (!isPriced) riskScore += 6;
         riskScore = Math.min(100, riskScore);
-        const riskSeverity = mdRiskSeverity(riskScore, policy);
+        const riskSeverity = riskScore >= 70 ? "High" : riskScore >= 40 ? "Medium" : riskScore > 0 ? "Low" : "Healthy";
         return {
             assetKey: mdText(row.assetKey),
             objectAgent: mdText(row.objectAgent),
@@ -30760,9 +30120,6 @@ function mdNormalizeAssets(rows, pricing, rule, policy = null) {
 }
 
 function mdBuildGroups(assets, incidents, metrics, domains = {}) {
-    const policy = domains.policy || { values: DEFAULT_MANAGEMENT_POLICY_VALUES };
-    const endpointRiskThreshold = mdPolicyNumber(policy, "score.risk.endpointThreshold", 35);
-    const mediumRiskThreshold = mdPolicyNumber(policy, "score.risk.mediumThreshold", 40);
     const sumCost = (rows) => rows.reduce((sum, row) => sum + mdNumber(row.replacementCost), 0);
     const countUnique = (rows) => rows.length;
     const rowsBy = {
@@ -30772,7 +30129,7 @@ function mdBuildGroups(assets, incidents, metrics, domains = {}) {
         monitor: assets.filter((row) => row.isMonitor),
         missingIdentity: assets.filter((row) => row.missingIdentity),
         unpriced: assets.filter((row) => !row.isPriced),
-        risk: assets.filter((row) => row.riskScore >= endpointRiskThreshold),
+        risk: assets.filter((row) => row.riskScore >= 35),
         online: assets.filter((row) => row.isOnline),
         unassigned: assets.filter((row) => mdText(row.department, "Unassigned").toLowerCase() === "unassigned")
     };
@@ -30782,10 +30139,10 @@ function mdBuildGroups(assets, incidents, metrics, domains = {}) {
     const duplicateIpRows = Array.isArray(domains.duplicateIpRows) ? domains.duplicateIpRows : [];
     const visibilityRiskRows = assets.filter((row) => row.isStale || !row.isOnline);
     const auditRiskRows = assets.filter((row) => row.missingIdentity || !row.isPriced);
-    const staleRecoveryValue = mdNumber(metrics.staleRecoveryEstimate, rowsBy.stale.length * mdPolicyNumber(policy, "saving.staleRecovery.perDevice", 250));
-    const pricingCleanupValue = mdNumber(metrics.pricingCleanupEstimate, rowsBy.unpriced.length * mdPolicyNumber(policy, "saving.pricingCleanup.perAsset", 250));
-    const identityCleanupValue = mdNumber(metrics.identityCleanupEstimate, rowsBy.missingIdentity.length * mdPolicyNumber(policy, "saving.identityCleanup.perAsset", 150));
-    const slaProductivityValue = mdNumber(metrics.slaProductivityEstimate, mdNumber(incidents.slaBreached) * mdPolicyNumber(policy, "saving.slaProductivity.perBreach", 500));
+    const staleRecoveryValue = rowsBy.stale.length * 250;
+    const pricingCleanupValue = rowsBy.unpriced.length * 250;
+    const identityCleanupValue = rowsBy.missingIdentity.length * 150;
+    const slaProductivityValue = mdNumber(incidents.slaBreached) * 500;
     const intangibleExposure = pricingCleanupValue + identityCleanupValue + staleRecoveryValue + slaProductivityValue;
 
     const row = (payload) => ({
@@ -30801,7 +30158,7 @@ function mdBuildGroups(assets, incidents, metrics, domains = {}) {
     // Keep the Hardware domain card and its drilldown aligned.
     // The frontend Hardware card represents lifecycle + telemetry + identity/control evidence,
     // not only devices that already crossed the final aging threshold.
-    const hardwareLifecycleRows = assets.filter((row) => row.isAging || row.isMonitor || row.isStale || row.missingIdentity || row.riskScore >= endpointRiskThreshold);
+    const hardwareLifecycleRows = assets.filter((row) => row.isAging || row.isMonitor || row.isStale || row.missingIdentity || row.riskScore >= 35);
     const hardwareLifecycleValue = sumCost(hardwareLifecycleRows);
 
     const riskRows = [
@@ -30917,9 +30274,9 @@ function mdBuildGroups(assets, incidents, metrics, domains = {}) {
         row({
             key: "control-risk",
             label: "Endpoint control risk",
-            count: assets.filter((r) => r.riskScore >= mediumRiskThreshold || r.isStale || !r.isOnline).length,
-            value: sumCost(assets.filter((r) => r.riskScore >= mediumRiskThreshold || r.isStale || !r.isOnline)),
-            valueFmt: mdMoneyValue(sumCost(assets.filter((r) => r.riskScore >= mediumRiskThreshold || r.isStale || !r.isOnline))),
+            count: assets.filter((r) => r.riskScore >= 40 || r.isStale || !r.isOnline).length,
+            value: sumCost(assets.filter((r) => r.riskScore >= 40 || r.isStale || !r.isOnline)),
+            valueFmt: mdMoneyValue(sumCost(assets.filter((r) => r.riskScore >= 40 || r.isStale || !r.isOnline))),
             tone: "orange",
             impactType: "Control risk",
             riskType: "PC / security posture",
@@ -31055,7 +30412,7 @@ function mdBuildGroups(assets, incidents, metrics, domains = {}) {
 
     const savingsByType = [
         row({ key: "monitor-reuse", label: "Monitor-stage hardware reuse", count: rowsBy.monitor.filter((row) => row.isOnline).length, value: metrics.savingsOpportunity, valueFmt: mdMoneyValue(metrics.savingsOpportunity), tone: "green", impactType: "Cost optimization", riskType: "Reuse / deferment", costType: "Avoided spend", decision: "Review devices for reuse or deferment", insight: "Online monitor-stage hardware may not need immediate replacement, creating avoided spend.", level3Area: "saving", level3Key: "monitor-reuse" }),
-        row({ key: "refresh-deferment", label: "Refresh deferment reserve", count: rowsBy.monitor.length, value: Math.round(metrics.monitorExposure * mdPolicyNumber(policy, "saving.refreshDeferment.percent", 0.15)), valueFmt: mdMoneyValue(Math.round(metrics.monitorExposure * mdPolicyNumber(policy, "saving.refreshDeferment.percent", 0.15))), tone: "cyan", impactType: "Cost optimization", riskType: "Budget timing", costType: "Avoided / delayed CAPEX", decision: "Split deferable vs must-refresh devices", insight: "Not every monitor-stage device is a buy-now item; deferment protects budget without hiding risk.", level3Area: "capex", level3Key: "refresh-watch" }),
+        row({ key: "refresh-deferment", label: "Refresh deferment reserve", count: rowsBy.monitor.length, value: Math.round(metrics.monitorExposure * 0.15), valueFmt: mdMoneyValue(Math.round(metrics.monitorExposure * 0.15)), tone: "cyan", impactType: "Cost optimization", riskType: "Budget timing", costType: "Avoided / delayed CAPEX", decision: "Split deferable vs must-refresh devices", insight: "Not every monitor-stage device is a buy-now item; deferment protects budget without hiding risk.", level3Area: "capex", level3Key: "refresh-watch" }),
         row({ key: "stale-device-review", label: "Stale device recovery", count: rowsBy.stale.length, value: staleRecoveryValue, valueFmt: mdMoneyValue(staleRecoveryValue), tone: "amber", impactType: "Cost optimization", riskType: "Recovery / retirement", costType: "Intangible recovery", decision: "Recover, retire or reconnect stale endpoints", insight: "Stale cleanup can recover assets, reduce noise and improve license/support planning.", level3Area: "saving", level3Key: "stale-device-review" }),
         row({ key: "pricing-cleanup", label: "Pricing cleanup confidence gain", count: rowsBy.unpriced.length, value: pricingCleanupValue, valueFmt: mdMoneyValue(pricingCleanupValue), tone: "purple", impactType: "Cost optimization", riskType: "Cost catalogue", costType: "Financial confidence", confidence: "Unpriced", decision: "Complete missing pricing rules", insight: "Pricing cleanup may not save cash directly, but it prevents under-budgeting and weak CAPEX approval evidence.", level3Area: "compliance", level3Key: "unpriced-assets" }),
         row({ key: "sla-productivity", label: "SLA productivity leakage", count: incidents.slaBreached, value: slaProductivityValue, valueFmt: mdMoneyValue(slaProductivityValue), tone: "red", impactType: "Cost optimization", riskType: "Support productivity", costType: "Intangible productivity", confidence: "Estimated", decision: "Reduce breach backlog and repeat work", insight: "Service delay creates hidden cost through follow-up work, dissatisfaction and escalation time.", level3Area: "compliance", level3Key: "sla-breach" })
@@ -31064,8 +30421,7 @@ function mdBuildGroups(assets, incidents, metrics, domains = {}) {
     return { riskRows, resourcesByDepartment, capexByCategory, complianceByGap, savingsByType };
 }
 
-function mdBuildTrend(assets, incidents, metrics, rule, policy = null) {
-    const endpointRiskThreshold = mdPolicyNumber(policy, "score.risk.endpointThreshold", mdNumber(metrics.endpointRiskThreshold, 35));
+function mdBuildTrend(assets, incidents, metrics, rule) {
     const keys = mdLastMonthKeys(6);
     const map = new Map(keys.map((key) => [key, {
         month: key,
@@ -31078,15 +30434,15 @@ function mdBuildTrend(assets, incidents, metrics, rule, policy = null) {
     const first = keys[0];
     const current = keys[keys.length - 1];
     assets.forEach((row) => {
-        if (!row.isAging && !row.isMonitor && row.riskScore < endpointRiskThreshold) return;
+        if (!row.isAging && !row.isMonitor && row.riskScore < 35) return;
         let dueKey = mdMonthKey(row.dueDate || row.lastSeen || new Date());
         if (!map.has(dueKey)) {
             dueKey = row.dueDate && row.dueDate < new Date(`${first}-01`) ? current : current;
         }
         const bucket = map.get(dueKey) || map.get(current);
         bucket.financialExposure += row.isAging || row.isMonitor ? row.replacementCost : 0;
-        bucket.riskExposure += row.riskScore >= endpointRiskThreshold ? row.replacementCost : 0;
-        bucket.signals += row.riskScore >= endpointRiskThreshold ? 1 : 0;
+        bucket.riskExposure += row.riskScore >= 35 ? row.replacementCost : 0;
+        bucket.signals += row.riskScore >= 35 ? 1 : 0;
     });
     if (Array.isArray(incidents.monthlyCounts) && incidents.monthlyCounts.length) {
         incidents.monthlyCounts.forEach((row) => {
@@ -31123,8 +30479,6 @@ function mdBuildBoardActions(metrics, incidents) {
 }
 
 function mdBuildOverviewPayload(assets, incidents, rule, domains = {}) {
-    const policy = domains.policy || { values: DEFAULT_MANAGEMENT_POLICY_VALUES };
-    const endpointRiskThreshold = mdPolicyNumber(policy, "score.risk.endpointThreshold", 35);
     const total = assets.length;
     const online = assets.filter((row) => row.isOnline).length;
     const offline = total - online;
@@ -31132,15 +30486,15 @@ function mdBuildOverviewPayload(assets, incidents, rule, domains = {}) {
     const aging = assets.filter((row) => row.isAging).length;
     const monitor = assets.filter((row) => row.isMonitor).length;
     const identityGaps = assets.filter((row) => row.missingIdentity).length;
-    const hardwareLifecycleRiskItems = assets.filter((row) => row.isAging || row.isMonitor || row.isStale || row.missingIdentity || row.riskScore >= endpointRiskThreshold).length;
+    const hardwareLifecycleRiskItems = assets.filter((row) => row.isAging || row.isMonitor || row.isStale || row.missingIdentity || row.riskScore >= 35).length;
     const pricedAssets = assets.filter((row) => row.isPriced).length;
     const unpricedAssets = total - pricedAssets;
-    const endpointRiskCandidates = assets.filter((row) => row.riskScore >= endpointRiskThreshold).length;
+    const endpointRiskCandidates = assets.filter((row) => row.riskScore >= 35).length;
     const softwareRows = Array.isArray(domains.softwareRows) ? domains.softwareRows : [];
     const networkRows = Array.isArray(domains.networkRows) ? domains.networkRows : [];
     const geoRows = Array.isArray(domains.geoRows) ? domains.geoRows : [];
     const deviceIdsWithSoftware = new Set(softwareRows.map((row) => mdText(row.assetId)).filter(Boolean));
-    const softwareRiskItems = softwareRows.filter((row) => row.riskScore >= endpointRiskThreshold || row.isUnclassified || row.isStale || row.isSensitive).length;
+    const softwareRiskItems = softwareRows.filter((row) => row.riskScore >= 35 || row.isUnclassified || row.isStale || row.isSensitive).length;
     const unclassifiedSoftware = softwareRows.filter((row) => row.isUnclassified).length;
     const staleSoftwareEvidence = softwareRows.filter((row) => row.isStale).length;
     const softwareInstallations = softwareRows.length;
@@ -31149,11 +30503,7 @@ function mdBuildOverviewPayload(assets, incidents, rule, domains = {}) {
     const softwareComplianceScore = Math.max(0, Math.min(100, Math.round(100 - mdPercent(unclassifiedSoftware + staleSoftwareEvidence, Math.max(softwareInstallations, 1)))));
     const ipMap = new Map();
     assets.forEach((row) => { const ip = mdText(row.ipAddress); if (!ip) return; if (!ipMap.has(ip)) ipMap.set(ip, []); ipMap.get(ip).push(row); });
-    const duplicateIpScore = mdPolicyNumber(policy, "score.network.duplicateIp", mdPolicyNumber(policy, "score.risk.mediumThreshold", 40));
-    const duplicateIpRows = Array.from(ipMap.entries()).filter(([, rows]) => rows.length > 1).flatMap(([ip, rows]) => rows.map((row) => {
-        const duplicateRiskScore = Math.max(row.riskScore, duplicateIpScore);
-        return { ...row, category: "Duplicate IP", riskScore: duplicateRiskScore, riskSeverity: mdRiskSeverity(duplicateRiskScore, policy), replacementCostFmt: row.replacementCostFmt, ipAddress: ip };
-    }));
+    const duplicateIpRows = Array.from(ipMap.entries()).filter(([, rows]) => rows.length > 1).flatMap(([ip, rows]) => rows.map((row) => ({ ...row, category: "Duplicate IP", riskScore: Math.max(row.riskScore, 45), riskSeverity: row.riskScore >= 70 ? row.riskSeverity : "Medium", replacementCostFmt: row.replacementCostFmt, ipAddress: ip })));
     const networkKnownIps = networkRows.length || ipMap.size;
     const networkUnregisteredRows = networkRows.filter((row) => row.registered === false || /unregistered|unmapped/i.test(mdText(row.status)));
     const networkRiskItems = networkUnregisteredRows.length + duplicateIpRows.length;
@@ -31166,29 +30516,29 @@ function mdBuildOverviewPayload(assets, incidents, rule, domains = {}) {
     const geoMissingDevices = Math.max(total - geoTrackedDevices, 0);
     const geoRiskItems = geoMissingDevices + geoStaleLocations + geoUnknownLocations;
     const geoIntegrityScore = Math.max(0, Math.min(100, Math.round(100 - mdPercent(geoStaleLocations + geoUnknownLocations, Math.max(geoRows.length, 1)))));
-    const softwareRiskExposure = softwareRiskItems * mdPolicyNumber(policy, "risk.software.itemExposure", 150);
-    const networkRiskExposure = networkRiskItems * mdPolicyNumber(policy, "risk.network.itemExposure", 300);
-    const geoRiskExposure = geoRiskItems * mdPolicyNumber(policy, "risk.geo.itemExposure", 200);
+    const softwareRiskExposure = softwareRiskItems * 150;
+    const networkRiskExposure = networkRiskItems * 300;
+    const geoRiskExposure = geoRiskItems * 200;
     const domainRiskItems = softwareRiskItems + networkRiskItems + geoRiskItems;
     const riskCandidates = endpointRiskCandidates + domainRiskItems;
     const capexExposure = assets.filter((row) => row.isAging).reduce((sum, row) => sum + row.replacementCost, 0);
     const monitorExposure = assets.filter((row) => row.isMonitor).reduce((sum, row) => sum + row.replacementCost, 0);
-    const endpointRiskExposure = assets.filter((row) => row.riskScore >= endpointRiskThreshold).reduce((sum, row) => sum + row.replacementCost, 0);
+    const endpointRiskExposure = assets.filter((row) => row.riskScore >= 35).reduce((sum, row) => sum + row.replacementCost, 0);
     const riskExposure = endpointRiskExposure + softwareRiskExposure + networkRiskExposure + geoRiskExposure;
-    const savingsOpportunity = Math.round(assets.filter((row) => row.isMonitor && row.isOnline).reduce((sum, row) => sum + row.replacementCost * mdPolicyNumber(policy, "saving.reuse.percent", 0.25), 0));
-    const staleRecoveryEstimate = stale * mdPolicyNumber(policy, "saving.staleRecovery.perDevice", 250);
-    const pricingCleanupEstimate = unpricedAssets * mdPolicyNumber(policy, "saving.pricingCleanup.perAsset", 250);
-    const identityCleanupEstimate = identityGaps * mdPolicyNumber(policy, "saving.identityCleanup.perAsset", 150);
-    const slaProductivityEstimate = incidents.slaBreached * mdPolicyNumber(policy, "saving.slaProductivity.perBreach", 500);
+    const savingsOpportunity = Math.round(assets.filter((row) => row.isMonitor && row.isOnline).reduce((sum, row) => sum + row.replacementCost * 0.25, 0));
+    const staleRecoveryEstimate = stale * 250;
+    const pricingCleanupEstimate = unpricedAssets * 250;
+    const identityCleanupEstimate = identityGaps * 150;
+    const slaProductivityEstimate = incidents.slaBreached * 500;
     const intangibleExposure = staleRecoveryEstimate + pricingCleanupEstimate + identityCleanupEstimate + slaProductivityEstimate + softwareRiskExposure + networkRiskExposure + geoRiskExposure;
     const tangibleExposure = capexExposure + monitorExposure;
     const totalFinancialExposure = tangibleExposure + riskExposure + intangibleExposure;
     const totalSavingsOpportunity = savingsOpportunity + staleRecoveryEstimate + pricingCleanupEstimate + slaProductivityEstimate;
     const onlineRate = mdPercent(online, total);
     const pricingCoverage = mdPercent(pricedAssets, total);
-    const compliancePenalty = mdPercent(unpricedAssets + identityGaps, total) * mdPolicyNumber(policy, "score.compliance.evidenceGapWeight", 0.55) + mdPercent(incidents.slaBreached, Math.max(incidents.openTickets, 1)) * mdPolicyNumber(policy, "score.compliance.slaWeight", 0.25);
+    const compliancePenalty = mdPercent(unpricedAssets + identityGaps, total) * 0.55 + mdPercent(incidents.slaBreached, Math.max(incidents.openTickets, 1)) * 0.25;
     const complianceScore = Math.max(0, Math.min(100, Math.round(100 - compliancePenalty)));
-    const healthPenalty = mdPercent(riskCandidates, total) * mdPolicyNumber(policy, "score.health.riskWeight", 0.5) + mdPercent(stale, total) * mdPolicyNumber(policy, "score.health.staleWeight", 0.24) + mdPercent(offline, total) * mdPolicyNumber(policy, "score.health.offlineWeight", 0.16) + mdPercent(incidents.slaBreached, Math.max(incidents.openTickets, 1)) * mdPolicyNumber(policy, "score.health.slaWeight", 0.1);
+    const healthPenalty = mdPercent(riskCandidates, total) * 0.5 + mdPercent(stale, total) * 0.24 + mdPercent(offline, total) * 0.16 + mdPercent(incidents.slaBreached, Math.max(incidents.openTickets, 1)) * 0.1;
     const healthScore = Math.max(0, Math.min(100, Math.round(100 - healthPenalty)));
     const metrics = {
         totalEndpoints: total,
@@ -31258,10 +30608,10 @@ function mdBuildOverviewPayload(assets, incidents, rule, domains = {}) {
         slaBreached: incidents.slaBreached,
         highPriority: incidents.highPriority
     };
-    const groups = mdBuildGroups(assets, incidents, metrics, { ...domains, duplicateIpRows, policy });
+    const groups = mdBuildGroups(assets, incidents, metrics, { ...domains, duplicateIpRows });
     const boardActions = mdBuildBoardActions(metrics, incidents);
     metrics.boardAttention = boardActions.filter((row) => row.priority !== "Low").length || boardActions.length;
-    const trend = mdBuildTrend(assets, incidents, metrics, rule, policy);
+    const trend = mdBuildTrend(assets, incidents, metrics, rule);
     return {
         generatedAt: new Date().toISOString(),
         metrics,
@@ -31277,7 +30627,7 @@ function mdBuildOverviewPayload(assets, incidents, rule, domains = {}) {
             { id: "risk", title: "Risk Management", scoreTitle: "Risk Score", scoreValue: String(Math.max(0, 100 - healthScore)), scoreUnit: "/100", scoreStatus: riskCandidates > 0 ? "Action required" : "Controlled", secondTitle: "Risk Exposure", secondValue: mdMoneyValue(riskExposure), secondNote: `${riskCandidates.toLocaleString()} risk candidate(s)`, details: groups.riskRows.slice(0, 4).map((row) => ({ label: row.label, value: row.valueFmt || mdMoneyValue(row.value), key: row.key, tone: "red" })), tone: "purple", icon: "risk", area: "risk" },
             { id: "resources", title: "Resources Management", scoreTitle: "Resource Score", scoreValue: String(onlineRate), scoreUnit: "%", scoreStatus: `${online.toLocaleString()} online`, secondTitle: "Total Endpoints", secondValue: total.toLocaleString(), secondNote: `${onlineRate}% online`, details: [{ label: "Online coverage", value: `${onlineRate}%`, key: "online", tone: "green" }, { label: "Open tickets", value: incidents.openTickets.toLocaleString(), key: "open-tickets", tone: "blue" }, { label: "Devices due for refresh", value: aging.toLocaleString(), key: "aging", tone: "amber" }], tone: "blue", icon: "endpoint", area: "resources" },
             { id: "compliance", title: "Audit Compliance", scoreTitle: "Compliance Score", scoreValue: String(complianceScore), scoreUnit: "%", scoreStatus: complianceScore >= 80 ? "Healthy" : "Needs improvement", secondTitle: "Evidence Coverage", secondValue: `${pricingCoverage}%`, secondNote: `${unpricedAssets.toLocaleString()} unpriced endpoint(s)`, details: groups.complianceByGap.slice(0, 4).map((row) => ({ label: row.label, value: row.valueFmt, key: row.key, tone: "purple" })), tone: "cyan", icon: "audit", area: "compliance" },
-            { id: "saving", title: "Cost Saving", scoreTitle: "Savings Opportunity", scoreValue: mdMoneyValue(totalSavingsOpportunity), scoreStatus: totalSavingsOpportunity > 0 ? "Actionable" : "Stable", secondTitle: "CAPEX Watch", secondValue: mdMoneyValue(monitorExposure), secondNote: `${monitor.toLocaleString()} monitor-stage device(s)`, details: groups.savingsByType.slice(0, 4).map((row) => ({ label: row.label, value: row.valueFmt, key: row.key, tone: "green" })), tone: "orange", icon: "saving", area: "saving" }
+            { id: "saving", title: "Cost Saving", scoreTitle: "Savings Opportunity", scoreValue: mdMoneyValue(savingsOpportunity), scoreStatus: savingsOpportunity > 0 ? "Actionable" : "Stable", secondTitle: "CAPEX Watch", secondValue: mdMoneyValue(monitorExposure), secondNote: `${monitor.toLocaleString()} monitor-stage device(s)`, details: groups.savingsByType.slice(0, 4).map((row) => ({ label: row.label, value: row.valueFmt, key: row.key, tone: "green" })), tone: "orange", icon: "saving", area: "saving" }
         ],
         finance: {
             capexOpex: trend.map((row) => ({ month: row.label, capex: row.financialExposure, opex: row.riskExposure, count: row.signals })),
@@ -31312,15 +30662,11 @@ function mdBuildOverviewPayload(assets, incidents, rule, domains = {}) {
             saving: groups.savingsByType,
             actions: []
         },
-        boardActions,
-        policyUsed: domains.policy?.profile || null,
-        assumptionValues: mdPolicyValues(policy)
+        boardActions
     };
 }
 
 function mdFilterDrilldownRows(assets, incidents, area, key, domains = {}) {
-    const endpointRiskThreshold = mdPolicyNumber(domains.policy, "score.risk.endpointThreshold", 35);
-    const mediumRiskThreshold = mdPolicyNumber(domains.policy, "score.risk.mediumThreshold", 40);
     const a = mdText(area).toLowerCase();
     const k = mdText(key).toLowerCase();
     const softwareRows = Array.isArray(domains.softwareRows) ? domains.softwareRows : [];
@@ -31330,22 +30676,22 @@ function mdFilterDrilldownRows(assets, incidents, area, key, domains = {}) {
     if (a === "software") {
         if (!k || k === "software-scope") return softwareRows;
         if (k === "software-compliance") return softwareRows.filter((row) => row.isUnclassified || row.isSensitive);
-        return softwareRows.filter((row) => row.riskScore >= endpointRiskThreshold || row.isUnclassified || row.isStale || row.isSensitive);
+        return softwareRows.filter((row) => row.riskScore >= 35 || row.isUnclassified || row.isStale || row.isSensitive);
     }
     if (a === "network") {
         if (!k || k === "network-scope") return networkRows.concat(duplicateIpRows);
         if (k === "network-evidence") return networkRows.filter((row) => row.riskScore > 0 || row.registered === false).concat(duplicateIpRows);
-        return networkRows.filter((row) => row.riskScore >= endpointRiskThreshold || row.registered === false).concat(duplicateIpRows);
+        return networkRows.filter((row) => row.riskScore >= 35 || row.registered === false).concat(duplicateIpRows);
     }
     if (a === "geolocation") {
         if (!k || k === "geolocation-scope") return geoRows;
         if (k === "geo-evidence") return geoRows.filter((row) => row.isStale || row.isUnknown || !row.hasCoordinate);
-        return geoRows.filter((row) => row.riskScore >= endpointRiskThreshold || row.isStale || row.isUnknown || !row.hasCoordinate);
+        return geoRows.filter((row) => row.riskScore >= 35 || row.isStale || row.isUnknown || !row.hasCoordinate);
     }
     if (a === "capex") {
         if (!k || k === "aging-assets" || k === "lifecycle-replacement") return assets.filter((row) => row.isAging);
         if (k === "refresh-watch" || k === "refresh-deferment") return assets.filter((row) => row.isMonitor);
-        if (k === "risk-adjusted-replacement") return assets.filter((row) => row.riskScore >= endpointRiskThreshold);
+        if (k === "risk-adjusted-replacement") return assets.filter((row) => row.riskScore >= 35);
         if (k === "intangible-exposure") return assets.filter((row) => row.missingIdentity || !row.isPriced || row.isStale);
         if (k === "unpriced-blindspot") return assets.filter((row) => !row.isPriced);
         return assets.filter((row) => (row.isAging || row.isMonitor) && mdText(row.category).toLowerCase() === k);
@@ -31381,34 +30727,34 @@ function mdFilterDrilldownRows(assets, incidents, area, key, domains = {}) {
         if (k === "stale") return assets.filter((row) => row.isStale);
         if (k === "offline") return assets.filter((row) => !row.isOnline);
         if (k === "aging" || k === "pc-lifecycle" || k === "hardware-lifecycle") {
-            return assets.filter((row) => row.isAging || row.isMonitor || row.isStale || row.missingIdentity || row.riskScore >= endpointRiskThreshold);
+            return assets.filter((row) => row.isAging || row.isMonitor || row.isStale || row.missingIdentity || row.riskScore >= 35);
         }
         if (k === "data-quality") return assets.filter((row) => row.missingIdentity);
-        if (k === "financial-risk") return assets.filter((row) => row.riskScore >= endpointRiskThreshold);
+        if (k === "financial-risk") return assets.filter((row) => row.riskScore >= 35);
         if (k === "visibility-risk") return assets.filter((row) => row.isStale || !row.isOnline);
-        if (k === "control-risk") return assets.filter((row) => row.riskScore >= mediumRiskThreshold || row.isStale || !row.isOnline);
-        return assets.filter((row) => row.riskScore >= endpointRiskThreshold);
+        if (k === "control-risk") return assets.filter((row) => row.riskScore >= 40 || row.isStale || !row.isOnline);
+        return assets.filter((row) => row.riskScore >= 35);
     }
     return assets;
 }
 
 async function mdLoadDashboardContext(pool) {
-    const [rule, policy] = await Promise.all([mdLoadPcAgingRule(pool), mdLoadManagementPolicy(pool)]);
+    const rule = await mdLoadPcAgingRule(pool);
     const [assetRows, pricing, incidents, softwareRows, networkRows, geoRows] = await Promise.all([
         mdFetchAssetRows(pool, rule),
         mdFetchPricing(pool),
         mdFetchIncidents(pool),
-        mdFetchSoftwareRows(pool, policy),
-        mdFetchNetworkRows(pool, policy),
-        mdFetchGeoRows(pool, policy)
+        mdFetchSoftwareRows(pool),
+        mdFetchNetworkRows(pool),
+        mdFetchGeoRows(pool)
     ]);
-    const assets = mdNormalizeAssets(assetRows, pricing, rule, policy);
-    return { assets, pricing, incidents, rule, policy, softwareRows, networkRows, geoRows };
+    const assets = mdNormalizeAssets(assetRows, pricing, rule);
+    return { assets, pricing, incidents, rule, softwareRows, networkRows, geoRows };
 }
 
 app.get("/api/management-dashboard/overview", authenticateToken, async (req, res) => {
     try {
-        const cacheKey = "management-dashboard-overview:v5";
+        const cacheKey = "management-dashboard-overview:v4";
         const cachedData = shouldBypassDashboardCache(req) ? null : readDashboardCache(cacheKey);
         if (cachedData) {
             res.set("X-EMA-Cache", "HIT");
@@ -31432,7 +30778,7 @@ app.get("/api/management-dashboard/drilldown", authenticateToken, async (req, re
         const area = mdText(req.query.area || "risk");
         const key = mdText(req.query.key || "");
         const level = mdNumber(req.query.level, 2);
-        const cacheKey = `management-dashboard-drilldown:v5:${area}:${key}:${level}`;
+        const cacheKey = `management-dashboard-drilldown:v4:${area}:${key}:${level}`;
         const cachedData = shouldBypassDashboardCache(req) ? null : readDashboardCache(cacheKey);
         if (cachedData) {
             res.set("X-EMA-Cache", "HIT");
@@ -31444,11 +30790,7 @@ app.get("/api/management-dashboard/drilldown", authenticateToken, async (req, re
         const context = await mdLoadDashboardContext(pool);
         const ipMap = new Map();
         context.assets.forEach((row) => { const ip = mdText(row.ipAddress); if (!ip) return; if (!ipMap.has(ip)) ipMap.set(ip, []); ipMap.get(ip).push(row); });
-        const duplicateIpScore = mdPolicyNumber(context.policy, "score.network.duplicateIp", mdPolicyNumber(context.policy, "score.risk.mediumThreshold", 40));
-        const duplicateIpRows = Array.from(ipMap.entries()).filter(([, rows]) => rows.length > 1).flatMap(([ip, rows]) => rows.map((row) => {
-            const duplicateRiskScore = Math.max(row.riskScore, duplicateIpScore);
-            return { ...row, category: "Duplicate IP", riskScore: duplicateRiskScore, riskSeverity: mdRiskSeverity(duplicateRiskScore, context.policy), ipAddress: ip };
-        }));
+        const duplicateIpRows = Array.from(ipMap.entries()).filter(([, rows]) => rows.length > 1).flatMap(([ip, rows]) => rows.map((row) => ({ ...row, category: "Duplicate IP", riskScore: Math.max(row.riskScore, 45), riskSeverity: row.riskScore >= 70 ? row.riskSeverity : "Medium", ipAddress: ip })));
         const filtered = mdFilterDrilldownRows(context.assets, context.incidents, area, key, { ...context, duplicateIpRows });
         if (level >= 3) {
             const data = {

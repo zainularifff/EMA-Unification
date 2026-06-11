@@ -1830,3 +1830,448 @@
     width: 100%;
   }
 }
+
+/* =========================================================
+   Management Policy Settings
+   Dashboard policy editor for exposure, scoring, savings and freshness rules.
+========================================================= */
+
+.settings-module-root[data-section="policy"] .content-body {
+  padding-top: 0.9rem !important;
+  overflow-y: auto !important;
+}
+
+.management-policy-editor {
+  display: grid;
+  gap: 0.95rem;
+  align-content: start;
+}
+
+.management-policy-command {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.05rem 1.1rem !important;
+  border-radius: 1.22rem !important;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(37, 99, 235, 0.13), transparent 18rem),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(244, 248, 253, 0.96)) !important;
+  box-shadow:
+    0 16px 34px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88) !important;
+}
+
+.management-policy-command::after {
+  content: "";
+  position: absolute;
+  right: -3.8rem;
+  bottom: -4.2rem;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.16), transparent 64%);
+  pointer-events: none;
+}
+
+.management-policy-command > * {
+  position: relative;
+  z-index: 1;
+}
+
+.management-policy-command-copy h4,
+.management-policy-group-head h4 {
+  margin: 0.32rem 0 0.28rem;
+  color: var(--ema-control-text-strong, #0f2746);
+  font-size: clamp(1.2rem, 1.55vw, 1.7rem);
+  font-weight: 950;
+  letter-spacing: -0.05em;
+  line-height: 1.08;
+}
+
+.management-policy-command-copy p,
+.management-policy-group-head p {
+  max-width: 58rem;
+  margin: 0;
+  color: var(--ema-control-muted, #64748b);
+  font-size: 0.74rem;
+  font-weight: 680;
+  line-height: 1.5;
+}
+
+.management-policy-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin-top: 0.78rem;
+}
+
+.management-policy-meta span,
+.management-policy-count-chip {
+  min-height: 1.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  padding: 0 0.66rem;
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  border-radius: 999px;
+  color: var(--ema-control-primary, #2558e8);
+  background: rgba(37, 99, 235, 0.075);
+  font-size: 0.66rem;
+  font-weight: 920;
+  white-space: nowrap;
+}
+
+.management-policy-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.52rem;
+  flex-wrap: wrap;
+  white-space: nowrap;
+}
+
+.management-policy-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.78rem;
+}
+
+.management-policy-summary-card {
+  min-width: 0;
+  min-height: 5.2rem;
+  display: grid;
+  align-content: center;
+  gap: 0.24rem;
+  padding: 0.86rem 0.92rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1.05rem;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.08), transparent 9rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 254, 0.95));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.035);
+}
+
+.management-policy-summary-card span {
+  color: var(--ema-control-muted, #64748b);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.management-policy-summary-card strong {
+  min-width: 0;
+  color: var(--ema-control-text-strong, #0f2746);
+  font-size: clamp(1.12rem, 1.4vw, 1.5rem);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.management-policy-summary-card small {
+  color: var(--ema-control-muted, #64748b);
+  font-size: 0.68rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.management-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.management-policy-group {
+  min-width: 0;
+  padding: 1rem !important;
+  border-radius: 1.18rem !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(249, 251, 254, 0.95)) !important;
+  box-shadow:
+    0 14px 30px rgba(15, 23, 42, 0.045),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86) !important;
+}
+
+.management-policy-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.85rem;
+  margin-bottom: 0.82rem;
+}
+
+.management-policy-group-head h4 {
+  font-size: clamp(1rem, 1.15vw, 1.24rem);
+}
+
+.management-policy-field-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.68rem;
+}
+
+.management-policy-field {
+  min-width: 0;
+  min-height: 8.9rem;
+  display: grid;
+  grid-template-rows: minmax(3.1rem, auto) auto auto;
+  gap: 0.56rem;
+  padding: 0.78rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.055), transparent 8rem),
+    rgba(248, 251, 254, 0.88);
+  cursor: default;
+}
+
+.management-policy-field-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.management-policy-field-copy strong {
+  color: var(--ema-control-text-strong, #0f2746);
+  font-size: 0.76rem;
+  font-weight: 930;
+  line-height: 1.18;
+}
+
+.management-policy-field-copy small {
+  color: var(--ema-control-muted, #64748b);
+  font-size: 0.66rem;
+  font-weight: 680;
+  line-height: 1.38;
+}
+
+.management-policy-input-wrap {
+  width: 100%;
+  min-width: 0;
+  height: 2.42rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.35rem;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--ema-control-border, #d9e5f2);
+  border-radius: 0.84rem;
+  background: #ffffff;
+}
+
+.management-policy-input-wrap .setting-input {
+  height: 100% !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ema-control-text-strong, #0f2746) !important;
+  font-size: 0.78rem !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+}
+
+.management-policy-input-wrap .setting-input:focus {
+  box-shadow: none !important;
+}
+
+.management-policy-input-wrap em {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+  color: var(--ema-control-primary, #2558e8);
+  background: rgba(37, 99, 235, 0.06);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 930;
+}
+
+.management-policy-preview {
+  min-height: 1.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: max-content;
+  max-width: 100%;
+  padding: 0 0.58rem;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 999px;
+  color: var(--ema-control-primary, #2558e8);
+  background: rgba(37, 99, 235, 0.065);
+  font-size: 0.68rem;
+  font-weight: 930;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1320px) {
+  .management-policy-field-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .management-policy-command,
+  .management-policy-grid,
+  .management-policy-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .management-policy-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .management-policy-group-head {
+    grid-template-columns: 1fr;
+  }
+
+  .management-policy-actions,
+  .management-policy-actions .soft-btn,
+  .management-policy-actions .primary-btn {
+    width: 100%;
+  }
+}
+
+/* =========================================================
+   V10 Settings widget scroll performance final override
+   Fixes lag caused by individual cards becoming scroll containers
+   and repeated gradient/shadow paint during Settings scroll.
+========================================================= */
+
+.settings-module-root.ema-settings-pro .policy-card,
+.settings-module-root.ema-settings-pro .pricing-card,
+.settings-module-root.ema-settings-pro .risk-card,
+.settings-module-root.ema-settings-pro .aging-card,
+.settings-module-root.ema-settings-pro .role-card,
+.settings-module-root.ema-settings-pro .pc-aging-command-card,
+.settings-module-root.ema-settings-pro .pc-aging-overview-card,
+.settings-module-root.ema-settings-pro .pc-aging-panel,
+.settings-module-root.ema-settings-pro .pricing-info-card,
+.settings-module-root.ema-settings-pro .pricing-disclaimer-card,
+.settings-module-root.ema-settings-pro .risk-simple-card,
+.settings-module-root.ema-settings-pro .risk-rule-panel,
+.settings-module-root.ema-settings-pro .settings-helper-card,
+.settings-module-root.ema-settings-pro .module-role-manager,
+.settings-module-root.ema-settings-pro .management-policy-command,
+.settings-module-root.ema-settings-pro .management-policy-group,
+.settings-module-root.ema-settings-pro .management-policy-summary-card,
+.settings-module-root.ema-settings-pro .management-policy-field {
+  overflow: visible !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.026) !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+.settings-module-root.ema-settings-pro .management-policy-command::after,
+.settings-module-root.ema-settings-pro .pricing-info-card::after,
+.settings-module-root.ema-settings-pro .pc-aging-overview-card::after,
+.settings-module-root.ema-settings-pro .pc-aging-command-card::before,
+.settings-module-root.ema-settings-pro .risk-simple-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+.settings-module-root.ema-settings-pro .management-policy-command,
+.settings-module-root.ema-settings-pro .management-policy-group,
+.settings-module-root.ema-settings-pro .management-policy-summary-card,
+.settings-module-root.ema-settings-pro .management-policy-field,
+.settings-module-root.ema-settings-pro .pricing-info-card,
+.settings-module-root.ema-settings-pro .pricing-disclaimer-card,
+.settings-module-root.ema-settings-pro .risk-simple-card,
+.settings-module-root.ema-settings-pro .risk-rule-panel,
+.settings-module-root.ema-settings-pro .pc-aging-panel,
+.settings-module-root.ema-settings-pro .pc-aging-overview-card {
+  background: #ffffff !important;
+}
+
+.settings-module-root.ema-settings-pro .management-policy-grid,
+.settings-module-root.ema-settings-pro .management-policy-field-list,
+.settings-module-root.ema-settings-pro .risk-simple-grid,
+.settings-module-root.ema-settings-pro .pricing-grid,
+.settings-module-root.ema-settings-pro .aging-grid,
+.settings-module-root.ema-settings-pro .role-grid {
+  align-items: start !important;
+}
+
+.settings-module-root.ema-settings-pro .management-policy-field,
+.settings-module-root.ema-settings-pro .risk-simple-card,
+.settings-module-root.ema-settings-pro .pricing-info-card,
+.settings-module-root.ema-settings-pro .pc-aging-panel,
+.settings-module-root.ema-settings-pro .pc-aging-overview-card,
+.settings-module-root.ema-settings-pro .policy-card,
+.settings-module-root.ema-settings-pro .pricing-card,
+.settings-module-root.ema-settings-pro .aging-card,
+.settings-module-root.ema-settings-pro .role-card {
+  content-visibility: auto !important;
+  contain-intrinsic-size: 150px !important;
+  contain: layout paint style !important;
+}
+
+.settings-module-root.ema-settings-pro .user-row,
+.settings-module-root.ema-settings-pro .role-control-row,
+.settings-module-root.ema-settings-pro .audit-row,
+.settings-module-root.ema-settings-pro .pricing-row,
+.settings-module-root.ema-settings-pro .module-control-row,
+.settings-module-root.ema-settings-pro .summary-row {
+  content-visibility: auto !important;
+  contain-intrinsic-size: 58px !important;
+  contain: layout paint style !important;
+}
+
+.settings-module-root.ema-settings-pro .management-policy-input-wrap,
+.settings-module-root.ema-settings-pro .price-input-shell,
+.settings-module-root.ema-settings-pro .setting-input,
+.settings-module-root.ema-settings-pro .setting-select-trigger,
+.settings-module-root.ema-settings-pro .soft-btn,
+.settings-module-root.ema-settings-pro .primary-btn,
+.settings-module-root.ema-settings-pro .setting-btn {
+  transition: none !important;
+  animation: none !important;
+}
+
+.settings-module-root.ema-settings-pro .management-policy-command {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 0.85rem !important;
+}
+
+.settings-module-root.ema-settings-pro .management-policy-meta,
+.settings-module-root.ema-settings-pro .management-policy-actions {
+  gap: 0.4rem !important;
+}
+
+@media (max-width: 1320px) {
+  .settings-module-root.ema-settings-pro .management-policy-grid,
+  .settings-module-root.ema-settings-pro .management-policy-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-module-root.ema-settings-pro .management-policy-command,
+  .settings-module-root.ema-settings-pro .management-policy-grid,
+  .settings-module-root.ema-settings-pro .management-policy-summary-grid,
+  .settings-module-root.ema-settings-pro .management-policy-field-list {
+    grid-template-columns: 1fr !important;
+  }
+
+  .settings-module-root.ema-settings-pro .management-policy-actions,
+  .settings-module-root.ema-settings-pro .management-policy-actions .soft-btn,
+  .settings-module-root.ema-settings-pro .management-policy-actions .primary-btn {
+    width: 100% !important;
+  }
+}

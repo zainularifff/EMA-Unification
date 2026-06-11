@@ -21693,3 +21693,268 @@ button.ema-sidebar-tree-node {
     flex: 0 0 9.5rem !important;
   }
 }
+
+/* =========================================================
+   V17 Settings scroll performance final override
+   Applied to Settings only.
+   Goal: remove nested scrolling, reduce repaint cost and keep one smooth scroll area.
+========================================================= */
+
+html.ema-settings-page-active,
+body.ema-settings-page-active,
+html.ema-settings-lock,
+body.ema-settings-lock,
+html.ema-layout-lock,
+body.ema-layout-lock {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  scroll-behavior: auto !important;
+}
+
+body.ema-settings-page-active #root,
+body.ema-settings-lock #root,
+body.ema-layout-lock #root,
+body.ema-settings-page-active .ema-shell,
+body.ema-settings-page-active .ema-main,
+body.ema-settings-page-active .ema-page,
+body.ema-settings-page-active .ema-content,
+body.ema-settings-page-active .app-shell,
+body.ema-settings-page-active .app-main,
+body.ema-settings-page-active .app-content,
+body.ema-settings-lock .ema-shell,
+body.ema-settings-lock .ema-main,
+body.ema-settings-lock .ema-page,
+body.ema-settings-lock .ema-content,
+body.ema-settings-lock .app-shell,
+body.ema-settings-lock .app-main,
+body.ema-settings-lock .app-content {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+body.ema-settings-page-active .ema-page,
+body.ema-settings-page-active .app-content,
+body.ema-settings-page-active .main-content,
+body.ema-settings-lock .ema-page,
+body.ema-settings-lock .app-content,
+body.ema-settings-lock .main-content {
+  height: calc(100dvh - 76px) !important;
+  max-height: calc(100dvh - 76px) !important;
+  padding: 0.75rem !important;
+}
+
+.settings-module-root.ema-settings-pro {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border-radius: 1.35rem !important;
+  background: #eef3f8 !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.055) !important;
+  contain: layout paint style !important;
+}
+
+.settings-module-root.ema-settings-pro,
+.settings-module-root.ema-settings-pro *,
+.settings-module-root.ema-settings-pro *::before,
+.settings-module-root.ema-settings-pro *::after {
+  scroll-behavior: auto !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.settings-module-root.ema-settings-pro * {
+  animation: none !important;
+  transition: none !important;
+}
+
+.settings-module-root.ema-settings-pro::before,
+.settings-module-root.ema-settings-pro::after,
+.settings-module-root.ema-settings-pro .settings-hero::before,
+.settings-module-root.ema-settings-pro .settings-hero::after {
+  display: none !important;
+  content: none !important;
+}
+
+.settings-module-root.ema-settings-pro .settings-layout {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 248px minmax(0, 1fr) !important;
+  gap: 0.85rem !important;
+  padding: 0.85rem !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.ema-settings-pro .settings-menu,
+.settings-module-root.ema-settings-pro .settings-content,
+.settings-module-root.ema-settings-pro .content-shell {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+.settings-module-root.ema-settings-pro .settings-menu {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.settings-module-root.ema-settings-pro .settings-menu-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  -webkit-overflow-scrolling: auto !important;
+  contain: layout paint style !important;
+}
+
+.settings-module-root.ema-settings-pro .settings-content {
+  height: 100% !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 0.85rem !important;
+}
+
+.settings-module-root.ema-settings-pro .settings-hero {
+  min-height: 5.9rem !important;
+  max-height: 7rem !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.035) !important;
+  contain: layout paint style !important;
+}
+
+.settings-module-root.ema-settings-pro .content-shell {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.035) !important;
+  contain: layout paint style !important;
+}
+
+.settings-module-root.ema-settings-pro .content-head,
+.settings-module-root.ema-settings-pro .content-toolbar,
+.settings-module-root.ema-settings-pro .user-access-commandbar,
+.settings-module-root.ema-settings-pro .audit-commandbar,
+.settings-module-root.ema-settings-pro .settings-helper-card {
+  flex: 0 0 auto !important;
+}
+
+.settings-module-root.ema-settings-pro .content-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  scrollbar-gutter: stable !important;
+  -webkit-overflow-scrolling: auto !important;
+  will-change: auto !important;
+  transform: none !important;
+  contain: layout style paint !important;
+}
+
+.settings-module-root.ema-settings-pro .settings-content,
+.settings-module-root.ema-settings-pro .content-shell,
+.settings-module-root.ema-settings-pro .content-panel,
+.settings-module-root.ema-settings-pro .uam-panel,
+.settings-module-root.ema-settings-pro .policy-card,
+.settings-module-root.ema-settings-pro .pricing-card,
+.settings-module-root.ema-settings-pro .risk-card,
+.settings-module-root.ema-settings-pro .aging-card,
+.settings-module-root.ema-settings-pro .role-card,
+.settings-module-root.ema-settings-pro .management-policy-field,
+.settings-module-root.ema-settings-pro .management-policy-summary-card,
+.settings-module-root.ema-settings-pro .risk-simple-card,
+.settings-module-root.ema-settings-pro .pc-aging-panel,
+.settings-module-root.ema-settings-pro .pc-aging-overview-card,
+.settings-module-root.ema-settings-pro .pricing-info-card {
+  backface-visibility: hidden !important;
+  transform: none !important;
+  will-change: auto !important;
+}
+
+/* Remove sticky headers inside long Settings scrolls. Sticky table rows repaint heavily here. */
+.settings-module-root.ema-settings-pro .module-control-row.head,
+.settings-module-root.ema-settings-pro .user-row.head,
+.settings-module-root.ema-settings-pro .role-control-row.head,
+.settings-module-root.ema-settings-pro .audit-standard-row.head,
+.settings-module-root.ema-settings-pro .pricing-head-row {
+  position: static !important;
+  top: auto !important;
+}
+
+/* Do not let table/cards create another vertical scrollbar. */
+.settings-module-root.ema-settings-pro .user-access-table,
+.settings-module-root.ema-settings-pro .role-control-table,
+.settings-module-root.ema-settings-pro .audit-standard-table,
+.settings-module-root.ema-settings-pro .pricing-table-card,
+.settings-module-root.ema-settings-pro .module-control-table,
+.settings-module-root.ema-settings-pro .role-standard-table {
+  overflow-y: visible !important;
+  max-height: none !important;
+  contain: layout style paint !important;
+}
+
+.settings-module-root.ema-settings-pro .pricing-table-card,
+.settings-module-root.ema-settings-pro .module-control-table,
+.settings-module-root.ema-settings-pro .user-access-table,
+.settings-module-root.ema-settings-pro .role-control-table,
+.settings-module-root.ema-settings-pro .audit-standard-table {
+  overflow-x: auto !important;
+}
+
+@media (max-width: 1100px) {
+  html.ema-settings-page-active,
+  body.ema-settings-page-active,
+  html.ema-settings-lock,
+  body.ema-settings-lock,
+  html.ema-layout-lock,
+  body.ema-layout-lock {
+    height: auto !important;
+    max-height: none !important;
+    overflow: auto !important;
+  }
+
+  body.ema-settings-page-active .ema-page,
+  body.ema-settings-lock .ema-page,
+  body.ema-layout-lock .ema-page,
+  body.ema-settings-page-active .app-content,
+  body.ema-settings-lock .app-content,
+  body.ema-layout-lock .app-content {
+    height: auto !important;
+    max-height: none !important;
+    overflow: auto !important;
+    padding: 0.75rem !important;
+  }
+
+  .settings-module-root.ema-settings-pro,
+  .settings-module-root.ema-settings-pro .settings-layout,
+  .settings-module-root.ema-settings-pro .settings-menu,
+  .settings-module-root.ema-settings-pro .settings-content,
+  .settings-module-root.ema-settings-pro .content-shell,
+  .settings-module-root.ema-settings-pro .content-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    contain: none !important;
+  }
+
+  .settings-module-root.ema-settings-pro .settings-layout {
+    grid-template-columns: 1fr !important;
+    padding: 0.75rem !important;
+  }
+
+  .settings-module-root.ema-settings-pro .settings-menu-list {
+    display: flex !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+  }
+}

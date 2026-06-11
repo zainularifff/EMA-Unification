@@ -74,6 +74,7 @@ type ReportFilters = {
   contractStart?: string;
   contractEnd?: string;
   contractedNodes?: number;
+  hardwareReports?: string[];
 };
 
 type ReportOptionItem = {
@@ -134,6 +135,150 @@ const colors = {
   Risk: "#f43f5e"
 } as Record<string, string>;
 
+type HardwareReportOption = {
+  id: string;
+  title: string;
+  description: string;
+  icon: keyof typeof icons;
+  accent: string;
+};
+
+const HARDWARE_REPORT_OPTIONS: HardwareReportOption[] = [
+  {
+    id: "manufacturer-brand",
+    title: "Endpoint Manufacturer Brand",
+    description: "Brand and model distribution for endpoint estate and procurement visibility.",
+    icon: "asset",
+    accent: "#7c3aed"
+  },
+  {
+    id: "pc-aging",
+    title: "Resources Planning - PC Aging",
+    description: "Aging endpoint view by location to support refresh and replacement planning.",
+    icon: "device",
+    accent: "#f97316"
+  },
+  {
+    id: "os-compliance",
+    title: "OS Compliance",
+    description: "Windows OS support posture and compliance review for the selected scope.",
+    icon: "shield",
+    accent: "#2563eb"
+  },
+  {
+    id: "vulnerability-security",
+    title: "Vulnerability & Security",
+    description: "Supported OS vs EOL/EOS exposure split by HQ and Branch estate.",
+    icon: "shield",
+    accent: "#ef4444"
+  },
+  {
+    id: "location",
+    title: "Location / Department",
+    description: "Grouping by location or department with online, offline and aging counts.",
+    icon: "geo",
+    accent: "#0f766e"
+  },
+  {
+    id: "agent-status",
+    title: "Agent Status",
+    description: "Connected vs not connected endpoint status with supporting evidence.",
+    icon: "remote",
+    accent: "#0891b2"
+  }
+];
+
+const DEFAULT_HARDWARE_REPORT_IDS = HARDWARE_REPORT_OPTIONS.map((item) => item.id);
+
+function normalizeHardwareReportSelection(value: unknown) {
+  const raw = Array.isArray(value)
+    ? value
+    : String(value || "").split(",");
+
+  const selected = raw
+    .map((item) => String(item || "").trim())
+    .filter((item) => DEFAULT_HARDWARE_REPORT_IDS.includes(item));
+
+  return selected.length ? Array.from(new Set(selected)) : DEFAULT_HARDWARE_REPORT_IDS;
+}
+
+function hardwareSectionBelongsToSelection(section: ReportSection, selectedIds: string[]) {
+  const title = String(section?.title || "").toLowerCase();
+  const type = String(section?.type || "").toLowerCase();
+
+  if (!title) return false;
+  if (title.includes("hardware report selection") || title.includes("selected hardware")) return true;
+  if (title.includes("recommended action") || title.includes("action plan")) return true;
+  if (type === "kpi" && (title.includes("snapshot") || title.includes("summary"))) return true;
+
+  return selectedIds.some((id) => {
+    if (id === "manufacturer-brand") {
+      return title.includes("manufacturer brand") || title.includes("brand detail") || title.includes("brand distribution");
+    }
+    if (id === "pc-aging") {
+      return title.includes("pc aging") || title.includes("aging evidence") || title.includes("replacement") || title.includes("aging candidate");
+    }
+    if (id === "os-compliance") {
+      return title === "os compliance" || title.includes("os compliance") || title.includes("windows compliance");
+    }
+    if (id === "vulnerability-security") {
+      return title.includes("vulnerability") || title.includes("supported os") || title.includes("eol") || title.includes("eos") || title.includes("security exposure");
+    }
+    if (id === "location") {
+      return title.includes("location") || title.includes("department");
+    }
+    if (id === "agent-status") {
+      return title.includes("agent status") || title.includes("connected / not connected") || title.includes("not connected");
+    }
+    return false;
+  });
+}
+
+function applyHardwareSelectionToPayload(payload: ReportPayload, reportId: string | undefined, selectedIdsInput: unknown): ReportPayload {
+  if (!payload || reportId !== "hardware-asset-lifecycle") return payload;
+
+  const selectedIds = normalizeHardwareReportSelection(selectedIdsInput);
+  const selectedTitles = HARDWARE_REPORT_OPTIONS
+    .filter((item) => selectedIds.includes(item.id))
+    .map((item) => item.title);
+
+  const sectionRows = selectedTitles.map((title, index) => ({
+    no: String(index + 1).padStart(2, "0"),
+    report: title,
+    output: "Included in preview/PDF",
+    basis: HARDWARE_REPORT_OPTIONS.find((item) => item.title === title)?.description || "Selected hardware evidence"
+  }));
+
+  const selectionSummary: ReportSection = {
+    type: "table",
+    title: "Selected Hardware Report Scope",
+    columns: ["no", "report", "output", "basis"],
+    rows: sectionRows
+  };
+
+  const originalSections = Array.isArray(payload.sections) ? payload.sections : [];
+  const filteredSections = originalSections.filter((section) => hardwareSectionBelongsToSelection(section, selectedIds));
+  const withoutDuplicateSummary = filteredSections.filter((section) => String(section.title || "").toLowerCase() !== "selected hardware report scope");
+
+  return {
+    ...payload,
+    filters: { ...(payload.filters || {}), hardwareReports: selectedIds },
+    sections: [selectionSummary, ...withoutDuplicateSummary],
+    narrative: {
+      ...payload.narrative,
+      executiveSummary: selectedTitles.length
+        ? `This Hardware & Asset Lifecycle preview is generated only for the selected hardware report card(s): ${selectedTitles.join(", ")}. The evidence below is filtered to match the selected reporting scope.`
+        : payload.narrative.executiveSummary,
+      keyFindings: selectedTitles.length
+        ? [
+            `Selected hardware report card(s): ${selectedTitles.join(", ")}.`,
+            ...(payload.narrative?.keyFindings || []).filter((finding) => selectedTitles.some((title) => String(finding).toLowerCase().includes(title.toLowerCase().split(" ")[0]))).slice(0, 4)
+          ]
+        : payload.narrative.keyFindings
+    }
+  };
+}
+
 const emptyFilters: ReportFilters = {
   dateRange: "current-month",
   relationID: 0,
@@ -149,7 +294,8 @@ const emptyFilters: ReportFilters = {
   solutionVersion: "EMA System",
   contractStart: "",
   contractEnd: "",
-  contractedNodes: 0
+  contractedNodes: 0,
+  hardwareReports: DEFAULT_HARDWARE_REPORT_IDS
 };
 
 const fallbackOptions: ReportOptions = {
@@ -282,13 +428,13 @@ const FEATURED_REPORT_BLUEPRINTS: Record<string, FeaturedReportBlueprint> = {
     deliverables: ["Client PDF", "Resource planning table", "Application risk appendix"]
   },
   "hardware-asset-lifecycle": {
-    eyebrow: "Hardware Lifecycle",
+    eyebrow: "Hardware Reporting",
     icon: "asset",
-    intent: "Hardware estate and lifecycle readiness view for replacement and inventory planning.",
-    bestFor: "Procurement planning, asset refresh, missing hardware data cleanup.",
+    intent: "Choose one or more hardware report cards: manufacturer brand, PC aging, OS compliance, security exposure, location and agent status.",
+    bestFor: "Procurement planning, asset refresh, OS compliance and hardware estate review.",
     accent: "#7c3aed",
-    sections: ["Hardware estate summary", "Brand/model distribution", "Endpoint type distribution", "PC age / BIOS age", "Aging candidates", "Missing hardware information", "Replacement planning"],
-    deliverables: ["Lifecycle PDF", "Hardware inventory export", "Replacement candidate list"]
+    sections: HARDWARE_REPORT_OPTIONS.map((item) => item.title),
+    deliverables: ["Selected hardware PDF", "Hardware section evidence", "Lifecycle action list"]
   },
   "operations-health-sla": {
     eyebrow: "Operations Health",
@@ -332,8 +478,8 @@ function getApiBases() {
   const viteBase = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL || "";
   const configured = String(viteBase || "").replace(/\/$/, "");
 
-  // First use project config/proxy. If Vite proxy is not configured, fall back to the backend port used by server.js.
-  return Array.from(new Set([configured, "", "http://localhost:3001"].filter((item) => item !== null && item !== undefined)));
+  // Report API must call the backend directly. Do not try the Vite origin first because /api/reports/preview is not served by Vite.
+  return Array.from(new Set([configured || "http://localhost:3001", "http://localhost:3001"].filter(Boolean)));
 }
 
 function pickTokenFromJson(value: string | null) {
@@ -2432,7 +2578,7 @@ function buildClientRnrFilterValues(payload: ReportPayload, filters: ReportFilte
 
 function applyClientRnrLiveOverrides(payload: ReportPayload, filters: ReportFilters): ReportPayload {
   if (payload.report.id !== "client-summary-rnr") {
-    return { ...payload, filters: { ...(payload.filters || {}), ...(filters || {}) } };
+    return { ...payload, filters: { ...(payload.filters || emptyFilters), ...(filters || {}) } as ReportFilters };
   }
 
   const values = buildClientRnrFilterValues(payload, filters);
@@ -2470,7 +2616,7 @@ function applyClientRnrLiveOverrides(payload: ReportPayload, filters: ReportFilt
 
   return {
     ...payload,
-    filters: { ...(payload.filters || {}), ...(filters || {}) },
+    filters: { ...(payload.filters || emptyFilters), ...(filters || {}) } as ReportFilters,
     sections
   };
 }
@@ -2973,34 +3119,49 @@ export default function Report() {
     setPayload(null);
     setPreviewStatus("Ready");
     const nextOutput = allowedOutputs(report, options)[0] || "PDF";
-    updateFilter("outputFormat", nextOutput);
+    setFilters((current) => ({
+      ...current,
+      outputFormat: nextOutput,
+      ...(report.id === "hardware-asset-lifecycle" ? { hardwareReports: normalizeHardwareReportSelection(current.hardwareReports) } : {})
+    }));
     setScheduleDraft((current) => ({ ...current, outputFormat: nextOutput }));
   }
 
   async function requestReport(mode: "preview" | "generate") {
     if (!selectedReport) return null;
+    const hardwareSelectionForRequest = normalizeHardwareReportSelection(filters.hardwareReports);
+    const requestFilters: ReportFilters = selectedReport.id === "hardware-asset-lifecycle"
+      ? {
+          ...filters,
+          hardwareReports: hardwareSelectionForRequest,
+          selectedHardwareReports: hardwareSelectionForRequest,
+          selectedHardwareReportIds: hardwareSelectionForRequest
+        }
+      : filters;
+
     setLoading(true);
     setError("");
     try {
       const response = await apiRequest<ReportPayload>(`/api/reports/${mode === "preview" ? "preview" : "generate"}`, {
         method: "POST",
-        body: JSON.stringify({ reportId: selectedReport.id, ...filters })
+        body: JSON.stringify({ reportId: selectedReport.id, ...requestFilters })
       });
-      const responseWithLiveFilters = applyClientRnrLiveOverrides(response, filters);
+      const responseForSelectedReport = applyHardwareSelectionToPayload(response, selectedReport.id, hardwareSelectionForRequest);
+      const responseWithLiveFilters = applyClientRnrLiveOverrides(responseForSelectedReport, requestFilters);
       setPayload(responseWithLiveFilters);
       setPreviewStatus(mode === "preview" ? "Previewed" : "Generated");
       setIsPreviewOpen(true);
 
       if (mode === "generate") {
         setHistory((current) => [
-          { title: responseWithLiveFilters.report.title, format: filters.outputFormat, time: formatGeneratedTime(), payload: responseWithLiveFilters },
+          { title: responseWithLiveFilters.report.title, format: requestFilters.outputFormat, time: formatGeneratedTime(), payload: responseWithLiveFilters },
           ...current.slice(0, 7)
         ]);
 
-        if (filters.outputFormat === "PDF") {
+        if (requestFilters.outputFormat === "PDF") {
           exportPdfPayload(responseWithLiveFilters);
         } else {
-          applyOutputAction(responseWithLiveFilters, filters.outputFormat);
+          applyOutputAction(responseWithLiveFilters, requestFilters.outputFormat);
         }
       }
 
@@ -3078,6 +3239,33 @@ export default function Report() {
   const totalTemplateCount = featuredReports.length;
   const selectedBlueprint = getFeaturedReportBlueprint(selectedReport?.id);
   const selectedPackNumber = getFeaturedReportNumber(featuredReports, selectedReport);
+  const isHardwareReport = selectedReport?.id === "hardware-asset-lifecycle";
+  const selectedHardwareReportIds = normalizeHardwareReportSelection(filters.hardwareReports);
+  const selectedHardwareReports = HARDWARE_REPORT_OPTIONS.filter((item) => selectedHardwareReportIds.includes(item.id));
+
+  function toggleHardwareReportOption(optionId: string) {
+    setFilters((current) => {
+      const currentSelection = normalizeHardwareReportSelection(current.hardwareReports);
+      const isSelected = currentSelection.includes(optionId);
+      const nextSelection = isSelected
+        ? currentSelection.filter((item) => item !== optionId)
+        : [...currentSelection, optionId];
+
+      return {
+        ...current,
+        hardwareReports: nextSelection.length ? nextSelection : currentSelection
+      };
+    });
+    setPayload(null);
+    setPreviewStatus("Ready");
+  }
+
+  function selectAllHardwareReports() {
+    setFilters((current) => ({ ...current, hardwareReports: DEFAULT_HARDWARE_REPORT_IDS }));
+    setPayload(null);
+    setPreviewStatus("Ready");
+  }
+
   const reportAnalysis = buildReportAnalysis(selectedReport, filters, payload);
 
   return (
@@ -3776,6 +3964,174 @@ export default function Report() {
           background: #edf4ff;
           border-color: #b7cef7;
         }
+        .hardware-report-selector-panel {
+          background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+          border: 1px solid #d8e3f3;
+          border-radius: 22px;
+          padding: 20px;
+          box-shadow: 0 12px 28px rgba(15, 35, 71, 0.06);
+        }
+        .hardware-report-selector-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+          align-items: flex-start;
+          margin-bottom: 16px;
+        }
+        .hardware-report-selector-head span,
+        .hardware-mini-selector span {
+          display: block;
+          color: #7b8da8;
+          font-size: 0.72rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          margin-bottom: 6px;
+        }
+        .hardware-report-selector-head h4 {
+          margin: 0 0 6px;
+          color: #172f57;
+          font-size: 1.08rem;
+        }
+        .hardware-report-selector-head p {
+          margin: 0;
+          max-width: 760px;
+          color: #5d7190;
+          line-height: 1.55;
+        }
+        .hardware-report-selected-count {
+          flex-shrink: 0;
+          min-width: 112px;
+          padding: 12px 14px;
+          border-radius: 16px;
+          background: #eef4ff;
+          border: 1px solid #cddcf6;
+          text-align: center;
+          color: #2457cd;
+        }
+        .hardware-report-selected-count strong {
+          display: block;
+          font-size: 1.45rem;
+          line-height: 1;
+        }
+        .hardware-report-selected-count small {
+          display: block;
+          margin-top: 4px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+        }
+        .hardware-report-choice-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .hardware-report-choice-card {
+          position: relative;
+          display: grid;
+          grid-template-columns: 42px minmax(0, 1fr) auto;
+          gap: 12px;
+          align-items: flex-start;
+          min-height: 116px;
+          padding: 16px;
+          border: 1px solid #d8e3f3;
+          border-left: 4px solid var(--hardware-accent, #7c3aed);
+          border-radius: 18px;
+          background: #fff;
+          cursor: pointer;
+          transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+        }
+        .hardware-report-choice-card:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 14px 28px rgba(15, 35, 71, 0.08);
+          border-color: #bad0f5;
+        }
+        .hardware-report-choice-card.active {
+          background: linear-gradient(180deg, #ffffff 0%, #f3f7ff 100%);
+          border-color: #9bbcf4;
+          box-shadow: 0 16px 30px rgba(37, 99, 235, 0.12);
+        }
+        .hardware-report-choice-card input {
+          position: absolute;
+          opacity: 0;
+          pointer-events: none;
+        }
+        .hardware-report-choice-icon {
+          width: 42px;
+          height: 42px;
+          border-radius: 14px;
+          display: grid;
+          place-items: center;
+          color: var(--hardware-accent, #7c3aed);
+          background: color-mix(in srgb, var(--hardware-accent, #7c3aed) 12%, white);
+        }
+        .hardware-report-choice-icon svg { width: 21px; height: 21px; }
+        .hardware-report-choice-copy strong {
+          display: block;
+          color: #17325d;
+          font-size: 0.98rem;
+          line-height: 1.3;
+          margin-bottom: 6px;
+        }
+        .hardware-report-choice-copy small {
+          display: block;
+          color: #5f7391;
+          line-height: 1.45;
+          font-weight: 600;
+        }
+        .hardware-report-checkmark {
+          width: 30px;
+          height: 30px;
+          border-radius: 999px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #cbd8eb;
+          color: #8aa0bf;
+          font-weight: 900;
+          background: #f8fbff;
+        }
+        .hardware-report-choice-card.active .hardware-report-checkmark {
+          background: var(--hardware-accent, #7c3aed);
+          color: #fff;
+          border-color: transparent;
+        }
+        .hardware-report-selector-actions {
+          margin-top: 14px;
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: center;
+          color: #6b7f9c;
+          font-weight: 700;
+        }
+        .hardware-mini-selector {
+          border: 1px solid #d8e3f3;
+          border-radius: 18px;
+          padding: 14px;
+          background: #f8fbff;
+        }
+        .hardware-mini-selector legend {
+          float: none;
+          width: auto;
+          padding: 0 6px;
+          margin: 0;
+          font-size: 0.78rem;
+          font-weight: 800;
+          color: #17325d;
+        }
+        .hardware-mini-check-grid {
+          display: grid;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .hardware-mini-check-grid label {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          color: #435875;
+          font-weight: 700;
+          line-height: 1.35;
+        }
         .report-config-panel { position: sticky; top: 16px; }
         @media (max-width: 1400px) {
           .report-template-row { grid-template-columns: minmax(0, 1fr); }
@@ -3908,16 +4264,62 @@ export default function Report() {
                       </div>
                     </div>
 
-                    <div className="report-pack-section-list">
-                      <span>Report Content</span>
-                      <h4>What this report will include</h4>
-                      <p>{selectedBlueprint.intent}</p>
-                      <div className="report-section-chip-grid">
-                        {selectedBlueprint.sections.map((section, index) => (
-                          <div key={`${section}-${index}`}><b>{String(index + 1).padStart(2, "0")}</b><strong>{section}</strong></div>
-                        ))}
+                    {isHardwareReport ? (
+                      <div className="hardware-report-selector-panel">
+                        <div className="hardware-report-selector-head">
+                          <div>
+                            <span>Hardware report selection</span>
+                            <h4>Choose one or more hardware reports</h4>
+                            <p>Hardware & Asset Lifecycle now works as a report bundle. Select the exact report cards needed for this PDF; only selected hardware sections will be generated.</p>
+                          </div>
+                          <div className="hardware-report-selected-count">
+                            <strong>{selectedHardwareReports.length}</strong>
+                            <small>Selected</small>
+                          </div>
+                        </div>
+
+                        <div className="hardware-report-choice-grid">
+                          {HARDWARE_REPORT_OPTIONS.map((option) => {
+                            const isSelected = selectedHardwareReportIds.includes(option.id);
+                            return (
+                              <label
+                                key={option.id}
+                                className={`hardware-report-choice-card ${isSelected ? "active" : ""}`}
+                                style={{ "--hardware-accent": option.accent } as CSSProperties}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleHardwareReportOption(option.id)}
+                                />
+                                <span className="hardware-report-choice-icon" dangerouslySetInnerHTML={{ __html: icons[option.icon] || icons.asset }} />
+                                <span className="hardware-report-choice-copy">
+                                  <strong>{option.title}</strong>
+                                  <small>{option.description}</small>
+                                </span>
+                                <span className="hardware-report-checkmark">{isSelected ? "✓" : "+"}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        <div className="hardware-report-selector-actions">
+                          <span>Multiple selections are supported. PDF will follow the selected card order.</span>
+                          <button type="button" className="btn soft-btn" onClick={selectAllHardwareReports}>Select All</button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="report-pack-section-list">
+                        <span>Report Content</span>
+                        <h4>What this report will include</h4>
+                        <p>{selectedBlueprint.intent}</p>
+                        <div className="report-section-chip-grid">
+                          {selectedBlueprint.sections.map((section, index) => (
+                            <div key={`${section}-${index}`}><b>{String(index + 1).padStart(2, "0")}</b><strong>{section}</strong></div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="selected-report-only-panel">
                       <div>
@@ -4019,6 +4421,25 @@ export default function Report() {
                           </select>
                         </label>
 
+                        {isHardwareReport && (
+                          <fieldset className="hardware-mini-selector">
+                            <legend>Hardware Reports</legend>
+                            <span>{selectedHardwareReports.length} selected for PDF generation</span>
+                            <div className="hardware-mini-check-grid">
+                              {HARDWARE_REPORT_OPTIONS.map((option) => (
+                                <label key={option.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedHardwareReportIds.includes(option.id)}
+                                    onChange={() => toggleHardwareReportOption(option.id)}
+                                  />
+                                  {option.title}
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        )}
+
                         {selectedReport?.id === "client-summary-rnr" && (
                           <fieldset className="client-rnr-fields">
                             <legend>Client RNR Details</legend>
@@ -4077,7 +4498,7 @@ export default function Report() {
 
                       <div className="report-preview-map">
                         <strong>PDF content preview</strong>
-                        {selectedBlueprint.sections.slice(0, 7).map((row, index) => <span key={`${row}-${index}`}>{row}</span>)}
+                        {(isHardwareReport ? selectedHardwareReports.map((item) => item.title) : selectedBlueprint.sections.slice(0, 7)).map((row, index) => <span key={`${row}-${index}`}>{row}</span>)}
                       </div>
 
                       {history.length > 0 && (

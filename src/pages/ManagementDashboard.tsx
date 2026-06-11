@@ -188,6 +188,16 @@ type ExecutiveStory = {
   generatedAt?: string;
 };
 
+type PolicyUsed = {
+  profileID?: number | string;
+  profileKey?: string;
+  profileName?: string;
+  scopeType?: string;
+  scopeKey?: string;
+  isDefault?: boolean;
+  updatedAt?: string | null;
+};
+
 type DashboardData = {
   generatedAt?: string;
   executiveKpis: KpiItem[];
@@ -197,6 +207,8 @@ type DashboardData = {
   analysis?: AnalysisData;
   level2: Record<string, DrillRow[]>;
   metrics?: Record<string, number | string | boolean>;
+  policyUsed?: PolicyUsed | null;
+  assumptionValues?: Record<string, number>;
 };
 
 type DrillState = {
@@ -4233,6 +4245,9 @@ export default function ManagementDashboard() {
     if (chartRows.some((row) => Number(row.signals || row.serviceRisk || 0) > 0)) return "signals" as const;
     return "empty" as const;
   }, [chartRows]);
+
+  const policyLabel = dashboard.policyUsed?.profileName || "Default EMA Management Policy";
+  const policyScope = dashboard.policyUsed?.scopeType || dashboard.policyUsed?.scopeKey || "GLOBAL";
   const chartMax = useMemo(() => Math.max(1, ...chartRows.flatMap((row) => chartMode === "money"
     ? [moneyValue(row.financialExposure), moneyValue(row.riskExposure)]
     : [Number(row.signals || row.serviceRisk || 0)]
@@ -4566,6 +4581,7 @@ export default function ManagementDashboard() {
                 <p>{dashboard.analysis?.headline || "Trend appears only when live exposure, risk or signal records exist."}</p>
               </div>
               <div className="md-actions">
+                <span className="md-action-btn md-policy-badge" title="Management Dashboard calculations use this active policy">Policy: {policyLabel} · {policyScope}</span>
                 <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
                 <button type="button" className="md-action-btn primary" onClick={printDashboard}><Icon name="download" /> Report</button>
               </div>
