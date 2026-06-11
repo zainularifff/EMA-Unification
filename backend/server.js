@@ -446,6 +446,261 @@ function buildModuleAccessMap(modules = []) {
     return access;
 }
 
+
+
+// ============================================================
+// ACCESS CONTROL ENFORCEMENT
+// Settings > Access Control is no longer only a CRUD screen.
+// Active rows in EMA_AccessControls are used by login/auth middleware.
+// ============================================================
+const ACCESS_CONTROL_CACHE_TTL_MS = Number(process.env.ACCESS_CONTROL_CACHE_TTL_MS || 30000);
+const ACCESS_CONTROL_SESSION_TIMEOUT_MINUTES = Number(process.env.ACCESS_CONTROL_SESSION_TIMEOUT_MINUTES || 60);
+let accessControlPolicyCache = { expiresAt: 0, rows: [] };
+
+const ACCESS_CONTROL_ALIASES = {
+    mfa: ['multi_factor_authentication', 'mfa', '2fa', 'two_factor_authentication'],
+    session: ['session_timeout', 'timeout', 'idle_timeout'],
+    ip: ['ip_vpn_restriction', 'ip_restriction', 'vpn_restriction', 'network_restriction'],
+    approval: ['approval_for_critical_action', 'critical_action_approval', 'approval_workflow', 'role_change_approval']
+};
+
+function normalizeAccessControlKey(value) {
+    return normalizeAuthValue(value)
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+}
+
+function normalizeAccessControlStatus(value) {
+    return normalizeAuthValue(value, 'Inactive').toLowerCase();
+}
+
+function normalizeAccessControlEnforcement(value) {
+    return normalizeAuthValue(value, 'Disabled').toLowerCase();
+}
+
+function isAccessControlRowEnabled(row) {
+    if (!row) return false;
+    const status = normalizeAccessControlStatus(row.Status || row.status);
+    const enforcement = normalizeAccessControlEnforcement(row.Enforcement || row.enforcement);
+    return status === 'active' && enforcement !== 'disabled';
+}
+
+function accessControlRowMatches(row, aliases = []) {
+    const keys = [
+        normalizeAccessControlKey(row?.PolicyKey || row?.policyKey),
+        normalizeAccessControlKey(row?.PolicyName || row?.policyName || row?.name)
+    ].filter(Boolean);
+
+    return aliases.map(normalizeAccessControlKey).some((alias) => keys.includes(alias));
+}
+
+function findAccessControlRow(rows, aliases = []) {
+    return (Array.isArray(rows) ? rows : []).find((row) => accessControlRowMatches(row, aliases)) || null;
+}
+
+function isAccessControlEnabled(rows, aliases = []) {
+    return isAccessControlRowEnabled(findAccessControlRow(rows, aliases));
+}
+
+function accessControlScopeApplies(row, user = {}) {
+    const scope = normalizeAuthValue(row?.Scope || row?.scope || 'All Users').toLowerCase();
+    const roleText = [
+        user?.role,
+        user?.RoleName,
+        user?.roleName,
+        user?.HdRole,
+        user?.roleKey,
+        ...(Array.isArray(user?.roles) ? user.roles : [])
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    if (!scope || scope.includes('all')) return true;
+    if (scope.includes('admin')) return roleText.includes('admin');
+    if (scope.includes('service')) return roleText.includes('service') || roleText.includes('support');
+    if (scope.includes('selected') || scope.includes('role')) return true;
+    return true;
+}
+
+async function getAccessControlPolicies(pool, forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && accessControlPolicyCache.rows && accessControlPolicyCache.expiresAt > now) {
+        return accessControlPolicyCache.rows;
+    }
+
+    try {
+        const hasTable = await tableExists(pool, 'EMA_AccessControls');
+        if (!hasTable) {
+            accessControlPolicyCache = { expiresAt: now + ACCESS_CONTROL_CACHE_TTL_MS, rows: [] };
+            return [];
+        }
+
+        const result = await pool.request().query(`
+            SELECT
+                ControlID,
+                PolicyKey,
+                PolicyName,
+                Description,
+                Scope,
+                Enforcement,
+                ReviewCycle,
+                Status,
+                IsSystemPolicy,
+                SortOrder,
+                CreatedAt,
+                UpdatedAt
+            FROM dbo.EMA_AccessControls WITH (NOLOCK)
+            ORDER BY ISNULL(SortOrder, 9999), PolicyName;
+        `);
+
+        const rows = result.recordset || [];
+        accessControlPolicyCache = { expiresAt: now + ACCESS_CONTROL_CACHE_TTL_MS, rows };
+        return rows;
+    } catch (err) {
+        console.warn('Access control enforcement read skipped:', err.message);
+        return accessControlPolicyCache.rows || [];
+    }
+}
+
+function parseAccessControlDurationMinutes(policy, fallbackMinutes = ACCESS_CONTROL_SESSION_TIMEOUT_MINUTES) {
+    const text = `${policy?.Description || ''} ${policy?.ReviewCycle || ''}`;
+    const match = text.match(/(\d+)\s*(minute|minutes|min|hour|hours|hr|hrs)/i);
+    if (!match) return Number(fallbackMinutes) || 60;
+
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value <= 0) return Number(fallbackMinutes) || 60;
+
+    const unit = String(match[2] || '').toLowerCase();
+    return unit.startsWith('hour') || unit.startsWith('hr') ? value * 60 : value;
+}
+
+function getClientIp(req) {
+    const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    return (forwarded || req.ip || req.socket?.remoteAddress || '')
+        .replace(/^::ffff:/, '')
+        .replace(/^::1$/, '127.0.0.1');
+}
+
+function getAllowedAccessControlIps() {
+    return String(process.env.EMA_ALLOWED_IPS || process.env.ACCESS_CONTROL_ALLOWED_IPS || process.env.ALLOWED_IPS || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
+function ipMatchesAccessControlList(ip, allowedList) {
+    if (!ip || !Array.isArray(allowedList) || allowedList.length === 0) return true;
+    if (allowedList.includes('*')) return true;
+    if (allowedList.includes(ip)) return true;
+
+    // Lightweight CIDR / prefix support for common internal ranges.
+    return allowedList.some((entry) => {
+        if (entry.endsWith('.*')) return ip.startsWith(entry.slice(0, -1));
+        if (entry.includes('/')) {
+            const [base, maskText] = entry.split('/');
+            const mask = Number(maskText);
+            if (!Number.isFinite(mask)) return false;
+            if (mask === 8) return ip.split('.')[0] === base.split('.')[0];
+            if (mask === 16) return ip.split('.').slice(0, 2).join('.') === base.split('.').slice(0, 2).join('.');
+            if (mask === 24) return ip.split('.').slice(0, 3).join('.') === base.split('.').slice(0, 3).join('.');
+        }
+        return false;
+    });
+}
+
+function enforceIpAccessControl(req, accessRows) {
+    const policy = findAccessControlRow(accessRows, ACCESS_CONTROL_ALIASES.ip);
+    if (!isAccessControlRowEnabled(policy)) return { ok: true };
+
+    const allowedList = getAllowedAccessControlIps();
+    if (allowedList.length === 0) {
+        // Policy is active but no allowlist is configured. Do not lock everyone out.
+        return { ok: true, warning: 'IP/VPN restriction is active, but EMA_ALLOWED_IPS is not configured.' };
+    }
+
+    const ip = getClientIp(req);
+    if (ipMatchesAccessControlList(ip, allowedList)) return { ok: true };
+
+    return {
+        ok: false,
+        status: 403,
+        message: 'Access blocked by IP/VPN restriction policy.',
+        code: 'ACCESS_CONTROL_IP_RESTRICTED',
+        detail: `Client IP ${ip || 'unknown'} is not allowed.`
+    };
+}
+
+function enforceSessionTimeoutAccessControl(user, accessRows) {
+    const policy = findAccessControlRow(accessRows, ACCESS_CONTROL_ALIASES.session);
+    if (!isAccessControlRowEnabled(policy)) return { ok: true };
+
+    const issuedAtSeconds = Number(user?.iat || 0);
+    if (!issuedAtSeconds) return { ok: true };
+
+    const timeoutMinutes = parseAccessControlDurationMinutes(policy, ACCESS_CONTROL_SESSION_TIMEOUT_MINUTES);
+    const ageMs = Date.now() - issuedAtSeconds * 1000;
+    if (ageMs <= timeoutMinutes * 60 * 1000) return { ok: true };
+
+    return {
+        ok: false,
+        status: 401,
+        message: `Session expired by Access Control policy after ${timeoutMinutes} minutes.`,
+        code: 'ACCESS_CONTROL_SESSION_EXPIRED'
+    };
+}
+
+function isCriticalActionRequest(req) {
+    const method = String(req.method || '').toUpperCase();
+    const pathValue = String(req.originalUrl || req.url || '').toLowerCase();
+
+    if (method === 'DELETE') return true;
+    return /(lock|unlock|wipe|reset|override|delete|remove|disable|critical)/i.test(pathValue);
+}
+
+function enforceCriticalActionApproval(req, accessRows) {
+    const policy = findAccessControlRow(accessRows, ACCESS_CONTROL_ALIASES.approval);
+    if (!isAccessControlRowEnabled(policy)) return { ok: true };
+    if (!isCriticalActionRequest(req)) return { ok: true };
+
+    // Do not block the Access Control module itself; otherwise users can lock themselves out
+    // from disabling a bad policy.
+    const pathValue = String(req.originalUrl || req.url || '').toLowerCase();
+    if (pathValue.includes('/api/settings/access-controls')) return { ok: true };
+
+    const reason = normalizeAuthValue(
+        req.headers['x-approval-reason'] ||
+        req.body?.approvalReason ||
+        req.body?.reason ||
+        req.query?.approvalReason ||
+        req.query?.reason
+    );
+
+    if (reason.length >= 5) return { ok: true };
+
+    return {
+        ok: false,
+        status: 428,
+        message: 'Approval reason is required by Access Control policy for this critical action.',
+        code: 'ACCESS_CONTROL_APPROVAL_REQUIRED'
+    };
+}
+
+async function enforceAccessControlsForRequest(req, user) {
+    const pool = await sql.connect(dbConfig);
+    const accessRows = await getAccessControlPolicies(pool);
+
+    const ipCheck = enforceIpAccessControl(req, accessRows);
+    if (!ipCheck.ok) return ipCheck;
+
+    const sessionCheck = enforceSessionTimeoutAccessControl(user, accessRows);
+    if (!sessionCheck.ok) return sessionCheck;
+
+    const approvalCheck = enforceCriticalActionApproval(req, accessRows);
+    if (!approvalCheck.ok) return approvalCheck;
+
+    return { ok: true };
+}
+
 async function getEmaUserAccessContext(pool, emaUserID) {
     if (!emaUserID) {
         return {
@@ -688,10 +943,15 @@ async function updateEmaLoginFailure(pool, userID) {
 | This is not Microsoft/Google OAuth login and does not require client IDs.
 */
 
-function emaUserRequires2FA(user) {
-    // RequireMFA is the policy switch controlled by User Access Management.
-    // TwoFactorEnabled only means the user has completed authenticator setup before.
-    return user?.RequireMFA === true || user?.RequireMFA === 1;
+function emaUserRequires2FA(user, accessRows = []) {
+    // User-specific RequireMFA is still respected.
+    if (user?.RequireMFA === true || user?.RequireMFA === 1) return true;
+
+    // Settings > Access Control can force MFA centrally.
+    const policy = findAccessControlRow(accessRows, ACCESS_CONTROL_ALIASES.mfa);
+    if (!isAccessControlRowEnabled(policy)) return false;
+
+    return accessControlScopeApplies(policy, user);
 }
 
 function mapEmaTwoFactorUser(user) {
@@ -779,6 +1039,16 @@ app.post("/api/auth/login", async (req, res) => {
         }
 
         const pool = await sql.connect(dbConfig);
+        const loginAccessControlRows = await getAccessControlPolicies(pool);
+        const loginIpCheck = enforceIpAccessControl(req, loginAccessControlRows);
+        if (!loginIpCheck.ok) {
+            return res.status(loginIpCheck.status || 403).json({
+                success: false,
+                message: loginIpCheck.message,
+                code: loginIpCheck.code,
+                detail: loginIpCheck.detail
+            });
+        }
 
         // EMA v2 authentication first. This is the source used by Settings > User Access Management.
         const emaUser = await getEmaLoginUser(pool, username);
@@ -816,7 +1086,7 @@ app.post("/api/auth/login", async (req, res) => {
                 return res.status(401).json({ success: false, message: "Invalid username or password" });
             }
 
-            if (emaUserRequires2FA(emaUser)) {
+            if (emaUserRequires2FA(emaUser, loginAccessControlRows)) {
                 await logEmaAudit(pool, req, "EMA login requires 2FA", "Security & Auth", "Info", {
                     username: emaUser.Username || emaUser.Email || username,
                     authSource: "EMA",
@@ -932,11 +1202,6 @@ app.post("/api/auth/login", async (req, res) => {
         const role = user.HdRole || "Admin";
         const displayName = user.HdUsername || user.UserID;
         const permissions = buildPermissionsByRole(role);
-
-        await logEmaAudit(pool, req, "Successful legacy login", "Security & Auth", "Success", {
-            username: user.UserID || username,
-            authSource: "LEGACY"
-        }, { entityType: "Login", entityID: String(user.Console_Idn || user.UserID || username) });
 
         return res.json({
             success: true,
@@ -1294,13 +1559,28 @@ function authenticateToken(req, res, next) {
             issuer: "ema-node-api",
             audience: "ema-react-app"
         },
-        (err, user) => {
+        async (err, user) => {
 
             if (err) {
                 return res.status(403).json({
                     success: false,
                     message: "Invalid or expired token"
                 });
+            }
+
+            try {
+                const enforcement = await enforceAccessControlsForRequest(req, user);
+                if (!enforcement.ok) {
+                    return res.status(enforcement.status || 403).json({
+                        success: false,
+                        message: enforcement.message,
+                        code: enforcement.code,
+                        detail: enforcement.detail
+                    });
+                }
+            } catch (accessErr) {
+                // Fail open for availability; log clearly so it can be fixed without taking down the app.
+                console.warn("Access control enforcement skipped:", accessErr.message);
             }
 
             req.user = user;
@@ -29998,6 +30278,7 @@ app.post('/api/settings/access-controls', authenticateToken, async (req, res) =>
             { entityType: 'AccessControl', entityID: getAuditEntityId(data, 'ControlID', 'PolicyKey') }
         );
 
+        accessControlPolicyCache.expiresAt = 0;
         return res.json({ success: true, message: 'Access control created.', data });
     } catch (err) {
         console.error('POST /api/settings/access-controls error:', err);
@@ -30073,6 +30354,7 @@ app.put('/api/settings/access-controls/:id', authenticateToken, async (req, res)
             { entityType: 'AccessControl', entityID: getAuditEntityId(data, 'ControlID', 'PolicyKey') }
         );
 
+        accessControlPolicyCache.expiresAt = 0;
         return res.json({ success: true, message: 'Access control updated.', data });
     } catch (err) {
         console.error('PUT /api/settings/access-controls/:id error:', err);
@@ -30111,6 +30393,7 @@ app.delete('/api/settings/access-controls/:id', authenticateToken, async (req, r
             { entityType: 'AccessControl', entityID: getAuditEntityId(data, 'ControlID', 'PolicyKey') }
         );
 
+        accessControlPolicyCache.expiresAt = 0;
         return res.json({ success: true, message: 'Access control deleted.', data });
     } catch (err) {
         console.error('DELETE /api/settings/access-controls/:id error:', err);

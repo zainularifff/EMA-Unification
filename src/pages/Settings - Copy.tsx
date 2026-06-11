@@ -3877,8 +3877,8 @@ function AccessControlContent({ policies, loading, error, onReload, onAdd, onEdi
       )}
 
       <div className="settings-helper-card compact">
-        <strong>Access controls now drive backend enforcement.</strong>
-        <span>Set Status to Active to enforce MFA, session timeout, IP/VPN restriction and critical action approval from EMA_AccessControls.</span>
+        <strong>Access controls define login and security enforcement.</strong>
+        <span>Manage MFA, session, IP/VPN and approval rules from EMA_AccessControls.</span>
       </div>
 
       <div className="user-access-table advanced clean-table role-standard-table access-standard-table">
@@ -4964,7 +4964,7 @@ function AccessPolicyModal({ open, mode, title, form, setForm, onClose, onSave }
           <div>
             <span className="eyebrow">{mode}</span>
             <h3>{title}</h3>
-            <p>Configure login, session and security behaviour. Active controls are enforced by the backend.</p>
+            <p>Configure login, session and security access control behaviour.</p>
           </div>
           <button className="modal-close" type="button" onClick={onClose}>×</button>
         </div>
