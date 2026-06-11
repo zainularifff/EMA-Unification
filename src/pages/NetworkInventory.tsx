@@ -29,14 +29,23 @@ import {
   Zap,
 } from "lucide-react";
 
-import networkService from "../services/networkService";
-
 type CountKey = "registered" | "notRegistered" | "notInstalled" | "otherDevice";
 type DeviceStatusTab = "device" | "network";
 type NetworkTreeMode = "organization" | "statistics";
 type ManualDeviceStatus = "Active" | "Inactive" | "Maintenance";
 type ScanMode = "all" | "subnet" | "ip";
 type CommandType = "push" | "schedule";
+
+type ApiResponse<T> = {
+  success?: boolean;
+  message?: string;
+  data?: T;
+  page?: number;
+  limit?: number;
+  totalRecords?: number;
+  totalPages?: number;
+  [key: string]: unknown;
+};
 
 type NetworkCounts = Record<CountKey, number>;
 
@@ -138,118 +147,8 @@ const emptyCounts: NetworkCounts = {
 const pageSize = 8;
 const statusDetailPageSize = 10;
 
-const NETWORK_INVENTORY_PAGE_CSS = `
-html.network-inventory-page-active,
-body.network-inventory-page-active,
-body.network-inventory-page-active #root {
-  height: 100% !important;
-  max-height: 100% !important;
-  overflow: hidden !important;
-  background: #f4f8fc !important;
-}
-
-body.network-inventory-page-active .ema-main,
-body.network-inventory-page-active .ema-content,
-body.network-inventory-page-active .ema-content-area,
-body.network-inventory-page-active .app-main,
-body.network-inventory-page-active .app-content,
-body.network-inventory-page-active .layout-main,
-body.network-inventory-page-active .layout-content,
-body.network-inventory-page-active .main,
-body.network-inventory-page-active .main-content,
-body.network-inventory-page-active main {
-  min-height: 0 !important;
-  overflow: hidden !important;
-  background: #f4f8fc !important;
-}
-
-body.network-inventory-page-active .ema-page,
-body.network-inventory-page-active .page-content,
-body.network-inventory-page-active .content,
-body.network-inventory-page-active .content-area,
-body.network-inventory-page-active .dashboard-page,
-body.network-inventory-page-active .dashboard-content,
-body.network-inventory-page-active .page-container,
-body.network-inventory-page-active .router-content {
-  height: calc(100dvh - 76px) !important;
-  max-height: calc(100dvh - 76px) !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: #f4f8fc !important;
-}
-
-body.network-inventory-page-active .settings-module-root.ema-module-root,
-body.network-inventory-page-active .network-inventory-page {
-  width: 100% !important;
-  max-width: none !important;
-  height: 100% !important;
-  min-height: 0 !important;
-  max-height: 100% !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  margin: 0 !important;
-  color: #0f172a !important;
-  background:
-    radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
-    radial-gradient(circle at 98% 18%, rgba(14, 165, 233, 0.06), transparent 26rem),
-    linear-gradient(135deg, #eef4fb 0%, #f8fbff 46%, #e8eff7 100%) !important;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  -webkit-overflow-scrolling: touch;
-}
-
-body.network-inventory-page-active .settings-module-root.ema-module-root::before,
-body.network-inventory-page-active .network-inventory-page::before {
-  content: "";
-  position: fixed;
-  inset: 76px 0 0 0;
-  pointer-events: none;
-  opacity: .28;
-  background-image:
-    linear-gradient(rgba(100, 116, 139, .08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(100, 116, 139, .07) 1px, transparent 1px);
-  background-size: 34px 34px;
-  mask-image: linear-gradient(180deg, transparent 0%, black 12%, black 78%, transparent 100%);
-}
-
-body.network-inventory-page-active .settings-module-root.ema-module-root::-webkit-scrollbar,
-body.network-inventory-page-active .network-inventory-page::-webkit-scrollbar {
-  width: 6px;
-}
-
-body.network-inventory-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-track,
-body.network-inventory-page-active .network-inventory-page::-webkit-scrollbar-track {
-  background: rgba(226, 232, 240, .55);
-  border-radius: 999px;
-}
-
-body.network-inventory-page-active .settings-module-root.ema-module-root::-webkit-scrollbar-thumb,
-body.network-inventory-page-active .network-inventory-page::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, .65);
-  border: 1px solid rgba(226, 232, 240, .55);
-  border-radius: 999px;
-}
-
-body.network-inventory-page-active .settings-layout,
-body.network-inventory-page-active .settings-content,
-body.network-inventory-page-active .content-shell,
-body.network-inventory-page-active .settings-hero {
-  position: relative;
-  z-index: 1;
-}
-
-body.network-inventory-page-active .settings-menu,
-body.network-inventory-page-active .settings-hero,
-body.network-inventory-page-active .content-shell,
-body.network-inventory-page-active .ema-panel-surface,
-body.network-inventory-page-active .pricing-table-card,
-body.network-inventory-page-active .settings-helper-card {
-  background-color: rgba(255, 255, 255, 0.94) !important;
-}
-`;
-
+const API_BASE_URL = String((import.meta as unknown as { env?: Record<string, string> }).env?.VITE_API_BASE_URL || "http://localhost:3001").replace(/\/+$/, "");
+const tokenKeys = ["token", "access_token", "accessToken", "authToken", "emaToken", "ema_access_token", "jwt"];
 
 function cx(...items: Array<string | false | null | undefined>) {
   return items.filter(Boolean).join(" ");
@@ -385,6 +284,58 @@ function NetworkCustomSelect({
       {menuNode}
     </div>
   );
+}
+
+function readAuthToken() {
+  for (const key of tokenKeys) {
+    const value = window.localStorage.getItem(key);
+    if (value) return value;
+  }
+
+  const userJson = window.localStorage.getItem("user") || window.localStorage.getItem("emaUser");
+  if (!userJson) return "";
+
+  try {
+    const user = JSON.parse(userJson) as Record<string, unknown>;
+    return String(user.token || user.accessToken || user.access_token || "");
+  } catch {
+    return "";
+  }
+}
+
+async function apiRequest<T>(path: string, options: RequestInit = {}) {
+  const headers = new Headers(options.headers || {});
+  const token = readAuthToken();
+
+  if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  let payload: ApiResponse<T>;
+  try {
+    payload = (await response.json()) as ApiResponse<T>;
+  } catch {
+    payload = { success: response.ok } as ApiResponse<T>;
+  }
+
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.message || `Request failed: ${response.status}`);
+  }
+
+  return payload;
+}
+
+function toQuery(params: Record<string, string | number | undefined | null>) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== "") search.set(key, String(value));
+  });
+  const value = search.toString();
+  return value ? `?${value}` : "";
 }
 
 function getString(value: unknown, fallback = "-") {
@@ -660,29 +611,6 @@ function formatScheduleTime(value: string) {
 }
 
 export default function NetworkInventory() {
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-
-    document.documentElement.classList.add("network-inventory-page-active");
-    document.body.classList.add("network-inventory-page-active");
-    document.documentElement.classList.remove("itops-dashboard-page-active", "md-dashboard-page-active", "md-management-dashboard-active");
-    document.body.classList.remove("itops-dashboard-page-active", "md-dashboard-page-active", "md-management-dashboard-active");
-
-    window.dispatchEvent(new CustomEvent("ema-topbar-meta", {
-      detail: {
-        path: window.location.pathname,
-        title: "Network Inventory",
-        subtitle: "Monitor IP records, workgroups and network coverage.",
-        searchPlaceholder: "Search IP, hostname, subnet or workgroup...",
-      },
-    }));
-
-    return () => {
-      document.documentElement.classList.remove("network-inventory-page-active");
-      document.body.classList.remove("network-inventory-page-active");
-      window.dispatchEvent(new CustomEvent("ema-topbar-meta", { detail: null }));
-    };
-  }, []);
   const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
   const [treeMode, setTreeMode] = useState<NetworkTreeMode>("organization");
   const [hierarchy, setHierarchy] = useState<NetworkHierarchyNode | null>(null);
@@ -730,10 +658,10 @@ export default function NetworkInventory() {
   const loadManualDevices = useCallback(async () => {
     setManualLoading(true);
     try {
-      const response = await networkService.getNetworkDeviceStatus({ page: 1, limit: 500, search: manualSearch });
-      const payload = response as { data?: Record<string, unknown>[] };
-      const rows = Array.isArray(payload.data) ? payload.data : Array.isArray(response) ? response : [];
-      setManualRows(rows.map(normalizeManualDevice));
+      const response = await apiRequest<Record<string, unknown>[]>(
+        `/api/network/network-device-status${toQuery({ page: 1, limit: 500, search: manualSearch })}`
+      );
+      setManualRows((Array.isArray(response.data) ? response.data : []).map(normalizeManualDevice));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load network device status.");
     } finally {
@@ -748,13 +676,13 @@ export default function NetworkInventory() {
 
     try {
       const [hierarchyResult, dateResult, workgroupResult] = await Promise.allSettled([
-        networkService.getHierarchy(),
-        networkService.getSearchDate(),
-        networkService.getWorkgroupCount(),
+        apiRequest<NetworkHierarchyNode>("/api/network/hierarchy"),
+        apiRequest<{ LastSearchDateStr?: string }>("/api/network/search-date"),
+        apiRequest<Record<string, unknown>[]>("/api/network/workgroup-count"),
       ]);
 
-      if (hierarchyResult.status === "fulfilled" && hierarchyResult.value) {
-        const nextHierarchy = hierarchyResult.value as NetworkHierarchyNode;
+      if (hierarchyResult.status === "fulfilled" && hierarchyResult.value.data) {
+        const nextHierarchy = hierarchyResult.value.data;
         setHierarchy(nextHierarchy);
         setSelectedNodeId(nextHierarchy.id || null);
         setExpandedTreeIds(new Set<string>());
@@ -764,12 +692,11 @@ export default function NetworkInventory() {
       }
 
       if (dateResult.status === "fulfilled") {
-        const datePayload = dateResult.value as { data?: { LastSearchDateStr?: string }; LastSearchDateStr?: string };
-        setLastSearchDate(getString(datePayload.data?.LastSearchDateStr ?? datePayload.LastSearchDateStr, "-"));
+        setLastSearchDate(getString(dateResult.value.data?.LastSearchDateStr, "-"));
       }
 
       if (workgroupResult.status === "fulfilled") {
-        setWorkgroupApiRows(Array.isArray(workgroupResult.value) ? workgroupResult.value : []);
+        setWorkgroupApiRows(Array.isArray(workgroupResult.value.data) ? workgroupResult.value.data : []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load network inventory.");
@@ -800,12 +727,12 @@ export default function NetworkInventory() {
 
     try {
       const [agentResponse, objectResponse] = await Promise.allSettled([
-        networkService.getIpAgent(ip),
-        networkService.getIpObject(ip),
+        apiRequest<Record<string, unknown>[]>(`/api/network/ip/${encodeURIComponent(ip)}/agent`),
+        apiRequest<Record<string, unknown>[]>(`/api/network/ip/${encodeURIComponent(ip)}/object`),
       ]);
 
-      const agentRow = agentResponse.status === "fulfilled" && Array.isArray(agentResponse.value) ? agentResponse.value[0] : undefined;
-      const objectRow = objectResponse.status === "fulfilled" && Array.isArray(objectResponse.value) ? objectResponse.value[0] : undefined;
+      const agentRow = agentResponse.status === "fulfilled" && Array.isArray(agentResponse.value.data) ? agentResponse.value.data[0] : undefined;
+      const objectRow = objectResponse.status === "fulfilled" && Array.isArray(objectResponse.value.data) ? objectResponse.value.data[0] : undefined;
 
       setIpDetail({
         ip,
@@ -880,15 +807,16 @@ export default function NetworkInventory() {
 
     try {
       if (canCallSubnetApi) {
-        const response = await networkService.getSubnetDetails(selectedNode.label, { type, page: nextPage, limit: statusDetailPageSize });
-        const payload = response as { data?: DeviceDetail[]; page?: number; totalPages?: number; totalRecords?: number };
+        const response = await apiRequest<DeviceDetail[]>(
+          `/api/network/subnet/${encodeURIComponent(selectedNode.label)}/details${toQuery({ type, page: nextPage, limit: statusDetailPageSize })}`
+        );
         setStatusDetail({
           type,
           title,
-          rows: normalizeStatusRows(payload.data),
-          page: Number(payload.page || nextPage),
-          totalPages: Number(payload.totalPages || 1),
-          totalRecords: Number(payload.totalRecords || 0),
+          rows: normalizeStatusRows(response.data),
+          page: Number(response.page || nextPage),
+          totalPages: Number(response.totalPages || 1),
+          totalRecords: Number(response.totalRecords || 0),
           source: "Subnet detail",
           loading: false,
           serverPaginated: true,
@@ -923,12 +851,12 @@ export default function NetworkInventory() {
     setBusy(true);
     try {
       if (clientId > 0) {
-        const response = await networkService.getClient(clientId);
-        const row = Array.isArray(response) ? response[0] : undefined;
+        const response = await apiRequest<Record<string, unknown>[]>(`/api/network/client/${clientId}`);
+        const row = Array.isArray(response.data) ? response.data[0] : undefined;
         setRecordDetail({ title: `Registered Network Client • ${clientId}`, rows: rowsFromObject(row), source: "spGetNIClient" });
       } else if (inventoryId > 0) {
-        const response = await networkService.getObject(inventoryId);
-        const row = Array.isArray(response) ? response[0] : undefined;
+        const response = await apiRequest<Record<string, unknown>[]>(`/api/network/object/${inventoryId}`);
+        const row = Array.isArray(response.data) ? response.data[0] : undefined;
         setRecordDetail({ title: `Network Object • ${inventoryId}`, rows: rowsFromObject(row), source: "spGetNIObject" });
       } else {
         setRecordDetail({ title: detail.computerName || detail.ipAddress || "Network Record", rows: rowsFromObject(raw), source: "current row" });
@@ -969,10 +897,16 @@ export default function NetworkInventory() {
     setBusy(true);
     try {
       if (editingDevice) {
-        await networkService.updateNetworkDeviceStatus(editingDevice.id, payload);
+        await apiRequest(`/api/network/network-device-status/${editingDevice.id}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
         showNotice("Network device updated.");
       } else {
-        await networkService.createNetworkDeviceStatus(payload);
+        await apiRequest("/api/network/network-device-status", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
         showNotice("Network device added.");
       }
 
@@ -989,7 +923,7 @@ export default function NetworkInventory() {
   const handleDeleteDevice = async (device: ManualNetworkDevice) => {
     setBusy(true);
     try {
-      await networkService.deleteNetworkDeviceStatus(device.id);
+      await apiRequest(`/api/network/network-device-status/${device.id}`, { method: "DELETE" });
       showNotice("Network device removed.");
       setDeleteTarget(null);
       await loadManualDevices();
@@ -1038,9 +972,12 @@ export default function NetworkInventory() {
 
     setBusy(true);
     try {
-      const response = await networkService.createNetworkScanJob(body);
+      const response = await apiRequest<{ Job_Idn?: number; targetCount?: number }>("/api/network/scan", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
       setScanDialog(null);
-      showNotice(`Scan job created${response?.Job_Idn ? `: #${response.Job_Idn}` : ""}. Target count: ${response?.targetCount ?? body.ips.length}.`);
+      showNotice(`Scan job created${response.data?.Job_Idn ? `: #${response.data.Job_Idn}` : ""}. Target count: ${response.data?.targetCount ?? body.ips.length}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create scan job.");
     } finally {
@@ -1049,9 +986,7 @@ export default function NetworkInventory() {
   };
 
   return (
-    <>
-      <style>{NETWORK_INVENTORY_PAGE_CSS}</style>
-      <main className="settings-module-root ema-settings-pro ema-module-root network-inventory-page container-fluid p-3 p-xl-4" data-section="network">
+    <main className="settings-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="users">
       {notice && (
         <div className="settings-toast-layer">
           <div className="settings-toast settings-toast-success" role="status" aria-live="polite">
@@ -1085,15 +1020,19 @@ export default function NetworkInventory() {
       <div className="settings-layout d-grid gap-3">
         <aside className="settings-menu ema-panel-surface">
           <div className="panel-head">
-            <span>Network Metering</span>
+            <span>Network Inventory</span>
             <strong>Network Control</strong>
             <small>IP/subnet hierarchy and synchronized device records.</small>
           </div>
 
-          <nav className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher">
+          <nav
+            className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher"
+            style={{ display: "flex", justifyContent: "center", padding: "18px 16px" }}
+          >
             <button
               type="button"
               className={cx("setting-btn", treeMode === "organization" && "active")}
+              style={{ width: "100%", maxWidth: 170, justifyContent: "center", textAlign: "center" }}
               onClick={() => {
                 setTreeMode("organization");
                 setTreeSearch("");
@@ -1101,16 +1040,9 @@ export default function NetworkInventory() {
               }}
             >
               <span className="setting-icon"><Network /></span>
-              <span>
+              <span style={{ alignItems: "center", textAlign: "center" }}>
                 <strong>Organization</strong>
                 <small>IP scope</small>
-              </span>
-            </button>
-            <button type="button" className={cx("setting-btn", treeMode === "statistics" && "active")} onClick={() => setTreeMode("statistics")}>
-              <span className="setting-icon"><ShieldCheck /></span>
-              <span>
-                <strong>Statistics</strong>
-                <small>Workgroup</small>
               </span>
             </button>
           </nav>
@@ -1119,7 +1051,7 @@ export default function NetworkInventory() {
             <label className="section-search">
               <Search size={15} />
               <input
-                placeholder={treeMode === "organization" ? "Search IP / subnet..." : "Search workgroup..."}
+                placeholder="Search IP / subnet..."
                 value={treeSearch}
                 onChange={(event) => setTreeSearch(event.target.value)}
               />
@@ -1136,41 +1068,33 @@ export default function NetworkInventory() {
           <div className="settings-menu-list">
             {loading ? (
               <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading network hierarchy...</div>
-            ) : treeMode === "organization" ? (
-              filteredHierarchy ? (
-                <NetworkTree
-                  key={treeSearch.trim() ? `search-${treeSearch.trim()}` : hierarchy?.id || "network-tree"}
-                  node={filteredHierarchy}
-                  selectedNodeId={selectedNode?.id || null}
-                  expandedIds={expandedTreeIds}
-                  onToggle={handleToggleTreeNode}
-                  onSelect={handleSelectNode}
-                  forceOpen={Boolean(treeSearch.trim())}
-                />
-              ) : (
-                <div className="settings-helper-card">No IP segment found.</div>
-              )
-            ) : (
-              <WorkgroupStatisticList
-                rows={workgroupStats.filter((row) => row.name.toLowerCase().includes(treeSearch.toLowerCase()))}
-                selected={selectedWorkgroup}
-                onSelect={handleSelectWorkgroup}
+            ) : filteredHierarchy ? (
+              <NetworkTree
+                key={treeSearch.trim() ? `search-${treeSearch.trim()}` : hierarchy?.id || "network-tree"}
+                node={filteredHierarchy}
+                selectedNodeId={selectedNode?.id || null}
+                expandedIds={expandedTreeIds}
+                onToggle={handleToggleTreeNode}
+                onSelect={handleSelectNode}
+                forceOpen={Boolean(treeSearch.trim())}
               />
+            ) : (
+              <div className="settings-helper-card">No IP segment found.</div>
             )}
           </div>
 
-          <div className="settings-helper-card m-3 mt-0">
+          {/* <div className="settings-helper-card m-3 mt-0">
             <strong>Selected scope</strong>
             <span>{selectedNode?.label || selectedWorkgroup || "Organization"}</span>
-            <small>{treeMode === "organization" ? `${selectedIps.length.toLocaleString()} scan target(s)` : "Workgroup statistics"}</small>
-          </div>
+            <small>{`${selectedIps.length.toLocaleString()} scan target(s)`}</small>
+          </div> */}
         </aside>
 
         <section className="settings-content">
           <section className="settings-hero ema-panel-surface">
             <div>
               <span className="section-tag">Network Operations</span>
-              <h2>Network Metering</h2>
+              <h2>Network Inventory</h2>
               <p>Monitor IP scope status, discover endpoint agents, and maintain network device records.</p>
             </div>
 
@@ -1249,7 +1173,7 @@ export default function NetworkInventory() {
                   disabled={!selectedNode || busy}
                 >
                   <Zap size={15} />
-                  Scan Scope
+                  Scan Network
                 </button>
               ) : (
                 <button type="button" className="primary-btn flex-shrink-0" onClick={openAddDevice} disabled={busy}>
@@ -1342,8 +1266,7 @@ export default function NetworkInventory() {
           </div>
         </div>
       )}
-      </main>
-    </>
+    </main>
   );
 }
 
@@ -1485,11 +1408,11 @@ function DeviceStatusOverview({
   targetCount: number;
   onOpenStatus: (type: CountKey) => void;
 }) {
-  const rows: Array<{ type: CountKey; label: string; description: string; count: number; tone: string; actionLabel: string; icon: typeof CheckCircle2 }> = [
-    { type: "registered", label: "Registered Agent", description: "nPoints client agent exists and is registered for this IP scope.", count: counts.registered, tone: "active", actionLabel: "View registered devices", icon: CheckCircle2 },
-    { type: "notRegistered", label: "Not Registered", description: "Client agent exists but registration status is not completed.", count: counts.notRegistered, tone: "locked", actionLabel: "View not registered devices", icon: AlertCircle },
-    { type: "notInstalled", label: "Not Installed", description: "Detected network object without nPoints agent installed.", count: counts.notInstalled, tone: "review", actionLabel: "View not installed devices", icon: Activity },
-    { type: "otherDevice", label: "Other Device", description: "Router, switch, printer, SNMP or other discovered network device.", count: counts.otherDevice, tone: "info", actionLabel: "View other devices", icon: Router },
+  const rows: Array<{ type: CountKey; label: string; count: number; tone: string; actionLabel: string; icon: typeof CheckCircle2 }> = [
+    { type: "registered", label: "Registered Agent", count: counts.registered, tone: "active", actionLabel: "View registered devices", icon: CheckCircle2 },
+    { type: "notRegistered", label: "Not Registered", count: counts.notRegistered, tone: "locked", actionLabel: "View not registered devices", icon: AlertCircle },
+    { type: "notInstalled", label: "Not Installed", count: counts.notInstalled, tone: "review", actionLabel: "View not installed devices", icon: Activity },
+    { type: "otherDevice", label: "Other Device", count: counts.otherDevice, tone: "info", actionLabel: "View other devices", icon: Router },
   ];
 
   return (
@@ -1504,7 +1427,6 @@ function DeviceStatusOverview({
           <thead>
             <tr>
               <th>Status</th>
-              <th>Description</th>
               <th>Count</th>
               <th className="text-end">Action</th>
             </tr>
@@ -1523,7 +1445,6 @@ function DeviceStatusOverview({
                       </span>
                     </div>
                   </td>
-                  <td>{row.description}</td>
                   <td><span className={cx("user-pill", row.tone)}>{row.count.toLocaleString()}</span></td>
                   <td className="text-end">
                     <button

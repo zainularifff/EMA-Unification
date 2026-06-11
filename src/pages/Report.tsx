@@ -192,7 +192,7 @@ const FRONTEND_REPORT_CATALOG: ReportCategory[] = [
     items: [
       {
         id: "ai-executive-summary",
-        title: "Executive Summary Report",
+        title: "AI Executive Summary Report",
         description: "High-level management summary only: overall posture, key findings and priority recommendations.",
         type: "Summary",
         source: "Endpoint Inventory + Service Desk + Software Inventory + Jobs + Geolocation",
@@ -6219,8 +6219,8 @@ export default function Report() {
           <aside className="settings-menu report-category-panel ema-panel-surface featured-report-nav-panel">
             <div className="panel-head">
               <span>REPORT CENTER</span>
-              <strong>Featured Report Packs</strong>
               <small>Only the six management-ready reports are shown here.</small>
+              
             </div>
 
             <div className="featured-report-nav-list" role="tablist" aria-label="Featured report pack navigation">
@@ -6251,7 +6251,7 @@ export default function Report() {
             <div className="settings-hero ema-panel-surface users-hero">
               <div>
                 <span className="eyebrow">REPORT GENERATOR WORKSPACE</span>
-                <h2 id="categoryTitle">Featured Report Center</h2>
+                <h2 id="categoryTitle">Report Center</h2>
                 <p id="categoryDesc">Select a report pack, set filters and generate the output.</p>
               </div>
               <div className="settings-score users-hero-score">

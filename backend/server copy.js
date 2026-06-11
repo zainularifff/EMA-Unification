@@ -196,136 +196,6 @@ const dbConfig = {
     }
 };
 
-/* TASK/JOB CONSOLE ID RESOLUTION
- * Some EMA-authenticated tokens carry console_Idn = 0. Job rows must not be
- * created with Console_Idn = 0; TS_JOB.Console_Idn should resolve to the
- * actual TS_CONSOLE row whenever possible, matching the legacy server.js flow.
- */
-function normalizeTaskJobConsoleCandidate(value) {
-    if (value === undefined || value === null || String(value).trim() === "") return 0;
-    const parsed = parseInt(value, 10);
-    return Number.isNaN(parsed) || parsed <= 0 ? 0 : parsed;
-}
-
-function pickTaskJobPositiveConsoleId(...values) {
-    for (const value of values) {
-        const parsed = normalizeTaskJobConsoleCandidate(value);
-        if (parsed > 0) return parsed;
-    }
-    return 0;
-}
-
-function pickTaskJobTextValue(...values) {
-    for (const value of values) {
-        if (value !== undefined && value !== null && String(value).trim() !== "") {
-            return String(value).trim();
-        }
-    }
-    return "";
-}
-
-async function lookupConsoleIdByUserKey(dbContext, userKey) {
-    const login = pickTaskJobTextValue(userKey);
-    if (!login) return 0;
-
-    try {
-        const result = await new sql.Request(dbContext)
-            .input("LoginKey", sql.VarChar(255), login)
-            .query(`
-                SELECT TOP 1 Console_Idn
-                FROM dbo.TS_CONSOLE WITH (NOLOCK)
-                WHERE ISNULL(Console_Idn, 0) > 0
-                  AND ISNULL(IsDeleted, 0) = 0
-                  AND (
-                        UserID = @LoginKey
-                     OR LOWER(UserID) = LOWER(@LoginKey)
-                  )
-                ORDER BY Console_Idn DESC;
-            `);
-
-        return normalizeTaskJobConsoleCandidate(result.recordset?.[0]?.Console_Idn);
-    } catch (_) {
-        return 0;
-    }
-}
-
-async function lookupConsoleIdByEmaUser(dbContext, emaUserID) {
-    const userIdn = normalizeTaskJobConsoleCandidate(emaUserID);
-    if (userIdn <= 0) return 0;
-
-    try {
-        const result = await new sql.Request(dbContext)
-            .input("UserID", sql.Int, userIdn)
-            .query(`
-                IF OBJECT_ID(N'dbo.EMA_Users', N'U') IS NOT NULL
-                BEGIN
-                    SELECT TOP 1
-                        Username,
-                        Email
-                    FROM dbo.EMA_Users WITH (NOLOCK)
-                    WHERE UserID = @UserID;
-                END
-            `);
-
-        const user = result.recordset?.[0] || {};
-        return await lookupConsoleIdByUserKey(dbContext, pickTaskJobTextValue(user.Username, user.Email));
-    } catch (_) {
-        return 0;
-    }
-}
-
-async function resolveTaskJobConsoleId(dbContext, req = {}, source = {}, fallback = 1) {
-    const positiveFromRequest = pickTaskJobPositiveConsoleId(
-        req.user?.console_Idn,
-        req.user?.Console_Idn,
-        source.Console_Idn,
-        source.console_Idn,
-        source.consoleId,
-        source.Pkg_Owner,
-        source.pkg_Owner,
-        source.pkgOwner,
-        req.body?.Console_Idn,
-        req.body?.console_Idn,
-        req.body?.consoleId,
-        req.body?.Pkg_Owner,
-        req.body?.pkg_Owner,
-        req.body?.pkgOwner,
-        req.query?.Console_Idn,
-        req.query?.console_Idn,
-        req.query?.consoleId,
-        req.query?.Pkg_Owner,
-        req.query?.pkg_Owner,
-        req.query?.pkgOwner
-    );
-    if (positiveFromRequest > 0) return positiveFromRequest;
-
-    const lookupKeys = [
-        req.user?.userID,
-        req.user?.UserID,
-        req.user?.username,
-        req.user?.Username,
-        req.user?.email,
-        req.user?.Email,
-        source.userID,
-        source.UserID,
-        source.username,
-        source.Username,
-        source.email,
-        source.Email
-    ];
-
-    for (const key of lookupKeys) {
-        const resolved = await lookupConsoleIdByUserKey(dbContext, key);
-        if (resolved > 0) return resolved;
-    }
-
-    const emaResolved = await lookupConsoleIdByEmaUser(dbContext, pickTaskJobTextValue(req.user?.emaUserID, req.user?.EmaUserID, source.emaUserID, source.EmaUserID));
-    if (emaResolved > 0) return emaResolved;
-
-    const fallbackId = normalizeTaskJobConsoleCandidate(fallback);
-    return fallbackId > 0 ? fallbackId : 1;
-}
-
 // JWT CONFIG
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
@@ -2452,75 +2322,100 @@ async function getEMAData(pool, Object_Root_Idn) {
     }
 }
 
-async function getTSMDMData(pool, MDM_Asset_Idn) {
+async function executeOptionalAssetQuery(pool, label, query, inputs = {}) {
     try {
-        const [
-            hwMainInfo,
-            diskDrives,
-            additionalMac,
-            phoneSignal
-
-        ] = await Promise.all([
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_HWMainInfo,
-                {
-                    input_MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            ),
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_DISKDRIVES_WINDOWS,
-                {
-                    MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            ),
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_AdditionalMac,
-                {
-                    MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            ),
-
-            executeQuery(
-                pool,
-                queries_TSMDM.query_PhoneSignal,
-                {
-                    input_MDM_Asset_Idn: {
-                        type: sql.Int,
-                        value: MDM_Asset_Idn
-                    }
-                }
-            )
-
-        ]);
-
-        const responseObject = {
-            HWMainInfo: hwMainInfo,
-            DiskDrives: diskDrives,
-            AdditionalMac: additionalMac,
-            PhoneSignal: phoneSignal
+        return {
+            rows: await executeQuery(pool, query, inputs),
+            error: null
         };
-
-        return responseObject;
-
     } catch (err) {
-        console.error("getTSMDMData Error:", err);
-        throw err;
+        console.warn(`Optional asset detail query skipped (${label}):`, err.message);
+        return {
+            rows: [],
+            error: err.message
+        };
     }
+}
+
+async function getTSMDMData(pool, MDM_Asset_Idn) {
+    const [
+        hwMainInfoResult,
+        diskDrivesResult,
+        additionalMacResult,
+        phoneSignalResult
+    ] = await Promise.all([
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM HWMainInfo",
+            queries_TSMDM.query_HWMainInfo,
+            {
+                input_MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        ),
+
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM DiskDrives",
+            queries_TSMDM.query_DISKDRIVES_WINDOWS,
+            {
+                MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        ),
+
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM AdditionalMac",
+            queries_TSMDM.query_AdditionalMac,
+            {
+                MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        ),
+
+        executeOptionalAssetQuery(
+            pool,
+            "TSMDM PhoneSignal",
+            queries_TSMDM.query_PhoneSignal,
+            {
+                input_MDM_Asset_Idn: {
+                    type: sql.Int,
+                    value: MDM_Asset_Idn
+                }
+            }
+        )
+    ]);
+
+    const detailErrors = {
+        HWMainInfo: hwMainInfoResult.error,
+        DiskDrives: diskDrivesResult.error,
+        AdditionalMac: additionalMacResult.error,
+        PhoneSignal: phoneSignalResult.error
+    };
+
+    const responseObject = {
+        HWMainInfo: hwMainInfoResult.rows,
+        DiskDrives: diskDrivesResult.rows,
+        AdditionalMac: additionalMacResult.rows,
+        PhoneSignal: phoneSignalResult.rows
+    };
+
+    const activeErrors = Object.fromEntries(
+        Object.entries(detailErrors).filter(([, error]) => Boolean(error))
+    );
+
+    if (Object.keys(activeErrors).length) {
+        responseObject.DetailErrors = activeErrors;
+    }
+
+    return responseObject;
 }
 
 // GET /api/asset/:objectAgent/:assetId
@@ -2545,18 +2440,28 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
 
         const pool = await sql.connect(dbConfig);
 
+        const normalizedObjectAgent = String(objectAgent).trim().toUpperCase();
+
         let data = {};
-        if (objectAgent=='EM') {
+        if (normalizedObjectAgent === 'EM') {
             data = await getEMAData(pool, assetId);
 
-            let MDM_Asset_Idn = data['HWMainInfo'][0].MDM_Asset_Idn;
-            if (MDM_Asset_Idn)
-                data['MDM'] = await getTSMDMData(pool, MDM_Asset_Idn);
-            else
-                data['MDM'] = [];
-        }
-        else if (objectAgent=='MDM')
+            const hwMainInfoRows = Array.isArray(data.HWMainInfo) ? data.HWMainInfo : [];
+            const MDM_Asset_Idn = hwMainInfoRows[0]?.MDM_Asset_Idn;
+
+            if (MDM_Asset_Idn) {
+                data.MDM = await getTSMDMData(pool, MDM_Asset_Idn);
+            } else {
+                data.MDM = [];
+            }
+        } else if (normalizedObjectAgent === 'MDM') {
             data = await getTSMDMData(pool, assetId);
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: "Unsupported object agent. Expected EM or MDM."
+            });
+        }
 
         return res.json({
             success: true,
@@ -2568,7 +2473,8 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
 
         return res.status(500).json({
             success: false,
-            message: "Failed to retrieve asset data"
+            message: "Failed to retrieve asset data",
+            error: err.message
         });
     }
 });
@@ -5110,8 +5016,7 @@ app.put("/api/settings/users/:id", authenticateToken, async (req, res) => {
             .input("PhoneNo", sql.NVarChar, req.body.phoneNo || "")
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
-            .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
-            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
+            .input("RequireMFA", sql.Bit, parseEmaBit(req.body.requireMFA ?? req.body.mfa, false) ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
@@ -13158,6 +13063,146 @@ function softInvText(value) {
     return String(value).trim();
 }
 
+function softInvCleanText(value, fallback = "") {
+    if (value === undefined || value === null) return fallback;
+
+    const text = String(value)
+        .replace(/[\u0000-\u001f\u007f]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!text || text === "-" || /^(null|undefined|n\/?a|na|not available|not collected)$/i.test(text)) {
+        return fallback;
+    }
+
+    return text;
+}
+
+function softInvFirstText(...values) {
+    for (const value of values) {
+        const text = softInvCleanText(value);
+        if (text) return text;
+    }
+    return "";
+}
+
+function softInvIsGuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(softInvCleanText(value));
+}
+
+function softInvNormalizeSoftwareNameValue(value, fallback = "") {
+    let text = softInvCleanText(value, fallback);
+
+    if (softInvIsGuid(text)) {
+        text = softInvCleanText(fallback);
+    }
+
+    if (!text) return "-";
+
+    const lower = text.toLowerCase().replace(/\s+/g, " ").trim();
+
+    if (lower === "zoom" || lower.includes("zoom workplace")) return "Zoom Workplace";
+    if (lower.includes("google chrome")) return "Google Chrome";
+    if (lower.includes("microsoft edge")) return "Microsoft Edge";
+    if (lower.includes("microsoft onedrive") || lower === "onedrive") return "Microsoft OneDrive";
+    if (lower.includes("tightvnc")) return "TightVNC";
+
+    if (lower.includes("adobe acrobat") && /64[ -]?bit/.test(lower)) return "Adobe Acrobat (64-bit)";
+    if (lower.includes("adobe acrobat")) return "Adobe Acrobat";
+
+    return text;
+}
+
+function softInvNormalizeCategoryName(value) {
+    const text = softInvCleanText(value, "Unclassified");
+    const lower = text.toLowerCase();
+
+    if (["others", "other categories", "tools", "uncategorized", "unknown"].includes(lower)) {
+        return "Unclassified";
+    }
+
+    return text;
+}
+
+function softInvNormalizeOs(value, platformType = "") {
+    const os = softInvCleanText(value);
+    const platform = softInvCleanText(platformType);
+
+    if (os && os !== platform) return os;
+    if (/windows/i.test(platform)) return "Windows";
+    if (/android/i.test(platform)) return "Android";
+    if (/ios|ipad/i.test(platform)) return "iOS";
+    if (/mac|darwin/i.test(platform)) return "macOS";
+
+    return platform || "-";
+}
+
+function softInvNormalizeRow(row = {}) {
+    const fallbackSoftwareName = softInvFirstText(
+        row.RawSoftwareID,
+        row.SoftwareID,
+        row.Id,
+        row.id
+    );
+
+    const softwareName = softInvNormalizeSoftwareNameValue(
+        softInvFirstText(
+            row.SoftwareName,
+            row.softwareName,
+            row.SWUNI_Name,
+            row.SWUNI_Alias,
+            row.Name,
+            row.name,
+            row.RawSoftwareName
+        ),
+        fallbackSoftwareName
+    );
+
+    const categoryName = softInvNormalizeCategoryName(
+        softInvFirstText(row.CategoryName, row.categoryName, row.Category, row.category, row.SW_CATEGORY)
+    );
+
+    const publisher = softInvCleanText(row.Publisher || row.publisher || row.Description || row.description);
+    const version = softInvCleanText(row.Version || row.version || row.SWUNI_Version || row.FileVersion);
+    const assetTag = softInvFirstText(row.AssetTag, row.assetTag, row.DeviceName, row.DeviceID, row.ComputerName, row.Object_DeviceID, row.AssetID, row.assetId) || "-";
+    const computerName = softInvFirstText(row.ComputerName, row.computerName, row.DeviceName, row.deviceName, assetTag) || assetTag;
+    const machineType = softInvFirstText(row.MachineType, row.machineType, row.DeviceType, row.deviceType, row.PlatformType, row.platformType) || "-";
+    const os = softInvNormalizeOs(
+        softInvFirstText(row.OS, row.os, row.OperatingSystem, row.operatingSystem),
+        softInvFirstText(row.PlatformType, row.platformType, machineType)
+    );
+    const customerName = softInvFirstText(row.CustomerName, row.customerName, row.Object_Full_Name, row.Department, row.department, row.Object_Client_Name);
+    const department = softInvFirstText(row.Department, row.department, row.Object_Full_Name, customerName);
+
+    return {
+        ...row,
+        SoftwareName: softwareName,
+        softwareName,
+        CategoryName: categoryName,
+        categoryName,
+        Publisher: publisher,
+        publisher,
+        Version: version,
+        version,
+        AssetTag: assetTag,
+        assetTag,
+        ComputerName: computerName,
+        computerName,
+        MachineType: machineType,
+        machineType,
+        OS: os,
+        os,
+        CustomerName: customerName,
+        customerName,
+        Department: department,
+        department
+    };
+}
+
+function softInvNormalizeRows(data) {
+    return Array.isArray(data) ? data.map(softInvNormalizeRow) : [];
+}
+
 function softInvSendWrapped(res, data, meta = {}) {
     return res.json({
         success: true,
@@ -13181,6 +13226,8 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 OR base.CategoryName LIKE @SearchText
                 OR base.PlatformType LIKE @SearchText
                 OR base.Description LIKE @SearchText
+                OR base.CustomerName LIKE @SearchText
+                OR base.DeviceModelName LIKE @SearchText
             )
         `;
     }
@@ -13204,6 +13251,7 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 asset.ConnectionStatus,
                 asset.DeviceIPAddress,
                 asset.DeviceLocalIPAddress,
+                relInfo.Object_Full_Name AS CustomerName,
 
                 ISNULL(NULLIF(LTRIM(RTRIM(cat.CategoryName)), ''), 'Unclassified') AS CategoryName,
 
@@ -13225,6 +13273,15 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 ON sw.DeviceID = asset.DeviceID
             LEFT JOIN TS_SW_CATEGORY cat WITH (NOLOCK)
                 ON sw.SW_CATEGORY = cat.CategoryID
+            OUTER APPLY (
+                SELECT TOP 1 rel.Object_Full_Name
+                FROM TSMDM_OBJECT_RELATION mor WITH (NOLOCK)
+                INNER JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
+                    ON mor.Object_Rel_Idn = rel.Object_Rel_Idn
+                WHERE mor.MDM_Asset_Idn = asset.MDM_Asset_Idn
+                  AND ISNULL(rel.Object_Rel_Deleted, 0) = 0
+                ORDER BY rel.Object_Full_Name ASC
+            ) relInfo
         )
         SELECT
             CleanSoftwareName AS SoftwareID,
@@ -13241,7 +13298,7 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
             ISNULL(DeviceName, '-') AS ComputerName,
             ISNULL(PlatformType, '-') AS MachineType,
             ISNULL(PlatformType, '-') AS OS,
-            '' AS CustomerName,
+            ISNULL(CustomerName, '') AS CustomerName,
 
             CASE
                 WHEN DeviceLocalIPAddress IS NULL OR DeviceLocalIPAddress = ''
@@ -13249,7 +13306,7 @@ async function getMdmSoftwareInventory(pool, searchText = "") {
                 ELSE DeviceLocalIPAddress
             END AS IP,
 
-            '' AS Department,
+            ISNULL(CustomerName, '') AS Department,
             ISNULL(CAST(ConnectionStatus AS VARCHAR(100)), '-') AS AgentStatus,
             'MDM' AS Object_Agent,
             ISNULL(DeviceID, '-') AS Object_DeviceID,
@@ -13285,7 +13342,7 @@ async function handleSoftwareInventoryList(req, res) {
                 SWName: { type: sql.VarChar(255), value: swname }
             });
 
-            return softInvSendWrapped(res, data, { scope: "client", clientID });
+            return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "client", clientID });
         }
 
         if (relationID) {
@@ -13294,11 +13351,11 @@ async function handleSoftwareInventoryList(req, res) {
                 SWName: { type: sql.VarChar(255), value: swname }
             });
 
-            return softInvSendWrapped(res, data, { scope: "relation", relationID });
+            return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "relation", relationID });
         }
 
         const data = await getMdmSoftwareInventory(pool, swname);
-        return res.json(data);
+        return res.json(softInvNormalizeRows(data));
 
     } catch (err) {
         console.error("GET /api/software error:", err);
@@ -13326,7 +13383,7 @@ async function handleSoftwareCategories(req, res) {
 
         return res.json(
             (result.recordset || [])
-                .map((row) => row.CategoryName)
+                .map((row) => softInvNormalizeCategoryName(row.CategoryName))
                 .filter(Boolean)
         );
 
@@ -13370,14 +13427,14 @@ async function handleSoftwareDebugSummary(req, res) {
     }
 }
 
-app.get("/api/software", authenticateToken, handleSoftwareInventoryList);
-app.get("/api/software/categories", authenticateToken, handleSoftwareCategories);
-app.get("/api/software/debug/summary", authenticateToken, handleSoftwareDebugSummary);
+app.get("/api/software", authenticateToken, softwareCacheMiddleware, handleSoftwareInventoryList);
+app.get("/api/software/categories", authenticateToken, softwareCacheMiddleware, handleSoftwareCategories);
+app.get("/api/software/debug/summary", authenticateToken, softwareCacheMiddleware, handleSoftwareDebugSummary);
 
 // Compatibility aliases, in case old frontend/service uses software-inventory wording.
-app.get("/api/software-inventory", authenticateToken, handleSoftwareInventoryList);
-app.get("/api/software-inventory/categories", authenticateToken, handleSoftwareCategories);
-app.get("/api/software-inventory/debug/summary", authenticateToken, handleSoftwareDebugSummary);
+app.get("/api/software-inventory", authenticateToken, softwareCacheMiddleware, handleSoftwareInventoryList);
+app.get("/api/software-inventory/categories", authenticateToken, softwareCacheMiddleware, handleSoftwareCategories);
+app.get("/api/software-inventory/debug/summary", authenticateToken, softwareCacheMiddleware, handleSoftwareDebugSummary);
 
 
 // ============================================================
@@ -13402,7 +13459,7 @@ function softAdvNormalizeExtension(value) {
 }
 
 // Device Hierarchy > click one EM/Windows device > Installed Software list
-app.get("/api/software/client/:clientID", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const swname = softAdvNormalizeSearchValue(req.query.swname || req.query.search || req.query.q);
@@ -13417,7 +13474,7 @@ app.get("/api/software/client/:clientID", authenticateToken, async (req, res) =>
             SWName: { type: sql.VarChar(255), value: swname }
         });
 
-        return softInvSendWrapped(res, data, { scope: "client", clientID });
+        return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "client", clientID });
     } catch (err) {
         console.error("GET /api/software/client/:clientID error:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve client software list", error: err.message });
@@ -13425,7 +13482,7 @@ app.get("/api/software/client/:clientID", authenticateToken, async (req, res) =>
 });
 
 // MDM device software list
-app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
+app.get("/api/software/mdm/:deviceID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const deviceID = softAdvNormalizeSearchValue(req.params.deviceID);
         if (!deviceID) {
@@ -13450,7 +13507,7 @@ app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
             DeviceID: { type: sql.VarChar(255), value: deviceID }
         });
 
-        return softInvSendWrapped(res, data, { scope: "mdm", deviceID });
+        return softInvSendWrapped(res, softInvNormalizeRows(data), { scope: "mdm", deviceID });
     } catch (err) {
         console.error("GET /api/software/mdm/:deviceID error:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve MDM software list", error: err.message });
@@ -13458,7 +13515,7 @@ app.get("/api/software/mdm/:deviceID", authenticateToken, async (req, res) => {
 });
 
 // Relation installed software statistics and drilldowns.
-app.get("/api/software/relation/:relationID/installed", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/installed", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "summary1").toLowerCase();
@@ -13496,7 +13553,7 @@ app.get("/api/software/relation/:relationID/installed", authenticateToken, async
             }
         );
 
-        return softInvSendWrapped(res, data, { scope: "relation", relationID, mode, procedure });
+        return softInvSendWrapped(res, isDeviceListMode ? softInvNormalizeRows(data) : data, { scope: "relation", relationID, mode, procedure });
     } catch (err) {
         console.error("GET /api/software/relation/:relationID/installed error:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve installed software statistics", error: err.message });
@@ -13504,7 +13561,7 @@ app.get("/api/software/relation/:relationID/installed", authenticateToken, async
 });
 
 // Relation package/license statistics and drilldowns.
-app.get("/api/software/relation/:relationID/packages", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/packages", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "stat1").toLowerCase();
@@ -13549,7 +13606,7 @@ app.get("/api/software/relation/:relationID/packages", authenticateToken, async 
 });
 
 // Application Package / License Status by selected client.
-app.get("/api/software/client/:clientID/packages", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/packages", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "package").toLowerCase();
@@ -13572,7 +13629,7 @@ app.get("/api/software/client/:clientID/packages", authenticateToken, async (req
 });
 
 // File Extension statistics/list by relation.
-app.get("/api/software/relation/:relationID/files", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/files", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
         const mode = softAdvNormalizeSearchValue(req.query.mode || "stat").toLowerCase();
@@ -13609,7 +13666,7 @@ app.get("/api/software/relation/:relationID/files", authenticateToken, async (re
 });
 
 // File Extension list by selected client/device.
-app.get("/api/software/client/:clientID/files", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/files", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
         const extension = softAdvNormalizeExtension(req.query.extension || req.query.ext);
@@ -13636,7 +13693,7 @@ app.get("/api/software/client/:clientID/files", authenticateToken, async (req, r
 });
 
 // Software registry report/stat endpoint.
-app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, async (req, res) => {
+app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = parseInt(req.params.relationID, 10);
 
@@ -13657,7 +13714,7 @@ app.get("/api/software/relation/:relationID/swr-stat", authenticateToken, async 
 });
 
 // Software registry detail endpoint by client.
-app.get("/api/software/client/:clientID/swr-detail", authenticateToken, async (req, res) => {
+app.get("/api/software/client/:clientID/swr-detail", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const clientID = parseInt(req.params.clientID, 10);
 
@@ -13677,7 +13734,7 @@ app.get("/api/software/client/:clientID/swr-detail", authenticateToken, async (r
     }
 });
 
-app.get("/api/software/stats", authenticateToken, async (req, res) => {
+app.get("/api/software/stats", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     try {
         const relationID = softAdvParseOptionalInt(req.query.relationID, 0);
         const swname = softAdvNormalizeSearchValue(req.query.swname || req.query.search || req.query.q);
@@ -13714,7 +13771,7 @@ app.get("/api/software/stats", authenticateToken, async (req, res) => {
     }
 });
 
-app.get("/api/software/extensions", authenticateToken, async (req, res) => {
+app.get("/api/software/extensions", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     return res.json({
         success: true,
         totalRecords: 3,
@@ -13738,6 +13795,41 @@ function softScanNormalizeValue(value, fallback = "") {
 function softScanParseInt(value, fallback = 0) {
     const parsed = parseInt(value, 10);
     return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function softScanParseScopeInt(value, fallback = 0) {
+    if (value === undefined || value === null || value === "") return fallback;
+
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? Math.trunc(value) : fallback;
+    }
+
+    if (typeof value === "object") {
+        return softScanParseScopeInt(softScanFirstDefined(
+            value.Object_Rel_Idn,
+            value.objectRelIdn,
+            value.objectRelID,
+            value.object_rel_idn,
+            value.relationID,
+            value.relationId,
+            value.relation_id,
+            value.folderId,
+            value.folderID,
+            value.departmentId,
+            value.branchId,
+            value.id
+        ), fallback);
+    }
+
+    const text = String(value).trim();
+    if (!text) return fallback;
+
+    if (/^-?\d+$/.test(text)) {
+        return softScanParseInt(text, fallback);
+    }
+
+    const embeddedNumber = text.match(/\d+/);
+    return embeddedNumber ? softScanParseInt(embeddedNumber[0], fallback) : fallback;
 }
 
 function softScanFirstDefined(...values) {
@@ -13795,10 +13887,73 @@ function getSoftScanModeCode(scanMode) {
     return -1;
 }
 
+function getSoftScanObjectRelId(body = {}) {
+    return softScanParseScopeInt(softScanFirstDefined(
+        body.Object_Rel_Idn,
+        body.objectRelIdn,
+        body.objectRelID,
+        body.object_rel_idn,
+        body.relationID,
+        body.relationId,
+        body.relation_id,
+        body.folderId,
+        body.folderID,
+        body.departmentId,
+        body.departmentID,
+        body.branchId,
+        body.branchID,
+        body.selectedFolder,
+        body.folder,
+        body.department,
+        body.branch
+    ), -1);
+}
+
+function getSoftScanObjectRootId(body = {}) {
+    return softScanParseScopeInt(softScanFirstDefined(
+        body.Object_Root_Idn,
+        body.objectRootIdn,
+        body.objectRootID,
+        body.object_root_idn,
+        body.assetId,
+        body.assetID,
+        body.deviceIdn,
+        body.deviceIDN,
+        body.selectedDevice,
+        body.device,
+        body.asset
+    ), 0);
+}
+
+function getSoftScanObjectDeviceID(body = {}) {
+    return softScanNormalizeValue(softScanFirstDefined(
+        body.Object_DeviceID,
+        body.objectDeviceID,
+        body.objectDeviceId,
+        body.object_device_id,
+        body.deviceID,
+        body.deviceId,
+        body.deviceName,
+        body.computerName,
+        body.selectedDevice?.Object_DeviceID,
+        body.selectedDevice?.objectDeviceID,
+        body.selectedDevice?.objectDeviceId,
+        body.selectedDevice?.deviceID,
+        body.selectedDevice?.deviceId,
+        body.selectedDevice?.computerName,
+        body.device?.Object_DeviceID,
+        body.device?.objectDeviceID,
+        body.device?.objectDeviceId,
+        body.device?.deviceID,
+        body.device?.deviceId,
+        body.device?.computerName
+    ));
+}
+
 async function getSoftScanTargets(pool, options = {}) {
     const scanMode = options.scanMode;
-    const objectRelIdn = softScanParseInt(options.objectRelIdn, -1);
-    const objectRootIdn = softScanParseInt(options.objectRootIdn, 0);
+    const objectRelIdn = softScanParseScopeInt(options.objectRelIdn, -1);
+    const objectRootIdn = softScanParseScopeInt(options.objectRootIdn, 0);
     const objectDeviceID = softScanNormalizeValue(options.objectDeviceID);
 
     if (scanMode === "all") {
@@ -13820,7 +13975,9 @@ async function getSoftScanTargets(pool, options = {}) {
 
     if (scanMode === "folder") {
         if (objectRelIdn === -1 || objectRelIdn === 0 || Number.isNaN(objectRelIdn)) {
-            throw new Error("Object_Rel_Idn is required for folder software inventory scan.");
+            const error = new Error("Object_Rel_Idn is required for folder software inventory scan.");
+            error.statusCode = 400;
+            throw error;
         }
 
         const result = await pool.request()
@@ -13859,7 +14016,9 @@ async function getSoftScanTargets(pool, options = {}) {
 
     if (scanMode === "device") {
         if (!objectRootIdn && !objectDeviceID) {
-            throw new Error("Object_Root_Idn or Object_DeviceID is required for device software inventory scan.");
+            const error = new Error("Object_Root_Idn or Object_DeviceID is required for device software inventory scan.");
+            error.statusCode = 400;
+            throw error;
         }
 
         const result = await pool.request()
@@ -13896,7 +14055,7 @@ async function createSoftScanJobHeader(transaction, req, payload, scanMode) {
     ), `Software inventory scan - ${scanMode}`);
 
     const jobResult = await new sql.Request(transaction)
-        .input("Console_Idn", sql.Int, await resolveTaskJobConsoleId(transaction, req, payload, getSoftScanConsoleId(req)))
+        .input("Console_Idn", sql.Int, getSoftScanConsoleId(req))
         .input("Job_Style", sql.Int, softScanParseInt(softScanFirstDefined(payload.Job_Style, payload.jobStyle), 1))
         .input("Job_StartTime", sql.VarChar(50), startTime)
         .input("Job_EndTime", sql.VarChar(50), endTime)
@@ -14072,9 +14231,17 @@ async function handleSoftInventoryScan(req, res) {
 
         const options = {
             scanMode,
-            objectRelIdn: softScanFirstDefined(body.Object_Rel_Idn, body.objectRelIdn, body.relationID, body.relationId),
-            objectRootIdn: softScanFirstDefined(body.Object_Root_Idn, body.objectRootIdn, body.objectRootID, body.assetId),
-            objectDeviceID: softScanFirstDefined(body.Object_DeviceID, body.objectDeviceID, body.deviceID, body.deviceId)
+            objectRelIdn: getSoftScanObjectRelId(body),
+            objectRootIdn: getSoftScanObjectRootId(body),
+            objectDeviceID: getSoftScanObjectDeviceID(body)
+        };
+
+        const normalizedPayload = {
+            ...body,
+            scanMode,
+            Object_Rel_Idn: options.objectRelIdn,
+            Object_Root_Idn: options.objectRootIdn,
+            Object_DeviceID: options.objectDeviceID
         };
 
         const pool = await sql.connect(dbConfig);
@@ -14090,17 +14257,18 @@ async function handleSoftInventoryScan(req, res) {
         transaction = new sql.Transaction(pool);
         await transaction.begin();
 
-        const job = await createSoftScanJobHeader(transaction, req, { ...body, scanMode }, scanMode);
+        const job = await createSoftScanJobHeader(transaction, req, normalizedPayload, scanMode);
         await insertHierarchicalTaskJobDestination(transaction, job.Job_Idn, scanMode, {
-            payload: body,
+            payload: normalizedPayload,
             firstTarget: targets[0],
-            objectRelIdn: softScanFirstDefined(body.Object_Rel_Idn, body.objectRelIdn, body.relationID, body.relationId),
+            objectRelIdn: options.objectRelIdn,
             objectRelCode: softScanFirstDefined(body.Object_Rel_Code, body.objectRelCode)
         });
-        const historyCount = await insertSoftScanHistoryRows(transaction, job.Job_Idn, scanMode, body, targets[0], job.Job_StartTime);
+        const historyCount = await insertSoftScanHistoryRows(transaction, job.Job_Idn, scanMode, normalizedPayload, targets[0], job.Job_StartTime);
 
         await transaction.commit();
         transaction = null;
+        clearTimedResponseCache('software:');
 
         return res.status(201).json({
             success: true,
@@ -14120,7 +14288,7 @@ async function handleSoftInventoryScan(req, res) {
                 historyRows: historyCount,
                 destination: {
                     mode: scanMode,
-                    Object_Rel_Idn: scanMode === "folder" ? softScanParseInt(options.objectRelIdn, -1) : -1,
+                    Object_Rel_Idn: scanMode === "folder" ? softScanParseScopeInt(options.objectRelIdn, -1) : -1,
                     Object_Root_Idn: scanMode === "device" ? targets[0]?.Object_Root_Idn : -1
                 }
             }
@@ -14135,9 +14303,9 @@ async function handleSoftInventoryScan(req, res) {
         }
 
         console.error("POST /api/software-inventory/scan error:", err);
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             success: false,
-            message: "Failed to create software inventory scan job.",
+            message: err.statusCode === 400 ? (err.message || "Invalid software inventory scan request.") : "Failed to create software inventory scan job.",
             error: err.message || String(err)
         });
     }
@@ -14148,7 +14316,7 @@ app.post("/api/software/scan", authenticateToken, handleSoftInventoryScan);
 
 
 // Old relation based route. Must stay after /categories and /debug/summary.
-app.get("/api/software/:relationID", authenticateToken, async (req, res) => {
+app.get("/api/software/:relationID", authenticateToken, softwareCacheMiddleware, async (req, res) => {
     req.query.relationID = req.params.relationID;
     return handleSoftwareInventoryList(req, res);
 });
@@ -18965,7 +19133,7 @@ async function createNetworkInventoryScanJob(req, res) {
     try {
         const body = req.body || {};
         const pool = await sql.connect(dbConfig);
-        const consoleId = await resolveTaskJobConsoleId(pool, req, body, getNetworkScanConsoleId(req));
+        const consoleId = getNetworkScanConsoleId(req);
         const jobStyle = getNetworkScanJobStyle(body);
         const jobStartTime = normalizeNetworkValue(firstNetworkScanDefined(
             body.Job_StartTime,
@@ -23025,36 +23193,6 @@ function getOnlinePatchPaging(req) {
     return { page, limit, offset };
 }
 
-function buildOnlinePatchPagedResponse(data, paging, totalRecords, extra = {}) {
-    const safeData = Array.isArray(data) ? data : [];
-    const safeTotal = Number.isFinite(Number(totalRecords)) ? Number(totalRecords) : safeData.length;
-    const safeLimit = Math.max(Number(paging?.limit || 0), 1);
-    const totalPages = Math.max(1, Math.ceil(safeTotal / safeLimit));
-    const page = Number(paging?.page || 1) || 1;
-    const limit = Number(paging?.limit || safeLimit) || safeLimit;
-
-    const nestedPayload = {
-        ...extra,
-        data: safeData,
-        rows: safeData,
-        page,
-        limit,
-        totalRecords: safeTotal,
-        totalPages
-    };
-
-    return {
-        success: true,
-        ...extra,
-        page,
-        limit,
-        totalRecords: safeTotal,
-        totalPages,
-        rows: safeData,
-        data: nestedPayload
-    };
-}
-
 function getOnlinePatchScopeParams(source = {}) {
     const scope = normalizeOnlinePatchScope(firstOnlinePatchDefined(source.scope, source.targetScope, source.mode));
     return {
@@ -23329,8 +23467,14 @@ app.get("/api/patch/online/status", authenticateToken, async (req, res) => {
         `);
 
         const data = (dataResult.recordset || []).map(normalizeOnlinePatchRow);
-        const totalRecords = countResult.recordset?.[0]?.TotalRecords || data.length;
-        return res.json(buildOnlinePatchPagedResponse(data, paging, totalRecords, { scope: scopeParams.scope }));
+        return res.json({
+            success: true,
+            scope: scopeParams.scope,
+            page: paging.page,
+            limit: paging.limit,
+            totalRecords: countResult.recordset?.[0]?.TotalRecords || data.length,
+            data
+        });
     } catch (err) {
         console.error("Failed to retrieve online patch status:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve online patch status", error: err.message || String(err) });
@@ -23410,8 +23554,13 @@ app.get("/api/patch/online/catalog", authenticateToken, async (req, res) => {
         `);
 
         const data = (dataResult.recordset || []).map(normalizeOnlinePatchRow);
-        const totalRecords = countResult.recordset?.[0]?.TotalRecords || data.length;
-        return res.json(buildOnlinePatchPagedResponse(data, paging, totalRecords));
+        return res.json({
+            success: true,
+            page: paging.page,
+            limit: paging.limit,
+            totalRecords: countResult.recordset?.[0]?.TotalRecords || data.length,
+            data
+        });
     } catch (err) {
         console.error("Failed to retrieve online patch catalog:", err);
         return res.status(500).json({ success: false, message: "Failed to retrieve online patch catalog", error: err.message || String(err) });
@@ -23717,7 +23866,7 @@ async function createOnlinePatchInstallJob(transaction, req, body, payload, upda
     ), `[Online Patching] Install Patch Online - ${patchLabel} - ${deviceLabel}`);
 
     const jobResult = await new sql.Request(transaction)
-        .input("Console_Idn", sql.Int, await resolveTaskJobConsoleId(transaction, req, payload || body || {}, getOnlinePatchScanConsoleId(req)))
+        .input("Console_Idn", sql.Int, getOnlinePatchScanConsoleId(req))
         .input("Job_Style", sql.Int, jobStyle)
         .input("Job_StartTime", sql.VarChar(50), jobStartTime)
         .input("Job_EndTime", sql.VarChar(50), jobEndTime)
@@ -23984,7 +24133,7 @@ async function createOnlinePatchScanJobHeader(transaction, req, payload, scopePa
     ), `[Online Patching] Scan Patches - ${targetLabel} (${targetCount} target${targetCount === 1 ? "" : "s"})`);
 
     const jobResult = await new sql.Request(transaction)
-        .input("Console_Idn", sql.Int, await resolveTaskJobConsoleId(transaction, req, payload || body || {}, getOnlinePatchScanConsoleId(req)))
+        .input("Console_Idn", sql.Int, getOnlinePatchScanConsoleId(req))
         .input("Job_Style", sql.Int, jobStyle)
         .input("Job_StartTime", sql.VarChar(50), jobStartTime)
         .input("Job_EndTime", sql.VarChar(50), jobEndTime)
@@ -25047,14 +25196,12 @@ async function getItOpsDepartmentRows(pool) {
     const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
     const hasEmAssets = await itopsTableExists(pool, "TS_OBJECT_ROOT");
     const hasIncidents = await itopsTableExists(pool, "HD_Incidents");
+    const hasIncidentCustomerName = hasIncidents && await itopsColumnExists(pool, "HD_Incidents", "CustomerName");
     const hasPatchStatus = await itopsTableExists(pool, "TS_UPDATE_ONLINE_STATUS");
 
     if (!hasRelations || !hasEmAssets) return [];
 
-    // Keep this query safe after API/table merges. The old dashboard query always
-    // selected inc.OpenIncidents and patch.* even when those optional joins were
-    // not added, causing MSSQL "multi-part identifier could not be bound" errors.
-    const incidentJoinSql = hasIncidents
+    const incidentJoinSql = hasIncidentCustomerName
         ? `
             LEFT JOIN (
                 SELECT
@@ -25082,26 +25229,18 @@ async function getItOpsDepartmentRows(pool) {
         `
         : "";
 
-    const applicablePatchesSelect = hasPatchStatus
-        ? "SUM(ISNULL(patch.ApplicablePatches, 0))"
-        : "CAST(0 AS INT)";
-
-    const installedPatchesSelect = hasPatchStatus
-        ? "SUM(ISNULL(patch.InstalledPatches, 0))"
-        : "CAST(0 AS INT)";
-
-    const openIncidentsSelect = hasIncidents
-        ? "MAX(ISNULL(inc.OpenIncidents, 0))"
-        : "CAST(0 AS INT)";
+    const openIncidentSelect = hasIncidentCustomerName ? "MAX(ISNULL(inc.OpenIncidents, 0))" : "0";
+    const applicablePatchSelect = hasPatchStatus ? "SUM(ISNULL(patch.ApplicablePatches, 0))" : "0";
+    const installedPatchSelect = hasPatchStatus ? "SUM(ISNULL(patch.InstalledPatches, 0))" : "0";
 
     const result = await pool.request().query(`
         SELECT TOP 8
             ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned')) AS Department,
             COUNT(DISTINCT root.Object_Root_Idn) AS Assets,
             SUM(CASE WHEN root.ConnectionStatus = 1 THEN 1 ELSE 0 END) AS OnlineAssets,
-            ${applicablePatchesSelect} AS ApplicablePatches,
-            ${installedPatchesSelect} AS InstalledPatches,
-            ${openIncidentsSelect} AS OpenIncidents
+            ${applicablePatchSelect} AS ApplicablePatches,
+            ${installedPatchSelect} AS InstalledPatches,
+            ${openIncidentSelect} AS OpenIncidents
         FROM TS_OBJECT_ROOT root WITH (NOLOCK)
         LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
             ON root.Object_Rel_Idn = rel.Object_Rel_Idn
@@ -25153,6 +25292,12 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
     }
 
     if (hasAssets) {
+        const hasAssetCustomerName = await itopsColumnExists(pool, "Assets", "CustomerName").catch(() => false);
+        const hasAssetDepartment = await itopsColumnExists(pool, "Assets", "Department").catch(() => false);
+        const assetDepartmentExpr = hasAssetCustomerName
+            ? "ISNULL(NULLIF(a.CustomerName, ''), " + (hasAssetDepartment ? "ISNULL(NULLIF(a.Department, ''), 'Unmapped')" : "'Unmapped'") + ")"
+            : (hasAssetDepartment ? "ISNULL(NULLIF(a.Department, ''), 'Unmapped')" : "'Unmapped'");
+
         const supportJoin = hasOsSupport
             ? `
                 LEFT JOIN OSSupportCache osc WITH (NOLOCK)
@@ -25187,7 +25332,7 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
                 SELECT
                     a.AssetID,
                     ISNULL(NULLIF(a.ComputerName, ''), ISNULL(NULLIF(a.AssetTag, ''), a.AssetID)) AS DeviceName,
-                    ISNULL(NULLIF(a.CustomerName, ''), ISNULL(NULLIF(a.Department, ''), 'Unmapped')) AS Department,
+                    ${assetDepartmentExpr} AS Department,
                     ISNULL(NULLIF(a.Model, ''), '-') AS Model,
                     ISNULL(NULLIF(a.OS, ''), 'Unknown') AS OSName,
                     ISNULL(NULLIF(a.BiosDate, ''), '-') AS BiosDate,
@@ -25589,7 +25734,24 @@ function buildItOpsAttentionQueue({ incidentSummary, hardware, patchSummary, sof
 
 app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
     try {
+        const cacheKey = "itops-dashboard:v4";
+        const cachedData = shouldBypassDashboardCache(req) ? null : readDashboardCache(cacheKey);
+        if (cachedData) {
+            res.set("X-EMA-Cache", "HIT");
+            return res.json({ success: true, cached: true, data: cachedData });
+        }
+
+        res.set("X-EMA-Cache", "MISS");
         const pool = await sql.connect(dbConfig);
+
+        const safeItOps = async (label, fallback, loader) => {
+            try {
+                return await loader();
+            } catch (err) {
+                console.warn(`IT Operations source skipped (${label}):`, err.message || err);
+                return fallback;
+            }
+        };
 
         const [
             hardware,
@@ -25601,14 +25763,25 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
             patchSummary,
             departmentRows
         ] = await Promise.all([
-            getItOpsHardwareSummary(pool),
-            getItOpsSoftwareSummary(pool),
-            getItOpsNetworkSummary(pool),
-            getItOpsGeoSummary(pool),
-            getItOpsTaskSummary(pool),
-            getItOpsIncidentSummary(pool),
-            getItOpsPatchSummary(pool),
-            getItOpsDepartmentRows(pool)
+            safeItOps("hardware", { totalDevices: 0, onlineDevices: 0 }, () => getItOpsHardwareSummary(pool)),
+            safeItOps("software", { devicesWithSoftware: 0 }, () => getItOpsSoftwareSummary(pool)),
+            safeItOps("network", { registeredDevices: 0, knownIps: 0 }, () => getItOpsNetworkSummary(pool)),
+            safeItOps("geolocation", { trackedDevices: 0, staleLocations: 0 }, () => getItOpsGeoSummary(pool)),
+            safeItOps("tasks", { runningTasks: 0, failedTasks: 0, completedTasks: 0, totalTasks: 0 }, () => getItOpsTaskSummary(pool)),
+            safeItOps("service desk", {
+                openIncidents: 0,
+                overdueTickets: 0,
+                mttrMinutes: 0,
+                firstResponseMinutes: 0,
+                slaAchievement: 0,
+                priorityBreakdown: [],
+                incidentTrend: [],
+                trendSummary: { newIncidents: 0, resolved: 0, openBacklog: 0 },
+                activeAlerts: [],
+                problematicSystems: []
+            }, () => getItOpsIncidentSummary(pool)),
+            safeItOps("patch", { patchCompliance: 0, missingPatches: 0, criticalVulnerabilities: 0, patchDepartments: [] }, () => getItOpsPatchSummary(pool)),
+            safeItOps("departments", [], () => getItOpsDepartmentRows(pool))
         ]);
 
         const totalDevices = itopsToNumber(hardware.totalDevices);
@@ -25720,7 +25893,8 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
             departmentRows
         };
 
-        return res.json({ success: true, data });
+        writeDashboardCache("itops-dashboard:v4", data);
+        return res.json({ success: true, cached: false, data });
     } catch (err) {
         console.error("GET /api/dashboard/it-operations error:", err);
         return res.status(500).json({

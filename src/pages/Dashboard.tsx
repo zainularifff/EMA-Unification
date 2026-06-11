@@ -745,7 +745,7 @@ function BarList({ items, limit = 7, emptyLabel = 'No breakdown data yet.' }: { 
 function IncidentTrendChart({ data, summary }: { data: IncidentTrendPoint[]; summary?: TrendSummary }) {
   const rows = data.slice(-5);
 
-  if (!rows.length) return <EmptyState label="No incident trend returned from API yet." />;
+  if (!rows.length) return <EmptyState label="No incident trend data." />;
 
   const maxDailyVolume = Math.max(
     1,

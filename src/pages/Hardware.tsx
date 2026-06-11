@@ -26,7 +26,6 @@ import {
   X,
 } from "lucide-react";
 
-import hardwareService from "../services/hardwareService";
 
 type StatusType = "Online" | "Locked" | "Stale Sync" | "Offline";
 type KpiFilter = "all" | "recent" | "stale" | "locked" | "running";
@@ -187,10 +186,29 @@ type HardwareScanResult = {
   Job_Idn?: number;
   Job_Type?: number;
   Job_Command?: number;
+  Job_Style?: number;
   Job_Status?: number;
+  Job_StartTime?: string;
+  Job_ScheduleTime?: string;
+  Job_Description?: string;
   scanMode?: string;
   targetCount?: number;
   historyRows?: number;
+  destination?: Record<string, unknown>;
+};
+
+type HardwareScanPayload = {
+  scanMode: HardwareScanMode;
+  objectRelIdn?: number;
+  relationID?: number;
+  objectRootIdn?: number;
+  objectDeviceID?: string;
+  deviceID?: string;
+  deviceName?: string;
+  jobStyle?: number;
+  jobPriority?: number;
+  scheduleTime?: string;
+  description?: string;
 };
 
 type GeoApiRuntime = {
@@ -223,9 +241,6 @@ type ApiAsset = {
   Object_DeviceID?: string;
   ComputerName?: string;
   Object_Full_Name?: string;
-  Object_Rel_Name?: string;
-  Object_Rel_Idn?: number | string;
-  Object_PR_Idn?: number | string;
   PlatformType?: string;
   Model?: string;
   ConnectionTime?: string;
@@ -384,6 +399,26 @@ type DepartmentPath = {
 };
 
 const PAGE_SIZE = 10;
+function resolveApiBaseUrl() {
+  const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+  if (envUrl) return envUrl.replace(/\/$/, "");
+
+  if (typeof window !== "undefined") {
+    const { hostname, port, protocol } = window.location;
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+    const isViteDevPort = port === "5173" || port === "5174" || port === "3000";
+
+    if (isLocalHost && isViteDevPort) {
+      return `${protocol}//${hostname}:3001`;
+    }
+  }
+
+  return "";
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
+const TOKEN_STORAGE_KEYS = ["ema-access-token", "ema-token", "accessToken", "token", "authToken"];
+const AUTH_PAYLOAD_KEYS = ["ema-auth", "auth", "user", "ema-user", "currentUser", "authUser", "ema-current-user"];
 const TABLE_FILTER_DEFAULTS: TableFilters = { status: "all", platform: "all" };
 
 const emptyDevice: Device = {
@@ -503,38 +538,65 @@ function generateStatisticTree(): StatisticNode[] {
         { id: "stat-model", name: "Model", type: "subcategory", dataType: "hardware" },
       ],
     },
-    {
-      id: "reports",
-      name: "Report",
-      type: "category",
-      icon: "file-text",
-      dataType: "report",
-      children: [
-        { id: "report-os", name: "Operating System", type: "report", dataType: "report" },
-        { id: "report-processor", name: "Processor", type: "report", dataType: "report" },
-        { id: "report-memory", name: "Memory", type: "report", dataType: "report" },
-        { id: "report-hdd", name: "Hard Disk", type: "report", dataType: "report" },
-        { id: "report-inventory", name: "Hardware Inventory List", type: "report", dataType: "report" },
-      ],
-    },
   ];
 }
 
+function normalizeHardwareStatRow(row: unknown): HardwareApiRow {
+  if (Array.isArray(row)) {
+    return row.reduce<HardwareApiRow>((record, value, index) => {
+      record[`column${index + 1}`] = value;
+      return record;
+    }, { __rawArray: row } as HardwareApiRow);
+  }
+
+  const record = asRecord(row) || {};
+  const emptyKeyValue = record[""];
+
+  if (Array.isArray(emptyKeyValue)) {
+    return emptyKeyValue.reduce<HardwareApiRow>((normalized, value, index) => {
+      normalized[`column${index + 1}`] = value;
+      return normalized;
+    }, { ...record, __rawArray: emptyKeyValue } as HardwareApiRow);
+  }
+
+  if (emptyKeyValue !== undefined && emptyKeyValue !== null && String(emptyKeyValue).trim() !== "") {
+    const normalized: HardwareApiRow = { ...record };
+    const nonEmptyKeys = Object.keys(record).filter((key) => key !== "" && record[key] !== undefined && record[key] !== null && String(record[key]).trim() !== "");
+    const numericValue = Number(String(emptyKeyValue).replace(/,/g, ""));
+
+    // Some backend statistic stored procedures return the label in a named
+    // column such as TCAVersion/OS and the count under an empty column name:
+    // { TCAVersion: "8.1.1.0", "": 15 }. Normalize that empty field as
+    // the count so all statistic tables can read it consistently.
+    if (Number.isFinite(numericValue)) {
+      normalized.Count = emptyKeyValue;
+      normalized.Cnt = emptyKeyValue;
+      normalized.column2 = emptyKeyValue;
+    } else if (nonEmptyKeys.length === 0) {
+      normalized.column1 = emptyKeyValue;
+    }
+
+    return normalized;
+  }
+
+  return record as HardwareApiRow;
+}
+
 function normalizeHardwareRows(value: unknown): HardwareApiRow[] {
-  if (Array.isArray(value)) return value.map((row) => (asRecord(row) || {}) as HardwareApiRow);
+  if (Array.isArray(value)) return value.map(normalizeHardwareStatRow);
 
   const valueRecord = asRecord(value);
   if (!valueRecord) return [];
 
   const nestedData = valueRecord.data;
-  if (Array.isArray(nestedData)) return nestedData.map((row) => (asRecord(row) || {}) as HardwareApiRow);
+  if (Array.isArray(nestedData)) return nestedData.map(normalizeHardwareStatRow);
 
   const nestedDataRecord = asRecord(nestedData);
   if (nestedDataRecord && Array.isArray(nestedDataRecord.data)) {
-    return nestedDataRecord.data.map((row) => (asRecord(row) || {}) as HardwareApiRow);
+    return nestedDataRecord.data.map(normalizeHardwareStatRow);
   }
 
-  return Object.keys(valueRecord).length ? [valueRecord] : [];
+  return Object.keys(valueRecord).length ? [normalizeHardwareStatRow(valueRecord)] : [];
 }
 
 function getColumnsFromHardwareRows(rows: HardwareApiRow[]) {
@@ -630,10 +692,14 @@ function readHardwareText(row: HardwareApiRow, keys: string[], fallback = "-") {
 }
 
 function readHardwareNumber(row: HardwareApiRow, keys: string[], fallback = 0) {
-  const value = findHardwareRecordValue(row, keys);
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  const parsed = Number(String(value ?? "").replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : fallback;
+  for (const key of keys) {
+    const value = findHardwareRecordValue(row, [key]);
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    const parsed = Number(String(value ?? "").replace(/,/g, ""));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return fallback;
 }
 
 function getStatisticItemLabel(row: HardwareApiRow) {
@@ -641,14 +707,21 @@ function getStatisticItemLabel(row: HardwareApiRow) {
     "Items",
     "Item",
     "Name",
+    "Category_Inventory",
+    "category_inventory",
+    "CategoryInventory",
     "Category",
     "Value",
+    "sCatg",
+    "Catg",
     "OS",
     "OperatingSystem",
     "Processor",
     "CPU",
     "Memory",
+    "RAM",
     "HardDisk",
+    "HDD",
     "CD-ROM",
     "CDROM",
     "SoundCard",
@@ -660,6 +733,7 @@ function getStatisticItemLabel(row: HardwareApiRow) {
     "Modem",
     "Monitor",
     "Manufacturer",
+    "MadeCompany",
     "Model",
     "ClientVersion",
     "clientVersion",
@@ -668,14 +742,161 @@ function getStatisticItemLabel(row: HardwareApiRow) {
 }
 
 function getStatisticCount(row: HardwareApiRow) {
-  return readHardwareNumber(row, ["Count", "Cnt", "Total", "Total Device", "TotalDevice", "No", "column2"], 0);
+  return readHardwareNumber(row, ["Count", "Cnt", "CCount", "TotalCount", "DeviceCount", "No", "", "column2", "column3", "column4", "Total Device", "TotalDevice"], 0);
 }
+
+function getStatisticTotal(row: HardwareApiRow, fallback = 0) {
+  return readHardwareNumber(row, ["Total", "GrandTotal", "TotalDevices", "TotalDeviceCount"], fallback);
+}
+
+function getStatisticPercentage(row: HardwareApiRow, count: number, total: number) {
+  const backendPercentage = readHardwareNumber(row, ["Percentage", "Percent", "Rate", "Ratio"], NaN);
+  if (Number.isFinite(backendPercentage)) return backendPercentage;
+  return total > 0 ? (count / total) * 100 : 0;
+}
+
+function getRawHardwareArray(row: HardwareApiRow): unknown[] {
+  return Array.isArray(row.__rawArray) ? row.__rawArray as unknown[] : [];
+}
+
+function getConnectionSummaryMetrics(rows: HardwareApiRow[]) {
+  const raw = getRawHardwareArray(rows[0] || {});
+
+  if (raw.length >= 5) {
+    return {
+      total: Number(raw[0] || 0),
+      periods: [
+        { period: "One Day", connected: Number(raw[1] || 0), notConnected: Number(raw[5] || 0) },
+        { period: "One Week", connected: Number(raw[2] || 0), notConnected: Number(raw[5] || 0) },
+        { period: "One Month", connected: Number(raw[3] || 0), notConnected: Number(raw[5] || 0) },
+        { period: "Three Months", connected: Number(raw[4] || 0), notConnected: Number(raw[5] || 0) },
+      ],
+    };
+  }
+
+  const periods = ["One Day", "One Week", "One Month", "Three Months"];
+  const total = getTotalFromStatisticRows(rows);
+  return {
+    total,
+    periods: periods.map((period, index) => {
+      const sourceRow = rows[index] || rows[0] || {};
+      const connectedKeys = [
+        "Connected", "ConnectedCount", "ConnectCount",
+        index === 0 ? "One_day" : "",
+        index === 1 ? "One_week" : "",
+        index === 2 ? "One_month" : "",
+        index === 3 ? "three_month" : "",
+        `column${index + 2}`,
+      ].filter(Boolean);
+      const connected = readHardwareNumber(sourceRow, connectedKeys, 0);
+      const notConnected = readHardwareNumber(sourceRow, ["Not Connected", "NotConnected", "Not_Connected", "NotConnectedCount", "column6"], Math.max(total - connected, 0));
+      return { period: readHardwareText(sourceRow, ["Period", "period", "Items", "Item"], period), connected, notConnected };
+    }),
+  };
+}
+
+const fixedChangedItemColumns = ["Server", "New User", "Server IP", "Department", "Processor", "Memory", "Workgroup", "Computer Name", "User Name", "IP Address"];
+
+const changedItemColumnKeys: Record<string, string[]> = {
+  Server: ["Server", "ServerName", "Server_Name", "nPoints Server Name", "ComputerName"],
+  "New User": ["New User", "NewUser", "UserName", "Username", "Object_Client_Name"],
+  "Server IP": ["Server IP", "ServerIP", "Server_IP", "IP"],
+  Department: ["Department", "Object_Full_Name", "Object_Rel_Name"],
+  Processor: ["Processor", "CPU"],
+  Memory: ["Memory", "RAM"],
+  Workgroup: ["Workgroup", "WorkGroup"],
+  "Computer Name": ["Computer Name", "ComputerName", "DeviceName"],
+  "User Name": ["User Name", "UserName", "Username", "Object_Client_Name"],
+  "IP Address": ["IP Address", "IPAddress", "IP", "RealIP"],
+};
+
+function isChangedItemSummaryResponse(rows: HardwareApiRow[]) {
+  return rows.some((row) => findHardwareRecordValue(row, ["FieldName", "fieldName", "Field", "field"]) !== undefined);
+}
+
+function getChangedItemFieldName(row: HardwareApiRow) {
+  return readHardwareText(row, ["FieldName", "fieldName", "Field", "field", "Items", "Item", "Name", "column1"]);
+}
+
+function getChangedItemFieldCount(row: HardwareApiRow) {
+  return readHardwareNumber(row, ["Count", "Cnt", "Total", "", "column2", "column3"], getStatisticCount(row));
+}
+
+const connectionListColumns = [
+  { label: "Username", keys: ["Username", "UserName", "Object_Client_Name", "Object_Client_Name "] },
+  { label: "Department", keys: ["Department", "Object_Full_Name", "Object_Rel_Name"] },
+  { label: "IP Address", keys: ["IP Address", "IPAddress", "IP", "RealIP"] },
+  { label: "Email", keys: ["Email", "EmailAddress"] },
+  { label: "Phone No.", keys: ["Phone No.", "PhoneNo", "TelNumber", "Phone"] },
+  { label: "Last Connection", keys: ["Last Connection", "LastConnection", "ConnectionTime"] },
+  { label: "MAC Address", keys: ["MAC Address", "MACAddress", "MacAddress", "Macaddress"] },
+  { label: "Operating System (OS)", keys: ["Operating System (OS)", "OS", "OperatingSystem"] },
+  { label: "OS Version", keys: ["OS Version", "OSVersion", "OS_Version"] },
+  { label: "OS Service Pack", keys: ["OS Service Pack", "OSServicePack", "OS_ServicePack"] },
+  { label: "Processor", keys: ["Processor", "CPU"] },
+  { label: "Memory", keys: ["Memory", "RAM"] },
+  { label: "Manufacturer", keys: ["Manufacturer", "MadeCompany"] },
+  { label: "Model", keys: ["Model"] },
+  { label: "Update Time", keys: ["Update Time", "UpdateTime", "HIUpdateTime", "SearchDate"] },
+  { label: "Reserved 01", keys: ["Reserved 01", "Reserved01", "Reserved0"] },
+  { label: "Reserved 02", keys: ["Reserved 02", "Reserved02", "Reserved1"] },
+  { label: "Reserved 03", keys: ["Reserved 03", "Reserved03", "Reserved2"] },
+  { label: "Workgroup", keys: ["Workgroup", "WorkGroup"] },
+  { label: "Computer Name", keys: ["Computer Name", "ComputerName", "DeviceName"] },
+];
+
+const reportInventoryColumns = [
+  { label: "Username", keys: ["Username", "UserName", "Object_Client_Name"] },
+  { label: "Operating System", keys: ["Operating System", "OS", "OperatingSystem"] },
+  { label: "Processor", keys: ["Processor", "CPU"] },
+  { label: "Memory", keys: ["Memory", "RAM"] },
+  { label: "Hard Disk", keys: ["Hard Disk", "HardDisk", "HDD"] },
+  { label: "Video Card", keys: ["Video Card", "VideoCard", "VIDEO_CARD"] },
+  { label: "LAN Card", keys: ["LAN Card", "LANCard", "LAN_CARD"] },
+  { label: "IP Address", keys: ["IP Address", "IPAddress", "IP"] },
+  { label: "Computer Name", keys: ["Computer Name", "ComputerName", "DeviceName"] },
+];
 
 function getTotalFromStatisticRows(rows: HardwareApiRow[]) {
   const directTotal = readHardwareNumber(rows[0] || {}, ["Total Connection(s)", "TotalConnection", "Total Device", "TotalDevice", "TotalCount", "Total", "total"], NaN);
   if (Number.isFinite(directTotal)) return directTotal;
 
   return rows.reduce((sum, row) => sum + getStatisticCount(row), 0);
+}
+
+function isReportSummaryLabel(value: string) {
+  const normalized = String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+  return normalized === "total" || normalized === "subtotal" || normalized === "sub-total";
+}
+
+function getReportItemText(row: HardwareApiRow, selectedStatistic: string) {
+  const keysByReport: Record<string, string[]> = {
+    "report-os": ["OS", "OperatingSystem", "Operating System", "Item", "Items", "Name", "column1"],
+    "report-processor": ["Processor", "CPU", "Item", "Items", "Name", "column1"],
+    "report-memory": ["Memory", "RAM", "Item", "Items", "Name", "column1"],
+    "report-hdd": ["HardDisk", "HDD", "Hard Disk", "Disk", "Item", "Items", "Name", "column1"],
+  };
+
+  return readHardwareText(row, keysByReport[selectedStatistic] || ["Items", "Item", "Name", "column1"], getStatisticItemLabel(row));
+}
+
+function getReportWorkgroupText(row: HardwareApiRow) {
+  // Do not fall back to column2 here. In the report stored procedure output,
+  // column2 is often a count/frequency/subtotal value, not a Workgroup name.
+  // Only display a value when the backend actually returns a Workgroup-like field.
+  return readHardwareText(row, [
+    "Workgroup",
+    "WorkGroup",
+    "Work_Group",
+    "Work Group",
+    "WG",
+    "Group",
+    "GroupName",
+    "Group_Name",
+    "Department",
+    "Object_Full_Name",
+    "Object_Rel_Name",
+  ]);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -698,6 +919,136 @@ function pickValue(record: Record<string, unknown> | null, keys: string[]) {
   }
 
   return "";
+}
+
+function findTokenInValue(value: unknown, depth = 0): string {
+  if (!value || depth > 5) return "";
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("eyJ")) return trimmed;
+
+    try {
+      return findTokenInValue(JSON.parse(trimmed), depth + 1);
+    } catch {
+      return "";
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const token = findTokenInValue(item, depth + 1);
+      if (token) return token;
+    }
+    return "";
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nestedData = asRecord(record.data);
+    const directToken =
+      record.token ||
+      record.accessToken ||
+      record.authToken ||
+      record.jwt ||
+      record.jwtToken ||
+      record.bearerToken ||
+      nestedData?.token ||
+      nestedData?.accessToken;
+
+    if (typeof directToken === "string" && directToken.trim()) return directToken.trim();
+
+    for (const item of Object.values(record)) {
+      const token = findTokenInValue(item, depth + 1);
+      if (token) return token;
+    }
+  }
+
+  return "";
+}
+
+function getStoredAccessToken() {
+  const storages = [window.localStorage, window.sessionStorage];
+
+  for (const storage of storages) {
+    for (const key of TOKEN_STORAGE_KEYS) {
+      const directValue = storage.getItem(key);
+      if (directValue?.trim()) return directValue.trim();
+    }
+
+    for (const key of AUTH_PAYLOAD_KEYS) {
+      const token = findTokenInValue(storage.getItem(key));
+      if (token) return token;
+    }
+
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key) continue;
+      const token = findTokenInValue(storage.getItem(key));
+      if (token) return token;
+    }
+  }
+
+  return "";
+}
+
+async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<ApiEnvelope<T>> {
+  const token = getStoredAccessToken();
+  if (!token) throw new Error("Access token missing. Please login again.");
+
+  const headers = new Headers(options.headers);
+  headers.set("Accept", "application/json");
+  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
+
+  const rawBody = await response.text();
+  let payload: ApiEnvelope<T>;
+
+  try {
+    payload = rawBody ? JSON.parse(rawBody) : ({ success: response.ok, data: undefined as T } as ApiEnvelope<T>);
+  } catch {
+    throw new Error("Unable to read server response.");
+  }
+
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.errorMessage || payload.message || `Request failed: ${response.status}`);
+  }
+
+  return payload;
+}
+
+async function scanHardwareInventory(payload: HardwareScanPayload): Promise<ApiEnvelope<HardwareScanResult>> {
+  const requestPayload = {
+    scanMode: payload.scanMode,
+    Object_Rel_Idn: payload.objectRelIdn ?? payload.relationID,
+    objectRelIdn: payload.objectRelIdn ?? payload.relationID,
+    relationID: payload.relationID ?? payload.objectRelIdn,
+    Object_Root_Idn: payload.objectRootIdn,
+    objectRootIdn: payload.objectRootIdn,
+    Object_DeviceID: payload.objectDeviceID ?? payload.deviceID,
+    objectDeviceID: payload.objectDeviceID ?? payload.deviceID,
+    deviceID: payload.deviceID ?? payload.objectDeviceID,
+    deviceName: payload.deviceName,
+    Job_Style: payload.jobStyle ?? 1,
+    jobStyle: payload.jobStyle ?? 1,
+    Job_Priority: payload.jobPriority ?? 0,
+    jobPriority: payload.jobPriority ?? 0,
+    Job_ScheduleTime: payload.scheduleTime ?? "",
+    scheduleTime: payload.scheduleTime ?? "",
+    Job_Description: payload.description ?? `Hardware inventory scan - ${payload.scanMode}`,
+    description: payload.description ?? `Hardware inventory scan - ${payload.scanMode}`,
+  };
+
+  return apiRequest<HardwareScanResult>("/api/hardware-inventory/scan", {
+    method: "POST",
+    body: JSON.stringify(requestPayload),
+  });
 }
 
 function mapDepartmentTree(departments: ApiDepartment[]): TreeNode[] {
@@ -737,29 +1088,6 @@ function collectDepartmentPaths(nodes: TreeNode[], parentKeys: string[] = [], pa
 
     return [...currentPath, ...(node.children ? collectDepartmentPaths(node.children, currentKeys, currentLabels) : [])];
   });
-}
-
-const ORGANIZATION_DEPARTMENT_PATH: DepartmentPath = {
-  key: "organization",
-  relationID: 0,
-  label: "Organization",
-  pathKeys: ["organization"],
-  groupPath: "Organization",
-};
-
-function resolveAssetDepartment(asset: ApiAsset, departmentByRelation: Map<number, DepartmentPath>) {
-  const relationID = Number(asset.Object_Rel_Idn ?? asset.objectRelIdn ?? asset.relationID ?? asset.relationId ?? 0);
-  if (Number.isFinite(relationID) && departmentByRelation.has(relationID)) {
-    return departmentByRelation.get(relationID)!;
-  }
-
-  const groupPath = String(asset.Object_Full_Name || asset.Object_Rel_Name || "").trim();
-  if (groupPath) {
-    const matchedDepartment = Array.from(departmentByRelation.values()).find((department) => department.groupPath === groupPath || department.label === groupPath);
-    if (matchedDepartment) return matchedDepartment;
-  }
-
-  return ORGANIZATION_DEPARTMENT_PATH;
 }
 
 function flattenTree(nodes: TreeNode[]): TreeNode[] {
@@ -1788,35 +2116,22 @@ export default function HardwareInventory() {
     setApiError("");
 
     try {
-      const departments = await hardwareService.getDepartments() as ApiDepartment[];
-      const departmentTree = mapDepartmentTree(departments || []);
+      const departmentsResponse = await apiRequest<ApiDepartment[]>("/api/departments");
+      const departmentTree = mapDepartmentTree(departmentsResponse.data || []);
       const departmentPaths = collectDepartmentPaths(departmentTree);
-      const departmentByRelation = new Map(departmentPaths.map((department) => [department.relationID, department]));
 
       setDepartmentOptions(departmentPaths);
       setTreeNodes(departmentTree);
 
-      let assets: ApiAsset[] = [];
-      let usedLegacyLoader = false;
+      const assetResults = await Promise.allSettled(
+        departmentPaths.map(async (department) => {
+          const response = await apiRequest<ApiAsset[]>(`/api/assets/${department.relationID}`);
+          return (response.data || []).map((asset) => mapApiAssetToDevice(asset, department));
+        })
+      );
 
-      try {
-        assets = await hardwareService.getHardwareInventoryAssets({ limit: 10000 }) as ApiAsset[];
-      } catch (fastLoadError) {
-        console.warn("Fast hardware inventory API failed. Falling back to per-department asset loading.", fastLoadError);
-        usedLegacyLoader = true;
-
-        const assetResults = await Promise.allSettled(
-          departmentPaths.map(async (department) => {
-            const departmentAssets = await hardwareService.getAssetsByRelationID(department.relationID) as ApiAsset[];
-            return (departmentAssets || []).map((asset) => ({ ...asset, Object_Rel_Idn: asset.Object_Rel_Idn ?? department.relationID }));
-          })
-        );
-
-        assets = assetResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
-      }
-
-      const nextDevices = (assets || [])
-        .map((asset) => mapApiAssetToDevice(asset, resolveAssetDepartment(asset, departmentByRelation)))
+      const nextDevices = assetResults
+        .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
         .map(applyPersistentLockState)
         .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1825,11 +2140,7 @@ export default function HardwareInventory() {
       setShowDeviceDetails(false);
       setDetailDeviceId("NO-DEVICE");
       setActiveModal(null);
-      setNote(
-        usedLegacyLoader
-          ? `Loaded ${nextDevices.length} devices using legacy per-department loading. Update server.js to enable the faster one-request loader.`
-          : `Loaded ${nextDevices.length} devices. Select a device row to view available actions.`
-      );
+      setNote(`Loaded ${nextDevices.length} devices. Select a device row to view available actions.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load hardware inventory.";
       setApiError(message);
@@ -1846,8 +2157,8 @@ export default function HardwareInventory() {
 
     try {
       setNote(`Loading live details for ${device.name}...`);
-      const response = await hardwareService.getAssetDetail(device.objectAgent, device.assetId);
-      const enrichedDevice = enrichDeviceWithDetails(device, response);
+      const response = await apiRequest<unknown>(`/api/asset/${device.objectAgent}/${device.assetId}`);
+      const enrichedDevice = enrichDeviceWithDetails(device, response.data);
       setApiDevices((current) => current.map((item) => (item.id === device.id ? enrichedDevice : item)));
       setNote(`${device.name} live details loaded.`);
     } catch (error) {
@@ -2007,8 +2318,11 @@ export default function HardwareInventory() {
     setFolderNameError("");
 
     try {
-      const response = await hardwareService.createDepartment({ name: cleanName, parentID }) as ApiDepartment;
-      const newRelationID = response?.Object_Rel_Idn;
+      const response = await apiRequest<ApiDepartment>("/api/departments", {
+        method: "POST",
+        body: JSON.stringify({ name: cleanName, parentID }),
+      });
+      const newRelationID = response.data?.Object_Rel_Idn;
       closeModal();
       setFolderNameInput("");
       await loadHardwareInventory();
@@ -2052,7 +2366,10 @@ export default function HardwareInventory() {
     setFolderActionError("");
 
     try {
-      await hardwareService.updateDepartment(node.key, { name: cleanName });
+      await apiRequest<ApiDepartment>(`/api/departments/${node.key}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: cleanName }),
+      });
       closeModal();
       setFolderActionNode(null);
       setFolderActionInput("");
@@ -2085,7 +2402,7 @@ export default function HardwareInventory() {
     setFolderActionError("");
 
     try {
-      await hardwareService.deleteDepartment(node.key);
+      await apiRequest<{ Object_Rel_Idn: number }>(`/api/departments/${node.key}`, { method: "DELETE" });
       closeModal();
       setFolderActionNode(null);
       await loadHardwareInventory();
@@ -2198,37 +2515,37 @@ export default function HardwareInventory() {
       let description = descriptionPrefix;
 
       if (selectedStatistic === "conn-summary") {
-        const response = await hardwareService.getHardwareStatistic(relationID, "connection-summary");
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/connection-summary`);
         rows = normalizeHardwareRows(response);
         description = "Connection period summary";
       } else if (selectedStatistic === "conn-list") {
-        const response = await hardwareService.getHardwareStatistic(relationID, "connection-list");
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/connection-list`);
         rows = normalizeHardwareRows(response);
         description = "Client connection list";
       } else if (selectedStatistic === "client-version") {
-        const response = await hardwareService.getHardwareStatistic(relationID, "client-version");
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/client-version`);
         rows = normalizeHardwareRows(response);
         description = "Client version distribution";
       } else if (selectedStatistic === "changed-items") {
-        const response = await hardwareService.getChangedItems(relationID);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-management/${relationID}/changed-items`);
         rows = normalizeHardwareRows(response);
         description = "Changed hardware item statistics";
       } else if (selectedStatistic === "duplicated-ip") {
-        const response = await hardwareService.getDuplicateIps();
+        const response = await apiRequest<HardwareApiRow[]>("/api/hardware-management/duplicate-ips");
         rows = normalizeHardwareRows(response);
         description = "Duplicated IP list";
       } else if (selectedStatistic.startsWith("stat-")) {
         const categoryKey = STATISTIC_CATEGORY_KEY_MAP[selectedStatistic];
-        const response = await hardwareService.getHardwareStatisticCategory(relationID, categoryKey);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/category/${categoryKey}`);
         rows = normalizeHardwareRows(response);
         description = `${title} distribution`;
       } else if (selectedStatistic === "report-inventory") {
-        const response = await hardwareService.getClientListReport(relationID);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-reports/${relationID}/client-list`);
         rows = normalizeHardwareRows(response);
         description = "Hardware inventory report list";
       } else if (selectedStatistic.startsWith("report-")) {
         const reportKey = REPORT_KEY_MAP[selectedStatistic];
-        const response = await hardwareService.getHardwareReport(relationID, reportKey);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-reports/${relationID}/${reportKey}`);
         rows = normalizeHardwareRows(response);
         description = `${title} report`;
       }
@@ -2305,27 +2622,27 @@ export default function HardwareInventory() {
     setNote(`Refreshing hardware inventory for ${targetLabel}...`);
 
     try {
-      const response = await hardwareService.createHardwareScanJob({
-          scanMode: mode,
-          objectRelIdn: mode === "folder" ? relationID : undefined,
-          relationID: mode === "folder" ? relationID : undefined,
-          objectRootIdn: mode === "device" ? selectedDevice.assetId : undefined,
-          objectDeviceID: mode === "device" ? selectedDevice.deviceIdentifier : undefined,
-          deviceID: mode === "device" ? selectedDevice.deviceIdentifier : undefined,
-          deviceName: mode === "device" ? selectedDevice.name : undefined,
-          jobStyle: 1,
-          jobPriority: 0,
-          description:
-            mode === "all"
-              ? "Hardware inventory refresh - all devices"
-              : mode === "folder"
-                ? `Hardware inventory refresh - ${selectedFolderLabel}`
-                : `Hardware inventory refresh - ${selectedDevice.name}`,
-        });
+      const response = await scanHardwareInventory({
+        scanMode: mode,
+        objectRelIdn: mode === "folder" ? relationID : undefined,
+        relationID: mode === "folder" ? relationID : undefined,
+        objectRootIdn: mode === "device" ? selectedDevice.assetId : undefined,
+        objectDeviceID: mode === "device" ? selectedDevice.deviceIdentifier : undefined,
+        deviceID: mode === "device" ? selectedDevice.deviceIdentifier : undefined,
+        deviceName: mode === "device" ? selectedDevice.name : undefined,
+        jobStyle: 1,
+        jobPriority: 0,
+        scheduleTime: "",
+        description:
+          mode === "all"
+            ? "Hardware inventory scan - all devices"
+            : mode === "folder"
+              ? `Hardware inventory scan - ${selectedFolderLabel}`
+              : `Hardware inventory scan - ${selectedDevice.name}`,
+      });
 
-      const scanResult = response.data as HardwareScanResult | undefined;
-      const jobId = scanResult?.Job_Idn ? ` Job ID: ${scanResult.Job_Idn}.` : "";
-      const targetCount = scanResult?.targetCount ? ` Target: ${scanResult.targetCount}.` : "";
+      const jobId = response.data?.Job_Idn ? ` Job ID: ${response.data.Job_Idn}.` : "";
+      const targetCount = response.data?.targetCount ? ` Target: ${response.data.targetCount}.` : "";
       showToast("success", "Inventory refresh started", `Hardware inventory refresh has started.${targetCount}`);
       setNote(`Hardware inventory refresh started.${targetCount}`);
     } catch (error) {
@@ -2373,7 +2690,10 @@ export default function HardwareInventory() {
     setMoveLoading(true);
 
     try {
-      await hardwareService.moveAssetDepartment(selectedDevice.objectAgent, selectedDevice.assetId, targetDepartment.relationID);
+      await apiRequest(`/api/assets/${selectedDevice.objectAgent}/${selectedDevice.assetId}/department`, {
+        method: "PUT",
+        body: JSON.stringify({ relationID: targetDepartment.relationID }),
+      });
       setApiDevices((current) =>
         current.map((device) =>
           device.id === selectedDevice.id
@@ -2428,17 +2748,20 @@ export default function HardwareInventory() {
     setMessageError("");
 
     try {
-      const response = await hardwareService.sendTextMessage(
-        buildSelectedDeviceMdmPayload({
-          Subject: cleanSubject,
-          Body: cleanBody,
-          ForceRead: forceRead,
-          ReadNotification: true,
-          PlatformType: selectedDevice.os,
-          MDM_DeviceID: selectedDevice.objectAgent === "MDM" ? selectedDevice.deviceIdentifier : undefined,
-        }),
-        broadcastMessage
-      ) as ApiEnvelope<SendMessageApiResult[]>;
+      const endpoint = broadcastMessage ? "/api/mdm/text-message/platform" : "/api/mdm/text-message";
+      const response = await apiRequest<SendMessageApiResult[]>(endpoint, {
+        method: "POST",
+        body: JSON.stringify(
+          buildSelectedDeviceMdmPayload({
+            Subject: cleanSubject,
+            Body: cleanBody,
+            ForceRead: forceRead,
+            ReadNotification: true,
+            PlatformType: selectedDevice.os,
+            MDM_DeviceID: selectedDevice.objectAgent === "MDM" ? selectedDevice.deviceIdentifier : undefined,
+          })
+        ),
+      });
 
       const rows = response.data || [];
       const successCount = response.summary?.SuccessCount ?? rows.filter((row) => normalizeApiMessage(row.message).toLowerCase() === "success").length;
@@ -2557,7 +2880,12 @@ export default function HardwareInventory() {
 
   const requestGeolocationRows = async (sync: boolean, queryType: "Live" | "All") => {
     const requestConfig = buildGeolocationApiRequest(sync, queryType);
-    const envelope = await hardwareService.requestGeolocation(queryType, requestConfig.payload) as ApiEnvelope<unknown> & { sync?: unknown; status?: number };
+    const response = await apiRequest<unknown>(requestConfig.endpoint, {
+      method: "POST",
+      body: JSON.stringify(requestConfig.payload),
+    });
+
+    const envelope = response as ApiEnvelope<unknown> & { sync?: unknown; status?: number };
     const rows = uniqueGeoRows([...getGeoRowsFromUnknown(envelope.data), ...getGeoRowsFromUnknown(envelope.sync)]);
     const coordinateRows = rows.filter((row) => getGeoLatitude(row) && getGeoLongitude(row));
     const latestRow = getLatestGeoRow(coordinateRows) || getLatestGeoRow(rows);
@@ -2753,13 +3081,16 @@ export default function HardwareInventory() {
     setRemoteLoading(true);
 
     try {
-      const response = await hardwareService.getRemoteControl(
-        buildSelectedDeviceMdmPayload({
-          ShowOnlyRemoteScreen: showOnlyRemoteScreen,
-          ScrBgClr: "null",
-          ScrImg: "null",
-        })
-      ) as ApiEnvelope<RemoteControlApiResult[]>;
+      const response = await apiRequest<RemoteControlApiResult[]>("/api/mdm/remote-control", {
+        method: "POST",
+        body: JSON.stringify(
+          buildSelectedDeviceMdmPayload({
+            ShowOnlyRemoteScreen: showOnlyRemoteScreen,
+            ScrBgClr: "null",
+            ScrImg: "null",
+          })
+        ),
+      });
 
       const remoteUrl = response.data?.[0]?.url;
 
@@ -2807,14 +3138,17 @@ export default function HardwareInventory() {
     setLockActionLoading(true);
 
     try {
-      const response = await hardwareService.lockUnlockDevice(
-        buildSelectedDeviceMdmPayload({
-          action,
-          Message: cleanReason || undefined,
-          Reason: cleanReason || undefined,
-          Duration: action === "lock" ? lockDuration : undefined,
-        })
-      ) as ApiEnvelope<LockUnlockApiResult[]>;
+      const response = await apiRequest<LockUnlockApiResult[]>("/api/mdm/lock-unlock", {
+        method: "POST",
+        body: JSON.stringify(
+          buildSelectedDeviceMdmPayload({
+            action,
+            Message: cleanReason || undefined,
+            Reason: cleanReason || undefined,
+            Duration: action === "lock" ? lockDuration : undefined,
+          })
+        ),
+      });
 
       const result = response.data?.[0];
       const nextStatus: StatusType = action === "lock" ? "Locked" : "Online";
@@ -2911,182 +3245,340 @@ export default function HardwareInventory() {
 
   const renderStatisticsWorkbench = () => {
     const rows = statisticApiData?.rows || [];
-    const columns = statisticApiData?.columns || [];
-    const totalCount = getTotalFromStatisticRows(rows);
     const selectedTitle = statisticApiData?.title || STATISTIC_TITLE_MAP[selectedStatistic] || "Hardware Statistics";
-    const selectedDescription = statisticApiData?.description || "Select a statistics category from the left panel.";
-    const scopeText = selectedFolderLabel || "Organization";
-    const visibleColumns = (columns.length ? columns : ["Items", "Count"]).slice(0, 8);
-    const detailColumns = visibleColumns
-      .filter((column) => {
-        const normalized = column.replace(/[\s_\-()/.]+/g, "").toLowerCase();
-        return ![
-          "no",
-          "items",
-          "item",
-          "name",
-          "category",
-          "value",
-          "count",
-          "cnt",
-          "total",
-          "totalcount",
-          "totaldevice",
-          "column1",
-          "column2",
-        ].includes(normalized);
-      })
-      .slice(0, 4);
+    const selectedCode = selectedStatistic ? selectedStatistic.toUpperCase() : "SELECT A CATEGORY";
 
-    const topRows = rows
-      .map((row) => ({ row, label: getStatisticItemLabel(row), count: getStatisticCount(row) }))
-      .filter((item) => item.label !== "-" || item.count > 0)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 4);
+    const emptyState = (title: string, message: string) => (
+      <div className="flex items-center justify-center h-64 text-slate-400">
+        <div className="text-center max-w-md px-4">
+          <Database className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-xs font-bold uppercase tracking-widest">{title}</p>
+          <p className="text-[10px] text-slate-500 mt-1">{message}</p>
+        </div>
+      </div>
+    );
 
-    const getPrimaryValue = (row: HardwareApiRow) => {
-      const count = getStatisticCount(row);
-      if (count > 0) return String(count);
-      const firstReadableColumn = visibleColumns.find((column) => {
-        const value = formatHardwareValue(row[column]);
-        return value !== "-";
-      });
-      return firstReadableColumn ? formatHardwareValue(row[firstReadableColumn]) : "-";
+    const renderStatisticTable = () => {
+      if (!selectedStatistic) {
+        return emptyState("Select a statistic category", "Choose a category from the statistic tree to view data.");
+      }
+
+      if (statisticLoading) {
+        return (
+          <div className="flex items-center justify-center h-64 text-slate-400">
+            <div className="text-center">
+              <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin text-blue-500" />
+              <p className="text-xs font-bold uppercase tracking-widest">Loading statistic data...</p>
+            </div>
+          </div>
+        );
+      }
+
+      if (statisticError) {
+        return (
+          <div className="flex items-center justify-center h-64 text-slate-400">
+            <div className="text-center max-w-md px-4">
+              <AlertCircle className="w-8 h-8 mx-auto mb-2 text-rose-500" />
+              <p className="text-xs font-black text-rose-600 uppercase tracking-widest">Failed to load statistic</p>
+              <p className="text-[10px] text-slate-500 mt-1">{statisticError}</p>
+            </div>
+          </div>
+        );
+      }
+
+      if (rows.length === 0) {
+        return emptyState("No data returned", "The backend API returned an empty result for this statistic.");
+      }
+
+      if (selectedStatistic === "conn-summary") {
+        const summaryMetrics = getConnectionSummaryMetrics(rows);
+        const totalConnections = summaryMetrics.total;
+        const periodData = summaryMetrics.periods;
+
+        return (
+          <div className="hardware-stat-summary-layout">
+            <div className="hardware-stat-summary-total">Total Connection(s) : {totalConnections}</div>
+            <table className="hardware-stat-summary-table">
+              <thead>
+                <tr>
+                  <th>Period</th>
+                  <th>Connected</th>
+                  <th>Not Connected</th>
+                </tr>
+              </thead>
+              <tbody>
+                {periodData.map((row) => (
+                  <tr key={row.period}>
+                    <td>{row.period}</td>
+                    <td>{row.connected}</td>
+                    <td>{row.notConnected}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="hardware-stat-summary-reference">
+              Reference Date - {new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" })}
+            </div>
+          </div>
+        );
+      }
+
+      if (selectedStatistic === "conn-list") {
+        return (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
+                  {connectionListColumns.map((column) => <th key={column.label} className="px-3 py-2">{column.label}</th>)}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {rows.map((row, index) => (
+                  <tr key={`conn-list-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                    {connectionListColumns.map((column) => (
+                      <td key={`${index}-${column.label}`} className={`px-3 py-2 text-[10px] whitespace-nowrap ${column.label.includes("IP") || column.label.includes("MAC") ? "text-slate-500 font-mono" : "text-slate-600"} ${column.label === "Username" ? "font-medium text-slate-900" : ""}`}>
+                        {readHardwareText(row, [...column.keys, `column${connectionListColumns.indexOf(column) + 1}`])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      if (selectedStatistic === "client-version") {
+        return (
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
+                <th className="px-3 py-2">Client Version</th>
+                <th className="px-3 py-2">Count</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {rows.map((row, index) => {
+                const version = readHardwareText(row, ["Client Version", "ClientVersion", "clientVersion", "Version", "TCAVersion", "Items", "Item", "column1"]);
+                const count = readHardwareNumber(row, ["CCount", "Count", "Cnt", "Total", "", "column2", "column3"], getStatisticCount(row));
+                return (
+                  <tr key={`${version}-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                    <td className="px-3 py-2 font-mono text-[10px] font-medium text-slate-900">{version}</td>
+                    <td className="px-3 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">{count}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        );
+      }
+
+      if (selectedStatistic === "changed-items") {
+        const isSummaryResponse = isChangedItemSummaryResponse(rows);
+
+        return (
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-tight">Changed Items</h4>
+                <p className="text-[9px] text-slate-500 mt-0.5">Live changed hardware data from backend API</p>
+              </div>
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{rows.length} Records</span>
+            </div>
+
+            {isSummaryResponse ? (
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
+                    <th className="px-3 py-2">Changed Item</th>
+                    <th className="px-3 py-2">Count</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {rows.map((row, index) => {
+                    const fieldName = getChangedItemFieldName(row);
+                    const count = getChangedItemFieldCount(row);
+                    return (
+                      <tr key={`changed-summary-${fieldName}-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-3 py-2 text-[10px] font-medium text-slate-900">{fieldName}</td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">{count}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
+                    {fixedChangedItemColumns.map((col) => <th key={col} className="px-3 py-2">{col}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {rows.map((row, index) => (
+                    <tr key={`changed-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                      {fixedChangedItemColumns.map((col) => (
+                        <td key={`${index}-${col}`} className={`px-3 py-2 text-[10px] ${col.includes("IP") ? "font-mono" : ""}`}>
+                          {readHardwareText(row, [...(changedItemColumnKeys[col] || [col]), `column${fixedChangedItemColumns.indexOf(col) + 1}`])}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      }
+
+      if (selectedStatistic === "duplicated-ip") {
+        return (
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
+                <th className="px-3 py-2">IP Address</th>
+                <th className="px-3 py-2">Count</th>
+                <th className="px-3 py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {rows.length > 0 ? rows.map((row, index) => {
+                const ip = readHardwareText(row, ["IP Address", "IPAddress", "IP", "ip", "column1"]);
+                const count = readHardwareNumber(row, ["CCount", "Count", "Cnt", "Total", "", "column2", "column3"], getStatisticCount(row));
+                return (
+                  <tr key={`${ip}-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                    <td className="px-3 py-2 font-mono text-[10px] font-medium text-slate-900">{ip}</td>
+                    <td className="px-3 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">{count}</span></td>
+                    <td className="px-3 py-2"><span className="flex items-center gap-1 text-[10px] text-red-600 font-bold"><AlertCircle className="w-3 h-3" /> Duplicate</span></td>
+                  </tr>
+                );
+              }) : (
+                <tr><td colSpan={3} className="px-4 py-6 text-center text-slate-400"><CheckCircle className="w-7 h-7 mx-auto mb-1.5 text-emerald-500" /> No duplicated IP addresses found</td></tr>
+              )}
+            </tbody>
+          </table>
+        );
+      }
+
+      if (selectedStatistic.startsWith("stat-")) {
+        const summedCount = rows.reduce((sum, row) => sum + getStatisticCount(row), 0);
+        const backendTotal = rows.reduce((max, row) => Math.max(max, getStatisticTotal(row, 0)), 0);
+        const totalCount = backendTotal || summedCount || rows.length;
+        return (
+          <div>
+            <div className="mb-3">
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-tight">Distribution</h4>
+              <p className="text-[9px] text-slate-500 mt-0.5">Showing grouped hardware values by device count</p>
+            </div>
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
+                  <th className="px-3 py-2">Item</th>
+                  <th className="px-3 py-2">Count</th>
+                  <th className="px-3 py-2">Percentage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {rows
+                  .map((row, index) => ({ row, index, item: getStatisticItemLabel(row), count: getStatisticCount(row) }))
+                  .sort((a, b) => b.count - a.count)
+                  .map(({ row, index, item, count }) => {
+                    const rawPercentage = getStatisticPercentage(row, count, totalCount);
+                    const percentage = Number.isFinite(rawPercentage) ? rawPercentage.toFixed(1) : "0.0";
+                    const barWidth = `${Math.max(0, Math.min(100, Number(percentage) || 0))}%`;
+                    return (
+                      <tr key={`${item}-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                        <td className="px-3 py-2 text-[10px] font-medium text-slate-900">{item === "-" ? getStatisticItemLabel(row) : item}</td>
+                        <td className="px-3 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">{count}</span></td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: barWidth }} /></div>
+                            <span className="text-[10px] font-bold text-slate-600 w-10">{percentage}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      if (selectedStatistic === "report-inventory") {
+        return (
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100 sticky top-0">
+                {reportInventoryColumns.map((column) => <th key={column.label} className="px-3 py-2">{column.label}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {rows.map((row, index) => (
+                <tr key={`report-inventory-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                  {reportInventoryColumns.map((column) => (
+                    <td key={`${index}-${column.label}`} className={`px-3 py-2 text-[10px] ${column.label.includes("IP") ? "text-slate-500 font-mono" : column.label === "Username" ? "font-medium text-slate-900" : "text-slate-600"}`}>
+                      {readHardwareText(row, [...column.keys, `column${reportInventoryColumns.indexOf(column) + 1}`])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+
+      if (selectedStatistic.startsWith("report-")) {
+        const reportRows = rows
+          .map((row, index) => ({
+            row,
+            index,
+            item: getReportItemText(row, selectedStatistic),
+            workgroup: getReportWorkgroupText(row),
+          }))
+          .filter(({ item, workgroup }) => !isReportSummaryLabel(item) && !isReportSummaryLabel(workgroup));
+
+        return (
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50/50 border-b border-slate-100">
+                <th className="px-3 py-2">Item</th>
+                <th className="px-3 py-2">Workgroup</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {reportRows.map(({ index, item, workgroup }) => (
+                <tr key={`report-${index}`} className="hover:bg-blue-50/30 transition-colors">
+                  <td className="px-3 py-2 text-[10px] font-medium text-slate-900">{item}</td>
+                  <td className="px-3 py-2 text-slate-600 text-[10px]">{workgroup}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        );
+      }
+
+      return null;
     };
 
     return (
       <div className="hardware-stat-workbench hardware-stat-workbench-clean">
-        <div className="hardware-stat-commandbar">
+        <div className="hardware-stat-commandbar hardware-stat-commandbar-compact">
           <div>
-            <span className="section-tag">Statistics View</span>
-            <h3>{selectedTitle}</h3>
-            <p>{selectedDescription}</p>
+            <h3>Hardware Statistics</h3>
+            <p>{selectedCode}</p>
           </div>
-
           <button type="button" className="hardware-stat-refresh-btn" onClick={() => void loadSelectedStatisticData()} disabled={statisticLoading}>
             <RefreshCw size={16} />
             {statisticLoading ? "Loading" : "Refresh"}
           </button>
         </div>
 
-        <div className="hardware-stat-metric-row">
-          <div className="hardware-stat-metric-card is-primary">
-            <span>Current View</span>
-            <strong>{selectedTitle}</strong>
-            <small>{scopeText}</small>
-          </div>
-          <div className="hardware-stat-metric-card">
-            <span>Total Records</span>
-            <strong>{rows.length}</strong>
-            <small>available result</small>
-          </div>
-          <div className="hardware-stat-metric-card">
-            <span>Total Count</span>
-            <strong>{Number.isFinite(totalCount) ? totalCount : 0}</strong>
-            <small>summarized value</small>
-          </div>
-          <div className="hardware-stat-metric-card">
-            <span>Scope</span>
-            <strong>{scopeText}</strong>
-            <small>{getSelectedRelationID() === -1 ? "All departments" : "Selected folder"}</small>
-          </div>
-        </div>
-
-        {statisticError && (
-          <div className="hardware-stat-alert">
-            <AlertCircle size={16} />
-            <span>{statisticError}</span>
-          </div>
-        )}
-
-        {topRows.length > 0 && (
-          <div className="hardware-stat-highlight-grid">
-            {topRows.map((item, index) => (
-              <div key={`${item.label}-${item.count}-${index}`} className="hardware-stat-highlight-card">
-                <span>{String(index + 1).padStart(2, "0")}</span>
-                <strong>{item.label}</strong>
-                <small>{item.count > 0 ? `${item.count} devices` : "Available"}</small>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="hardware-stat-table-card">
-          <div className="hardware-stat-table-head">
-            <div>
-              <strong>Result Table</strong>
-              <span>{rows.length ? `Showing ${rows.length} record${rows.length === 1 ? "" : "s"}` : "No records to display"}</span>
-            </div>
-          </div>
-
-          <div className="hardware-stat-table-scroll">
-            <table className="hardware-stat-clean-table">
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Statistic</th>
-                  <th>Value</th>
-                  <th>Details</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, index) => {
-                  const label = getStatisticItemLabel(row);
-                  const primaryLabel = label === "-" ? selectedTitle : label;
-                  const primaryValue = getPrimaryValue(row);
-                  const details = detailColumns
-                    .map((column) => ({ label: formatHardwareLabel(column), value: formatHardwareValue(row[column]) }))
-                    .filter((item) => item.value !== "-");
-
-                  return (
-                    <tr key={`stat-${selectedStatistic}-${index}`}>
-                      <td>
-                        <span className="row-index-pill">{String(index + 1).padStart(2, "0")}</span>
-                      </td>
-                      <td>
-                        <div className="hardware-stat-name-cell">
-                          <strong>{primaryLabel}</strong>
-                          <small>{selectedTitle}</small>
-                        </div>
-                      </td>
-                      <td>
-                        <span className="hardware-stat-value-pill">{primaryValue}</span>
-                      </td>
-                      <td>
-                        {details.length ? (
-                          <div className="hardware-stat-detail-chips">
-                            {details.map((item) => (
-                              <span key={`${item.label}-${item.value}-${index}`}>
-                                <b>{item.label}</b>
-                                {item.value}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="hardware-stat-muted">-</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {!statisticLoading && rows.length === 0 && (
-                  <tr>
-                    <td colSpan={4}>
-                      <div className="hardware-empty-state">No statistics available for this selection.</div>
-                    </td>
-                  </tr>
-                )}
-
-                {statisticLoading && (
-                  <tr>
-                    <td colSpan={4}>
-                      <div className="hardware-empty-state">Loading statistics...</div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+        <div className="hardware-stat-table-card hardware-stat-table-card-inventory-layout">
+          <div className="hardware-stat-table-scroll hardware-stat-table-scroll-inventory-layout">
+            {renderStatisticTable()}
           </div>
         </div>
       </div>
@@ -3103,6 +3595,157 @@ export default function HardwareInventory() {
 
   return (
     <main className={`settings-module-root hardware-module-root ema-settings-pro container-fluid p-3 p-xl-4 ${hasSelectedDevice ? "has-selected-device" : "no-selected-device"}`} data-section={activeTab}>
+      <style>{`
+        .hardware-registry-toolbar-stacked {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 14px;
+        }
+
+        .hardware-scan-command-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          min-width: 0;
+          flex-wrap: wrap;
+        }
+
+        .hardware-command-btn {
+          height: 38px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 0 16px;
+          border: 1px solid #a9befd;
+          border-radius: 13px;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+          color: #1858ff;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: -0.01em;
+          white-space: nowrap;
+          box-shadow: 0 10px 24px rgba(40, 85, 200, 0.08);
+          transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+
+        .hardware-command-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          border-color: #6f8fff;
+          box-shadow: 0 14px 28px rgba(40, 85, 200, 0.14);
+        }
+
+        .hardware-command-btn:disabled {
+          color: #9eb0e8;
+          background: #f8faff;
+          border-color: #d4ddff;
+          box-shadow: none;
+          cursor: not-allowed;
+        }
+
+        .hardware-command-btn-muted b {
+          padding: 3px 8px;
+          border-radius: 999px;
+          background: #e9efff;
+          color: #1858ff;
+          font-size: 11px;
+          line-height: 1;
+        }
+
+        .hardware-toolbar-search {
+          flex: 1 1 260px;
+          min-width: 220px;
+          max-width: none;
+          height: 38px;
+        }
+
+        .hardware-toolbar-refresh {
+          flex: 0 0 auto;
+        }
+
+        .hardware-registry-filter-row {
+          display: grid;
+          grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+          align-items: end;
+          gap: 10px;
+          width: 100%;
+        }
+
+
+
+        .hardware-stat-summary-layout {
+          padding: 18px 18px 16px;
+        }
+
+        .hardware-stat-summary-total {
+          margin-bottom: 18px;
+          color: #1559ff;
+          font-size: 15px;
+          font-weight: 900;
+          letter-spacing: -0.01em;
+        }
+
+        .hardware-stat-summary-table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          font-size: 12px;
+          color: #0f2854;
+        }
+
+        .hardware-stat-summary-table thead tr {
+          background: #2847a8;
+        }
+
+        .hardware-stat-summary-table thead th {
+          padding: 11px 14px;
+          color: #ffffff !important;
+          font-size: 10px;
+          line-height: 1.2;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          text-align: left;
+          border: 0;
+        }
+
+        .hardware-stat-summary-table tbody td {
+          padding: 12px 14px;
+          font-weight: 700;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+          background: #ffffff;
+        }
+
+        .hardware-stat-summary-table tbody td:nth-child(2) {
+          background: #e8f1ff;
+          color: #0639b7;
+        }
+
+        .hardware-stat-summary-table tbody td:nth-child(3) {
+          background: #eefcf4;
+          color: #047857;
+        }
+
+        .hardware-stat-summary-reference {
+          margin-top: 16px;
+          color: #8b9ab5;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        @media (max-width: 1100px) {
+          .hardware-registry-filter-row {
+            grid-template-columns: 1fr;
+          }
+          .hardware-toolbar-search {
+            flex-basis: 100%;
+          }
+        }
+      `}</style>
       <input aria-hidden="true" id="globalSearch" type="hidden" />
       <button hidden id="themeBtn" type="button">
         <span id="themeLabel">Dark Mode</span>
@@ -3221,8 +3864,86 @@ export default function HardwareInventory() {
         {activeTab === "statistics" ? renderStatisticsWorkbench() : (
           <>
 
-          <div className="hardware-registry-toolbar">
-            <div className="hardware-registry-filters">
+          <div className="hardware-registry-toolbar hardware-registry-toolbar-stacked">
+            <div className="hardware-scan-command-row">
+              {/* <button
+                type="button"
+                className="hardware-command-btn hardware-command-btn-muted"
+                onClick={() => setActiveTab("statistics")}
+                title="Open hardware statistics and insights"
+              >
+                <Database size={15} />
+                <span>Insights</span>
+                <b>0%</b>
+              </button> */}
+
+              <button
+                type="button"
+                className="hardware-command-btn"
+                onClick={() => void handleScanHardware("device")}
+                disabled={hardwareScanLoading || !hasSelectedDevice || String(selectedDevice.objectAgent || "EM").toUpperCase() !== "EM"}
+                title={!hasSelectedDevice ? "Select a device first" : String(selectedDevice.objectAgent || "EM").toUpperCase() !== "EM" ? "Only supported Windows/EM devices can be scanned" : `Refresh hardware inventory for ${selectedDevice.name}`}
+              >
+                <Monitor size={15} />
+                {hardwareScanLoading ? "Scanning..." : "Scan Device"}
+              </button>
+
+              <button
+                type="button"
+                className="hardware-command-btn"
+                onClick={() => void handleScanHardware("folder")}
+                disabled={hardwareScanLoading || getSelectedRelationID() === -1}
+                title={getSelectedRelationID() === -1 ? "Select a folder first, or use Scan All" : `Refresh hardware inventory for ${selectedFolderLabel}`}
+              >
+                <FolderOpen size={15} />
+                Scan Folder
+              </button>
+
+              <button
+                type="button"
+                className="hardware-command-btn"
+                onClick={() => void handleScanHardware("all")}
+                disabled={hardwareScanLoading}
+                title="Refresh hardware inventory for all EM/Windows devices"
+              >
+                <RefreshCw size={15} />
+                {hardwareScanLoading ? "Scanning..." : "Scan All"}
+              </button>
+
+              <div className="hardware-search-box small hardware-search-box-with-clear hardware-toolbar-search">
+                <Search size={15} />
+                <input
+                  type="text"
+                  placeholder="Search devices, IPs, users..."
+                  value={searchDevices}
+                  onChange={(event) => {
+                    setSearchDevices(event.target.value);
+                    setPage(1);
+                    setNote("Device panel remains open until you close it.");
+                  }}
+                />
+                {searchDevices && (
+                  <button
+                    type="button"
+                    className="hardware-search-clear"
+                    onClick={() => {
+                      setSearchDevices("");
+                      setPage(1);
+                      setNote("Device panel remains open until you close it.");
+                    }}
+                    aria-label="Clear device search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <button type="button" className="hardware-icon-btn hardware-toolbar-refresh" onClick={handleRefresh} title="Refresh inventory">
+                <RefreshCw size={16} />
+              </button>
+            </div>
+
+            <div className="hardware-registry-filters hardware-registry-filter-row">
               <div className="hardware-filter-group">
                 <label>Status</label>
                 <HardwareDropdown
@@ -3252,40 +3973,6 @@ export default function HardwareInventory() {
               <button type="button" className="hardware-clear-filters-btn" onClick={clearTableFilters} disabled={!searchDevices && activeTableFilterCount === 0}>
                 <X size={14} />
                 Reset
-              </button>
-            </div>
-
-            <div className="hardware-registry-tools">
-              <div className="hardware-search-box small hardware-search-box-with-clear">
-                <Search size={15} />
-                <input
-                  type="text"
-                  placeholder="Search devices, IPs, users..."
-                  value={searchDevices}
-                  onChange={(event) => {
-                    setSearchDevices(event.target.value);
-                    setPage(1);
-                    setNote("Device panel remains open until you close it.");
-                  }}
-                />
-                {searchDevices && (
-                  <button
-                    type="button"
-                    className="hardware-search-clear"
-                    onClick={() => {
-                      setSearchDevices("");
-                      setPage(1);
-                      setNote("Device panel remains open until you close it.");
-                    }}
-                    aria-label="Clear device search"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-
-              <button type="button" className="hardware-icon-btn" onClick={handleRefresh} title="Refresh inventory">
-                <RefreshCw size={16} />
               </button>
             </div>
           </div>
@@ -3487,15 +4174,6 @@ export default function HardwareInventory() {
               </button>
             )}
 
-            <button type="button" className="hardware-action-item is-action-scan" onClick={() => void handleScanHardware("device")} disabled={hardwareScanLoading || String(selectedDevice.objectAgent || "EM").toUpperCase() !== "EM"}>
-              <div className="hardware-action-icon">
-                <RefreshCw size={16} />
-              </div>
-              <div>
-                <strong>{hardwareScanLoading ? "Refreshing..." : "Refresh Inventory"}</strong>
-                <span>Refresh hardware inventory for this device</span>
-              </div>
-            </button>
 
             <button type="button" className="hardware-action-item is-action-move" onClick={openMoveDepartmentModal}>
               <div className="hardware-action-icon">

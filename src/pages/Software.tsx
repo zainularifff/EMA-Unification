@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import softwareService from "../services/softwareService";
 
 type ApiSoftwareRecord = {
   SoftwareID?: number | string | null;
@@ -130,11 +129,25 @@ type ToastState = {
   message: string;
 } | null;
 
-type LoadOptions = {
-  forceRefresh?: boolean;
-};
-
 type ApiRowsPayload = unknown[] | { data?: unknown[] | Record<string, unknown>; success?: boolean; totalRecords?: number };
+
+const API_BASE_CANDIDATES = Array.from(
+  new Set(
+    [
+      (import.meta.env.VITE_API_BASE_URL as string | undefined),
+      (import.meta.env.VITE_API_URL as string | undefined),
+      "",
+      typeof window !== "undefined" && window.location.hostname
+        ? `${window.location.protocol}//${window.location.hostname}:3001`
+        : "http://localhost:3001",
+      "http://localhost:3001",
+      "http://127.0.0.1:3001",
+      "http://localhost:3000",
+    ]
+      .filter((value): value is string => Boolean(value !== undefined && value !== null))
+      .map((value) => String(value).replace(/\/$/, ""))
+  )
+);
 
 const PAGE_SIZE = 10;
 const EMPTY_VALUE = "-";
@@ -143,14 +156,13 @@ const tableColumns: Record<TableKey, string[]> = {
   registry: ["Software Name", "Category", "Publisher / Description", "Version", "Device", "Type", "IP Address", "Last Updated"],
   installedSoftware: ["Original Software Name", "License Limit", "Used", "Classification", "Custom Info", "Software Name", "Expiry Date"],
   licenseStatus: ["Application Package", "Manufacturer", "Authorization", "Used", "Search Date", "Classification", "Detail"],
-  fileExtensionExe: ["File Name", "Original File Name", "Version", "Product Name", "Manufacturer", "User Name", "Department", "Directory", "Search Date"],
-  fileExtensionDll: ["File Name", "Original File Name", "Version", "Product Name", "Manufacturer", "User Name", "Department", "Directory", "Search Date"],
-  fileExtensionIni: ["File Name", "Original File Name", "Version", "Product Name", "Manufacturer", "User Name", "Department", "Directory", "Search Date"],
+  fileExtensionExe: ["File Name", "Count"],
+  fileExtensionDll: ["File Name", "Count"],
+  fileExtensionIni: ["File Name", "Count"],
 };
 
 const statisticTree: TreeNode[] = [
   { id: "stat-installed", label: "Installed Software", type: "category", children: [] },
-  { id: "stat-package", label: "Application Package", type: "category", children: [{ id: "stat-license", label: "License Status", type: "sub" }] },
   {
     id: "stat-extension",
     label: "File Extension",
@@ -175,6 +187,16 @@ const fallbackDeviceTree: TreeNode[] = [
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
+}
+
+function buildApiUrl(baseUrl: string, path: string) {
+  if (!baseUrl) return path;
+  return `${baseUrl}${path}`;
+}
+
+function isHtmlPayload(text: string, contentType: string) {
+  const trimmed = text.trim().toLowerCase();
+  return contentType.toLowerCase().includes("text/html") || trimmed.startsWith("<!doctype") || trimmed.startsWith("<html");
 }
 
 function safeString(value: unknown, fallback = EMPTY_VALUE) {
@@ -237,6 +259,105 @@ function formatDateTime(value: unknown) {
 
 function normalizeForCompare(value: string) {
   return value === EMPTY_VALUE ? "" : value.toLowerCase();
+}
+
+function getStoredToken() {
+  const directKeys = ["ema-access-token", "accessToken", "token", "jwtToken", "bearerToken"];
+
+  for (const key of directKeys) {
+    const value = localStorage.getItem(key);
+    if (value && value.trim()) return value.trim();
+  }
+
+  const objectKeys = ["ema-auth", "auth", "user", "ema-user"];
+
+  for (const key of objectKeys) {
+    const value = localStorage.getItem(key);
+    if (!value) continue;
+
+    try {
+      const parsed = JSON.parse(value) as Record<string, unknown>;
+      const token =
+        parsed.accessToken ||
+        parsed.token ||
+        parsed.jwtToken ||
+        parsed.bearerToken ||
+        (parsed.data as Record<string, unknown> | undefined)?.accessToken ||
+        (parsed.data as Record<string, unknown> | undefined)?.token;
+
+      if (typeof token === "string" && token.trim()) return token.trim();
+    } catch {
+      // ignore malformed localStorage values
+    }
+  }
+
+  return "";
+}
+
+async function readJsonResponse<T>(response: Response, url: string): Promise<T> {
+  const text = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+
+  if (isHtmlPayload(text, contentType)) {
+    throw new Error(`API returned HTML instead of JSON from ${url}.`);
+  }
+
+  let payload: unknown = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`API returned invalid JSON from ${url}.`);
+  }
+
+  if (!response.ok) {
+    const apiPayload = payload as { message?: string; error?: string } | null;
+    throw new Error(apiPayload?.message || apiPayload?.error || `API request failed with status ${response.status} at ${url}.`);
+  }
+
+  return payload as T;
+}
+
+async function apiGet<T>(path: string): Promise<T> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Access token missing. Please login again.");
+
+  let lastError: Error | null = null;
+  for (const baseUrl of API_BASE_CANDIDATES) {
+    const url = buildApiUrl(baseUrl, path);
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      return await readJsonResponse<T>(response, url);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError || new Error(`Unable to load API path ${path}.`);
+}
+
+async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const token = getStoredToken();
+  if (!token) throw new Error("Access token missing. Please login again.");
+
+  let lastError: Error | null = null;
+  for (const baseUrl of API_BASE_CANDIDATES) {
+    const url = buildApiUrl(baseUrl, path);
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      return await readJsonResponse<T>(response, url);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError || new Error(`Unable to post API path ${path}.`);
 }
 
 function unwrapRows(payload: ApiRowsPayload): Record<string, unknown>[] {
@@ -316,7 +437,7 @@ const columnAliases: Record<Exclude<TableKey, "registry">, string[][]> = {
   installedSoftware: [
     ["Original Software Name", "OriginalSoftwareName", "SWUNI_Alias", "SWUNI_Name", "Name", "SoftwareName", "RawSoftwareName", "Id"],
     ["License Limit", "LicenseLimit", "License_Limit", "Limit", "License", "SWUNI_License"],
-    ["Used", "UsedCount", "InUse", "Usage", "SWUNI_Used", "TotalUsed", "Total"],
+    ["Used", "", "UsedCount", "InUse", "Usage", "SWUNI_Used", "TotalUsed", "Total", "Count", "Cnt", "CCount"],
     ["Classification", "CategoryName", "Category", "SW_Category", "SW_CATEGORY"],
     ["Custom Info", "CustomInfo", "Custom_Info", "Description", "Remark", "Remarks"],
     ["Software Name", "SoftwareName", "SWName", "SWUNI_Name", "SWUNI_Alias", "Name"],
@@ -326,7 +447,7 @@ const columnAliases: Record<Exclude<TableKey, "registry">, string[][]> = {
     ["Application Package", "ApplicationPackage", "SW_Pkg_Name", "SWPkgName", "PackageName", "Pkg_Name", "Name"],
     ["Manufacturer", "Mfr", "Vendor", "Publisher"],
     ["Authorization", "License_Type_Text", "LicenseType", "AuthorizationStatus", "Status"],
-    ["Used", "UsedCount", "IsUsed", "Usage", "TotalUsed", "Total"],
+    ["Used", "", "UsedCount", "IsUsed", "Usage", "TotalUsed", "Total", "Count", "Cnt", "CCount"],
     ["Search Date", "SearchDate", "Search_Date", "LastUpdated"],
     ["Classification", "CategoryName", "Category", "SW_Category"],
     ["Detail", "Description", "Remark", "Remarks", "Info"],
@@ -337,15 +458,8 @@ const columnAliases: Record<Exclude<TableKey, "registry">, string[][]> = {
 };
 
 const fileAliases = [
-  ["File Name", "FileName", "Filename", "File_Name", "SW_File_Name", "ProcessName", "Name"],
-  ["Original File Name", "OriginalFileName", "Original_File_Name", "OriginalName"],
-  ["Version", "FileVersion", "SW_Version"],
-  ["Product Name", "ProductName", "Product_Name", "SW_Product_Name"],
-  ["Manufacturer", "CompanyName", "Company", "Publisher", "Vendor"],
-  ["User Name", "UserName", "Username", "Object_Client_Name", "LoginUser"],
-  ["Department", "Object_Full_Name", "DepartmentName"],
-  ["Directory", "Path", "FilePath", "File_Path", "Folder"],
-  ["Search Date", "SearchDate", "Search_Date", "LastUpdated"],
+  ["File Name", "SW_OrgFileName", "SWOrgFileName", "OriginalFileName", "Original File Name", "FileName", "Filename", "File_Name", "SW_FileName", "SW_File_Name", "ProcessName", "Name"],
+  ["Count", "", "Count", "Cnt", "CCount", "Total", "TotalRecords", "FileCount", "Files"],
 ];
 
 columnAliases.fileExtensionExe = fileAliases;
@@ -391,6 +505,13 @@ function mapDepartmentsToTree(departments: DepartmentNode[], depth = 0): TreeNod
 
 function buildDeviceTreeFromDepartments(departments: DepartmentNode[]): TreeNode[] {
   return [{ id: "org-root", label: "Organization", type: "org", relationId: -1, children: mapDepartmentsToTree(departments) }];
+}
+
+function collectDepartmentRelationIds(departments: DepartmentNode[]): number[] {
+  return departments.flatMap((department) => [
+    department.Object_Rel_Idn,
+    ...collectDepartmentRelationIds(department.children || []),
+  ]).filter((relationID) => Number.isFinite(relationID) && relationID > 0);
 }
 
 function mapAssetToDeviceNode(asset: AssetItem, relationId?: number): TreeNode {
@@ -489,7 +610,7 @@ export default function Software() {
     fileExtensionIni: [],
   });
   const [deviceTree, setDeviceTree] = useState<TreeNode[]>(fallbackDeviceTree);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["org-root", "stat-package", "stat-extension"]));
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["org-root", "stat-extension"]));
   const [currentRelationId, setCurrentRelationId] = useState(-1);
   const [selectedFolder, setSelectedFolder] = useState<{ id: number; label: string } | null>({ id: -1, label: "Organization" });
   const [selectedDevice, setSelectedDevice] = useState<TreeNode | null>(null);
@@ -502,7 +623,6 @@ export default function Software() {
   const [treeLoading, setTreeLoading] = useState(false);
   const [treeError, setTreeError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [osFilter, setOsFilter] = useState("all");
@@ -525,18 +645,19 @@ export default function Software() {
     }
   };
 
-  const loadSoftwareInventory = async (options: LoadOptions = {}) => {
+  const loadSoftwareInventory = async () => {
     setLoading(true);
     setApiError("");
 
-    const requestConfig = options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined;
     const [softwareResult, categoriesResult] = await Promise.allSettled([
-      softwareService.getSoftware(undefined, requestConfig) as Promise<ApiSoftwareRecord[]>,
-      softwareService.getSoftwareCategories(requestConfig) as Promise<string[]>,
+      apiGet<ApiSoftwareRecord[] | { data?: ApiSoftwareRecord[] }>("/api/software"),
+      apiGet<string[] | { data?: string[] }>("/api/software/categories"),
     ]);
 
     if (softwareResult.status === "fulfilled") {
-      setSoftwareRecords(softwareResult.value.map(normalizeSoftwareRecord));
+      const softwareResponse = softwareResult.value;
+      const softwarePayload = Array.isArray(softwareResponse) ? softwareResponse : Array.isArray(softwareResponse.data) ? softwareResponse.data : [];
+      setSoftwareRecords(softwarePayload.map(normalizeSoftwareRecord));
     } else {
       const message = softwareResult.reason instanceof Error ? softwareResult.reason.message : "Unable to load software data.";
       setApiError(message);
@@ -545,7 +666,9 @@ export default function Software() {
     }
 
     if (categoriesResult.status === "fulfilled") {
-      setCategoriesFromApi(categoriesResult.value.map((item) => cleanCategory(item)).filter(Boolean));
+      const categoriesResponse = categoriesResult.value;
+      const categoryPayload = Array.isArray(categoriesResponse) ? categoriesResponse : Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [];
+      setCategoriesFromApi(categoryPayload.map((item) => cleanCategory(item)).filter(Boolean));
     } else {
       setCategoriesFromApi([]);
     }
@@ -553,11 +676,12 @@ export default function Software() {
     setLoading(false);
   };
 
-  const loadDepartmentTree = async (options: LoadOptions = {}) => {
+  const loadDepartmentTree = async () => {
     setTreeLoading(true);
     setTreeError("");
     try {
-      const departments = await softwareService.getDepartments(options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined) as DepartmentNode[];
+      const response = await apiGet<DepartmentNode[] | { data?: DepartmentNode[] }>("/api/departments");
+      const departments = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : [];
       setDeviceTree(buildDeviceTreeFromDepartments(departments));
     } catch (error) {
       const message = "Organization view is not available right now.";
@@ -570,19 +694,7 @@ export default function Software() {
 
   useEffect(() => {
     void loadSoftwareInventory();
-
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-
-    if (idleWindow.requestIdleCallback) {
-      const idleId = idleWindow.requestIdleCallback(() => void loadDepartmentTree(), { timeout: 1200 });
-      return () => idleWindow.cancelIdleCallback?.(idleId);
-    }
-
-    const timer = window.setTimeout(() => void loadDepartmentTree(), 250);
-    return () => window.clearTimeout(timer);
+    void loadDepartmentTree();
   }, []);
 
   useEffect(() => {
@@ -604,7 +716,7 @@ export default function Software() {
   const osOptions = useMemo(() => uniqueValues(softwareRecords, "os"), [softwareRecords]);
 
   const baseFilteredRecords = useMemo(() => {
-    const lowerSearch = deferredSearchTerm.trim().toLowerCase();
+    const lowerSearch = searchTerm.trim().toLowerCase();
     return softwareRecords.filter((record) => {
       const searchable = [record.softwareName, record.category, record.publisher, record.description, record.version, record.assetTag, record.deviceName, record.machineType, record.os, record.username, record.ip, record.department].join(" ").toLowerCase();
       return (!lowerSearch || searchable.includes(lowerSearch)) &&
@@ -612,7 +724,7 @@ export default function Software() {
         (typeFilter === "all" || record.machineType === typeFilter) &&
         (osFilter === "all" || record.os === osFilter);
     });
-  }, [softwareRecords, deferredSearchTerm, categoryFilter, typeFilter, osFilter]);
+  }, [softwareRecords, searchTerm, categoryFilter, typeFilter, osFilter]);
 
   const filteredRecords = useMemo(() => {
     let rows = [...baseFilteredRecords];
@@ -632,7 +744,7 @@ export default function Software() {
   const currentTableRows = selected.tableKey === "registry" ? [] : tableRows[selected.tableKey];
   const filteredTableRows = useMemo(() => {
     if (selected.tableKey === "registry") return [];
-    const lowerSearch = deferredSearchTerm.trim().toLowerCase();
+    const lowerSearch = searchTerm.trim().toLowerCase();
     let rows = tableRows[selected.tableKey].filter((row) => !lowerSearch || row.join(" ").toLowerCase().includes(lowerSearch));
     if (tableSort) {
       rows = [...rows].sort((a, b) => {
@@ -644,7 +756,7 @@ export default function Software() {
       });
     }
     return rows;
-  }, [selected.tableKey, tableRows, deferredSearchTerm, tableSort]);
+  }, [selected.tableKey, tableRows, searchTerm, tableSort]);
 
   const activeRowsCount = selected.tableKey === "registry" ? filteredRecords.length : filteredTableRows.length;
   const isDataLoading = selected.tableKey === "registry" ? loading : tableLoading;
@@ -696,13 +808,21 @@ export default function Software() {
     };
   }, [tableRows.licenseStatus]);
 
+  const getFileExtensionLoadedCount = (tableKey: TableKey) => {
+    if (tableKey !== "fileExtensionExe" && tableKey !== "fileExtensionDll" && tableKey !== "fileExtensionIni") return 0;
+    const rows = tableRows[tableKey];
+    const summedCount = rows.reduce((sum, row) => sum + parseNumber(row[1]), 0);
+    return summedCount || rows.length;
+  };
+
   const loadDepartmentDevices = async (node: TreeNode) => {
     if ((node.type !== "dept" && node.type !== "branch" && node.type !== "org") || !node.relationId || node.devicesLoaded || node.devicesLoading) return;
     if (node.relationId === -1) return;
 
     setDeviceTree((prev) => updateTreeNode(prev, node.id, (target) => ({ ...target, devicesLoading: true })));
     try {
-      const assets = await softwareService.getAssetsByRelationID(node.relationId) as AssetItem[];
+      const response = await apiGet<AssetItem[] | { data?: AssetItem[] }>(`/api/assets/${node.relationId}`);
+      const assets = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : [];
       const deviceChildren = assets.map((asset) => mapAssetToDeviceNode(asset, node.relationId));
 
       setDeviceTree((prev) => updateTreeNode(prev, node.id, (target) => {
@@ -724,26 +844,32 @@ export default function Software() {
     });
   };
 
-  const loadSoftwarePayloadForTable = async (tableKey: Exclude<TableKey, "registry">, relationID: number, options: LoadOptions = {}): Promise<ApiRowsPayload> => {
-    const requestConfig = options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined;
-
-    if (tableKey === "licenseStatus") {
-      return softwareService.getSoftwarePackagesByRelation(relationID, { mode: "stat1" }, requestConfig) as Promise<ApiRowsPayload>;
-    }
-
-    if (tableKey === "fileExtensionExe" || tableKey === "fileExtensionDll" || tableKey === "fileExtensionIni") {
-      return softwareService.getSoftwareFilesByRelation(relationID, { mode: "list", extension: getExtensionFromTableKey(tableKey) }, requestConfig) as Promise<ApiRowsPayload>;
-    }
-
-    return softwareService.getInstalledSoftwareByRelation(relationID, { mode: "summary1" }, requestConfig) as Promise<ApiRowsPayload>;
-  };
-
-  const loadRowsForTable = async (tableKey: Exclude<TableKey, "registry">, relationID = currentRelationId, options: LoadOptions = {}) => {
+  const loadRowsForTable = async (tableKey: Exclude<TableKey, "registry">, relationID = currentRelationId) => {
     setTableLoading(true);
     setTableError("");
     try {
-      const payload = await loadSoftwarePayloadForTable(tableKey, relationID, options);
-      const rows = rowsToTableRows(tableKey, unwrapRows(payload));
+      const buildStatisticPath = (targetRelationID: number) => {
+        if (tableKey === "licenseStatus") return `/api/software/relation/${targetRelationID}/packages?mode=stat1`;
+        if (tableKey === "fileExtensionExe" || tableKey === "fileExtensionDll" || tableKey === "fileExtensionIni") {
+          return `/api/software/relation/${targetRelationID}/files?extension=${getExtensionFromTableKey(tableKey)}`;
+        }
+        return `/api/software/relation/${targetRelationID}/installed?mode=summary1`;
+      };
+
+      let rawRows: Record<string, unknown>[] = [];
+
+      if (relationID <= 0 && (tableKey === "installedSoftware" || tableKey === "licenseStatus")) {
+        const departmentResponse = await apiGet<DepartmentNode[] | { data?: DepartmentNode[] }>("/api/departments");
+        const departments = Array.isArray(departmentResponse) ? departmentResponse : Array.isArray(departmentResponse.data) ? departmentResponse.data : [];
+        const relationIds = collectDepartmentRelationIds(departments);
+        const payloads = await Promise.all(relationIds.map((targetRelationID) => apiGet<ApiRowsPayload>(buildStatisticPath(targetRelationID))));
+        rawRows = payloads.flatMap(unwrapRows);
+      } else {
+        const payload = await apiGet<ApiRowsPayload>(buildStatisticPath(relationID));
+        rawRows = unwrapRows(payload);
+      }
+
+      const rows = rowsToTableRows(tableKey, rawRows);
       setTableRows((prev) => ({ ...prev, [tableKey]: rows }));
       return rows;
     } catch (error) {
@@ -757,16 +883,16 @@ export default function Software() {
     }
   };
 
-  const loadRowsForDevice = async (node: TreeNode, options: LoadOptions = {}) => {
+  const loadRowsForDevice = async (node: TreeNode) => {
     if (!node.assetId) return;
     setTableLoading(true);
     setTableError("");
     try {
       const agent = (node.objectAgent || "EM").toUpperCase();
-      const requestConfig = options.forceRefresh ? { forceRefresh: true, cacheTtlMs: 0 } : undefined;
-      const payload = agent === "MDM" && node.objectDeviceId
-        ? await softwareService.getSoftwareByMdmDevice(node.objectDeviceId, undefined, requestConfig)
-        : await softwareService.getSoftwareByClient(node.assetId, undefined, requestConfig);
+      const path = agent === "MDM" && node.objectDeviceId
+        ? `/api/software/mdm/${encodeURIComponent(node.objectDeviceId)}`
+        : `/api/software/client/${node.assetId}`;
+      const payload = await apiGet<ApiRowsPayload>(path);
       const rows = rowsToTableRows("installedSoftware", unwrapRows(payload));
       setTableRows((prev) => ({ ...prev, installedSoftware: rows }));
       setSelected({ mode: "device", tableKey: "installedSoftware", label: node.label, relationId: node.relationId, assetId: node.assetId, objectAgent: node.objectAgent, objectDeviceId: node.objectDeviceId });
@@ -844,9 +970,9 @@ export default function Software() {
         body.Object_Root_Idn = selectedDevice.assetId;
         body.Object_DeviceID = selectedDevice.objectDeviceId;
       }
-      const response = await softwareService.createSoftwareInventoryScan(body) as { Job_Idn?: number; targetCount?: number; message?: string };
-      const jobId = response.Job_Idn || "-";
-      const targetCount = response.targetCount ?? "-";
+      const response = await apiPost<{ data?: { Job_Idn?: number; targetCount?: number }; message?: string }>("/api/software-inventory/scan", body);
+      const jobId = response.data?.Job_Idn || "-";
+      const targetCount = response.data?.targetCount ?? "-";
       showToast({ type: "success", title: "Software scan job created", message: `Job ${jobId} created for ${targetCount} target(s).` });
     } catch (error) {
       showToast({ type: "error", title: "Scan job failed", message: error instanceof Error ? error.message : "Failed to create software scan job." });
@@ -912,15 +1038,14 @@ export default function Software() {
 
   const refreshCurrentView = async () => {
     if (selected.tableKey === "registry") {
-      await loadSoftwareInventory({ forceRefresh: true });
-      void loadDepartmentTree({ forceRefresh: true });
+      await loadSoftwareInventory();
       return;
     }
     if (selected.mode === "device" && selectedDevice) {
-      await loadRowsForDevice(selectedDevice, { forceRefresh: true });
+      await loadRowsForDevice(selectedDevice);
       return;
     }
-    await loadRowsForTable(selected.tableKey, selected.relationId ?? currentRelationId, { forceRefresh: true });
+    await loadRowsForTable(selected.tableKey, selected.relationId ?? currentRelationId);
   };
 
   const exportCurrentView = () => {
@@ -1164,7 +1289,7 @@ export default function Software() {
                 {(selected.tableKey === "fileExtensionExe" || selected.tableKey === "fileExtensionDll" || selected.tableKey === "fileExtensionIni") && (
                   <>
                     <div><span>Extension</span><strong>{getExtensionFromTableKey(selected.tableKey)}</strong><small>file inventory</small></div>
-                    <div><span>Files</span><strong>{currentTableRows.length}</strong><small>loaded records</small></div>
+                    <div><span>Files</span><strong>{getFileExtensionLoadedCount(selected.tableKey)}</strong><small>loaded records</small></div>
                     <div><span>Scope</span><strong>{selectedFolder?.label || "All"}</strong><small>selected folder</small></div>
                   </>
                 )}
