@@ -476,7 +476,7 @@ function PatchManagement() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="patch-management">
+    <main className="settings-module-root hardware-module-root patch-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="patch-management">
       {toast && <PatchToast toast={toast} onClose={() => setToast(null)} />}
 
       <div className="settings-layout d-grid gap-3">
@@ -524,18 +524,19 @@ function PatchManagement() {
         </aside>
 
         <section className="settings-content">
-          <section className="settings-hero ema-panel-surface d-flex align-items-center justify-content-between gap-3 flex-wrap">
-            <div className="flex-grow-1" style={{ minWidth: 0 }}>
-              <span className="section-tag">Patch Operations</span>
+          <section className="settings-hero hardware-hero ema-panel-surface">
+            <div>
+              <span className="eyebrow">PATCH OPERATIONS</span>
               <h2>Patch Management</h2>
               <p>Review update coverage, scan selected endpoints, and install missing patches from one workspace.</p>
             </div>
 
-            <div className="settings-score users-hero-score d-flex align-items-stretch justify-content-end gap-2 flex-nowrap overflow-auto ms-auto">
-              <KpiCard label="Coverage" value={`${patchCoverage}%`} note="Installed rate" icon={<ShieldCheck />} active={activeKpi === 'coverage'} onClick={() => handleKpiClick('coverage')} />
-              <KpiCard label="Applicable" value={formatNumber(summary.ApplicablePatches)} note="Detected updates" icon={<ListChecks />} active={activeKpi === 'applicable'} onClick={() => handleKpiClick('applicable')} />
-              <KpiCard label="Missing" value={formatNumber(summary.MissingPatches)} note={`${installableMissingCount} action row(s)`} icon={<ShieldAlert />} active={activeKpi === 'missing' || statusFilter === 'missing'} onClick={() => handleKpiClick('missing')} />
-              <KpiCard label="Installed" value={formatNumber(summary.InstalledPatches)} note="Completed updates" icon={<PackageCheck />} active={activeKpi === 'installed' || statusFilter === 'installed'} onClick={() => handleKpiClick('installed')} />
+            <div className="hardware-hero-score">
+              <KpiCard color="is-total" label="Coverage" value={`${patchCoverage}%`} note="Installed rate" icon={<ShieldCheck size={17} />} active={activeKpi === 'coverage'} onClick={() => handleKpiClick('coverage')} />
+              <KpiCard color="is-connected" label="Applicable" value={formatNumber(summary.ApplicablePatches)} note="Detected updates" icon={<ListChecks size={17} />} active={activeKpi === 'applicable'} onClick={() => handleKpiClick('applicable')} />
+              <KpiCard color="is-stale" attention label="Missing" value={formatNumber(summary.MissingPatches)} note={`${installableMissingCount} action row(s)`} icon={<ShieldAlert size={17} />} active={activeKpi === 'missing' || statusFilter === 'missing'} onClick={() => handleKpiClick('missing')} />
+              <KpiCard color="is-online" label="Installed" value={formatNumber(summary.InstalledPatches)} note="Completed updates" icon={<PackageCheck size={17} />} active={activeKpi === 'installed' || statusFilter === 'installed'} onClick={() => handleKpiClick('installed')} />
+              <KpiCard color="is-locked" label="Devices" value={formatNumber(summary.DeviceCount)} note="Endpoint scope" icon={<Laptop size={17} />} active={activeKpi === 'devices'} onClick={() => handleKpiClick('devices')} />
             </div>
           </section>
 
@@ -767,6 +768,8 @@ function KpiCard({
   value,
   note,
   icon,
+  color,
+  attention,
   active,
   onClick,
 }: {
@@ -774,22 +777,25 @@ function KpiCard({
   value: ReactNode;
   note: ReactNode;
   icon: ReactNode;
+  color: string;
+  attention?: boolean;
   active?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button
-      className={cx('score-box ema-kpi-card text-start flex-shrink-0', active && 'active')}
+      className={cx('hardware-kpi-card', color, active && 'is-active', attention && 'is-attention')}
       type="button"
       onClick={onClick}
       aria-pressed={Boolean(active)}
       title={`${label}: click to filter patch table`}
-      style={{ minWidth: 168 }}
     >
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-      <i className="d-none">{icon}</i>
+      <div className="hardware-kpi-content">
+        <i className="hardware-kpi-icon">{icon}</i>
+        <span className="hardware-kpi-label">{label}</span>
+        <strong className="hardware-kpi-value">{value}</strong>
+        <small className="hardware-kpi-note">{note}</small>
+      </div>
     </button>
   );
 }

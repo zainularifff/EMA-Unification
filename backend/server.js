@@ -1855,7 +1855,7 @@ WHERE a.Object_PR_Idn = @parentID
 // GET /api/assets
 // Used by Service Desk asset lookup.
 // Important: this route must stay BEFORE /api/assets/:relationID.
-// Source priority: TSMDM_ASSET + TS_OBJECT_ROOT, fallback HD_Assets.
+// Source priority: TSMDM_ASSET + TS_OBJECT_ROOT only.
 function sdAssetText(value, fallback = "") {
     if (value === undefined || value === null) return fallback;
     const text = String(value).trim();
@@ -1919,8 +1919,8 @@ function sdNormalizeAssetRow(row) {
         OS: os,
         deviceType: sdAssetText(row.deviceType || row.DeviceType || os, os),
         ipAddress: sdAssetText(row.ipAddress || row.IP || row.DeviceIPAddress || row.DeviceLocalIPAddress),
-        customerName: sdAssetText(row.customerName || row.CustomerName || row.Object_Full_Name || row.department),
-        department: sdAssetText(row.department || row.Object_Full_Name || row.customerName || row.CustomerName),
+        requesterName: sdAssetText(row.requesterName || row.RequesterName || row.Object_Full_Name || row.department),
+        department: sdAssetText(row.department || row.Object_Full_Name || row.requesterName || row.RequesterName),
         biosDate: biosDate || "-",
         BiosDate: biosDate || null,
         pcAge,
@@ -1931,12 +1931,12 @@ function sdNormalizeAssetRow(row) {
 async function handleServiceDeskAssets(req, res) {
     try {
         const search = String(req.query.search || req.query.q || req.query.keyword || "").trim();
-        const customerName = String(req.query.customerName || req.query.requester || req.query.client || "").trim();
+        const requesterName = String(req.query.requesterName || req.query.requester || req.query.client || "").trim();
 
         const pool = await sql.connect(dbConfig);
         const request = pool.request();
         request.input("SearchText", sql.NVarChar(255), `%${search}%`);
-        request.input("CustomerName", sql.NVarChar(255), customerName);
+        request.input("RequesterName", sql.NVarChar(255), requesterName);
 
         const serviceDeskBiosFragments = getBiosSqlFragments("r", "r", await hasBiosInventoryTables(pool));
 
@@ -1956,7 +1956,7 @@ async function handleServiceDeskAssets(req, res) {
                         THEN ISNULL(a.DeviceIPAddress, '')
                     ELSE a.DeviceLocalIPAddress
                 END AS ipAddress,
-                ISNULL(rel.Object_Full_Name, '') AS customerName,
+                ISNULL(rel.Object_Full_Name, '') AS requesterName,
                 ISNULL(rel.Object_Full_Name, '') AS department,
                 CAST(NULL AS NVARCHAR(100)) AS BiosDate,
                 CAST(NULL AS INT) AS PCAge,
@@ -1979,9 +1979,9 @@ async function handleServiceDeskAssets(req, res) {
                 )
                 AND
                 (
-                    @CustomerName = ''
-                    OR rel.Object_Full_Name = @CustomerName
-                    OR rel.Object_Full_Name LIKE '%' + @CustomerName + '%'
+                    @RequesterName = ''
+                    OR rel.Object_Full_Name = @RequesterName
+                    OR rel.Object_Full_Name LIKE '%' + @RequesterName + '%'
                 )
 
             UNION ALL
@@ -1997,7 +1997,7 @@ async function handleServiceDeskAssets(req, res) {
                 'Windows' AS os,
                 'Desktop' AS deviceType,
                 ISNULL(r.IP, '') AS ipAddress,
-                ISNULL(rel.Object_Full_Name, '') AS customerName,
+                ISNULL(rel.Object_Full_Name, '') AS requesterName,
                 ISNULL(rel.Object_Full_Name, '') AS department,
                 ${serviceDeskBiosFragments.select},
                 'EM' AS source
@@ -2016,65 +2016,15 @@ async function handleServiceDeskAssets(req, res) {
                 )
                 AND
                 (
-                    @CustomerName = ''
-                    OR rel.Object_Full_Name = @CustomerName
-                    OR rel.Object_Full_Name LIKE '%' + @CustomerName + '%'
+                    @RequesterName = ''
+                    OR rel.Object_Full_Name = @RequesterName
+                    OR rel.Object_Full_Name LIKE '%' + @RequesterName + '%'
                 )
             ORDER BY assetTag ASC;
         `);
 
         let data = (result.recordset || []).map(sdNormalizeAssetRow);
 
-        if (data.length === 0 && await tableExists(pool, "HD_Assets")) {
-            const hasHdAssetBiosDate = await tableColumnExists(pool, "HD_Assets", "BiosDate").catch(() => false);
-            const hasHdAssetPcAge = await tableColumnExists(pool, "HD_Assets", "PCAge").catch(() => false);
-            const hdBiosSelect = hasHdAssetBiosDate ? "BiosDate AS BiosDate" : "CAST(NULL AS NVARCHAR(100)) AS BiosDate";
-            const hdPcAgeSelect = hasHdAssetPcAge ? "PCAge AS PCAge" : "CAST(NULL AS INT) AS PCAge";
-            const hdRequest = pool.request();
-            hdRequest.input("SearchText", sql.NVarChar(255), `%${search}%`);
-            hdRequest.input("CustomerName", sql.NVarChar(255), customerName);
-
-            const hdResult = await hdRequest.query(`
-                SELECT TOP 500
-                    AssetID AS id,
-                    AssetID AS assetId,
-                    AssetTag AS assetTag,
-                    AssetTag AS name,
-                    AssetTag AS computerName,
-                    CustomerName AS customerName,
-                    DeviceType AS deviceType,
-                    Brand AS brand,
-                    Model AS model,
-                    OS AS os,
-                    IP AS ipAddress,
-                    CustomerName AS department,
-                    ${hdBiosSelect},
-                    ${hdPcAgeSelect},
-                    'HD' AS source
-                FROM HD_Assets WITH (NOLOCK)
-                WHERE
-                    (
-                        @SearchText = '%%'
-                        OR AssetID LIKE @SearchText
-                        OR AssetTag LIKE @SearchText
-                        OR CustomerName LIKE @SearchText
-                        OR DeviceType LIKE @SearchText
-                        OR Brand LIKE @SearchText
-                        OR Model LIKE @SearchText
-                        OR OS LIKE @SearchText
-                        OR IP LIKE @SearchText
-                    )
-                    AND
-                    (
-                        @CustomerName = ''
-                        OR CustomerName = @CustomerName
-                        OR CustomerName LIKE '%' + @CustomerName + '%'
-                    )
-                ORDER BY AssetTag ASC;
-            `);
-
-            data = (hdResult.recordset || []).map(sdNormalizeAssetRow);
-        }
 
         return res.json(data);
     } catch (err) {
@@ -2588,27 +2538,25 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
 
 // GET /api/clients
 // Incidents.tsx needs clients.getAll(). This route derives clients
-// from HD_Incidents so it works even when there is no separate HD_Clients table.
+// from EMA_Incidents so it works even when there is no separate HD_Clients table.
 app.get('/api/clients', authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
 
         const result = await pool.request().query(`
             SELECT
-                ROW_NUMBER() OVER (ORDER BY CustomerName) as id,
-                CustomerID as customerId,
-                CustomerName as name,
-                CustomerName as customerName,
-                Sector as sector
+                ROW_NUMBER() OVER (ORDER BY RequesterName) as id,
+                RequesterID as requesterId,
+                RequesterName as name,
+                RequesterName as requesterName
             FROM (
                 SELECT DISTINCT
-                    ISNULL(NULLIF(CustomerID, ''), CustomerName) as CustomerID,
-                    CustomerName,
-                    Sector
-                FROM HD_Incidents
-                WHERE CustomerName IS NOT NULL AND CustomerName <> ''
+                    ISNULL(NULLIF(RequesterID, ''), RequesterName) as RequesterID,
+                    RequesterName
+                FROM EMA_Incidents
+                WHERE RequesterName IS NOT NULL AND RequesterName <> ''
             ) c
-            ORDER BY CustomerName
+            ORDER BY RequesterName
         `);
 
         return res.json(result.recordset);
@@ -2748,6 +2696,14 @@ app.delete('/api/roles/:id', authenticateToken, async (req, res) => {
 
 
 
+
+function normalizeServiceDeskIncidentStatus(value, fallback = 'Awaiting') {
+    const text = String(value || '').trim();
+    if (!text) return fallback;
+    if (text.toLowerCase() === 'solved') return 'Resolved';
+    return text;
+}
+
 // ============================================================
 // INCIDENTS API
 // ============================================================
@@ -2762,12 +2718,11 @@ app.get('/api/incidents', authenticateToken, async (req, res) => {
                 Title as title,
                 Description as description,
                 Priority as priority,
-                Status as status,
+                CASE WHEN Status = 'Solved' THEN 'Resolved' ELSE Status END as status,
                 Category as category,
                 CreatedAt as createdAt,
-                CustomerID as customerId,
-                CustomerName as customerName,
-                Sector as sector,
+                RequesterID as requesterId,
+                RequesterName as requesterName,
                 DeviceType as deviceType,
                 AssetID as assetId,
                 Subcategory as subcategory,
@@ -2780,10 +2735,8 @@ app.get('/api/incidents', authenticateToken, async (req, res) => {
                 ResolvedAt as resolvedAt,
                 RootCause as rootCause,
                 ActionPlan as actionPlan,
-                AdditionalMemo as additionalMemo,
-                Remarks as remarks,
-                UserType as userType
-            FROM HD_Incidents
+                AdditionalMemo as additionalMemo
+            FROM EMA_Incidents
             ORDER BY CreatedAt DESC
         `);
         res.json(result.recordset);
@@ -2806,12 +2759,11 @@ app.get('/api/incidents/:id', authenticateToken, async (req, res) => {
                     Title as title,
                     Description as description,
                     Priority as priority,
-                    Status as status,
+                    CASE WHEN Status = 'Solved' THEN 'Resolved' ELSE Status END as status,
                     Category as category,
                     CreatedAt as createdAt,
-                    CustomerID as customerId,
-                    CustomerName as customerName,
-                    Sector as sector,
+                    RequesterID as requesterId,
+                    RequesterName as requesterName,
                     DeviceType as deviceType,
                     AssetID as assetId,
                     Subcategory as subcategory,
@@ -2824,10 +2776,8 @@ app.get('/api/incidents/:id', authenticateToken, async (req, res) => {
                     ResolvedAt as resolvedAt,
                     RootCause as rootCause,
                     ActionPlan as actionPlan,
-                    AdditionalMemo as additionalMemo,
-                    Remarks as remarks,
-                    UserType as userType
-                FROM HD_Incidents
+                    AdditionalMemo as additionalMemo
+                FROM EMA_Incidents
                 WHERE IncidentID = @id
             `);
         
@@ -2845,10 +2795,9 @@ app.get('/api/incidents/:id', authenticateToken, async (req, res) => {
 app.post('/api/incidents', authenticateToken, async (req, res) => {
     const { 
         id, title, description, priority, status, category, createdAt, 
-        customerId, customerName, sector, deviceType, assetId, subcategory, 
+        requesterId, requesterName, deviceType, assetId, subcategory, 
         incidentDetail, reporterId, slaDue, assignedTo, assignedLevel, 
-        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo, 
-        remarks, userType 
+        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo
     } = req.body;
     
     try {
@@ -2858,12 +2807,11 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
             .input('title', sql.NVarChar, title || '')
             .input('description', sql.NVarChar, description || '')
             .input('priority', sql.NVarChar, priority || 'Medium')
-            .input('status', sql.NVarChar, status || 'Awaiting')
+            .input('status', sql.NVarChar, normalizeServiceDeskIncidentStatus(status, 'Awaiting'))
             .input('category', sql.NVarChar, category || '')
             .input('createdAt', sql.NVarChar, createdAt || new Date().toISOString())
-            .input('customerId', sql.NVarChar, customerId || '')
-            .input('customerName', sql.NVarChar, customerName || '')
-            .input('sector', sql.NVarChar, sector || '')
+            .input('requesterId', sql.NVarChar, requesterId || '')
+            .input('requesterName', sql.NVarChar, requesterName || '')
             .input('deviceType', sql.NVarChar, deviceType || '')
             .input('assetId', sql.NVarChar, assetId || '')
             .input('subcategory', sql.NVarChar, subcategory || '')
@@ -2877,21 +2825,17 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
             .input('rootCause', sql.NVarChar, rootCause || '')
             .input('actionPlan', sql.NVarChar, actionPlan || '')
             .input('additionalMemo', sql.NVarChar, additionalMemo || '')
-            .input('remarks', sql.NVarChar, remarks || '')
-            .input('userType', sql.NVarChar, userType || '')
             .query(`
-                INSERT INTO HD_Incidents (
+                INSERT INTO EMA_Incidents (
                     IncidentID, Title, Description, Priority, Status, Category, CreatedAt, 
-                    CustomerID, CustomerName, Sector, DeviceType, AssetID, Subcategory, 
+                    RequesterID, RequesterName, DeviceType, AssetID, Subcategory, 
                     IncidentDetail, ReporterID, SlaDue, AssignedTo, AssignedLevel, 
-                    FirstResponseAt, ResolvedAt, RootCause, ActionPlan, AdditionalMemo, 
-                    Remarks, UserType
+                    FirstResponseAt, ResolvedAt, RootCause, ActionPlan, AdditionalMemo
                 ) VALUES (
                     @id, @title, @description, @priority, @status, @category, @createdAt,
-                    @customerId, @customerName, @sector, @deviceType, @assetId, @subcategory,
+                    @requesterId, @requesterName, @deviceType, @assetId, @subcategory,
                     @incidentDetail, @reporterId, @slaDue, @assignedTo, @assignedLevel,
-                    @firstResponseAt, @resolvedAt, @rootCause, @actionPlan, @additionalMemo,
-                    @remarks, @userType
+                    @firstResponseAt, @resolvedAt, @rootCause, @actionPlan, @additionalMemo
                 )
             `);
         res.json({ success: true, id, ...req.body });
@@ -2906,10 +2850,9 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { 
         title, description, priority, status, category, createdAt,
-        customerId, customerName, sector, deviceType, assetId, subcategory,
+        requesterId, requesterName, deviceType, assetId, subcategory,
         incidentDetail, reporterId, slaDue, assignedTo, assignedLevel,
-        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo,
-        remarks, userType 
+        firstResponseAt, resolvedAt, rootCause, actionPlan, additionalMemo
     } = req.body;
     
     try {
@@ -2919,12 +2862,11 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
             .input('title', sql.NVarChar, title || '')
             .input('description', sql.NVarChar, description || '')
             .input('priority', sql.NVarChar, priority || 'Medium')
-            .input('status', sql.NVarChar, status || 'Awaiting')
+            .input('status', sql.NVarChar, normalizeServiceDeskIncidentStatus(status, 'Awaiting'))
             .input('category', sql.NVarChar, category || '')
-            .input('createdAt', sql.NVarChar, createdAt)
-            .input('customerId', sql.NVarChar, customerId || '')
-            .input('customerName', sql.NVarChar, customerName || '')
-            .input('sector', sql.NVarChar, sector || '')
+            .input('createdAt', sql.NVarChar, createdAt || null)
+            .input('requesterId', sql.NVarChar, requesterId || '')
+            .input('requesterName', sql.NVarChar, requesterName || '')
             .input('deviceType', sql.NVarChar, deviceType || '')
             .input('assetId', sql.NVarChar, assetId || '')
             .input('subcategory', sql.NVarChar, subcategory || '')
@@ -2938,19 +2880,16 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
             .input('rootCause', sql.NVarChar, rootCause || '')
             .input('actionPlan', sql.NVarChar, actionPlan || '')
             .input('additionalMemo', sql.NVarChar, additionalMemo || '')
-            .input('remarks', sql.NVarChar, remarks || '')
-            .input('userType', sql.NVarChar, userType || '')
             .query(`
-                UPDATE HD_Incidents SET
+                UPDATE EMA_Incidents SET
                     Title = @title,
                     Description = @description,
                     Priority = @priority,
                     Status = @status,
                     Category = @category,
-                    CreatedAt = @createdAt,
-                    CustomerID = @customerId,
-                    CustomerName = @customerName,
-                    Sector = @sector,
+                    CreatedAt = COALESCE(NULLIF(@createdAt, ''), CreatedAt),
+                    RequesterID = @requesterId,
+                    RequesterName = @requesterName,
                     DeviceType = @deviceType,
                     AssetID = @assetId,
                     Subcategory = @subcategory,
@@ -2963,9 +2902,7 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
                     ResolvedAt = @resolvedAt,
                     RootCause = @rootCause,
                     ActionPlan = @actionPlan,
-                    AdditionalMemo = @additionalMemo,
-                    Remarks = @remarks,
-                    UserType = @userType
+                    AdditionalMemo = @additionalMemo
                 WHERE IncidentID = @id
             `);
         res.json({ success: true, id, ...req.body });
@@ -2980,9 +2917,50 @@ app.delete('/api/incidents/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const pool = await sql.connect(dbConfig);
+
+        const attachmentResult = await pool.request()
+            .input('id', sql.NVarChar, id)
+            .query(`
+                IF OBJECT_ID('dbo.EMA_IncidentAttachments', 'U') IS NOT NULL
+                BEGIN
+                    SELECT FilePath
+                    FROM EMA_IncidentAttachments
+                    WHERE IncidentID = @id;
+                END
+                ELSE
+                BEGIN
+                    SELECT CAST(NULL AS NVARCHAR(1000)) AS FilePath
+                    WHERE 1 = 0;
+                END
+            `);
+
         await pool.request()
             .input('id', sql.NVarChar, id)
-            .query('DELETE FROM HD_Incidents WHERE IncidentID = @id');
+            .query(`
+                IF OBJECT_ID('dbo.EMA_IncidentAttachments', 'U') IS NOT NULL
+                BEGIN
+                    DELETE FROM EMA_IncidentAttachments
+                    WHERE IncidentID = @id;
+                END;
+
+                DELETE FROM EMA_Incidents
+                WHERE IncidentID = @id;
+            `);
+
+        for (const attachment of attachmentResult.recordset || []) {
+            const storedPath = String(attachment.FilePath || '').trim();
+            if (!storedPath) continue;
+
+            const relativePath = storedPath.replace(/^\/api\/uploads\//i, 'uploads/').replace(/^\/+/, '');
+            const physicalPath = path.join(__dirname, relativePath);
+
+            try {
+                if (fs.existsSync(physicalPath)) fs.unlinkSync(physicalPath);
+            } catch (fileErr) {
+                console.warn(`Failed to delete attachment file for incident ${id}:`, fileErr.message);
+            }
+        }
+
         res.json({ success: true, message: 'Deleted' });
     } catch (err) {
         console.error('DELETE /api/incidents/:id error:', err);
@@ -3005,7 +2983,7 @@ app.get('/api/incident-config', authenticateToken, async (req, res) => {
                 ResponseTimeMin as responseTimeMin,
                 ResolutionTimeHrs as resolutionTimeHrs,
                 EscalationPolicy as escalationPolicy
-            FROM HD_SLA_Configs
+            FROM EMA_SLA_Configs
             ORDER BY ConfigID`);
         res.json(result.recordset);
     } catch (err) {
@@ -3026,7 +3004,7 @@ app.get('/api/incident-config/working-hours', authenticateToken, async (req, res
                 EndTime as endTime,
                 AutoResponseMsg as autoResponseMsg,
                 SortOrder as sortOrder
-            FROM HD_WorkingHours
+            FROM EMA_WorkingHours
             ORDER BY SortOrder
         `);
         res.json(result.recordset);
@@ -3044,7 +3022,7 @@ app.get('/api/incident-config/visibility', authenticateToken, async (req, res) =
                 FieldName as fieldName,
                 IsEnabled as isEnabled,
                 Label as label
-            FROM HD_VisibilityConfig
+            FROM EMA_VisibilityConfig
         `);
         const config = {};
         result.recordset.forEach(r => {
@@ -3072,9 +3050,14 @@ app.get('/api/incident-categories', authenticateToken, async (req, res) => {
                 s.Name as subName,
                 d.DetailID as detailId,
                 d.Name as detailName
-            FROM HD_IncidentCategories c
-            LEFT JOIN HD_IncidentSubcategories s ON c.CategoryID = s.CategoryID
-            LEFT JOIN HD_IncidentDetails d ON s.SubcategoryID = d.SubcategoryID
+            FROM EMA_IncidentCategories c
+            LEFT JOIN EMA_IncidentSubcategories s
+                ON c.CategoryID = s.CategoryID
+                AND ISNULL(s.IsActive, 1) = 1
+            LEFT JOIN EMA_IncidentDetails d
+                ON s.SubcategoryID = d.SubcategoryID
+                AND ISNULL(d.IsActive, 1) = 1
+            WHERE ISNULL(c.IsActive, 1) = 1
             ORDER BY c.Name, s.Name, d.Name
         `);
 
@@ -3118,7 +3101,7 @@ app.get('/api/knowledge-base', authenticateToken, async (req, res) => {
                 Resolution as resolution,
                 CreatedAt as createdAt,
                 UpdatedAt as updatedAt
-            FROM HD_KnowledgeBase
+            FROM EMA_KnowledgeBase
             ORDER BY CreatedAt DESC
         `);
         res.json(result.recordset);
@@ -3137,7 +3120,7 @@ app.post('/api/knowledge-base', authenticateToken, async (req, res) => {
             .input('incidentDetails', sql.NVarChar, incidentDetails || '')
             .input('resolution', sql.NVarChar, resolution || '')
             .query(`
-                INSERT INTO HD_KnowledgeBase (Title, IncidentDetails, Resolution)
+                INSERT INTO EMA_KnowledgeBase (Title, IncidentDetails, Resolution)
                 OUTPUT INSERTED.KBID
                 VALUES (@title, @incidentDetails, @resolution)
             `);
@@ -3159,7 +3142,7 @@ app.put('/api/knowledge-base/:id', authenticateToken, async (req, res) => {
             .input('incidentDetails', sql.NVarChar, incidentDetails || '')
             .input('resolution', sql.NVarChar, resolution || '')
             .query(`
-                UPDATE HD_KnowledgeBase 
+                UPDATE EMA_KnowledgeBase 
                 SET Title = @title, 
                     IncidentDetails = @incidentDetails, 
                     Resolution = @resolution, 
@@ -3179,7 +3162,7 @@ app.delete('/api/knowledge-base/:id', authenticateToken, async (req, res) => {
         const pool = await sql.connect(dbConfig);
         await pool.request()
             .input('id', sql.Int, id)
-            .query('DELETE FROM HD_KnowledgeBase WHERE KBID = @id');
+            .query('DELETE FROM EMA_KnowledgeBase WHERE KBID = @id');
         res.json({ success: true, message: 'Deleted' });
     } catch (err) {
         console.error('DELETE /api/knowledge-base/:id error:', err);
@@ -3206,18 +3189,55 @@ const storage = multer.diskStorage({
         cb(null, uniqueSuffix + ext);
     }
 });
-const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } });
+const INCIDENT_ATTACHMENT_MAX_FILES = 3;
+const INCIDENT_ATTACHMENT_MAX_MB = 10;
+const INCIDENT_ATTACHMENT_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_MB * 1024 * 1024;
+const INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_BYTES;
+
+const upload = multer({ storage, limits: { fileSize: INCIDENT_ATTACHMENT_MAX_BYTES } });
 
 app.use('/api/uploads', express.static(uploadsDir));
 
 app.post('/api/incidents/:id/attachments', authenticateToken, upload.single('file'), async (req, res) => {
     const incidentId = req.params.id;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    
+
     try {
         const pool = await sql.connect(dbConfig);
+
+        const countResult = await pool.request()
+            .input('incidentId', sql.NVarChar, incidentId)
+            .query(`
+                SELECT
+                    COUNT(1) AS totalFiles,
+                    ISNULL(SUM(ISNULL(FileSize, 0)), 0) AS totalSize
+                FROM EMA_IncidentAttachments
+                WHERE IncidentID = @incidentId
+            `);
+
+        const totalFiles = Number(countResult.recordset?.[0]?.totalFiles || 0);
+        const totalSize = Number(countResult.recordset?.[0]?.totalSize || 0);
+
+        if (totalFiles >= INCIDENT_ATTACHMENT_MAX_FILES) {
+            if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+            return res.status(400).json({
+                success: false,
+                message: `Maximum ${INCIDENT_ATTACHMENT_MAX_FILES} attachments are allowed per ticket.`
+            });
+        }
+
+        if (totalSize + Number(req.file.size || 0) > INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES) {
+            if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+            return res.status(400).json({
+                success: false,
+                message: `Total attachment size cannot exceed ${INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_MB}MB per ticket.`
+            });
+        }
+
         const filePath = `/api/uploads/incidents/${req.file.filename}`;
-        
+
         await pool.request()
             .input('incidentId', sql.NVarChar, incidentId)
             .input('filename', sql.NVarChar, req.file.filename)
@@ -3225,10 +3245,10 @@ app.post('/api/incidents/:id/attachments', authenticateToken, upload.single('fil
             .input('fileSize', sql.BigInt, req.file.size)
             .input('filePath', sql.NVarChar, filePath)
             .query(`
-                INSERT INTO HD_IncidentAttachments (IncidentID, Filename, OriginalName, FileSize, FilePath)
+                INSERT INTO EMA_IncidentAttachments (IncidentID, Filename, OriginalName, FileSize, FilePath)
                 VALUES (@incidentId, @filename, @originalName, @fileSize, @filePath)
             `);
-        
+
         const attachment = {
             filename: req.file.filename,
             originalName: req.file.originalname,
@@ -3238,6 +3258,7 @@ app.post('/api/incidents/:id/attachments', authenticateToken, upload.single('fil
         };
         res.json(attachment);
     } catch (err) {
+        if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         console.error('POST attachments error:', err);
         res.status(500).json({ error: 'Failed to save attachment', message: err.message });
     }
@@ -3257,7 +3278,7 @@ app.get('/api/incidents/:id/attachments', authenticateToken, async (req, res) =>
                     FileSize as size,
                     FilePath as url,
                     UploadedAt as uploadedAt
-                FROM HD_IncidentAttachments
+                FROM EMA_IncidentAttachments
                 WHERE IncidentID = @incidentId
                 ORDER BY UploadedAt DESC
             `);
@@ -3277,7 +3298,7 @@ app.delete('/api/incidents/:id/attachments/:filename', authenticateToken, async 
         const fileResult = await pool.request()
             .input('incidentId', sql.NVarChar, id)
             .input('filename', sql.NVarChar, filename)
-            .query('SELECT FilePath FROM HD_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
+            .query('SELECT FilePath FROM EMA_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
         
         if (fileResult.recordset.length > 0) {
             const filePath = path.join(__dirname, fileResult.recordset[0].FilePath.replace('/api/uploads/', 'uploads/'));
@@ -3287,7 +3308,7 @@ app.delete('/api/incidents/:id/attachments/:filename', authenticateToken, async 
         await pool.request()
             .input('incidentId', sql.NVarChar, id)
             .input('filename', sql.NVarChar, filename)
-            .query('DELETE FROM HD_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
+            .query('DELETE FROM EMA_IncidentAttachments WHERE IncidentID = @incidentId AND Filename = @filename');
         
         res.json({ message: 'Deleted' });
     } catch (err) {
@@ -3378,12 +3399,11 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 Title as title,
                 Description as description,
                 Priority as priority,
-                Status as status,
+                CASE WHEN Status = 'Solved' THEN 'Resolved' ELSE Status END as status,
                 Category as category,
                 CreatedAt as createdAt,
-                CustomerID as customerId,
-                CustomerName as customerName,
-                Sector as sector,
+                RequesterID as requesterId,
+                RequesterName as requesterName,
                 DeviceType as deviceType,
                 AssetID as assetId,
                 Subcategory as subcategory,
@@ -3396,10 +3416,8 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 ResolvedAt as resolvedAt,
                 RootCause as rootCause,
                 ActionPlan as actionPlan,
-                AdditionalMemo as additionalMemo,
-                Remarks as remarks,
-                UserType as userType
-            FROM HD_Incidents
+                AdditionalMemo as additionalMemo
+            FROM EMA_Incidents
             WHERE 1=1
         `;
         
@@ -3415,7 +3433,7 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 paramCounter++;
             }
             if (keyword.requester) {
-                conditions.push(`CustomerName LIKE @requester${paramCounter}`);
+                conditions.push(`RequesterName LIKE @requester${paramCounter}`);
                 request.input(`requester${paramCounter}`, sql.NVarChar, `%${keyword.requester}%`);
                 paramCounter++;
             }
@@ -3429,12 +3447,7 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 request.input(`assetTag${paramCounter}`, sql.NVarChar, `%${keyword.assetTag}%`);
                 paramCounter++;
             }
-            if (keyword.ipAddress) {
-                // IP address would need to join with Assets table
-                conditions.push(`EXISTS (SELECT 1 FROM HD_Assets WHERE HD_Assets.AssetID = HD_Incidents.AssetID AND HD_Assets.IP LIKE @ip${paramCounter})`);
-                request.input(`ip${paramCounter}`, sql.NVarChar, `%${keyword.ipAddress}%`);
-                paramCounter++;
-            }
+            // IP address filter removed because legacy asset table is no longer used.
         }
 
         // 2. Date Range
@@ -3480,19 +3493,7 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
                 conditions.push(`DeviceType = @deviceType`);
                 request.input('deviceType', sql.NVarChar, asset.deviceType);
             }
-            // Brand and Model would need to join with Assets table
-            if (asset.brand || asset.model) {
-                let assetJoinCondition = '';
-                if (asset.brand) {
-                    assetJoinCondition += ` AND a.Brand = @brand`;
-                    request.input('brand', sql.NVarChar, asset.brand);
-                }
-                if (asset.model) {
-                    assetJoinCondition += ` AND a.Model = @model`;
-                    request.input('model', sql.NVarChar, asset.model);
-                }
-                conditions.push(`EXISTS (SELECT 1 FROM HD_Assets a WHERE a.AssetID = HD_Incidents.AssetID ${assetJoinCondition})`);
-            }
+            // Brand/model filter removed because legacy asset table is no longer used.
         }
 
         // 6. Assignment
@@ -3511,11 +3512,11 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
         if (slaStatus && slaStatus !== 'All') {
             const now = new Date().toISOString();
             if (slaStatus === 'On Time') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue > GETDATE() AND Status != 'Resolved'`);
+                conditions.push(`SlaDue IS NOT NULL AND SlaDue > GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
             } else if (slaStatus === 'Near Due') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue <= DATEADD(hour, 24, GETDATE()) AND SlaDue > GETDATE() AND Status != 'Resolved'`);
+                conditions.push(`SlaDue IS NOT NULL AND SlaDue <= DATEADD(hour, 24, GETDATE()) AND SlaDue > GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
             } else if (slaStatus === 'Overdue') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue < GETDATE() AND Status != 'Resolved'`);
+                conditions.push(`SlaDue IS NOT NULL AND SlaDue < GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
             }
         }
 
@@ -3548,91 +3549,21 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
 });
 
 // ============================================================
-// USER TYPES API - WITHOUT SORTORDER
+// USER TYPES API - DISABLED
 // ============================================================
+// Service Desk no longer uses HD_UserTypes. Keep these endpoints disabled so
+// old frontend calls do not query the removed/unused HD_UserTypes table.
+function disabledUserTypesApi(req, res) {
+    return res.status(410).json({
+        success: false,
+        message: 'User Type API is disabled. Service Desk no longer uses HD_UserTypes.'
+    });
+}
 
-// GET all user types - ORDER BY Name alphabetically
-app.get('/api/user-types', authenticateToken, async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request().query(`
-            SELECT Id, Name, Description, IsActive, 
-                   FORMAT(CreatedAt, 'yyyy-MM-dd HH:mm:ss') as CreatedAt,
-                   FORMAT(UpdatedAt, 'yyyy-MM-dd HH:mm:ss') as UpdatedAt,
-                   CreatedBy, UpdatedBy
-            FROM HD_UserTypes 
-            ORDER BY Name ASC
-        `);
-        res.json(result.recordset);
-    } catch (err) {
-        console.error('GET /api/user-types error:', err);
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
-
-// CREATE user type - without SortOrder
-app.post('/api/user-types', authenticateToken, async (req, res) => {
-    try {
-        const { Name, Description, IsActive } = req.body;
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request()
-            .input('Name', sql.NVarChar, Name)
-            .input('Description', sql.NVarChar, Description || '')
-            .input('IsActive', sql.Bit, IsActive !== false)
-            .query(`
-                INSERT INTO HD_UserTypes (Name, Description, IsActive, CreatedAt, UpdatedAt)
-                OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.Description, INSERTED.IsActive
-                VALUES (@Name, @Description, @IsActive, GETDATE(), GETDATE())
-            `);
-        
-        res.json(result.recordset[0]);
-    } catch (err) {
-        console.error('POST /api/user-types error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// UPDATE user type - without SortOrder
-app.put('/api/user-types/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { Name, Description, IsActive } = req.body;
-        const pool = await sql.connect(dbConfig);
-        
-        await pool.request()
-            .input('Id', sql.Int, id)
-            .input('Name', sql.NVarChar, Name)
-            .input('Description', sql.NVarChar, Description || '')
-            .input('IsActive', sql.Bit, IsActive)
-            .query(`
-                UPDATE HD_UserTypes 
-                SET Name = @Name, Description = @Description, IsActive = @IsActive, 
-                    UpdatedAt = GETDATE()
-                WHERE Id = @Id
-            `);
-        
-        res.json({ Id: parseInt(id), Name, Description, IsActive });
-    } catch (err) {
-        console.error('PUT /api/user-types/:id error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// DELETE user type
-app.delete('/api/user-types/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input('Id', sql.Int, id)
-            .query('DELETE FROM HD_UserTypes WHERE Id = @Id');
-        res.json({ success: true, message: 'User type deleted successfully' });
-    } catch (err) {
-        console.error('DELETE /api/user-types/:id error:', err);
-        res.status(500).json({ success: false, message: err.message });
-    }
-});
+app.get('/api/user-types', authenticateToken, disabledUserTypesApi);
+app.post('/api/user-types', authenticateToken, disabledUserTypesApi);
+app.put('/api/user-types/:id', authenticateToken, disabledUserTypesApi);
+app.delete('/api/user-types/:id', authenticateToken, disabledUserTypesApi);
 
 // ============================================================
 // ENGINEER AVAILABILITY API - EMA_Users ONLY
@@ -4314,14 +4245,6 @@ async function ensureEmaAuditLogsTable(pool) {
         UPDATE dbo.EMA_AuditLogs
         SET Action = 'Audit event'
         WHERE Action IS NULL OR LTRIM(RTRIM(Action)) = '';
-
-        IF NOT EXISTS (SELECT 1 FROM dbo.EMA_AuditLogs WITH (NOLOCK))
-        BEGIN
-            INSERT INTO dbo.EMA_AuditLogs
-            (UserName, Module, Action, Severity, Details, EntityType, EntityID, IpAddress, UserAgent, CreatedAt)
-            VALUES
-            ('system', 'Audit Logs', 'Audit log initialized', 'Info', 'EMA audit log table is ready. New login and Settings actions will appear here.', 'System', 'EMA_AuditLogs', NULL, NULL, GETDATE());
-        END;
     `);
 
     await pool.request().query(`
@@ -4373,9 +4296,6 @@ function getAuditRequestUser(req) {
         req?.user?.email ||
         req?.body?.updatedBy ||
         req?.body?.createdBy ||
-        req?.body?.username ||
-        req?.body?.userName ||
-        req?.body?.email ||
         'system',
         'system'
     );
@@ -4918,6 +4838,8 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
         const status = accountLocked ? "Locked" : normalizeEmaUserStatus(req.body.status);
         const roleNames = getRequestedEmaRoles(req.body);
         const passwordText = String(req.body.password || req.body.newPassword || "").trim();
+        const requestedRequireMFA = parseEmaBit(req.body.requireMFA ?? req.body.mfa, false);
+        const resetMfaEnrollment = requestedRequireMFA;
 
         if (!fullName && !username) {
             return res.status(400).json({ success: false, message: "Full name or username is required." });
@@ -4928,7 +4850,6 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
         }
 
         const passwordHash = await bcrypt.hash(passwordText, 10);
-        const requestedRequireMFA = parseEmaBit(req.body.requireMFA ?? req.body.mfa, false);
 
         const pool = await sql.connect(dbConfig);
         await assertEmaUsersTable(pool);
@@ -4960,6 +4881,7 @@ app.post("/api/settings/users", authenticateToken, async (req, res) => {
             .input("Status", sql.NVarChar, status)
             .input("IsActive", sql.Bit, status === "Inactive" ? 0 : 1)
             .input("RequireMFA", sql.Bit, requestedRequireMFA ? 1 : 0)
+            .input("ResetMfaEnrollment", sql.Bit, resetMfaEnrollment ? 1 : 0)
             .input("AccountLocked", sql.Bit, accountLocked ? 1 : 0)
             .input("LockReason", sql.NVarChar, accountLocked ? (req.body.lockReason || "Locked by administrator") : "")
             .input("AccessStartDate", sql.DateTime, normalizeEmaDate(req.body.accessStartDate))
@@ -5875,7 +5797,6 @@ app.get("/api/settings/clients", authenticateToken, async (req, res) => {
                 ClientID as id,
                 FullName as fullName,
                 ShortName as shortName,
-                Sector as sector,
                 ContactEmail as contactEmail
             FROM EMA_Clients
             ORDER BY FullName
@@ -5963,7 +5884,7 @@ app.delete("/api/settings/clients/:id", authenticateToken, async (req, res) => {
 // /api/settings/incident-config/categories
 // ============================================================
 
-// SLA CONFIG - uses HD_SLA_Configs
+// SLA CONFIG - uses EMA_SLA_Configs
 app.get("/api/settings/incident-config/sla", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -5976,7 +5897,7 @@ app.get("/api/settings/incident-config/sla", authenticateToken, async (req, res)
                 ResponseTimeMin as responseTimeMin,
                 ResolutionTimeHrs as resolutionTimeHrs,
                 EscalationPolicy as escalationPolicy
-            FROM HD_SLA_Configs
+            FROM EMA_SLA_Configs
             ORDER BY ConfigID
         `);
 
@@ -6007,7 +5928,7 @@ app.put("/api/settings/incident-config/sla", authenticateToken, async (req, res)
                 .input("ResolutionTimeHrs", sql.Int, parseInt(item.resolutionTimeHrs) || 0)
                 .input("EscalationPolicy", sql.NVarChar, item.escalationPolicy || "")
                 .query(`
-                    UPDATE HD_SLA_Configs
+                    UPDATE EMA_SLA_Configs
                     SET
                         Label = @Label,
                         ResponseTimeMin = @ResponseTimeMin,
@@ -6031,7 +5952,7 @@ app.put("/api/settings/incident-config/sla", authenticateToken, async (req, res)
     }
 });
 
-// WORKING HOURS - uses HD_WorkingHours
+// WORKING HOURS - uses EMA_WorkingHours
 app.get("/api/settings/incident-config/working-hours", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -6047,7 +5968,7 @@ app.get("/api/settings/incident-config/working-hours", authenticateToken, async 
                 Is24Hours as is24Hours,
                 AutoResponseMsg as autoResponseMsg,
                 SortOrder as sortOrder
-            FROM HD_WorkingHours
+            FROM EMA_WorkingHours
             ORDER BY SortOrder
         `);
 
@@ -6077,7 +5998,7 @@ app.put("/api/settings/incident-config/working-hours", authenticateToken, async 
                 .input("StartTime", sql.NVarChar, item.start || "09:00")
                 .input("EndTime", sql.NVarChar, item.end || "18:00")
                 .query(`
-                    UPDATE HD_WorkingHours
+                    UPDATE EMA_WorkingHours
                     SET
                         IsRestDay = @IsRestDay,
                         Is24Hours = 0,
@@ -6101,7 +6022,7 @@ app.put("/api/settings/incident-config/working-hours", authenticateToken, async 
     }
 });
 
-// FIELD VISIBILITY - uses HD_VisibilityConfig
+// FIELD VISIBILITY - uses EMA_VisibilityConfig
 app.get("/api/settings/incident-config/fields", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -6112,7 +6033,7 @@ app.get("/api/settings/incident-config/fields", authenticateToken, async (req, r
                 FieldName as [key],
                 ISNULL(Label, FieldName) as label,
                 IsEnabled as enabled
-            FROM HD_VisibilityConfig
+            FROM EMA_VisibilityConfig
             ORDER BY FieldName
         `);
 
@@ -6140,7 +6061,7 @@ app.put("/api/settings/incident-config/fields", authenticateToken, async (req, r
                 .input("FieldName", sql.NVarChar, item.key || item.id)
                 .input("IsEnabled", sql.Bit, item.enabled ? 1 : 0)
                 .query(`
-                    UPDATE HD_VisibilityConfig
+                    UPDATE EMA_VisibilityConfig
                     SET
                         IsEnabled = @IsEnabled
                     WHERE FieldName = @FieldName
@@ -6161,7 +6082,132 @@ app.put("/api/settings/incident-config/fields", authenticateToken, async (req, r
     }
 });
 
-// CATEGORY HIERARCHY - uses HD_IncidentCategories, HD_IncidentSubcategories, HD_IncidentDetails
+// CATEGORY HIERARCHY - uses EMA_IncidentCategories, EMA_IncidentSubcategories, EMA_IncidentDetails
+function normalizeIncidentConfigText(value, fallback = "") {
+    if (value === undefined || value === null) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function incidentConfigConflict(message, usageCount = 0) {
+    const error = new Error(message);
+    error.statusCode = 409;
+    error.usageCount = usageCount;
+    return error;
+}
+
+async function getIncidentCategoryUsageCount(pool, categoryName) {
+    const result = await pool.request()
+        .input("CategoryName", sql.NVarChar, normalizeIncidentConfigText(categoryName))
+        .query(`
+            SELECT COUNT(1) AS UsedCount
+            FROM EMA_Incidents WITH (NOLOCK)
+            WHERE LTRIM(RTRIM(ISNULL(Category, ''))) = @CategoryName;
+        `);
+
+    return Number(result.recordset?.[0]?.UsedCount || 0);
+}
+
+async function getIncidentSubcategoryUsageCount(pool, categoryName, subcategoryName) {
+    const result = await pool.request()
+        .input("CategoryName", sql.NVarChar, normalizeIncidentConfigText(categoryName))
+        .input("SubcategoryName", sql.NVarChar, normalizeIncidentConfigText(subcategoryName))
+        .query(`
+            SELECT COUNT(1) AS UsedCount
+            FROM EMA_Incidents WITH (NOLOCK)
+            WHERE LTRIM(RTRIM(ISNULL(Category, ''))) = @CategoryName
+              AND LTRIM(RTRIM(ISNULL(Subcategory, ''))) = @SubcategoryName;
+        `);
+
+    return Number(result.recordset?.[0]?.UsedCount || 0);
+}
+
+async function getIncidentDetailUsageCount(pool, categoryName, subcategoryName, detailName) {
+    const result = await pool.request()
+        .input("CategoryName", sql.NVarChar, normalizeIncidentConfigText(categoryName))
+        .input("SubcategoryName", sql.NVarChar, normalizeIncidentConfigText(subcategoryName))
+        .input("DetailName", sql.NVarChar, normalizeIncidentConfigText(detailName))
+        .query(`
+            SELECT COUNT(1) AS UsedCount
+            FROM EMA_Incidents WITH (NOLOCK)
+            WHERE LTRIM(RTRIM(ISNULL(Category, ''))) = @CategoryName
+              AND LTRIM(RTRIM(ISNULL(Subcategory, ''))) = @SubcategoryName
+              AND LTRIM(RTRIM(ISNULL(IncidentDetail, ''))) = @DetailName;
+        `);
+
+    return Number(result.recordset?.[0]?.UsedCount || 0);
+}
+
+async function getIncidentCategoryById(pool, categoryId) {
+    const result = await pool.request()
+        .input("CategoryID", sql.Int, categoryId)
+        .query(`
+            SELECT TOP 1
+                CategoryID,
+                Name,
+                IsActive
+            FROM EMA_IncidentCategories WITH (NOLOCK)
+            WHERE CategoryID = @CategoryID;
+        `);
+
+    return result.recordset?.[0] || null;
+}
+
+async function getIncidentSubcategoryById(pool, subcategoryId) {
+    const result = await pool.request()
+        .input("SubcategoryID", sql.Int, subcategoryId)
+        .query(`
+            SELECT TOP 1
+                s.SubcategoryID,
+                s.CategoryID,
+                s.Name,
+                s.IsActive,
+                c.Name AS CategoryName
+            FROM EMA_IncidentSubcategories s WITH (NOLOCK)
+            INNER JOIN EMA_IncidentCategories c WITH (NOLOCK)
+                ON c.CategoryID = s.CategoryID
+            WHERE s.SubcategoryID = @SubcategoryID;
+        `);
+
+    return result.recordset?.[0] || null;
+}
+
+async function getIncidentDetailById(pool, detailId) {
+    const result = await pool.request()
+        .input("DetailID", sql.Int, detailId)
+        .query(`
+            SELECT TOP 1
+                d.DetailID,
+                d.SubcategoryID,
+                d.Name,
+                d.IsActive,
+                s.Name AS SubcategoryName,
+                c.CategoryID,
+                c.Name AS CategoryName
+            FROM EMA_IncidentDetails d WITH (NOLOCK)
+            INNER JOIN EMA_IncidentSubcategories s WITH (NOLOCK)
+                ON s.SubcategoryID = d.SubcategoryID
+            INNER JOIN EMA_IncidentCategories c WITH (NOLOCK)
+                ON c.CategoryID = s.CategoryID
+            WHERE d.DetailID = @DetailID;
+        `);
+
+    return result.recordset?.[0] || null;
+}
+
+function isIncidentConfigRename(oldName, newName) {
+    return normalizeIncidentConfigText(oldName).toLowerCase() !== normalizeIncidentConfigText(newName).toLowerCase();
+}
+
+function getIncidentConfigIsActiveFromBody(body, fallback = true) {
+    if (Object.prototype.hasOwnProperty.call(body || {}, "isActive")) return parseEmaBit(body.isActive, fallback);
+    if (Object.prototype.hasOwnProperty.call(body || {}, "IsActive")) return parseEmaBit(body.IsActive, fallback);
+    if (Object.prototype.hasOwnProperty.call(body || {}, "active")) return parseEmaBit(body.active, fallback);
+    if (Object.prototype.hasOwnProperty.call(body || {}, "enabled")) return parseEmaBit(body.enabled, fallback);
+    return fallback;
+}
+
+// CATEGORY HIERARCHY - uses EMA_IncidentCategories, EMA_IncidentSubcategories, EMA_IncidentDetails
 app.get("/api/settings/incident-config/categories", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -6170,15 +6216,18 @@ app.get("/api/settings/incident-config/categories", authenticateToken, async (re
             SELECT
                 c.CategoryID as categoryId,
                 c.Name as categoryName,
+                c.IsActive as categoryIsActive,
                 s.SubcategoryID as subcategoryId,
                 s.Name as subcategoryName,
+                s.IsActive as subcategoryIsActive,
                 d.DetailID as detailId,
-                d.Name as detailName
-            FROM HD_IncidentCategories c
-            LEFT JOIN HD_IncidentSubcategories s
+                d.Name as detailName,
+                d.IsActive as detailIsActive
+            FROM EMA_IncidentCategories c
+            LEFT JOIN EMA_IncidentSubcategories s
                 ON c.CategoryID = s.CategoryID
                 AND ISNULL(s.IsActive, 1) = 1
-            LEFT JOIN HD_IncidentDetails d
+            LEFT JOIN EMA_IncidentDetails d
                 ON s.SubcategoryID = d.SubcategoryID
                 AND ISNULL(d.IsActive, 1) = 1
             WHERE ISNULL(c.IsActive, 1) = 1
@@ -6194,6 +6243,7 @@ app.get("/api/settings/incident-config/categories", authenticateToken, async (re
                 category = {
                     id: row.categoryId,
                     name: row.categoryName,
+                    isActive: row.categoryIsActive === true || row.categoryIsActive === 1,
                     subcategories: []
                 };
                 categories.push(category);
@@ -6206,6 +6256,7 @@ app.get("/api/settings/incident-config/categories", authenticateToken, async (re
                     subcategory = {
                         id: row.subcategoryId,
                         name: row.subcategoryName,
+                        isActive: row.subcategoryIsActive === true || row.subcategoryIsActive === 1,
                         details: []
                     };
                     category.subcategories.push(subcategory);
@@ -6214,7 +6265,8 @@ app.get("/api/settings/incident-config/categories", authenticateToken, async (re
                 if (row.detailId) {
                     subcategory.details.push({
                         id: row.detailId,
-                        name: row.detailName
+                        name: row.detailName,
+                        isActive: row.detailIsActive === true || row.detailIsActive === 1
                     });
                 }
             }
@@ -6251,7 +6303,7 @@ app.post("/api/settings/incident-config/categories", authenticateToken, async (r
         const result = await pool.request()
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                INSERT INTO HD_IncidentCategories
+                INSERT INTO EMA_IncidentCategories
                 (
                     Name,
                     IsActive,
@@ -6260,7 +6312,8 @@ app.post("/api/settings/incident-config/categories", authenticateToken, async (r
                 )
                 OUTPUT
                     INSERTED.CategoryID as id,
-                    INSERTED.Name as name
+                    INSERTED.Name as name,
+                    INSERTED.IsActive as isActive
                 VALUES
                 (
                     @Name,
@@ -6296,27 +6349,49 @@ app.put("/api/settings/incident-config/categories/:id", authenticateToken, async
             });
         }
 
+        const categoryId = parseInt(req.params.id, 10);
         const pool = await sql.connect(dbConfig);
+        const currentCategory = await getIncidentCategoryById(pool, categoryId);
 
-        await pool.request()
-            .input("CategoryID", sql.Int, parseInt(req.params.id))
-            .input("Name", sql.NVarChar, name.trim())
+        if (!currentCategory) {
+            return res.status(404).json({ success: false, message: "Category not found" });
+        }
+
+        const nextName = name.trim();
+        const nextIsActive = getIncidentConfigIsActiveFromBody(req.body, currentCategory.IsActive === true || currentCategory.IsActive === 1);
+
+        if (isIncidentConfigRename(currentCategory.Name, nextName)) {
+            const usedCount = await getIncidentCategoryUsageCount(pool, currentCategory.Name);
+            if (usedCount > 0) throw incidentConfigConflict("This category name cannot be changed because it is already used in existing Service Desk tickets. You can deactivate it instead.", usedCount);
+        }
+
+        const result = await pool.request()
+            .input("CategoryID", sql.Int, categoryId)
+            .input("Name", sql.NVarChar, nextName)
+            .input("IsActive", sql.Bit, nextIsActive ? 1 : 0)
             .query(`
-                UPDATE HD_IncidentCategories
+                UPDATE EMA_IncidentCategories
                 SET
                     Name = @Name,
+                    IsActive = @IsActive,
                     UpdatedAt = GETDATE()
+                OUTPUT
+                    INSERTED.CategoryID as id,
+                    INSERTED.Name as name,
+                    INSERTED.IsActive as isActive
                 WHERE CategoryID = @CategoryID
             `);
 
         return res.json({
-            success: true
+            success: true,
+            data: result.recordset?.[0] || null
         });
     } catch (err) {
         console.error("PUT /api/settings/incident-config/categories/:id error:", err);
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             success: false,
-            message: "Failed to update category",
+            message: err.message || "Failed to update category",
+            usageCount: err.usageCount || 0,
             error: err.message
         });
     }
@@ -6325,13 +6400,31 @@ app.put("/api/settings/incident-config/categories/:id", authenticateToken, async
 // DELETE MAIN CATEGORY
 app.delete("/api/settings/incident-config/categories/:id", authenticateToken, async (req, res) => {
     try {
+        const categoryId = parseInt(req.params.id, 10);
         const pool = await sql.connect(dbConfig);
+        const currentCategory = await getIncidentCategoryById(pool, categoryId);
+
+        if (!currentCategory) {
+            return res.status(404).json({ success: false, message: "Category not found" });
+        }
+
+        const usedCount = await getIncidentCategoryUsageCount(pool, currentCategory.Name);
+        if (usedCount > 0) throw incidentConfigConflict("This category cannot be deleted because it is already used in existing Service Desk tickets. You can deactivate it instead.", usedCount);
 
         await pool.request()
-            .input("CategoryID", sql.Int, parseInt(req.params.id))
+            .input("CategoryID", sql.Int, categoryId)
             .query(`
-                DELETE FROM HD_IncidentCategories
-                WHERE CategoryID = @CategoryID
+                DELETE d
+                FROM EMA_IncidentDetails d
+                INNER JOIN EMA_IncidentSubcategories s
+                    ON s.SubcategoryID = d.SubcategoryID
+                WHERE s.CategoryID = @CategoryID;
+
+                DELETE FROM EMA_IncidentSubcategories
+                WHERE CategoryID = @CategoryID;
+
+                DELETE FROM EMA_IncidentCategories
+                WHERE CategoryID = @CategoryID;
             `);
 
         return res.json({
@@ -6339,9 +6432,10 @@ app.delete("/api/settings/incident-config/categories/:id", authenticateToken, as
         });
     } catch (err) {
         console.error("DELETE /api/settings/incident-config/categories/:id error:", err);
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             success: false,
-            message: "Failed to delete category",
+            message: err.message || "Failed to delete category",
+            usageCount: err.usageCount || 0,
             error: err.message
         });
     }
@@ -6362,10 +6456,10 @@ app.post("/api/settings/incident-config/categories/:categoryId/subcategories", a
         const pool = await sql.connect(dbConfig);
 
         const result = await pool.request()
-            .input("CategoryID", sql.Int, parseInt(req.params.categoryId))
+            .input("CategoryID", sql.Int, parseInt(req.params.categoryId, 10))
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                INSERT INTO HD_IncidentSubcategories
+                INSERT INTO EMA_IncidentSubcategories
                 (
                     CategoryID,
                     Name,
@@ -6375,7 +6469,8 @@ app.post("/api/settings/incident-config/categories/:categoryId/subcategories", a
                 )
                 OUTPUT
                     INSERTED.SubcategoryID as id,
-                    INSERTED.Name as name
+                    INSERTED.Name as name,
+                    INSERTED.IsActive as isActive
                 VALUES
                 (
                     @CategoryID,
@@ -6412,27 +6507,49 @@ app.put("/api/settings/incident-config/subcategories/:id", authenticateToken, as
             });
         }
 
+        const subcategoryId = parseInt(req.params.id, 10);
         const pool = await sql.connect(dbConfig);
+        const currentSubcategory = await getIncidentSubcategoryById(pool, subcategoryId);
 
-        await pool.request()
-            .input("SubcategoryID", sql.Int, parseInt(req.params.id))
-            .input("Name", sql.NVarChar, name.trim())
+        if (!currentSubcategory) {
+            return res.status(404).json({ success: false, message: "Subcategory not found" });
+        }
+
+        const nextName = name.trim();
+        const nextIsActive = getIncidentConfigIsActiveFromBody(req.body, currentSubcategory.IsActive === true || currentSubcategory.IsActive === 1);
+
+        if (isIncidentConfigRename(currentSubcategory.Name, nextName)) {
+            const usedCount = await getIncidentSubcategoryUsageCount(pool, currentSubcategory.CategoryName, currentSubcategory.Name);
+            if (usedCount > 0) throw incidentConfigConflict("This subcategory name cannot be changed because it is already used in existing Service Desk tickets. You can deactivate it instead.", usedCount);
+        }
+
+        const result = await pool.request()
+            .input("SubcategoryID", sql.Int, subcategoryId)
+            .input("Name", sql.NVarChar, nextName)
+            .input("IsActive", sql.Bit, nextIsActive ? 1 : 0)
             .query(`
-                UPDATE HD_IncidentSubcategories
+                UPDATE EMA_IncidentSubcategories
                 SET
                     Name = @Name,
+                    IsActive = @IsActive,
                     UpdatedAt = GETDATE()
+                OUTPUT
+                    INSERTED.SubcategoryID as id,
+                    INSERTED.Name as name,
+                    INSERTED.IsActive as isActive
                 WHERE SubcategoryID = @SubcategoryID
             `);
 
         return res.json({
-            success: true
+            success: true,
+            data: result.recordset?.[0] || null
         });
     } catch (err) {
         console.error("PUT /api/settings/incident-config/subcategories/:id error:", err);
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             success: false,
-            message: "Failed to update subcategory",
+            message: err.message || "Failed to update subcategory",
+            usageCount: err.usageCount || 0,
             error: err.message
         });
     }
@@ -6441,13 +6558,25 @@ app.put("/api/settings/incident-config/subcategories/:id", authenticateToken, as
 // DELETE SUBCATEGORY
 app.delete("/api/settings/incident-config/subcategories/:id", authenticateToken, async (req, res) => {
     try {
+        const subcategoryId = parseInt(req.params.id, 10);
         const pool = await sql.connect(dbConfig);
+        const currentSubcategory = await getIncidentSubcategoryById(pool, subcategoryId);
+
+        if (!currentSubcategory) {
+            return res.status(404).json({ success: false, message: "Subcategory not found" });
+        }
+
+        const usedCount = await getIncidentSubcategoryUsageCount(pool, currentSubcategory.CategoryName, currentSubcategory.Name);
+        if (usedCount > 0) throw incidentConfigConflict("This subcategory cannot be deleted because it is already used in existing Service Desk tickets. You can deactivate it instead.", usedCount);
 
         await pool.request()
-            .input("SubcategoryID", sql.Int, parseInt(req.params.id))
+            .input("SubcategoryID", sql.Int, subcategoryId)
             .query(`
-                DELETE FROM HD_IncidentSubcategories
-                WHERE SubcategoryID = @SubcategoryID
+                DELETE FROM EMA_IncidentDetails
+                WHERE SubcategoryID = @SubcategoryID;
+
+                DELETE FROM EMA_IncidentSubcategories
+                WHERE SubcategoryID = @SubcategoryID;
             `);
 
         return res.json({
@@ -6455,9 +6584,10 @@ app.delete("/api/settings/incident-config/subcategories/:id", authenticateToken,
         });
     } catch (err) {
         console.error("DELETE /api/settings/incident-config/subcategories/:id error:", err);
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             success: false,
-            message: "Failed to delete subcategory",
+            message: err.message || "Failed to delete subcategory",
+            usageCount: err.usageCount || 0,
             error: err.message
         });
     }
@@ -6478,10 +6608,10 @@ app.post("/api/settings/incident-config/subcategories/:subcategoryId/details", a
         const pool = await sql.connect(dbConfig);
 
         const result = await pool.request()
-            .input("SubcategoryID", sql.Int, parseInt(req.params.subcategoryId))
+            .input("SubcategoryID", sql.Int, parseInt(req.params.subcategoryId, 10))
             .input("Name", sql.NVarChar, name.trim())
             .query(`
-                INSERT INTO HD_IncidentDetails
+                INSERT INTO EMA_IncidentDetails
                 (
                     SubcategoryID,
                     Name,
@@ -6491,7 +6621,8 @@ app.post("/api/settings/incident-config/subcategories/:subcategoryId/details", a
                 )
                 OUTPUT
                     INSERTED.DetailID as id,
-                    INSERTED.Name as name
+                    INSERTED.Name as name,
+                    INSERTED.IsActive as isActive
                 VALUES
                 (
                     @SubcategoryID,
@@ -6528,27 +6659,49 @@ app.put("/api/settings/incident-config/details/:id", authenticateToken, async (r
             });
         }
 
+        const detailId = parseInt(req.params.id, 10);
         const pool = await sql.connect(dbConfig);
+        const currentDetail = await getIncidentDetailById(pool, detailId);
 
-        await pool.request()
-            .input("DetailID", sql.Int, parseInt(req.params.id))
-            .input("Name", sql.NVarChar, name.trim())
+        if (!currentDetail) {
+            return res.status(404).json({ success: false, message: "Problem detail not found" });
+        }
+
+        const nextName = name.trim();
+        const nextIsActive = getIncidentConfigIsActiveFromBody(req.body, currentDetail.IsActive === true || currentDetail.IsActive === 1);
+
+        if (isIncidentConfigRename(currentDetail.Name, nextName)) {
+            const usedCount = await getIncidentDetailUsageCount(pool, currentDetail.CategoryName, currentDetail.SubcategoryName, currentDetail.Name);
+            if (usedCount > 0) throw incidentConfigConflict("This problem detail name cannot be changed because it is already used in existing Service Desk tickets. You can deactivate it instead.", usedCount);
+        }
+
+        const result = await pool.request()
+            .input("DetailID", sql.Int, detailId)
+            .input("Name", sql.NVarChar, nextName)
+            .input("IsActive", sql.Bit, nextIsActive ? 1 : 0)
             .query(`
-                UPDATE HD_IncidentDetails
+                UPDATE EMA_IncidentDetails
                 SET
                     Name = @Name,
+                    IsActive = @IsActive,
                     UpdatedAt = GETDATE()
+                OUTPUT
+                    INSERTED.DetailID as id,
+                    INSERTED.Name as name,
+                    INSERTED.IsActive as isActive
                 WHERE DetailID = @DetailID
             `);
 
         return res.json({
-            success: true
+            success: true,
+            data: result.recordset?.[0] || null
         });
     } catch (err) {
         console.error("PUT /api/settings/incident-config/details/:id error:", err);
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             success: false,
-            message: "Failed to update problem detail",
+            message: err.message || "Failed to update problem detail",
+            usageCount: err.usageCount || 0,
             error: err.message
         });
     }
@@ -6557,12 +6710,21 @@ app.put("/api/settings/incident-config/details/:id", authenticateToken, async (r
 // DELETE PROBLEM DETAIL
 app.delete("/api/settings/incident-config/details/:id", authenticateToken, async (req, res) => {
     try {
+        const detailId = parseInt(req.params.id, 10);
         const pool = await sql.connect(dbConfig);
+        const currentDetail = await getIncidentDetailById(pool, detailId);
+
+        if (!currentDetail) {
+            return res.status(404).json({ success: false, message: "Problem detail not found" });
+        }
+
+        const usedCount = await getIncidentDetailUsageCount(pool, currentDetail.CategoryName, currentDetail.SubcategoryName, currentDetail.Name);
+        if (usedCount > 0) throw incidentConfigConflict("This problem detail cannot be deleted because it is already used in existing Service Desk tickets. You can deactivate it instead.", usedCount);
 
         await pool.request()
-            .input("DetailID", sql.Int, parseInt(req.params.id))
+            .input("DetailID", sql.Int, detailId)
             .query(`
-                DELETE FROM HD_IncidentDetails
+                DELETE FROM EMA_IncidentDetails
                 WHERE DetailID = @DetailID
             `);
 
@@ -6571,9 +6733,10 @@ app.delete("/api/settings/incident-config/details/:id", authenticateToken, async
         });
     } catch (err) {
         console.error("DELETE /api/settings/incident-config/details/:id error:", err);
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             success: false,
-            message: "Failed to delete problem detail",
+            message: err.message || "Failed to delete problem detail",
+            usageCount: err.usageCount || 0,
             error: err.message
         });
     }
@@ -6861,6 +7024,10 @@ app.delete('/api/settings/audit-logs', authenticateToken, async (req, res) => {
     }
 });
 
+/* ===== pricing ===== */
+
+/*
+|--------------------------------------------------------------------------
 /*
 |--------------------------------------------------------------------------
 | GEOLOCATION APIs - MERGED FROM server_geolocation.js
@@ -22395,8 +22562,9 @@ app.put("/api/settings/pc-aging-rule", authenticateToken, async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-/*
-|--------------------------------------------------------------------------
+/* ===== access ===== */
+
+/* =========================================================
 | SETTINGS - MANAGEMENT DASHBOARD POLICY APIs
 |--------------------------------------------------------------------------
 | Tables used:

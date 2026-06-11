@@ -2,7 +2,299 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ButtonHTMLAttributes, CSSProperties, FormEvent, ReactNode } from 'react';
 
-import serviceDeskService from '../services/ServiceDeskService';
+
+const SERVICE_DESK_ENV = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env || {};
+const SERVICE_DESK_API_BASE = (SERVICE_DESK_ENV.VITE_API_BASE_URL || SERVICE_DESK_ENV.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
+
+function safeServiceDeskJsonParse<T = unknown>(raw: string | null): T | null {
+  if (!raw || raw === 'undefined' || raw === 'null') return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function findServiceDeskToken(value: unknown, depth = 0): string {
+  if (!value || depth > 4) return '';
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('eyJ')) return trimmed;
+    const parsed = safeServiceDeskJsonParse<unknown>(trimmed);
+    return parsed ? findServiceDeskToken(parsed, depth + 1) : '';
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const token = findServiceDeskToken(item, depth + 1);
+      if (token) return token;
+    }
+    return '';
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const data = record.data as Record<string, unknown> | undefined;
+    const directToken = record.token || record.accessToken || record.authToken || record.jwt || data?.token || data?.accessToken;
+    if (typeof directToken === 'string' && directToken.trim()) return directToken.trim();
+
+    for (const item of Object.values(record)) {
+      const token = findServiceDeskToken(item, depth + 1);
+      if (token) return token;
+    }
+  }
+
+  return '';
+}
+
+function getServiceDeskToken() {
+  if (typeof window === 'undefined') return '';
+
+  const tokenKeys = ['ema-access-token', 'ema-token', 'token', 'accessToken', 'authToken', 'emaToken'];
+  const objectKeys = ['ema-auth', 'auth', 'user', 'ema-user', 'currentUser', 'authUser', 'ema-current-user', 'authData'];
+
+  for (const storage of [window.localStorage, window.sessionStorage]) {
+    for (const key of tokenKeys) {
+      const directValue = storage.getItem(key);
+      if (directValue?.trim()) return directValue.trim();
+    }
+
+    for (const key of objectKeys) {
+      const token = findServiceDeskToken(storage.getItem(key));
+      if (token) return token;
+    }
+  }
+
+  return '';
+}
+
+async function serviceDeskApiRequest<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getServiceDeskToken();
+  const headers = new Headers(options.headers || {});
+
+  if (!headers.has('Content-Type') && options.body) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${SERVICE_DESK_API_BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  const text = await response.text();
+  let payload: any = null;
+
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      const isHtml = text.trim().toLowerCase().startsWith('<!doctype') || text.trim().toLowerCase().startsWith('<html');
+      const hint = isHtml
+        ? 'Backend returned HTML instead of JSON. Check that the backend route exists and VITE_API_BASE_URL points to port 3001.'
+        : 'Backend returned a non-JSON response.';
+      throw new Error(`${hint} [${response.status} ${response.statusText}] ${SERVICE_DESK_API_BASE}${path}`);
+    }
+  }
+
+  if (!response.ok || payload?.success === false) {
+    throw new Error(payload?.message || payload?.error || payload?.errorMessage || `Request failed with status ${response.status}`);
+  }
+
+  return payload as T;
+}
+
+function unwrapServiceDeskArray<T = any>(payload: any): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (Array.isArray(payload?.data)) return payload.data as T[];
+  if (Array.isArray(payload?.rows)) return payload.rows as T[];
+  return [];
+}
+
+function normalizeServiceDeskStatus(value: any) {
+  const text = String(value || 'Awaiting').trim();
+  return text.toLowerCase() === 'solved' ? 'Resolved' : text;
+}
+
+function normalizeServiceDeskIncident(row: any) {
+  const requesterId = row?.requesterId ?? row?.RequesterID ?? row?.customerId ?? row?.CustomerID ?? row?.reporterId ?? row?.ReporterID ?? '';
+  const requesterName = row?.requesterName ?? row?.RequesterName ?? row?.customerName ?? row?.CustomerName ?? row?.name ?? row?.Name ?? '';
+  const incidentId = row?.id ?? row?.IncidentID ?? row?.incidentID ?? '';
+
+  return {
+    ...row,
+    id: incidentId,
+    IncidentID: row?.IncidentID ?? incidentId,
+    title: row?.title ?? row?.Title ?? '',
+    description: row?.description ?? row?.Description ?? '',
+    priority: row?.priority ?? row?.Priority ?? 'Medium',
+    status: normalizeServiceDeskStatus(row?.status ?? row?.Status),
+    category: row?.category ?? row?.Category ?? '',
+    createdAt: row?.createdAt ?? row?.CreatedAt ?? '',
+    requesterId,
+    requesterName,
+    customerId: row?.customerId ?? row?.CustomerID ?? requesterId,
+    customerName: row?.customerName ?? row?.CustomerName ?? requesterName,
+    sector: row?.sector ?? row?.Sector ?? '',
+    deviceType: row?.deviceType ?? row?.DeviceType ?? '',
+    assetId: row?.assetId ?? row?.AssetID ?? '',
+    subcategory: row?.subcategory ?? row?.Subcategory ?? '',
+    incidentDetail: row?.incidentDetail ?? row?.IncidentDetail ?? '',
+    reporterId: row?.reporterId ?? row?.ReporterID ?? requesterId,
+    slaDue: row?.slaDue ?? row?.SlaDue ?? '',
+    assignedTo: row?.assignedTo ?? row?.AssignedTo ?? '',
+    assignedLevel: row?.assignedLevel ?? row?.AssignedLevel ?? '',
+    firstResponseAt: row?.firstResponseAt ?? row?.FirstResponseAt ?? '',
+    resolvedAt: row?.resolvedAt ?? row?.ResolvedAt ?? '',
+    rootCause: row?.rootCause ?? row?.RootCause ?? '',
+    actionPlan: row?.actionPlan ?? row?.ActionPlan ?? '',
+    additionalMemo: row?.additionalMemo ?? row?.AdditionalMemo ?? row?.remarks ?? row?.Remarks ?? '',
+    remarks: row?.remarks ?? row?.Remarks ?? row?.additionalMemo ?? row?.AdditionalMemo ?? '',
+  };
+}
+
+function buildServiceDeskIncidentPayload(row: any) {
+  const incidentId = row?.id ?? row?.IncidentID ?? row?.incidentID ?? '';
+  const requesterId = row?.requesterId ?? row?.RequesterID ?? row?.customerId ?? row?.CustomerID ?? row?.reporterId ?? row?.ReporterID ?? '';
+  const requesterName = row?.requesterName ?? row?.RequesterName ?? row?.customerName ?? row?.CustomerName ?? '';
+
+  return {
+    ...row,
+    id: incidentId,
+    requesterId,
+    requesterName,
+    customerId: row?.customerId ?? requesterId,
+    customerName: row?.customerName ?? requesterName,
+    reporterId: row?.reporterId ?? requesterId,
+    status: normalizeServiceDeskStatus(row?.status),
+  };
+}
+
+function normalizeServiceDeskAsset(row: any) {
+  const requesterName = row?.requesterName ?? row?.RequesterName ?? row?.customerName ?? row?.CustomerName ?? row?.department ?? row?.Object_Full_Name ?? '';
+
+  return {
+    ...row,
+    id: row?.id ?? row?.assetId ?? row?.AssetID ?? row?.Object_Root_Idn ?? row?.MDM_Asset_Idn ?? row?.assetTag ?? row?.name ?? '',
+    assetId: row?.assetId ?? row?.AssetID ?? row?.id ?? row?.Object_Root_Idn ?? row?.MDM_Asset_Idn ?? '',
+    assetTag: row?.assetTag ?? row?.AssetTag ?? row?.name ?? row?.computerName ?? row?.ComputerName ?? row?.DeviceName ?? '',
+    name: row?.name ?? row?.assetTag ?? row?.AssetTag ?? row?.computerName ?? row?.ComputerName ?? row?.DeviceName ?? '',
+    brand: row?.brand ?? row?.Brand ?? '',
+    Brand: row?.Brand ?? row?.brand ?? '',
+    model: row?.model ?? row?.Model ?? '',
+    Model: row?.Model ?? row?.model ?? '',
+    os: row?.os ?? row?.OS ?? row?.PlatformType ?? '',
+    OS: row?.OS ?? row?.os ?? row?.PlatformType ?? '',
+    requesterName,
+    customerName: row?.customerName ?? row?.CustomerName ?? requesterName,
+    department: row?.department ?? requesterName,
+  };
+}
+
+const serviceDeskService = {
+  incidents: {
+    async getAll() {
+      const payload = await serviceDeskApiRequest('/api/incidents');
+      return unwrapServiceDeskArray(payload).map(normalizeServiceDeskIncident);
+    },
+    async create(data: any) {
+      const payload = await serviceDeskApiRequest('/api/incidents', {
+        method: 'POST',
+        body: JSON.stringify(buildServiceDeskIncidentPayload(data)),
+      });
+      return normalizeServiceDeskIncident(payload?.data || payload);
+    },
+    async update(data: any) {
+      const incidentId = data?.id ?? data?.IncidentID ?? data?.incidentID;
+      if (!incidentId) throw new Error('Incident ID is required for update.');
+      const payload = await serviceDeskApiRequest(`/api/incidents/${encodeURIComponent(String(incidentId))}`, {
+        method: 'PUT',
+        body: JSON.stringify(buildServiceDeskIncidentPayload(data)),
+      });
+      return normalizeServiceDeskIncident(payload?.data || payload);
+    },
+    async delete(id: string | number) {
+      return serviceDeskApiRequest(`/api/incidents/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+    },
+  },
+  incidentConfig: {
+    async getAll() {
+      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/incident-config'));
+    },
+    async getWorkingHours() {
+      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/incident-config/working-hours'));
+    },
+    async getVisibilityConfig() {
+      const payload = await serviceDeskApiRequest('/api/incident-config/visibility');
+      return payload?.data || payload || {};
+    },
+  },
+  incidentCategories: {
+    async getAll() {
+      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/incident-categories'));
+    },
+  },
+  users: {
+    async getAll() {
+      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/users'));
+    },
+  },
+  roles: {
+    async getAll() {
+      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/roles'));
+    },
+  },
+  assets: {
+    async getAll() {
+      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/assets')).map(normalizeServiceDeskAsset);
+    },
+    async getByCustomer(name: string) {
+      const params = new URLSearchParams();
+      if (name && name.toLowerCase() !== 'all') params.set('requesterName', name);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return unwrapServiceDeskArray(await serviceDeskApiRequest(`/api/assets${suffix}`)).map(normalizeServiceDeskAsset);
+    },
+    async search(term: string) {
+      const params = new URLSearchParams();
+      if (term) params.set('search', term);
+      return unwrapServiceDeskArray(await serviceDeskApiRequest(`/api/assets/search?${params.toString()}`)).map(normalizeServiceDeskAsset);
+    },
+  },
+  knowledgeBase: {
+    async getAll() {
+      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/knowledge-base'));
+    },
+    async create(data: any) {
+      return serviceDeskApiRequest('/api/knowledge-base', { method: 'POST', body: JSON.stringify(data) });
+    },
+    async update(data: any) {
+      const id = data?.id ?? data?.KBID;
+      if (!id) throw new Error('Knowledge base ID is required for update.');
+      return serviceDeskApiRequest(`/api/knowledge-base/${encodeURIComponent(String(id))}`, { method: 'PUT', body: JSON.stringify(data) });
+    },
+    async delete(id: string | number) {
+      return serviceDeskApiRequest(`/api/knowledge-base/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+    },
+  },
+  engineerAvailability: {
+    async getAvailableEngineers(date?: string, supportLevel?: string) {
+      const params = new URLSearchParams();
+      if (date) params.set('date', date);
+      if (supportLevel) params.set('supportLevel', supportLevel);
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return unwrapServiceDeskArray(await serviceDeskApiRequest(`/api/engineer-availability/available-engineers${suffix}`));
+    },
+  },
+};
 
 const {
   incidents: incidentsService,
@@ -786,7 +1078,9 @@ function ServiceDeskSelect({
     };
 
     const handleResize = () => updateMenuPosition();
-    const handleScroll = () => setOpen(false);
+    const handleScroll = () => {
+      window.requestAnimationFrame(updateMenuPosition);
+    };
 
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
@@ -1580,7 +1874,9 @@ export default function ServiceDesk() {
     updateAssetDropdownPosition();
 
     const handleResize = () => updateAssetDropdownPosition();
-    const handleScroll = () => setShowAssetDropdown(false);
+    const handleScroll = () => {
+      window.requestAnimationFrame(updateAssetDropdownPosition);
+    };
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('scroll', handleScroll, true);
@@ -2012,11 +2308,14 @@ export default function ServiceDesk() {
     }
   }
 
-  async function loadClientAssets(customerName: string) {
+  async function loadClientAssets(customerName: string, shouldOpenDropdown = false) {
     const queryName = customerName.trim();
 
     setIsLoadingAssets(true);
-    openAssetDropdown();
+
+    if (shouldOpenDropdown) {
+      openAssetDropdown();
+    }
 
     try {
       const assetsData = queryName && queryName.toLowerCase() !== 'all'
@@ -2024,11 +2323,18 @@ export default function ServiceDesk() {
         : await assetsService.getAll();
 
       setClientAssets(Array.isArray(assetsData) ? assetsData : []);
-      openAssetDropdown();
+
+      if (shouldOpenDropdown) {
+        openAssetDropdown();
+      }
     } catch (error) {
       console.error('Failed to load assets from DB', error);
       setClientAssets([]);
-      openAssetDropdown();
+
+      if (shouldOpenDropdown) {
+        openAssetDropdown();
+      }
+
       setToast({
         message: 'Asset lookup failed to load from /api/assets.',
         type: 'warning',
@@ -2045,7 +2351,7 @@ export default function ServiceDesk() {
 
     if (term.length < 2) {
       if (clientAssets.length === 0) {
-        void loadClientAssets('all');
+        void loadClientAssets('all', true);
       }
       return;
     }
@@ -5195,7 +5501,7 @@ export default function ServiceDesk() {
                             if (isRequesterAssetLocked) return;
                             openAssetDropdown();
                             if (clientAssets.length === 0) {
-                              void loadClientAssets('all');
+                              void loadClientAssets('all', true);
                             }
                           }}
                           placeholder={
@@ -5220,7 +5526,7 @@ export default function ServiceDesk() {
                           openAssetDropdown();
 
                           if (clientAssets.length === 0) {
-                            void loadClientAssets('all');
+                            void loadClientAssets('all', true);
                           }
                         }}
                       >

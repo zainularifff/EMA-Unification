@@ -169,6 +169,9 @@ type UserAccess = {
   isActive?: boolean;
   requireMFA?: boolean;
   mfa?: boolean;
+  twoFactorEnabled?: boolean;
+  twoFactorVerifiedAt?: string | null;
+  twoFactorResetAt?: string | null;
   accountLocked?: boolean;
   lockReason?: string;
   accessStartDate?: string | null;
@@ -191,12 +194,18 @@ type UserApiRow = Partial<UserAccess> & {
   FullName?: string;
   Email?: string;
   RoleName?: string;
+  RoleNames?: string;
+  LegacyUserID?: number | string | null;
   AccessScope?: string;
   Status?: string;
   Department?: string;
   Position?: string;
   PhoneNo?: string;
   RequireMFA?: boolean | number;
+  TwoFactorEnabled?: boolean | number;
+  TwoFactorSecret?: string | null;
+  TwoFactorVerifiedAt?: string | null;
+  TwoFactorResetAt?: string | null;
   AccountLocked?: boolean | number;
   LockReason?: string;
   AccessStartDate?: string | null;
@@ -911,7 +920,7 @@ function mapUserApiRow(row: UserApiRow = {}): UserAccess {
   const requireMFA = boolFromApi(row.requireMFA ?? row.mfa ?? row.RequireMFA, false);
   const accountLocked = boolFromApi(row.accountLocked ?? row.AccountLocked, status === "Locked");
 
-  const roles = normalizeUserRoles(row.roles || row.role || row.roleName || row.RoleName || "IT Operations");
+  const roles = normalizeUserRoles(row.roles || row.role || row.roleName || row.RoleNames || row.RoleName || "IT Operations");
   const roleName = joinUserRoles(roles);
 
   return {
@@ -934,6 +943,9 @@ function mapUserApiRow(row: UserApiRow = {}): UserAccess {
     requireMFA,
     mfa: requireMFA,
     accountLocked,
+    twoFactorEnabled: boolFromApi(row.TwoFactorEnabled, false),
+    twoFactorVerifiedAt: row.TwoFactorVerifiedAt ?? null,
+    twoFactorResetAt: row.TwoFactorResetAt ?? null,
     lockReason: String(row.lockReason ?? row.LockReason ?? "").trim(),
     accessStartDate: row.accessStartDate ?? row.AccessStartDate ?? null,
     accessEndDate: row.accessEndDate ?? row.AccessEndDate ?? null,
