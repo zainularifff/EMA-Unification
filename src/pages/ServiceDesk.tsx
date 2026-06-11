@@ -2,310 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ButtonHTMLAttributes, CSSProperties, FormEvent, ReactNode } from 'react';
 
-
-const SERVICE_DESK_ENV = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env || {};
-const SERVICE_DESK_API_BASE = (SERVICE_DESK_ENV.VITE_API_BASE_URL || SERVICE_DESK_ENV.VITE_API_URL || 'http://localhost:3001').replace(/\/$/, '');
-
-function safeServiceDeskJsonParse<T = unknown>(raw: string | null): T | null {
-  if (!raw || raw === 'undefined' || raw === 'null') return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
-function findServiceDeskToken(value: unknown, depth = 0): string {
-  if (!value || depth > 4) return '';
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.startsWith('eyJ')) return trimmed;
-    const parsed = safeServiceDeskJsonParse<unknown>(trimmed);
-    return parsed ? findServiceDeskToken(parsed, depth + 1) : '';
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const token = findServiceDeskToken(item, depth + 1);
-      if (token) return token;
-    }
-    return '';
-  }
-
-  if (typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    const data = record.data as Record<string, unknown> | undefined;
-    const directToken = record.token || record.accessToken || record.authToken || record.jwt || data?.token || data?.accessToken;
-    if (typeof directToken === 'string' && directToken.trim()) return directToken.trim();
-
-    for (const item of Object.values(record)) {
-      const token = findServiceDeskToken(item, depth + 1);
-      if (token) return token;
-    }
-  }
-
-  return '';
-}
-
-function getServiceDeskToken() {
-  if (typeof window === 'undefined') return '';
-
-  const tokenKeys = ['ema-access-token', 'ema-token', 'token', 'accessToken', 'authToken', 'emaToken'];
-  const objectKeys = ['ema-auth', 'auth', 'user', 'ema-user', 'currentUser', 'authUser', 'ema-current-user', 'authData'];
-
-  for (const storage of [window.localStorage, window.sessionStorage]) {
-    for (const key of tokenKeys) {
-      const directValue = storage.getItem(key);
-      if (directValue?.trim()) return directValue.trim();
-    }
-
-    for (const key of objectKeys) {
-      const token = findServiceDeskToken(storage.getItem(key));
-      if (token) return token;
-    }
-  }
-
-  return '';
-}
-
-async function serviceDeskApiRequest<T = any>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getServiceDeskToken();
-  const headers = new Headers(options.headers || {});
-
-  if (!headers.has('Content-Type') && options.body) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  if (!headers.has('Accept')) {
-    headers.set('Accept', 'application/json');
-  }
-
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
-  const response = await fetch(`${SERVICE_DESK_API_BASE}${path}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
-
-  const text = await response.text();
-  let payload: any = null;
-
-  if (text) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      const isHtml = text.trim().toLowerCase().startsWith('<!doctype') || text.trim().toLowerCase().startsWith('<html');
-      const hint = isHtml
-        ? 'Backend returned HTML instead of JSON. Check that the backend route exists and VITE_API_BASE_URL points to port 3001.'
-        : 'Backend returned a non-JSON response.';
-      throw new Error(`${hint} [${response.status} ${response.statusText}] ${SERVICE_DESK_API_BASE}${path}`);
-    }
-  }
-
-  if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.message || payload?.error || payload?.errorMessage || `Request failed with status ${response.status}`);
-  }
-
-  return payload as T;
-}
-
-function unwrapServiceDeskArray<T = any>(payload: any): T[] {
-  if (Array.isArray(payload)) return payload as T[];
-  if (Array.isArray(payload?.data)) return payload.data as T[];
-  if (Array.isArray(payload?.rows)) return payload.rows as T[];
-  return [];
-}
-
-function normalizeServiceDeskStatus(value: any) {
-  const text = String(value || 'Awaiting').trim();
-  return text.toLowerCase() === 'solved' ? 'Resolved' : text;
-}
-
-function normalizeServiceDeskIncident(row: any) {
-  const requesterId = row?.requesterId ?? row?.RequesterID ?? row?.customerId ?? row?.CustomerID ?? row?.reporterId ?? row?.ReporterID ?? '';
-  const requesterName = row?.requesterName ?? row?.RequesterName ?? row?.customerName ?? row?.CustomerName ?? row?.name ?? row?.Name ?? '';
-  const incidentId = row?.id ?? row?.IncidentID ?? row?.incidentID ?? '';
-
-  return {
-    ...row,
-    id: incidentId,
-    IncidentID: row?.IncidentID ?? incidentId,
-    title: row?.title ?? row?.Title ?? '',
-    description: row?.description ?? row?.Description ?? '',
-    priority: row?.priority ?? row?.Priority ?? 'Medium',
-    status: normalizeServiceDeskStatus(row?.status ?? row?.Status),
-    category: row?.category ?? row?.Category ?? '',
-    createdAt: row?.createdAt ?? row?.CreatedAt ?? '',
-    requesterId,
-    requesterName,
-    customerId: row?.customerId ?? row?.CustomerID ?? requesterId,
-    customerName: row?.customerName ?? row?.CustomerName ?? requesterName,
-    sector: row?.sector ?? row?.Sector ?? '',
-    deviceType: row?.deviceType ?? row?.DeviceType ?? '',
-    assetId: row?.assetId ?? row?.AssetID ?? '',
-    subcategory: row?.subcategory ?? row?.Subcategory ?? '',
-    incidentDetail: row?.incidentDetail ?? row?.IncidentDetail ?? '',
-    reporterId: row?.reporterId ?? row?.ReporterID ?? requesterId,
-    slaDue: row?.slaDue ?? row?.SlaDue ?? '',
-    assignedTo: row?.assignedTo ?? row?.AssignedTo ?? '',
-    assignedLevel: row?.assignedLevel ?? row?.AssignedLevel ?? '',
-    firstResponseAt: row?.firstResponseAt ?? row?.FirstResponseAt ?? '',
-    resolvedAt: row?.resolvedAt ?? row?.ResolvedAt ?? '',
-    rootCause: row?.rootCause ?? row?.RootCause ?? '',
-    actionPlan: row?.actionPlan ?? row?.ActionPlan ?? '',
-    additionalMemo: row?.additionalMemo ?? row?.AdditionalMemo ?? row?.remarks ?? row?.Remarks ?? '',
-    remarks: row?.remarks ?? row?.Remarks ?? row?.additionalMemo ?? row?.AdditionalMemo ?? '',
-  };
-}
-
-function buildServiceDeskIncidentPayload(row: any) {
-  const incidentId = row?.id ?? row?.IncidentID ?? row?.incidentID ?? '';
-  const requesterId = row?.requesterId ?? row?.RequesterID ?? row?.customerId ?? row?.CustomerID ?? row?.reporterId ?? row?.ReporterID ?? '';
-  const requesterName = row?.requesterName ?? row?.RequesterName ?? row?.customerName ?? row?.CustomerName ?? '';
-
-  return {
-    ...row,
-    id: incidentId,
-    requesterId,
-    requesterName,
-    customerId: row?.customerId ?? requesterId,
-    customerName: row?.customerName ?? requesterName,
-    reporterId: row?.reporterId ?? requesterId,
-    status: normalizeServiceDeskStatus(row?.status),
-  };
-}
-
-function normalizeServiceDeskAsset(row: any) {
-  const requesterName = row?.requesterName ?? row?.RequesterName ?? row?.customerName ?? row?.CustomerName ?? row?.department ?? row?.Object_Full_Name ?? '';
-
-  return {
-    ...row,
-    id: row?.id ?? row?.assetId ?? row?.AssetID ?? row?.Object_Root_Idn ?? row?.MDM_Asset_Idn ?? row?.assetTag ?? row?.name ?? '',
-    assetId: row?.assetId ?? row?.AssetID ?? row?.id ?? row?.Object_Root_Idn ?? row?.MDM_Asset_Idn ?? '',
-    assetTag: row?.assetTag ?? row?.AssetTag ?? row?.name ?? row?.computerName ?? row?.ComputerName ?? row?.DeviceName ?? '',
-    name: row?.name ?? row?.assetTag ?? row?.AssetTag ?? row?.computerName ?? row?.ComputerName ?? row?.DeviceName ?? '',
-    brand: row?.brand ?? row?.Brand ?? '',
-    Brand: row?.Brand ?? row?.brand ?? '',
-    model: row?.model ?? row?.Model ?? '',
-    Model: row?.Model ?? row?.model ?? '',
-    os: row?.os ?? row?.OS ?? row?.PlatformType ?? '',
-    OS: row?.OS ?? row?.os ?? row?.PlatformType ?? '',
-    requesterName,
-    customerName: row?.customerName ?? row?.CustomerName ?? requesterName,
-    department: row?.department ?? requesterName,
-  };
-}
-
-const serviceDeskService = {
-  incidents: {
-    async getAll() {
-      const payload = await serviceDeskApiRequest('/api/incidents');
-      return unwrapServiceDeskArray(payload).map(normalizeServiceDeskIncident);
-    },
-    async create(data: any) {
-      const payload = await serviceDeskApiRequest('/api/incidents', {
-        method: 'POST',
-        body: JSON.stringify(buildServiceDeskIncidentPayload(data)),
-      });
-      return normalizeServiceDeskIncident(payload?.data || payload);
-    },
-    async update(data: any) {
-      const incidentId = data?.id ?? data?.IncidentID ?? data?.incidentID;
-      if (!incidentId) throw new Error('Incident ID is required for update.');
-      const payload = await serviceDeskApiRequest(`/api/incidents/${encodeURIComponent(String(incidentId))}`, {
-        method: 'PUT',
-        body: JSON.stringify(buildServiceDeskIncidentPayload(data)),
-      });
-      return normalizeServiceDeskIncident(payload?.data || payload);
-    },
-    async delete(id: string | number) {
-      return serviceDeskApiRequest(`/api/incidents/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
-    },
-  },
-  incidentConfig: {
-    async getAll() {
-      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/incident-config'));
-    },
-    async getWorkingHours() {
-      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/incident-config/working-hours'));
-    },
-    async getVisibilityConfig() {
-      const payload = await serviceDeskApiRequest('/api/incident-config/visibility');
-      return payload?.data || payload || {};
-    },
-  },
-  incidentCategories: {
-    async getAll() {
-      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/incident-categories'));
-    },
-  },
-  users: {
-    async getAll() {
-      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/users'));
-    },
-  },
-  roles: {
-    async getAll() {
-      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/roles'));
-    },
-  },
-  assets: {
-    async getAll() {
-      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/assets')).map(normalizeServiceDeskAsset);
-    },
-    async getByCustomer(name: string) {
-      const params = new URLSearchParams();
-      if (name && name.toLowerCase() !== 'all') params.set('requesterName', name);
-      const suffix = params.toString() ? `?${params.toString()}` : '';
-      return unwrapServiceDeskArray(await serviceDeskApiRequest(`/api/assets${suffix}`)).map(normalizeServiceDeskAsset);
-    },
-    async search(term: string) {
-      const params = new URLSearchParams();
-      if (term) params.set('search', term);
-      return unwrapServiceDeskArray(await serviceDeskApiRequest(`/api/assets/search?${params.toString()}`)).map(normalizeServiceDeskAsset);
-    },
-  },
-  knowledgeBase: {
-    async getAll() {
-      return unwrapServiceDeskArray(await serviceDeskApiRequest('/api/knowledge-base'));
-    },
-    async create(data: any) {
-      return serviceDeskApiRequest('/api/knowledge-base', { method: 'POST', body: JSON.stringify(data) });
-    },
-    async update(data: any) {
-      const id = data?.id ?? data?.KBID;
-      if (!id) throw new Error('Knowledge base ID is required for update.');
-      return serviceDeskApiRequest(`/api/knowledge-base/${encodeURIComponent(String(id))}`, { method: 'PUT', body: JSON.stringify(data) });
-    },
-    async delete(id: string | number) {
-      return serviceDeskApiRequest(`/api/knowledge-base/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
-    },
-  },
-  engineerAvailability: {
-    async getAvailableEngineers(date?: string, supportLevel?: string) {
-      const params = new URLSearchParams();
-      if (date) params.set('date', date);
-      if (supportLevel) params.set('supportLevel', supportLevel);
-      const suffix = params.toString() ? `?${params.toString()}` : '';
-      return unwrapServiceDeskArray(await serviceDeskApiRequest(`/api/engineer-availability/available-engineers${suffix}`));
-    },
-  },
-};
-
-const {
-  incidents: incidentsService,
-  incidentConfig: incidentConfigService,
-  incidentCategories: incidentCategoriesService,
-  users: usersService,
-  roles: rolesService,
-  assets: assetsService,
-  knowledgeBase: knowledgeBaseService,
-  engineerAvailability: engineerAvailabilityService,
-} = serviceDeskService;
+import {
+  incidents as incidentsService,
+  incidentConfig as incidentConfigService,
+  incidentCategories as incidentCategoriesService,
+} from '../services/IncidentService';
+import { users as usersService, roles as rolesService } from '../services/UserService';
+import { assets as assetsService } from '../services/AssetService';
+import { knowledgeBase as knowledgeBaseService } from '../services/KnowledgeBaseService';
+import { engineerAvailability as engineerAvailabilityService } from '../services/EngineerAvailabilityService';
 
 import {
   ArrowRightLeft,
@@ -410,8 +115,6 @@ type EngineerOption = {
   department?: string;
   currentStatus?: string;
   status?: string;
-  AvailabilityStatus?: string;
-  availabilityStatus?: string;
   isOnLeave?: boolean;
   leaveStatus?: string;
   leaveReason?: string;
@@ -702,9 +405,101 @@ function formatSlaDuration(totalMinutes: number) {
   return `${minutes}m`;
 }
 
+function formatAttachmentSize(size: any) {
+  const bytes = Number(size || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getStoredAuthToken() {
+  if (typeof window === 'undefined') return '';
+
+  const directKeys = ['token', 'accessToken', 'authToken', 'emaToken', 'ema-token'];
+  for (const key of directKeys) {
+    const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+    if (value && value !== 'undefined' && value !== 'null') return value.replace(/^Bearer\s+/i, '');
+  }
+
+  const objectKeys = ['user', 'authUser', 'currentUser', 'emaUser', 'ema-user', 'userData', 'auth', 'ema-auth', 'authData', 'loginUser'];
+  for (const key of objectKeys) {
+    const parsed = readJsonStorage(key);
+    const token =
+      parsed?.token ||
+      parsed?.accessToken ||
+      parsed?.authToken ||
+      parsed?.data?.token ||
+      parsed?.data?.accessToken ||
+      parsed?.data?.authToken;
+
+    if (token) return String(token).replace(/^Bearer\s+/i, '');
+  }
+
+  return '';
+}
+
+const INCIDENT_ATTACHMENT_MAX_FILES = 3;
+const INCIDENT_ATTACHMENT_MAX_MB = 10;
+const INCIDENT_ATTACHMENT_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_MB * 1024 * 1024;
+const INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_BYTES;
+const INCIDENT_ATTACHMENT_ALLOWED_TYPES = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.txt',
+].join(',');
+
+function getServiceDeskApiBase() {
+  const env = (import.meta as any)?.env || {};
+  const configuredBase = String(env.VITE_API_BASE_URL || env.VITE_API_URL || '').trim();
+
+  if (configuredBase) return configuredBase.replace(/\/$/, '');
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname, port } = window.location;
+    if (port && port !== '3001') return `${protocol}//${hostname}:3001`;
+  }
+
+  return '';
+}
+
+function getServiceDeskApiUrl(pathValue: string) {
+  const path = String(pathValue || '');
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const base = getServiceDeskApiBase();
+
+  return base ? `${base}${normalizedPath}` : normalizedPath;
+}
+
+async function readAttachmentError(response: Response) {
+  try {
+    const data = await response.clone().json();
+    return data?.message || data?.error || '';
+  } catch (error) {
+    try {
+      return await response.clone().text();
+    } catch (textError) {
+      return '';
+    }
+  }
+}
+
+function getIncidentAttachmentUrl(file: any) {
+  const url = file?.url || file?.filePath || file?.FilePath || '';
+  if (!url || url === '#') return '#';
+  return getServiceDeskApiUrl(String(url));
+}
+
 const emptyForm = () => ({
   id: '',
-  userType: 'Internal User',
   title: '',
   description: '',
   priority: 'Medium',
@@ -717,9 +512,8 @@ const emptyForm = () => ({
   assetBrand: '',
   assetModel: '',
   assetOS: '',
-  customerId: '',
-  customerName: '',
-  sector: '',
+  requesterId: '',
+  requesterName: '',
   deviceType: '',
   reporterId: '',
   createdAt: new Date().toISOString(),
@@ -994,7 +788,6 @@ function AppPagination({
   );
 }
 
-
 function areFloatingMenuStylesEqual(current: CSSProperties, next: CSSProperties) {
   return (
     current.position === next.position &&
@@ -1181,6 +974,25 @@ function ServiceDeskSelect({
   );
 }
 
+async function safeApi<T>(
+  label: string,
+  request: Promise<T>,
+  fallback: T,
+  required = false
+): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    console.error(`Service Desk API failed: ${label}`, error);
+
+    if (required) {
+      throw error;
+    }
+
+    return fallback;
+  }
+}
+
 function getId(row: any) {
   return String(row?.id ?? row?.IncidentID ?? row?.incidentId ?? '');
 }
@@ -1192,11 +1004,11 @@ function makeIncidentId() {
 }
 
 function getClientName(client: any) {
-  return client?.companyName || client?.customerName || client?.name || client?.username || client?.userID || client?.UserID || client?.CustomerName || client?.Username || '';
+  return client?.companyName || client?.requesterName || client?.RequesterName || client?.customerName || client?.CustomerName || client?.name || client?.username || client?.userID || client?.UserID || client?.Username || '';
 }
 
 function getClientId(client: any) {
-  return String(client?.id ?? client?.userID ?? client?.UserID ?? client?.customerId ?? client?.CustomerID ?? getClientName(client));
+  return String(client?.id ?? client?.userID ?? client?.UserID ?? client?.requesterId ?? client?.RequesterID ?? client?.customerId ?? client?.CustomerID ?? getClientName(client));
 }
 
 function cleanAssetText(value: any, fallback = '') {
@@ -1267,7 +1079,7 @@ function getAssetSearchText(asset: any) {
     getAssetModel(asset),
     getAssetOS(asset),
     asset?.deviceType || asset?.DeviceType || '',
-    asset?.customerName || asset?.CustomerName || asset?.department || '',
+    asset?.requesterName || asset?.RequesterName || asset?.customerName || asset?.CustomerName || asset?.department || '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -1307,7 +1119,10 @@ function getCurrentLoginName(user: any) {
 
 function getCurrentLoginId(user: any) {
   return String(
-    user?.id ||
+    user?.emaUserID ||
+      user?.EMAUserID ||
+      user?.EmaUserID ||
+      user?.id ||
       user?.ID ||
       user?.userID ||
       user?.UserID ||
@@ -1437,6 +1252,13 @@ function statusClass(status: string) {
 
 function normalizeStatus(value: any) {
   return String(value || '').trim().toLowerCase();
+}
+
+
+function standardizeIncidentStatus(value: any) {
+  const text = String(value || '').trim();
+  if (text.toLowerCase() === 'solved') return 'Resolved';
+  return text;
 }
 
 function isDeleteLockedStatus(status: any) {
@@ -1655,6 +1477,9 @@ export default function ServiceDesk() {
 
   const [formData, setFormData] = useState<any>(emptyForm());
   const [clientAssets, setClientAssets] = useState<any[]>([]);
+  const [incidentAttachments, setIncidentAttachments] = useState<any[]>([]);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [assetSearchTerm, setAssetSearchTerm] = useState('');
   const [showAssetDropdown, setShowAssetDropdown] = useState(false);
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
@@ -1742,7 +1567,6 @@ export default function ServiceDesk() {
         ...user,
         id: getClientId(user),
         name: getUserName(user) || getClientName(user),
-        sector: '',
       }))
       .filter((user: any) => {
         const id = getClientId(user);
@@ -1755,7 +1579,7 @@ export default function ServiceDesk() {
 
     const currentName = currentUser?.name || currentUser?.username || currentUser?.userID || '';
     if (currentName && !list.some((user: any) => getClientName(user) === currentName)) {
-      list.unshift({ id: String(currentUser?.id || currentName), name: currentName, sector: '' });
+      list.unshift({ id: String(currentUser?.id || currentName), name: currentName });
     }
 
     return list;
@@ -1772,6 +1596,18 @@ export default function ServiceDesk() {
     void loadData();
     void ensureKnowledgeBaseLoaded(true);
   }, []);
+
+  useEffect(() => {
+    const activeAttachmentIncidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
+
+    if (!activeAttachmentIncidentId) {
+      setIncidentAttachments([]);
+      return;
+    }
+
+    void loadIncidentAttachments(activeAttachmentIncidentId);
+  }, [selectedIncidentId, viewMode, formData.id, formData.IncidentID]);
+
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1839,6 +1675,7 @@ export default function ServiceDesk() {
       document.documentElement.classList.remove('service-desk-is-scrolling');
     };
   }, []);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -2003,8 +1840,10 @@ export default function ServiceDesk() {
     if (!silent) setIsLoading(true);
 
     try {
-      const incidentsData = await incidentsService.getAll();
-      const nextIncidents = Array.isArray(incidentsData) ? incidentsData : [];
+      const incidentsData = await safeApi('GET /api/incidents', incidentsService.getAll(), [], true);
+      const nextIncidents = Array.isArray(incidentsData)
+        ? incidentsData.map((incident: any) => ({ ...incident, status: standardizeIncidentStatus(incident.status) }))
+        : [];
 
       setIncidents(nextIncidents);
       setSelectedIncidentId((current) => {
@@ -2034,12 +1873,12 @@ export default function ServiceDesk() {
   async function loadEssentialConfig() {
     try {
       const [slaData, workingHoursData, visibilityData] = await Promise.all([
-        incidentConfigService.getAll(),
-        incidentConfigService.getWorkingHours(),
-        incidentConfigService.getVisibilityConfig(),
+        safeApi('GET /api/incident-config', incidentConfigService.getAll(), []),
+        safeApi('GET /api/incident-config/working-hours', incidentConfigService.getWorkingHours(), []),
+        safeApi('GET /api/incident-config/visibility', incidentConfigService.getVisibilityConfig(), {}),
       ]);
 
-      setSlaConfigs(Array.isArray(slaData) ? (slaData as SlaConfig[]) : []);
+      setSlaConfigs(Array.isArray(slaData) ? slaData : []);
       setWorkingHoursConfigs(Array.isArray(workingHoursData) ? workingHoursData : []);
       setVisibilityConfig(visibilityData || {});
     } catch (error) {
@@ -2054,9 +1893,9 @@ export default function ServiceDesk() {
 
     try {
       const [rolesData, usersData, catsData] = await Promise.all([
-        rolesService.getAll(),
-        usersService.getAll(),
-        incidentCategoriesService.getAll(),
+        safeApi('GET /api/roles', rolesService.getAll(), []),
+        safeApi('GET /api/users', usersService.getAll(), []),
+        safeApi('GET /api/incident-categories', incidentCategoriesService.getAll(), []),
       ]);
 
       setRoles(Array.isArray(rolesData) ? rolesData : []);
@@ -2080,7 +1919,7 @@ export default function ServiceDesk() {
     setHasLoadedKb(false);
 
     try {
-      const kbData = await knowledgeBaseService.getAll();
+      const kbData = await safeApi('GET /api/knowledge-base', knowledgeBaseService.getAll(), []);
       setKnowledgeBaseEntries(Array.isArray(kbData) ? kbData : []);
     } catch (error) {
       console.error('Failed to load knowledge base', error);
@@ -2378,8 +2217,126 @@ export default function ServiceDesk() {
     }
   }
 
-  async function loadClientAssets(customerName: string, shouldOpenDropdown = false) {
-    const queryName = customerName.trim();
+  async function loadIncidentAttachments(incidentId: string) {
+    const id = String(incidentId || '').trim();
+    if (!id) {
+      setIncidentAttachments([]);
+      return;
+    }
+
+    setIsLoadingAttachments(true);
+    try {
+      const token = getStoredAuthToken();
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(id)}/attachments`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!response.ok) throw new Error((await readAttachmentError(response)) || `Attachment list failed with status ${response.status}`);
+
+      const data = await response.json();
+      const activeAttachmentIncidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
+      if (activeAttachmentIncidentId !== id) return;
+      setIncidentAttachments(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load incident attachments', error);
+      setIncidentAttachments([]);
+    } finally {
+      setIsLoadingAttachments(false);
+    }
+  }
+
+  async function uploadIncidentAttachment(event: any) {
+    const file = event?.target?.files?.[0];
+    const incidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
+
+    if (!file) return;
+
+    if (!incidentId) {
+      setToast({ message: 'Please save the ticket first before uploading attachment.', type: 'warning' });
+      if (event?.target) event.target.value = '';
+      return;
+    }
+
+    const existingAttachmentCount = incidentAttachments.length;
+    const existingAttachmentTotalSize = incidentAttachments.reduce(
+      (total, attachment) => total + Number(attachment?.size || attachment?.fileSize || attachment?.FileSize || 0),
+      0
+    );
+
+    if (existingAttachmentCount >= INCIDENT_ATTACHMENT_MAX_FILES) {
+      setToast({ message: `Maximum ${INCIDENT_ATTACHMENT_MAX_FILES} attachments are allowed per ticket.`, type: 'error' });
+      if (event?.target) event.target.value = '';
+      return;
+    }
+
+    if (file.size > INCIDENT_ATTACHMENT_MAX_BYTES) {
+      setToast({ message: `Attachment file is too large. Maximum allowed size is ${INCIDENT_ATTACHMENT_MAX_MB}MB per file.`, type: 'error' });
+      if (event?.target) event.target.value = '';
+      return;
+    }
+
+    if (existingAttachmentTotalSize + file.size > INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES) {
+      setToast({
+        message: `Total attachment size cannot exceed ${INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_MB}MB per ticket.`,
+        type: 'error',
+      });
+      if (event?.target) event.target.value = '';
+      return;
+    }
+
+    setIsUploadingAttachment(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+
+      const token = getStoredAuthToken();
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments`), {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body,
+      });
+
+      if (!response.ok) {
+        const errorMessage = await readAttachmentError(response);
+        throw new Error(errorMessage || `Attachment upload failed with status ${response.status}`);
+      }
+
+      await loadIncidentAttachments(incidentId);
+      setToast({ message: 'Attachment uploaded successfully.', type: 'success' });
+    } catch (error: any) {
+      console.error('Failed to upload incident attachment', error);
+      setToast({ message: error?.message || 'Failed to upload attachment.', type: 'error' });
+    } finally {
+      setIsUploadingAttachment(false);
+      if (event?.target) event.target.value = '';
+    }
+  }
+
+  async function deleteIncidentAttachment(filename: string) {
+    const incidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
+    const safeFilename = String(filename || '').trim();
+
+    if (!incidentId || !safeFilename) return;
+
+    try {
+      const token = getStoredAuthToken();
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments/${encodeURIComponent(safeFilename)}`), {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (!response.ok) throw new Error(`Attachment delete failed with status ${response.status}`);
+
+      await loadIncidentAttachments(incidentId);
+      setToast({ message: 'Attachment deleted.', type: 'success' });
+    } catch (error) {
+      console.error('Failed to delete incident attachment', error);
+      setToast({ message: 'Failed to delete attachment.', type: 'error' });
+    }
+  }
+
+  async function loadClientAssets(requesterName: string, shouldOpenDropdown = false) {
+    const queryName = requesterName.trim();
 
     setIsLoadingAssets(true);
 
@@ -2388,11 +2345,18 @@ export default function ServiceDesk() {
     }
 
     try {
-      const assetsData = queryName && queryName.toLowerCase() !== 'all'
-        ? await assetsService.getByCustomer(queryName)
-        : await assetsService.getAll();
+      const requests: Promise<any[]>[] = [
+        safeApi('GET /api/assets all', assetsService.getAll(), []),
+      ];
 
-      setClientAssets(Array.isArray(assetsData) ? assetsData : []);
+      if (queryName && queryName.toLowerCase() !== 'all') {
+        requests.unshift(safeApi('GET /api/assets by requester', assetsService.getByCustomer(queryName), []));
+      }
+
+      const results = await Promise.all(requests);
+      const mergedAssets = mergeAssetRows(...results.filter(Array.isArray));
+
+      setClientAssets(mergedAssets);
 
       if (shouldOpenDropdown) {
         openAssetDropdown();
@@ -2429,8 +2393,17 @@ export default function ServiceDesk() {
     setIsLoadingAssets(true);
 
     try {
-      const globalResults = await assetsService.search(term);
-      setClientAssets(Array.isArray(globalResults) ? globalResults : []);
+      const [globalResults, allAssets] = await Promise.all([
+        safeApi('GET /api/assets search global', assetsService.search(term), []),
+        clientAssets.length > 0 ? Promise.resolve(clientAssets) : safeApi('GET /api/assets all fallback', assetsService.getAll(), []),
+      ]);
+
+      const mergedAssets = mergeAssetRows(
+        Array.isArray(globalResults) ? globalResults : [],
+        Array.isArray(allAssets) ? allAssets.filter((asset) => getAssetSearchText(asset).includes(term.toLowerCase())) : []
+      );
+
+      setClientAssets(mergedAssets);
       openAssetDropdown();
     } catch (error) {
       console.error('Asset search failed', error);
@@ -2451,8 +2424,8 @@ export default function ServiceDesk() {
     if (!client) {
       setFormData((prev: any) => ({
         ...prev,
-        customerId: '',
-        customerName: '',
+        requesterId: '',
+        requesterName: '',
         assetId: '',
         assetBrand: '',
         assetModel: '',
@@ -2466,9 +2439,8 @@ export default function ServiceDesk() {
     const alias = client.databaseAlias || client.DatabaseAlias || getClientName(client);
     setFormData((prev: any) => ({
       ...prev,
-      customerId: getClientId(client),
-      customerName: getClientName(client),
-      sector: '',
+      requesterId: getClientId(client),
+      requesterName: getClientName(client),
       assetId: '',
       assetBrand: '',
       assetModel: '',
@@ -2516,16 +2488,16 @@ export default function ServiceDesk() {
     const currentRequesterName = getCurrentLoginName(currentUser);
     const currentRequesterId = getCurrentLoginId(currentUser);
 
+    setSelectedIncidentId('');
     setFormMode('create');
     setFormData({
       ...emptyForm(),
-      customerId: currentRequesterId,
-      customerName: currentRequesterName,
+      requesterId: currentRequesterId,
+      requesterName: currentRequesterName,
       reporterId: currentRequesterId,
-      userType: 'Internal User',
-      sector: '',
     });
     setClientAssets([]);
+    setIncidentAttachments([]);
     setAssetSearchTerm('');
     setShowAssetDropdown(false);
     void loadClientAssets('all');
@@ -2540,6 +2512,7 @@ export default function ServiceDesk() {
     const normalizedIncident = {
       ...incident,
       id: getId(incident),
+      status: standardizeIncidentStatus(incident.status),
       createdAt: toIsoDateOrEmpty(incident.createdAt) || new Date().toISOString(),
       slaPriority: incident.slaPriority || incident.SlaPriority || getSlaPriorityCode(incident.priority || 'Medium'),
       slaDue: toIsoDateOrEmpty(incident.slaDue),
@@ -2547,16 +2520,18 @@ export default function ServiceDesk() {
       resolvedAt: toIsoDateOrEmpty(incident.resolvedAt),
     };
 
+    setSelectedIncidentId('');
     setFormMode('edit');
     setFormData({ ...emptyForm(), ...normalizedIncident });
     setAssetSearchTerm(incident.assetId || '');
     setClientAssets([]);
     setShowAssetDropdown(false);
 
-    if (incident.customerName) {
-      void loadClientAssets(incident.customerName);
+    if (incident.requesterName) {
+      void loadClientAssets(incident.requesterName);
     }
 
+    void loadIncidentAttachments(getId(incident));
     setViewMode('form');
   }
 
@@ -2564,6 +2539,7 @@ export default function ServiceDesk() {
     setViewMode('list');
     setFormData(emptyForm());
     setClientAssets([]);
+    setIncidentAttachments([]);
     setAssetSearchTerm('');
     setShowAssetDropdown(false);
   }
@@ -2624,10 +2600,9 @@ export default function ServiceDesk() {
 
       const saveData = {
         ...formData,
-        userType: 'Internal User',
-        sector: '',
-        customerId: formMode === 'create' ? currentRequesterId : formData.customerId,
-        customerName: formMode === 'create' ? currentRequesterName : formData.customerName,
+        status: standardizeIncidentStatus(formData.status),
+        requesterId: formMode === 'create' ? currentRequesterId : formData.requesterId,
+        requesterName: formMode === 'create' ? currentRequesterName : formData.requesterName,
         reporterId: formMode === 'create' ? currentRequesterId : formData.reporterId,
         id: getId(formData) || makeIncidentId(),
         createdAt: toIsoDateOrEmpty(formData.createdAt) || new Date().toISOString(),
@@ -2645,6 +2620,7 @@ export default function ServiceDesk() {
         await incidentsService.create(saveData);
         setToast({ message: `Ticket ${saveData.id} created successfully.`, type: 'success' });
       } else {
+        if (saveData.status === 'Solved') saveData.status = 'Resolved';
         if (saveData.status === 'Awaiting') saveData.status = 'In Progress';
         if (!saveData.firstResponseAt) saveData.firstResponseAt = new Date().toISOString();
         if (saveData.status === 'Resolved' && !saveData.resolvedAt) saveData.resolvedAt = new Date().toISOString();
@@ -2740,7 +2716,9 @@ export default function ServiceDesk() {
           await incidentsService.delete(incidentId);
           await loadData(true);
           setSelectedIncidentId((current) => (current === incidentId ? '' : current));
-          setToast({ message: `Ticket ${incidentId} deleted successfully.`, type: 'success' });
+          if (getId(formData) === incidentId) closeForm();
+          setIncidentAttachments([]);
+          setToast({ message: `Ticket ${incidentId} and related attachments deleted successfully.`, type: 'success' });
         } catch (error) {
           console.error('Delete failed', error);
           setToast({ message: `Failed to delete ticket ${incidentId}.`, type: 'error' });
@@ -2815,9 +2793,8 @@ export default function ServiceDesk() {
         getId(incident),
         incident.title,
         incident.description,
-        incident.customerName,
+        incident.requesterName,
         incident.assetId,
-        incident.sector,
         incident.category,
         incident.subcategory,
         incident.incidentDetail,
@@ -2832,7 +2809,7 @@ export default function ServiceDesk() {
       if (showAdvanced) {
         const adv = advancedFilters;
         if (adv.reqNo && !getId(incident).toLowerCase().includes(adv.reqNo.toLowerCase())) return false;
-        if (adv.requester && !String(incident.customerName || '').toLowerCase().includes(adv.requester.toLowerCase())) return false;
+        if (adv.requester && !String(incident.requesterName || '').toLowerCase().includes(adv.requester.toLowerCase())) return false;
 
         if (adv.incidentTitle) {
           const incidentText = `${incident.title || ''} ${incident.description || ''}`.toLowerCase();
@@ -2917,15 +2894,14 @@ export default function ServiceDesk() {
   }
 
   function exportCsv() {
-    const headers = ['Req No', 'Submitted Date', 'Requester', 'Asset Tag', 'Sector', 'Incident', 'Urgency Level', 'Assigned To', 'Status', 'SLA Time'];
+    const headers = ['Req No', 'Submitted', 'Requester', 'Asset Tag', 'Incident', 'Urgency Level', 'Assigned To', 'Status', 'SLA Time'];
     const rows = filteredIncidents.map((incident) => {
       const sla = getSlaMeta(incident, now);
       return [
         getId(incident),
         normalizeDate(incident.createdAt),
-        incident.customerName || 'N/A',
+        incident.requesterName || 'N/A',
         incident.assetId || '-',
-        incident.sector || 'N/A',
         incident.title || '',
         incident.priority || '',
         incident.assignedTo || 'Unassigned',
@@ -3012,8 +2988,7 @@ export default function ServiceDesk() {
     const rows = [
       ['Request No', getId(incident)],
       ['Submitted Date', normalizeDateTime(incident.createdAt)],
-      ['Requester', incident.customerName || 'N/A'],
-      ['Sector', incident.sector || 'N/A'],
+      ['Requester', incident.requesterName || 'N/A'],
       ['Asset Tag', incident.assetId || '—'],
       ['Asset Brand', incident.assetBrand || '—'],
       ['Asset Model', incident.assetModel || '—'],
@@ -3247,7 +3222,7 @@ export default function ServiceDesk() {
           <td><strong>${safe(getId(incident))}</strong></td>
           <td>${safe(normalizeDateTime(incident.createdAt))}</td>
           <td>
-            <strong>${safe(incident.customerName || 'N/A')}</strong>
+            <strong>${safe(incident.requesterName || 'N/A')}</strong>
           </td>
           <td>${safe(incident.assetId || '—')}</td>
           <td>
@@ -3598,7 +3573,15 @@ export default function ServiceDesk() {
     '52px minmax(112px, .86fr) 106px minmax(132px, 1fr) minmax(96px, .72fr) minmax(220px, 1.55fr) 102px minmax(118px, .92fr) 104px 108px 104px';
   const ticketTableMinWidth = '100%';
 
-  const showInitialTicketLoading = isLoading && incidents.length === 0;
+  if (isLoading) {
+    return (
+      <div className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4 d-grid place-items-center text-center">
+        <Loader2 className="ema-spin" size={28} />
+        <strong>Loading Service Desk</strong>
+        <span>Loading incident queue...</span>
+      </div>
+    );
+  }
 
   // Service Desk uses the existing Settings layout/classes.
   return (
@@ -3679,63 +3662,13 @@ export default function ServiceDesk() {
           grid-template-columns: minmax(0, 1fr) max-content !important;
         }
 
-        main[data-section="service-desk"] .service-desk-list-panel {
-          display: flex !important;
-          flex-direction: column !important;
-        }
-
         main[data-section="service-desk"] .service-desk-commandbar {
-          order: 0 !important;
           display: grid !important;
           grid-template-columns: minmax(260px, 1fr) 150px 150px 150px max-content !important;
           align-items: center !important;
           gap: .55rem !important;
           overflow: visible !important;
           padding: .95rem 1rem !important;
-          margin: 0 0 .75rem !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-advanced-panel {
-          order: 1 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-list-panel > .content-body {
-          order: 2 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-list-panel > .uam-pagination.global-style {
-          order: 3 !important;
-        }
-
-        /* Keep Service Desk filters at the top of the ticket registry.
-           Some shared/global toolbar styles can push content-toolbar/users-toolbar
-           near the pagination area. This local override forces the intended order. */
-        main[data-section="service-desk"] .service-desk-list-panel {
-          display: flex !important;
-          flex-direction: column !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-list-panel > .service-desk-commandbar {
-          order: -30 !important;
-          position: relative !important;
-          top: auto !important;
-          right: auto !important;
-          bottom: auto !important;
-          left: auto !important;
-          transform: none !important;
-          margin: 0 0 .75rem !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-list-panel > .service-desk-advanced-panel {
-          order: -20 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-list-panel > .content-body {
-          order: 0 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-list-panel > .uam-pagination.global-style {
-          order: 10 !important;
         }
 
         main[data-section="service-desk"] .service-desk-commandbar .section-search {
@@ -4032,66 +3965,6 @@ export default function ServiceDesk() {
 
         main[data-section="service-desk"] .uam-pagination-info {
           text-align: center !important;
-        }
-
-
-        /* Service Desk ticket registry: filter must live ABOVE the table, not near pagination. */
-        main[data-section="service-desk"] .service-desk-ticket-registry-body {
-          display: flex !important;
-          flex-direction: column !important;
-          align-items: stretch !important;
-          gap: .75rem !important;
-          overflow: hidden !important;
-          padding-top: .85rem !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-ticket-registry-body > .service-desk-top-filterbar {
-          order: -1000 !important;
-          position: relative !important;
-          inset: auto !important;
-          transform: none !important;
-          display: grid !important;
-          grid-template-columns: minmax(260px, 1fr) 150px 150px 150px max-content !important;
-          align-items: center !important;
-          gap: .55rem !important;
-          width: calc(100% - 1.5rem) !important;
-          margin: 0 .75rem .1rem !important;
-          padding: 0 !important;
-          overflow: visible !important;
-          background: transparent !important;
-          border: 0 !important;
-          box-shadow: none !important;
-          z-index: 20 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-ticket-registry-body > .service-desk-advanced-panel {
-          order: -900 !important;
-          width: calc(100% - 1.5rem) !important;
-          margin: 0 .75rem .1rem !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-ticket-registry-body > .settings-empty-state,
-        main[data-section="service-desk"] .service-desk-ticket-registry-body > .service-desk-table-wrap {
-          order: 0 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-top-filterbar .section-search {
-          width: 100% !important;
-          min-width: 0 !important;
-          max-width: none !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-top-filterbar .service-desk-command-actions {
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: flex-end !important;
-          gap: .42rem !important;
-          flex-wrap: nowrap !important;
-          min-width: max-content !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-top-filterbar .primary-btn {
-          white-space: nowrap !important;
         }
 
         @media (max-width: 1480px) {
@@ -4461,6 +4334,243 @@ export default function ServiceDesk() {
           letter-spacing: .055em !important;
         }
 
+        main[data-section="service-desk"] .service-desk-attachment-card {
+          border: 1px solid rgba(148, 163, 184, 0.28) !important;
+          background: linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.96)) !important;
+          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-head {
+          align-items: flex-start !important;
+          gap: .75rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-head p {
+          margin: .15rem 0 0 !important;
+          color: #64748b !important;
+          font-size: .78rem !important;
+          font-weight: 700 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-icon,
+        main[data-section="service-desk"] .service-desk-upload-icon {
+          width: 2.2rem !important;
+          height: 2.2rem !important;
+          border-radius: 14px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          color: #2563eb !important;
+          background: rgba(37, 99, 235, 0.1) !important;
+          border: 1px solid rgba(37, 99, 235, 0.16) !important;
+          flex: 0 0 auto !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-form-head {
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: flex-start !important;
+          gap: 1rem !important;
+          margin-bottom: 1rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-form-head h3 {
+          margin: 0 !important;
+          color: #0f294f !important;
+          font-size: 1rem !important;
+          font-weight: 900 !important;
+          letter-spacing: -0.03em !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-form-head p {
+          margin: .25rem 0 0 !important;
+          color: #64748b !important;
+          font-size: .78rem !important;
+          font-weight: 700 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-form-head > span {
+          padding: .38rem .7rem !important;
+          border-radius: 999px !important;
+          background: #eef5ff !important;
+          color: #2563eb !important;
+          border: 1px solid #c8d9ff !important;
+          font-size: .72rem !important;
+          font-weight: 900 !important;
+          white-space: nowrap !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-layout {
+          display: grid !important;
+          grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr) !important;
+          gap: .95rem !important;
+          align-items: stretch !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-upload-box {
+          min-height: 8.25rem !important;
+          padding: 1rem !important;
+          border: 1.5px dashed rgba(37, 99, 235, 0.35) !important;
+          border-radius: 18px !important;
+          background: rgba(239, 246, 255, 0.55) !important;
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          text-align: center !important;
+          gap: .45rem !important;
+          cursor: pointer !important;
+          transition: .18s ease !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-upload-box:hover {
+          border-color: rgba(37, 99, 235, 0.72) !important;
+          background: rgba(239, 246, 255, 0.9) !important;
+          transform: translateY(-1px) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-upload-box.is-disabled {
+          cursor: not-allowed !important;
+          opacity: .65 !important;
+          transform: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-upload-box input {
+          position: absolute !important;
+          width: 1px !important;
+          height: 1px !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-upload-box strong {
+          color: #10254d !important;
+          font-size: .88rem !important;
+          font-weight: 900 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-upload-box small {
+          max-width: 22rem !important;
+          color: #64748b !important;
+          font-size: .72rem !important;
+          font-weight: 750 !important;
+          line-height: 1.45 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-uploaded-box {
+          padding: .9rem !important;
+          border: 1px solid rgba(203, 213, 225, 0.75) !important;
+          border-radius: 18px !important;
+          background: rgba(255, 255, 255, 0.88) !important;
+          min-height: 8.25rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-uploaded-title {
+          display: block !important;
+          margin-bottom: .65rem !important;
+          color: #64748b !important;
+          font-size: .72rem !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: .06em !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-empty-attachment {
+          min-height: 3.8rem !important;
+          border-radius: 14px !important;
+          background: rgba(248, 250, 252, 0.9) !important;
+          border: 1px solid rgba(226, 232, 240, 0.95) !important;
+          color: #b45309 !important;
+          display: flex !important;
+          align-items: center !important;
+          padding: .85rem !important;
+          font-size: .74rem !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: .03em !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-list {
+          display: grid !important;
+          gap: .55rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-item {
+          display: grid !important;
+          grid-template-columns: auto minmax(0, 1fr) auto !important;
+          align-items: center !important;
+          gap: .65rem !important;
+          padding: .7rem .75rem !important;
+          border-radius: 14px !important;
+          border: 1px solid rgba(203, 213, 225, 0.8) !important;
+          background: #ffffff !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-file-dot {
+          width: .65rem !important;
+          height: .65rem !important;
+          border-radius: 999px !important;
+          background: #2563eb !important;
+          box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-file-meta {
+          min-width: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-file-meta strong {
+          display: block !important;
+          min-width: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-file-meta a {
+          display: block !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          color: #0f294f !important;
+          font-size: .8rem !important;
+          font-weight: 900 !important;
+          text-decoration: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-file-meta a:hover {
+          color: #2563eb !important;
+          text-decoration: underline !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-file-meta p {
+          margin: .14rem 0 0 !important;
+          color: #64748b !important;
+          font-size: .7rem !important;
+          font-weight: 750 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-delete {
+          border: 0 !important;
+          border-radius: 999px !important;
+          background: rgba(239, 68, 68, 0.08) !important;
+          color: #dc2626 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: .3rem !important;
+          padding: .42rem .62rem !important;
+          font-size: .72rem !important;
+          font-weight: 900 !important;
+          cursor: pointer !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-attachment-delete:hover {
+          background: rgba(239, 68, 68, 0.14) !important;
+        }
+
+        @media (max-width: 820px) {
+          main[data-section="service-desk"] .service-desk-attachment-layout {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
+
         main[data-section="service-desk"] .service-desk-kb-form-grid input,
         main[data-section="service-desk"] .service-desk-kb-form-grid textarea {
           width: 100% !important;
@@ -4507,6 +4617,53 @@ export default function ServiceDesk() {
           main[data-section="service-desk"] .service-desk-kb-modal {
             width: 94vw !important;
           }
+        }
+
+
+        /* FINAL OVERRIDE: Service Desk registry visual order
+           This forces the command/filter bar to sit above the ticket table,
+           then the advanced filter, then the table, then pagination. */
+        main[data-section="service-desk"] .service-desk-registry-panel,
+        main[data-section="service-desk"] section.content-panel.clean.service-desk-registry-panel {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: stretch !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-registry-filterbar,
+        main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-commandbar,
+        main[data-section="service-desk"] section.content-panel.clean > .service-desk-commandbar {
+          order: -1000 !important;
+          grid-row: 1 !important;
+          margin: 0 0 .8rem 0 !important;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
+          position: relative !important;
+          z-index: 5 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-registry-advanced,
+        main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-advanced-panel,
+        main[data-section="service-desk"] section.content-panel.clean > .service-desk-advanced-panel {
+          order: -900 !important;
+          position: relative !important;
+          z-index: 4 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-registry-tablebody,
+        main[data-section="service-desk"] .service-desk-registry-panel > .content-body,
+        main[data-section="service-desk"] section.content-panel.clean > .content-body {
+          order: 0 !important;
+          margin-top: 0 !important;
+          position: relative !important;
+          z-index: 1 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-registry-pagination,
+        main[data-section="service-desk"] .service-desk-registry-panel > .uam-pagination,
+        main[data-section="service-desk"] section.content-panel.clean > .uam-pagination {
+          order: 1000 !important;
+          position: relative !important;
+          z-index: 1 !important;
         }
 
 `}</style>
@@ -4728,11 +4885,9 @@ export default function ServiceDesk() {
         <div className="content-shell ema-panel-surface roles-content-shell">
 
         {viewMode === 'list' && (
-          <section className="content-panel clean service-desk-list-panel">
-            <div className="content-body service-desk-ticket-registry-body">
-
+          <section className="content-panel clean service-desk-registry-panel" style={{ display: 'flex', flexDirection: 'column' }}>
             <div
-              className="service-desk-top-filterbar"
+              className="content-toolbar users-toolbar service-desk-commandbar service-desk-registry-filterbar"
               style={{
                 order: -1000,
                 display: 'grid',
@@ -4845,9 +5000,8 @@ export default function ServiceDesk() {
               </div>
             </div>
 
-
             {showAdvanced && (
-              <div className="settings-helper-card service-desk-advanced-panel">
+              <div className="settings-helper-card service-desk-advanced-panel service-desk-registry-advanced" style={{ order: -900 }}>
                 <div className="service-desk-advanced-head">
                   <i>
                     <Filter size={16} />
@@ -4948,17 +5102,8 @@ export default function ServiceDesk() {
               </div>
             )}
 
-              {showInitialTicketLoading ? (
-                <div className="settings-empty-state">
-                  <div className="setting-icon mx-auto">
-                    <Loader2 size={26} className="ema-spin" />
-                  </div>
-                  <strong>Loading service desk tickets...</strong>
-                  <span>
-                    The Service Desk interface is ready. Ticket data is loading from /api/incidents in the background.
-                  </span>
-                </div>
-              ) : paginatedIncidents.length === 0 ? (
+            <div className="content-body service-desk-registry-tablebody" style={{ order: 0 }}>
+              {paginatedIncidents.length === 0 ? (
                 <div className="settings-empty-state">
                   <div className="setting-icon mx-auto">
                     <Ticket size={26} />
@@ -5002,11 +5147,11 @@ export default function ServiceDesk() {
                     <div className="user-cell">
                       <button
                         type="button"
-                        className={cn('soft-btn', sortConfig.key === 'customerName' && 'is-active')}
-                        onClick={() => requestSort('customerName')}
+                        className={cn('soft-btn', sortConfig.key === 'requesterName' && 'is-active')}
+                        onClick={() => requestSort('requesterName')}
                       >
                         <span>Requester</span>
-                        <i>{sortConfig.key === 'customerName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        <i>{sortConfig.key === 'requesterName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
                       </button>
                     </div>
                     <div className="user-cell">Asset</div>
@@ -5088,9 +5233,9 @@ export default function ServiceDesk() {
 
                         <div className="user-cell">
                           <div className="user-name">
-                            <span className="user-mini-avatar">{initialText(incident.customerName || incident.reporterId)}</span>
+                            <span className="user-mini-avatar">{initialText(incident.requesterName || incident.reporterId)}</span>
                             <span>
-                              <strong>{incident.customerName || 'N/A'}</strong>
+                              <strong>{incident.requesterName || 'N/A'}</strong>
                             </span>
                           </div>
                         </div>
@@ -5166,7 +5311,7 @@ export default function ServiceDesk() {
             </div>
 
             <AppPagination
-              className="uam-pagination global-style"
+              className="uam-pagination global-style service-desk-registry-pagination"
               currentPage={currentPage}
               totalPages={totalPages}
               totalItems={sortedIncidents.length}
@@ -5244,7 +5389,7 @@ export default function ServiceDesk() {
                 <thead>
                   <tr>
                     <th>No</th>
-                    <th onClick={toggleKbTitleSort}>Knowledge Base</th>
+                    <th onClick={() => handleKbSort('title')}>Knowledge Base</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -5404,7 +5549,7 @@ export default function ServiceDesk() {
             <div className="form-grid">
               <div>
                 <span>Requester</span>
-                <strong>{selectedIncident.customerName || 'N/A'}</strong>
+                <strong>{selectedIncident.requesterName || 'N/A'}</strong>
               </div>
               <div>
                 <span>Priority</span>
@@ -5439,6 +5584,48 @@ export default function ServiceDesk() {
             <div className="settings-helper-card">
               <strong>Operational Note</strong>
               <p>{selectedIncident.additionalMemo || selectedIncident.remarks || 'Service desk queue ready.'}</p>
+            </div>
+
+            <div className="settings-helper-card service-desk-attachment-card">
+              <div className="content-head service-desk-attachment-head">
+                <span className="service-desk-attachment-icon">
+                  <Download size={16} />
+                </span>
+                <div>
+                  <strong>Incident Attachments</strong>
+                  <p>Files linked to this service request.</p>
+                </div>
+              </div>
+
+              {isLoadingAttachments ? (
+                <div className="settings-inline-alert">
+                  <Loader2 size={14} className="ema-spin" />
+                  Loading attachments...
+                </div>
+              ) : incidentAttachments.length === 0 ? (
+                <div className="service-desk-empty-attachment">No attachments uploaded.</div>
+              ) : (
+                <div className="service-desk-attachment-list">
+                  {incidentAttachments.map((file) => (
+                    <div key={file.filename || file.id} className="service-desk-attachment-item">
+                      <span className="service-desk-file-dot" />
+                      <div className="service-desk-file-meta">
+                        <strong>
+                          <a href={getIncidentAttachmentUrl(file)} target="_blank" rel="noreferrer">
+                            {file.originalName || file.filename || 'Attachment'}
+                          </a>
+                        </strong>
+                        <p>{formatAttachmentSize(file.size || file.fileSize) || 'Uploaded file'}</p>
+                      </div>
+                      {canEdit && (
+                        <button type="button" className="service-desk-attachment-delete" onClick={() => deleteIncidentAttachment(file.filename)}>
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="content-actions service-desk-row-actions">
@@ -5570,7 +5757,7 @@ export default function ServiceDesk() {
                   <label className="service-desk-created-by-field">
                     <span>Created By</span>
                     <input
-                      value={formData.customerName || getCurrentLoginName(currentUser)}
+                      value={formData.requesterName || getCurrentLoginName(currentUser)}
                       readOnly
                       disabled
                       aria-label="Created by current logged-in user"
@@ -5578,6 +5765,16 @@ export default function ServiceDesk() {
                     <small className="service-desk-field-hint">
                       Auto-filled from current login. This field is not manually selectable.
                     </small>
+                  </label>
+
+                  <label className="service-desk-submitted-at-field">
+                    <span>Submitted At</span>
+                    <input
+                      value={normalizeDateTime(formData.createdAt)}
+                      readOnly
+                      disabled
+                      aria-label="Submitted at system generated timestamp"
+                    />
                   </label>
 
                   <label>
@@ -5638,7 +5835,7 @@ export default function ServiceDesk() {
                           openAssetDropdown();
 
                           if (clientAssets.length === 0) {
-                            void loadClientAssets('all', true);
+                            void loadClientAssets('all');
                           }
                         }}
                       >
@@ -5661,11 +5858,11 @@ export default function ServiceDesk() {
                           ) : (
                             filteredClientAssets.map((asset) => {
                               const value = getAssetValue(asset);
-                              const meta = [asset.customerName || asset.CustomerName, getAssetBrand(asset), getAssetModel(asset), getAssetOS(asset)].filter(Boolean).join(' • ');
+                              const meta = [asset.requesterName || asset.RequesterName, getAssetBrand(asset), getAssetModel(asset), getAssetOS(asset)].filter(Boolean).join(' • ');
                               return (
                                 <button key={value || JSON.stringify(asset)} type="button" onClick={() => handleAssetSelect(asset)}>
                                   <strong>{value || 'Unnamed asset'}</strong>
-                                  <span>{meta || asset.customerName || 'No asset details'}</span>
+                                  <span>{meta || asset.requesterName || 'No asset details'}</span>
                                 </button>
                               );
                             })
@@ -6002,6 +6199,69 @@ export default function ServiceDesk() {
                   </label>
                 </div>
               </section>
+
+              {formMode === 'edit' && (
+              <section className="settings-helper-card service-desk-attachment-card service-desk-attachment-form-card">
+                <div className="service-desk-attachment-form-head">
+                  <div>
+                    <h3>Incident Attachments</h3>
+                    <p>Upload supporting screenshot, document or log file for this ticket.</p>
+                  </div>
+                  <span>
+                    {incidentAttachments.length}/{INCIDENT_ATTACHMENT_MAX_FILES} file{incidentAttachments.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className="service-desk-attachment-layout">
+                  <label className={cn('service-desk-upload-box', (isUploadingAttachment || !getId(formData) || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES) && 'is-disabled')}>
+                    <input
+                      type="file"
+                      accept={INCIDENT_ATTACHMENT_ALLOWED_TYPES}
+                      disabled={isUploadingAttachment || !getId(formData) || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES}
+                      onChange={uploadIncidentAttachment}
+                    />
+                    <span className="service-desk-upload-icon">
+                      {isUploadingAttachment ? <Loader2 size={19} className="ema-spin" /> : <Download size={19} />}
+                    </span>
+                    <strong>{isUploadingAttachment ? 'Uploading attachment...' : 'Choose attachment'}</strong>
+                    <small>
+                      Maximum {INCIDENT_ATTACHMENT_MAX_FILES} files per ticket. Max {INCIDENT_ATTACHMENT_MAX_MB}MB per file. Total max {INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_MB}MB.
+                    </small>
+                  </label>
+
+                  <div className="service-desk-uploaded-box">
+                    <span className="service-desk-uploaded-title">Uploaded Files</span>
+                    {isLoadingAttachments ? (
+                      <div className="settings-inline-alert">
+                        <Loader2 size={14} className="ema-spin" />
+                        Loading attachments...
+                      </div>
+                    ) : incidentAttachments.length === 0 ? (
+                      <div className="service-desk-empty-attachment">No attachments uploaded.</div>
+                    ) : (
+                      <div className="service-desk-attachment-list">
+                        {incidentAttachments.map((file) => (
+                          <div key={file.filename || file.id} className="service-desk-attachment-item">
+                            <span className="service-desk-file-dot" />
+                            <div className="service-desk-file-meta">
+                              <strong>
+                                <a href={getIncidentAttachmentUrl(file)} target="_blank" rel="noreferrer">
+                                  {file.originalName || file.filename || 'Attachment'}
+                                </a>
+                              </strong>
+                              <p>{formatAttachmentSize(file.size || file.fileSize) || 'Uploaded file'}</p>
+                            </div>
+                            <button type="button" className="service-desk-attachment-delete" onClick={() => deleteIncidentAttachment(file.filename)}>
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
             </div>
 
             <footer className="content-actions service-desk-row-actions">
