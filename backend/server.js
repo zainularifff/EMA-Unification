@@ -20834,6 +20834,128 @@ function erBuildRnrDerivedRows(data, derivedRows = null) {
   };
 }
 
+
+function erLatestInventoryDate(rows = []) {
+  const latest = (rows || [])
+    .map((row) => erSqlDate(row?.lastUpdated, null))
+    .filter(Boolean)
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+  return latest ? latest.toISOString() : null;
+}
+
+function erDistinctDeviceCount(rows = []) {
+  return new Set((rows || []).map((row) => erText(row?.deviceId || row?.deviceName)).filter(Boolean)).size;
+}
+
+function erSoftwareGovernanceRows(rows = [], category, status, action, limit = 100) {
+  return erRowsByBucket(rows, (row) => row.softwareName || row.name || category, (softwareName, groupedRows) => ({
+    category,
+    softwareName,
+    installCount: groupedRows.length,
+    coveredDevices: erDistinctDeviceCount(groupedRows),
+    latestInventory: erLatestInventoryDate(groupedRows),
+    complianceStatus: status,
+    recommendedAction: action
+  }), limit);
+}
+
+function erBuildSoftwareGovernanceRows(data, derivedRows = null) {
+  const { metrics, software } = data;
+  const d = derivedRows || erBuildDerivedRows(data);
+  const rnr = erBuildRnrDerivedRows(data, d);
+
+  const microsoftAdobeRows = [...rnr.microsoftRows, ...rnr.adobeRows];
+  const microsoftAdobeSet = new Set(microsoftAdobeRows.map((row) => `${erText(row.deviceId)}|${erText(row.softwareName)}|${erText(row.rawId)}`));
+  const riskSourceRows = [
+    ...rnr.remoteToolRows,
+    ...rnr.gamesRows,
+    ...rnr.antivirusRows,
+    ...rnr.unwantedRows,
+    ...d.unauthorizedSoftwareRows,
+    ...rnr.browserRows
+  ];
+  const riskSet = new Set(riskSourceRows.map((row) => `${erText(row.deviceId)}|${erText(row.softwareName)}|${erText(row.rawId)}`));
+
+  const paidBusinessRows = (software || []).filter((row) => {
+    if (microsoftAdobeSet.has(`${erText(row.deviceId)}|${erText(row.softwareName)}|${erText(row.rawId)}`)) return false;
+    return erSoftwareMatches(row, [
+      "business", "enterprise", "professional", "premium", "paid", "licensed", "license", "licence",
+      "subscription", "commercial", "standard", "pro ", "pro-", "plus", "accounting", "finance", "hr", "payroll", "erp", "crm"
+    ]);
+  });
+
+  const softwareProductRows = (software || []).filter((row) => {
+    const key = `${erText(row.deviceId)}|${erText(row.softwareName)}|${erText(row.rawId)}`;
+    return !microsoftAdobeSet.has(key) && !riskSet.has(key) && !paidBusinessRows.includes(row);
+  });
+
+  const bsaComplianceSummary = [
+    {
+      area: "Software Product",
+      totalRecords: softwareProductRows.length,
+      distinctSoftware: new Set(softwareProductRows.map((row) => erText(row.softwareName)).filter(Boolean)).size,
+      coveredDevices: erDistinctDeviceCount(softwareProductRows),
+      complianceStatus: "Inventory baseline",
+      recommendedAction: "Confirm product ownership and remove duplicate / obsolete software records."
+    },
+    {
+      area: "Business Product (Paid Version)",
+      totalRecords: paidBusinessRows.length,
+      distinctSoftware: new Set(paidBusinessRows.map((row) => erText(row.softwareName)).filter(Boolean)).size,
+      coveredDevices: erDistinctDeviceCount(paidBusinessRows),
+      complianceStatus: "Licence review required",
+      recommendedAction: "Validate paid / business application entitlement against purchase or subscription records."
+    },
+    {
+      area: "Microsoft / Adobe",
+      totalRecords: microsoftAdobeRows.length,
+      distinctSoftware: new Set(microsoftAdobeRows.map((row) => erText(row.softwareName)).filter(Boolean)).size,
+      coveredDevices: erDistinctDeviceCount(microsoftAdobeRows),
+      complianceStatus: "BSA priority review",
+      recommendedAction: "Reconcile Microsoft and Adobe installs with approved licence baseline."
+    },
+    {
+      area: "Breakdown Details",
+      totalRecords: metrics.totalSoftwareRecords,
+      distinctSoftware: metrics.distinctSoftware,
+      coveredDevices: metrics.softwareCoveredDevices,
+      complianceStatus: "Detailed evidence available",
+      recommendedAction: "Use breakdown tables for audit evidence, cleanup and exception approval."
+    }
+  ];
+
+  const riskSoftwareSummary = [
+    { area: "Remote Tools", totalRecords: rnr.remoteToolRows.length, severity: rnr.remoteToolRows.length ? "High" : "Low", recommendedAction: "Approve, remove or document exception for remote access tooling." },
+    { area: "Games Application", totalRecords: rnr.gamesRows.length, severity: rnr.gamesRows.length ? "Medium" : "Low", recommendedAction: "Remove non-business games or record approved exception." },
+    { area: "Antivirus", totalRecords: rnr.antivirusRows.length, severity: rnr.antivirusRows.length ? "Monitor" : "High", recommendedAction: "Validate endpoint protection standard and coverage evidence." },
+    { area: "Unwanted Application", totalRecords: rnr.unwantedRows.length, severity: rnr.unwantedRows.length ? "Medium" : "Low", recommendedAction: "Review PUP/adware/toolbars and remove if not approved." },
+    { area: "Unauthorized App", totalRecords: d.unauthorizedSoftwareRows.length, severity: d.unauthorizedSoftwareRows.length ? "High" : "Low", recommendedAction: "Approve, remove or investigate unauthorized software indicators." },
+    { area: "Web Browser", totalRecords: rnr.browserRows.length, severity: rnr.browserVulnerabilityRows.length ? "Medium" : "Monitor", recommendedAction: "Update browsers and validate vulnerable/outdated browser records." }
+  ];
+
+  const bsaChartRows = bsaComplianceSummary.map((row) => ({ label: row.area, value: row.totalRecords }));
+  const riskChartRows = riskSoftwareSummary.map((row) => ({ label: row.area, value: row.totalRecords }));
+
+  return {
+    bsaComplianceSummary,
+    bsaChartRows,
+    riskSoftwareSummary,
+    riskChartRows,
+    softwareProductRows: erSoftwareGovernanceRows(softwareProductRows, "Software Product", "Inventory baseline", "Confirm ownership, usage and cleanup status.", 80),
+    businessProductRows: erSoftwareGovernanceRows(paidBusinessRows, "Business Product (Paid Version)", "Licence review required", "Validate entitlement against purchase / subscription evidence.", 80),
+    microsoftAdobeRows: erSoftwareGovernanceRows(microsoftAdobeRows, "Microsoft / Adobe", "BSA priority review", "Reconcile installs with Microsoft / Adobe licence baseline.", 100),
+    breakdownRows: erSoftwareGovernanceRows(software || [], "Breakdown Details", "Detailed evidence", "Use row-level export for audit and cleanup validation.", 150),
+    remoteToolRows: erSoftwareGovernanceRows(rnr.remoteToolRows, "Remote Tools", "Sensitive / high risk", "Approve, remove or document exception for remote access tooling.", 80),
+    gamesRows: erSoftwareGovernanceRows(rnr.gamesRows, "Games Application", "Policy review", "Remove games or record approved exception.", 80),
+    antivirusRows: erSoftwareGovernanceRows(rnr.antivirusRows, "Antivirus", "Protection evidence", "Validate standard antivirus coverage and endpoint protection baseline.", 80),
+    unwantedRows: erSoftwareGovernanceRows(rnr.unwantedRows, "Unwanted Application", "Cleanup required", "Review and remove unwanted applications if not approved.", 80),
+    unauthorizedRows: erSoftwareGovernanceRows(d.unauthorizedSoftwareRows, "Unauthorized App", "Compliance exception", "Approve, remove or investigate unauthorized application evidence.", 80),
+    webBrowserRows: erSoftwareGovernanceRows(rnr.browserRows, "Web Browser", "Browser governance", "Patch, update or validate browser software version baseline.", 80),
+    browserVulnerabilityRows: erSoftwareGovernanceRows(rnr.browserVulnerabilityRows, "Web Browser Vulnerability", "Update candidate", "Update or validate browser vulnerability candidate records.", 80)
+  };
+}
+
+
 const EMA_HARDWARE_REPORT_IDS = [
   "manufacturer-brand",
   "pc-aging",
@@ -21077,15 +21199,23 @@ function erFindingsForReport(report, data, filters = {}) {
 
     case "ema-operations-overview":
       return [
-        erKpiSection("Operations Health Snapshot", [
+        erKpiSection("Operations Health & SLA Snapshot", [
           { label: "Total Endpoints", value: metrics.totalEndpoints, note: "Unified EM + MDM endpoint estate." },
-          { label: "Online", value: metrics.onlineEndpoints, note: `${metrics.onlineRate}% online.` },
+          { label: "Online Rate", value: `${metrics.onlineRate}%`, note: `${metrics.onlineEndpoints} online / ${metrics.offlineEndpoints} not online.` },
+          { label: "Open Tickets", value: metrics.openTickets, note: `${metrics.slaBreached} SLA breach candidate(s).` },
+          { label: "High Priority", value: metrics.highPriorityTickets, note: "High / critical / urgent open tickets." },
           { label: "Active Jobs", value: metrics.runningJobs, note: "Running/transferring tasks." },
-          { label: "Completed Jobs", value: metrics.completedJobs, note: "Transferred/completed tasks." }
+          { label: "Failed / Stopped Jobs", value: metrics.failedOrStoppedJobs, note: "Stopped/cancelled task execution evidence." }
         ]),
+        erBarSection("Endpoint Status Distribution", d.byStatus),
         erBarSection("Endpoint by Site", d.bySite),
         erBarSection("Task Status Distribution", d.jobsByStatus),
-        erTableSection("Operational Endpoint Exceptions", d.topEndpointRows.slice(0, 30), endpointRiskCols)
+        erBarSection("Open Ticket Priority Distribution", d.ticketsByPriority),
+        erTableSection("SLA Breach Candidate Tickets", d.slaRows.slice(0, 120), ticketCols),
+        erTableSection("High Priority Open Tickets", d.highPriorityTicketRows.slice(0, 120), ticketCols),
+        erTableSection("Operational Endpoint Exceptions", d.topEndpointRows.filter((r) => r.riskScore > 0).slice(0, 120), endpointRiskCols),
+        erTableSection("Job Execution Exceptions", jobs.filter((j) => [2203, 2204].includes(Number(j.statusCode))).slice(0, 120), jobCols),
+        erTableSection("Support Workload Queue", d.openTicketRows.slice(0, 150), ticketCols)
       ];
 
     case "risk-attention-summary":
@@ -21272,28 +21402,54 @@ function erFindingsForReport(report, data, filters = {}) {
 
     case "compliance-exposure":
       return [
-        erKpiSection("Compliance Exposure KPI", [
-          { label: "Endpoint Risk", value: d.topEndpointRows.filter((r) => r.riskScore > 0).length, note: "Endpoint records with risk indicators." },
-          { label: "Unauthorized Software", value: d.unauthorizedSoftwareRows.length, note: "Software rows matching compliance keywords." },
-          { label: "Unsupported OS", value: d.unsupportedOsRows.length, note: "Platform risk indicators." },
-          { label: "SLA Exposure", value: metrics.slaBreached, note: "Overdue support commitments." }
+        erKpiSection("Security & Compliance Exposure KPI", [
+          { label: "Endpoint Risk", value: d.topEndpointRows.filter((r) => r.riskScore > 0).length, note: "Endpoint records with offline/stale/incomplete indicators." },
+          { label: "Unsupported OS", value: d.unsupportedOsRows.length, note: "Platform / OS lifecycle risk indicators." },
+          { label: "Unauthorized Software", value: d.unauthorizedSoftwareRows.length, note: "Software rows matching compliance review keywords." },
+          { label: "Duplicate IP Groups", value: metrics.duplicateIpGroups, note: `${metrics.duplicateIpImpacted} impacted endpoint record(s).` },
+          { label: "SLA Exposure", value: metrics.slaBreached, note: "Open tickets past due date." },
+          { label: "Data Quality Issues", value: metrics.missingIp + metrics.missingModel + metrics.missingMapping, note: "Missing IP, model or site mapping." }
         ]),
-        erRiskSection("Compliance Exposure Areas", erRiskRows(metrics)),
-        erTableSection("Endpoint Compliance Evidence", d.topEndpointRows.filter((r) => r.riskScore > 0).slice(0, 100), endpointRiskCols)
+        erRiskSection("Security & Compliance Exposure Areas", erRiskRows(metrics)),
+        erBarSection("Endpoint Risk by Site", d.bySite),
+        erBarSection("Platform / OS Distribution", d.byPlatform),
+        erTableSection("High Risk Endpoint Evidence", d.topEndpointRows.filter((r) => r.riskScore > 0).slice(0, 150), endpointRiskCols),
+        erTableSection("Unsupported OS Candidates", d.unsupportedOsRows.slice(0, 150), endpointCols),
+        erTableSection("Unauthorized Software Evidence", d.unauthorizedSoftwareRows.slice(0, 150), softwareCols),
+        erTableSection("Duplicate IP Groups", d.duplicateIpRows.slice(0, 150), ["label", "value"]),
+        erTableSection("SLA Exposure Tickets", d.slaRows.slice(0, 120), ticketCols),
+        erTableSection("Compliance Data Quality Evidence", d.dataQualityRows.slice(0, 120), endpointCols)
       ];
 
-    case "software-inventory-summary":
+    case "software-inventory-summary": {
+      const governance = erBuildSoftwareGovernanceRows(data, d);
+      const governanceCols = ["category", "softwareName", "installCount", "coveredDevices", "latestInventory", "complianceStatus", "recommendedAction"];
       return [
-        erKpiSection("Software Inventory KPI", [
+        erKpiSection("Software & Application Governance KPI", [
           { label: "Software Records", value: metrics.totalSoftwareRecords, note: "Rows from software inventory." },
           { label: "Distinct Software", value: metrics.distinctSoftware, note: "Unique software names." },
           { label: "Covered Devices", value: metrics.softwareCoveredDevices, note: "Devices with software rows." },
-          { label: "Categories", value: d.softwareByCategory.length, note: "Software category groups found." }
+          { label: "BSA Review Items", value: governance.bsaComplianceSummary.reduce((sum, row) => sum + erNumber(row.totalRecords, 0), 0), note: "Software Product + Business Product + Microsoft/Adobe baseline." },
+          { label: "Risk Software Items", value: governance.riskSoftwareSummary.reduce((sum, row) => sum + erNumber(row.totalRecords, 0), 0), note: "Remote tools, games, antivirus, unwanted, unauthorized and browser rows." },
+          { label: "Browser Vulnerability", value: governance.browserVulnerabilityRows.length, note: "Browser update or validation candidates." }
         ]),
-        erBarSection("Software by Category", d.softwareByCategory),
-        erBarSection("Top Software Names", d.softwareByName),
-        erTableSection("Software Inventory Detail", software.slice(0, 500), softwareCols)
+        erBarSection("BSA Compliance Breakdown", governance.bsaChartRows),
+        erBarSection("Risk Software Breakdown", governance.riskChartRows),
+        erTableSection("BSA Compliance Summary", governance.bsaComplianceSummary, ["area", "totalRecords", "distinctSoftware", "coveredDevices", "complianceStatus", "recommendedAction"]),
+        erTableSection("BSA Compliance - Software Product", governance.softwareProductRows, governanceCols),
+        erTableSection("BSA Compliance - Business Product (Paid Version)", governance.businessProductRows, governanceCols),
+        erTableSection("BSA Compliance - Microsoft / Adobe", governance.microsoftAdobeRows, governanceCols),
+        erTableSection("BSA Compliance - Breakdown Details", governance.breakdownRows, governanceCols),
+        erTableSection("Risk Software Summary", governance.riskSoftwareSummary, ["area", "totalRecords", "severity", "recommendedAction"]),
+        erTableSection("Risk Software - Remote Tools", governance.remoteToolRows, governanceCols),
+        erTableSection("Risk Software - Games Application", governance.gamesRows, governanceCols),
+        erTableSection("Risk Software - Antivirus", governance.antivirusRows, governanceCols),
+        erTableSection("Risk Software - Unwanted Application", governance.unwantedRows, governanceCols),
+        erTableSection("Risk Software - Unauthorized App", governance.unauthorizedRows, governanceCols),
+        erTableSection("Risk Software - Web Browser", governance.webBrowserRows, governanceCols),
+        erTableSection("Risk Software - Browser Vulnerability Candidates", governance.browserVulnerabilityRows, governanceCols)
       ];
+    }
 
     case "unauthorized-software":
       return [
@@ -21549,7 +21705,7 @@ function erBuildDataOnlyNarrative(report, data, filters) {
     executiveSummary: `${report.title} was generated in standard data-report mode for ${siteText} and ${periodText}. AI analysis is only enabled for Summary reports.`,
     keyFindings: [
       `${sourceCount} source row(s) were returned across the selected system dataset.`,
-      `${m.totalEndpoints} endpoint record(s), ${m.totalTickets} ticket record(s), ${m.totalSoftwareRecords} software record(s), ${m.totalJobs} job record(s) and ${m.totalGeoRecords} geolocation record(s) are available in this payload.`,
+      `${m.totalEndpoints} endpoint record(s), ${m.totalTickets} ticket record(s), ${m.totalSoftwareRecords} software record(s), ${m.totalJobs} job record(s) and ${m.geolocationRecords} geolocation record(s) are available in this payload.`,
       "Use the detail tables/export output for operational review, reconciliation and evidence checking."
     ],
     managementConclusion: "This is a data-only report. No AI-generated management analysis or recommendation has been produced for this non-Summary report.",
@@ -22005,7 +22161,10 @@ async function erBuildReportPayload(pool, reportId, filters = {}, mode = "previe
       resourcePlanningBrandSummary: rnrRows.resourcePlanningBrandRows,
       applicationPurchasing: rnrRows.applicationPurchasingRows,
       sensitiveApplications: rnrRows.sensitiveApplicationRows,
-      browserVulnerability: rnrRows.browserVulnerabilityRows
+      browserVulnerability: rnrRows.browserVulnerabilityRows,
+      softwareGovernance: erBuildSoftwareGovernanceRows(data, derivedRows),
+      softwareGovernanceBreakdown: erBuildSoftwareGovernanceRows(data, derivedRows).breakdownRows,
+      softwareRiskSummary: erBuildSoftwareGovernanceRows(data, derivedRows).riskSoftwareSummary
     },
     dataSources: [
       { name: "Endpoint Inventory", table: "TS_OBJECT_ROOT / TSMDM_ASSET", rows: assets.length },

@@ -798,6 +798,26 @@ function DeployPackageModal({
 
   const hasDeployedPackage = packages.some((item) => item.status === "Deployed");
 
+  const packageStatusSummary = useMemo(() => {
+    return packages.reduce(
+      (summary, item) => {
+        summary.total += 1;
+        if (item.status === "Ready") summary.ready += 1;
+        if (item.status === "Deployed") summary.deployed += 1;
+        if (item.status === "Draft") summary.draft += 1;
+        if (item.status === "Archived") summary.archived += 1;
+        return summary;
+      },
+      { total: 0, ready: 0, deployed: 0, draft: 0, archived: 0 }
+    );
+  }, [packages]);
+
+  const packagePreviewText = useMemo(() => {
+    const visibleNames = packages.slice(0, 3).map((item) => item.name).filter(Boolean);
+    const hiddenCount = Math.max(packages.length - visibleNames.length, 0);
+    return `${visibleNames.join(", ")}${hiddenCount ? ` +${hiddenCount} more` : ""}`;
+  }, [packages]);
+
   const deployModalNode = (
     <div
       className="user-modal-backdrop open"
@@ -809,8 +829,8 @@ function DeployPackageModal({
         style={{
           width: "min(1840px, calc(100vw - 24px))",
           maxWidth: "calc(100vw - 24px)",
-          height: "min(96vh, 1040px)",
-          maxHeight: "calc(100vh - 24px)",
+          height: "calc(100vh - 12px)",
+          maxHeight: "calc(100vh - 12px)",
           display: "flex",
           flexDirection: "column",
         }}
@@ -832,18 +852,47 @@ function DeployPackageModal({
 
         <div
           className="user-modal-body content-body gap-3"
-          style={{ flex: "1 1 auto", overflowY: "auto" }}
+          style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}
         >
           <section className="policy-card wide p-4">
             <div className="policy-top">
               <div>
-                <strong>Selected Packages</strong>
-                <p>Review the packages that will be deployed.</p>
+                <strong>{packages.length > 1 ? "Selected Package Batch" : "Selected Package"}</strong>
+                <p>
+                  {packages.length > 1
+                    ? "Review the package batch before choosing targets."
+                    : "Review the package that will be deployed."}
+                </p>
               </div>
               <span className="user-pill info">{packages.length} selected</span>
             </div>
 
-            <div className="policy-list gap-3">
+            {packages.length > 1 && (
+              <div className="settings-helper-card wide p-3 mb-3">
+                <div className="policy-top mb-2">
+                  <div>
+                    <strong>Batch Summary</strong>
+                    <span>{packagePreviewText}</span>
+                  </div>
+                  <span className="user-pill info">{packageStatusSummary.total} packages</span>
+                </div>
+                <div className="content-actions justify-content-start gap-2">
+                  {packageStatusSummary.ready > 0 && <span className="user-pill active">Ready {packageStatusSummary.ready}</span>}
+                  {packageStatusSummary.deployed > 0 && <span className="user-pill info">Deployed {packageStatusSummary.deployed}</span>}
+                  {packageStatusSummary.draft > 0 && <span className="user-pill review">Draft {packageStatusSummary.draft}</span>}
+                  {packageStatusSummary.archived > 0 && <span className="user-pill inactive">Archived {packageStatusSummary.archived}</span>}
+                </div>
+              </div>
+            )}
+
+            <div
+              className="policy-list gap-2"
+              style={
+                packages.length > 1
+                  ? { maxHeight: "132px", overflowY: "auto", paddingRight: "4px" }
+                  : undefined
+              }
+            >
               {packages.map((item) => (
                 <div key={item.id} className="inline-check">
                   <Package size={16} />
@@ -859,7 +908,7 @@ function DeployPackageModal({
             </div>
 
             {hasDeployedPackage && (
-              <div className="settings-inline-alert wide">
+              <div className="settings-inline-alert wide mt-3">
                 <ShieldCheck size={15} />
                 <span>Some selected packages are already deployed. This action will redeploy them.</span>
               </div>

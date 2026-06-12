@@ -384,25 +384,6 @@ const HARDWARE_REPORT_OPTIONS: HardwareReportOption[] = [
 
 const DEFAULT_HARDWARE_REPORT_IDS = ["endpoint-manufacturer-brand"];
 
-
-const SOFTWARE_GOVERNANCE_CONTENT_GROUPS = [
-  {
-    title: "BSA Compliance",
-    description: "Licence and ownership review for software audit readiness.",
-    items: ["Software Product", "Business Product (Paid Version)", "Microsoft / Adobe", "Breakdown Details"]
-  },
-  {
-    title: "Risk Software",
-    description: "Application risk review for cleanup, exception and control action.",
-    items: ["Remote Tools", "Games Application", "Antivirus", "Unwanted Application", "Unauthorized App", "Web Browser"]
-  }
-];
-
-function isSoftwareGovernanceReport(report?: ReportTemplate | null) {
-  return report?.id === "software-application-governance";
-}
-
-
 function isHardwareLifecycleReport(report?: ReportTemplate | null) {
   return report?.id === "hardware-asset-lifecycle";
 }
@@ -847,7 +828,6 @@ function getPreviewRows(report?: ReportTemplate, payload?: ReportPayload) {
   if (report.type === "Detail") return ["Report title and filter summary", "Detailed record table", "Exception indicator", "Export-ready dataset", "Operational notes"];
   if (report.type === "Audit") return ["Audit scope and period", "Access / action summary", "User activity trail", "Exception log", "Evidence-ready output"];
   if (report.type === "Risk") return ["Risk summary", "Severity breakdown", "Affected endpoints", "Business impact", "Recommended action"];
-  if (report.id === "software-application-governance") return ["BSA Compliance", "Software Product", "Business Product (Paid Version)", "Microsoft / Adobe", "Risk Software breakdown"];
   return ["Executive summary", "KPI snapshot", "Visual section", "Management findings", "Recommended action"];
 }
 
@@ -2334,29 +2314,15 @@ function AssetLedgerPackV2({ sections, profile }: { sections: ReportSection[]; p
 }
 
 function SoftwarePortfolioPackV2({ sections, profile }: { sections: ReportSection[]; profile: ReportVisualProfile }) {
-  const tables = sectionGroup(sections, ["table"]);
-  const primaryTable = tables[0];
-  const detailTables = tables.slice(1);
+  const table = firstTableSection(sections);
   return (
     <>
       <RevampKpiRibbon sections={sections} tone="software" />
-      <RevampVisualPair sections={sections} profile={profile} />
       <section className="report-section revamp-software-showcase">
-        <div className="section-head template-section-head"><div><h2>Software Governance Portfolio</h2><p>BSA Compliance and Risk Software evidence are grouped into audit-ready sections.</p></div><span className="section-tag">Portfolio</span></div>
-        {primaryTable ? <SoftwarePortfolioSection section={primaryTable} profile={profile} /> : <p className="report-empty">No software records returned.</p>}
+        <div className="section-head template-section-head"><div><h2>Software Portfolio View</h2><p>Application records are grouped into portfolio-style evidence tiles.</p></div><span className="section-tag">Portfolio</span></div>
+        {table ? <SoftwarePortfolioSection section={table} profile={profile} /> : <p className="report-empty">No software records returned.</p>}
       </section>
-      {detailTables.map((section, index) => (
-        <section className="report-section revamp-software-detail clean-report-table-section" key={`${section.title}-${index}`}>
-          <div className="section-head template-section-head clean-section-head">
-            <div>
-              <h2>{section.title}</h2>
-              <p>Detailed application governance evidence for audit, cleanup and exception approval.</p>
-            </div>
-            <span className="section-tag">Evidence</span>
-          </div>
-          <CompactTableOnly section={section} limit={34} />
-        </section>
-      ))}
+      <RevampVisualPair sections={sections} profile={profile} />
     </>
   );
 }
@@ -3702,7 +3668,7 @@ function buildReportAnalysis(report: ReportTemplate | null, filters: ReportFilte
   if (id.includes("ticket") || id.includes("sla") || id.includes("incident") || id.includes("support")) {
     bullets.push("Recommended analysis: ticket volume, queue status, SLA breach candidates, priority and assignment workload.");
   } else if (id.includes("software") || id.includes("application") || id.includes("metering")) {
-    bullets.push("Recommended analysis: BSA Compliance, Software Product, Business Product (Paid Version), Microsoft / Adobe, Breakdown Details and Risk Software categories.");
+    bullets.push("Recommended analysis: software coverage, category distribution, unauthorized or outdated candidates and deployment or metering evidence.");
   } else if (id.includes("geo") || id.includes("location")) {
     bullets.push("Recommended analysis: geolocation coverage, abnormal or missing location evidence and latest location history.");
   } else if (id.includes("risk") || id.includes("security") || id.includes("duplicate") || id.includes("compliance")) {
@@ -3912,12 +3878,7 @@ export default function Report() {
             selectedHardwareReports: hardwareIds,
             selectedHardwareReportIds: hardwareIds
           }
-        : isSoftwareGovernanceReport(selectedReport)
-          ? {
-              ...filters,
-              softwareGovernanceScope: SOFTWARE_GOVERNANCE_CONTENT_GROUPS.flatMap((group) => group.items)
-            }
-          : filters;
+        : filters;
       const response = await apiRequest<ReportPayload>(`/api/reports/${mode === "preview" ? "preview" : "generate"}`, {
         method: "POST",
         body: JSON.stringify({ reportId: selectedReport.id, ...requestFilters })
@@ -4469,78 +4430,6 @@ export default function Report() {
           background: #fff;
           padding: 14px;
           box-shadow: 0 10px 24px rgba(15, 35, 71, .045);
-        }
-        .software-feedback-card {
-          border: 1px solid #fde7bf;
-          border-radius: 18px;
-          background: #fffdf7;
-          padding: 14px;
-          box-shadow: 0 10px 24px rgba(146, 64, 14, .055);
-        }
-        .software-feedback-head {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-        .software-feedback-head span,
-        .software-feedback-group span {
-          display: block;
-          color: #b45309;
-          font-size: .62rem;
-          font-weight: 900;
-          letter-spacing: .09em;
-          text-transform: uppercase;
-        }
-        .software-feedback-head strong {
-          display: block;
-          color: #17325d;
-          font-size: .92rem;
-          line-height: 1.2;
-        }
-        .software-feedback-head em {
-          border-radius: 999px;
-          background: rgba(245, 158, 11, .14);
-          color: #92400e;
-          font-size: .7rem;
-          font-style: normal;
-          font-weight: 800;
-          padding: 7px 10px;
-          white-space: nowrap;
-        }
-        .software-feedback-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 10px;
-        }
-        .software-feedback-group {
-          border: 1px solid rgba(245, 158, 11, .22);
-          border-radius: 16px;
-          background: rgba(255,255,255,.8);
-          padding: 12px;
-        }
-        .software-feedback-group strong {
-          display: block;
-          margin: 5px 0 9px;
-          color: #405678;
-          font-size: .82rem;
-          line-height: 1.35;
-        }
-        .software-feedback-tags {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-        }
-        .software-feedback-tags em {
-          border-radius: 999px;
-          background: #fff7ed;
-          border: 1px solid #fed7aa;
-          color: #9a3412;
-          font-size: .68rem;
-          font-style: normal;
-          font-weight: 750;
-          padding: 5px 8px;
         }
         .hardware-selector-head {
           display: flex;
@@ -6462,29 +6351,6 @@ export default function Report() {
                               </button>
                             );
                           })}
-                        </div>
-                      </div>
-                    )}
-
-                    {isSoftwareGovernanceReport(selectedReport) && (
-                      <div className="software-feedback-card">
-                        <div className="software-feedback-head">
-                          <div>
-                            <span>Software Report Content</span>
-                            <strong>BSA Compliance & Risk Software coverage</strong>
-                          </div>
-                          <em>Auto-generated from software inventory</em>
-                        </div>
-                        <div className="software-feedback-grid">
-                          {SOFTWARE_GOVERNANCE_CONTENT_GROUPS.map((group) => (
-                            <div className="software-feedback-group" key={group.title}>
-                              <span>{group.title}</span>
-                              <strong>{group.description}</strong>
-                              <div className="software-feedback-tags">
-                                {group.items.map((item) => <em key={item}>{item}</em>)}
-                              </div>
-                            </div>
-                          ))}
                         </div>
                       </div>
                     )}

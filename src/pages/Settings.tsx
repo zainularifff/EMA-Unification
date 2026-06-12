@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type WheelEvent } from "react";
 import { createPortal } from "react-dom";
 import "../styles/resource-planning.css";
 
@@ -2467,16 +2467,32 @@ export default function Settings() {
   }, []);
 
   const visibleUsers = users.filter((user) => !filteredContentTerm || `${user.name} ${user.username || ""} ${user.email} ${user.role} ${user.status}`.toLowerCase().includes(filteredContentTerm));
+  const isModuleSection = activeSection === "modules";
+  const moduleRootStyle: CSSProperties | undefined = isModuleSection
+    ? { height: "calc(100dvh - 72px)", maxHeight: "calc(100dvh - 72px)", overflow: "hidden" }
+    : undefined;
+  const moduleLayoutStyle: CSSProperties | undefined = isModuleSection
+    ? { height: "100%", minHeight: 0, overflow: "hidden" }
+    : undefined;
+  const moduleMenuStyle: CSSProperties | undefined = isModuleSection
+    ? { height: "100%", minHeight: 0, overflow: "hidden" }
+    : undefined;
+  const moduleContentStyle: CSSProperties | undefined = isModuleSection
+    ? { height: "100%", minHeight: 0, overflow: "hidden", gridTemplateRows: "auto auto minmax(0, 1fr)" }
+    : undefined;
+  const moduleContentBodyStyle: CSSProperties | undefined = isModuleSection
+    ? { minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }
+    : undefined;
 
   return (
-    <main className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section={activeSection}>
+    <main className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section={activeSection} style={moduleRootStyle}>
       <input aria-hidden="true" id="globalSearch" type="hidden" />
       <button hidden id="themeBtn" type="button">
         <span id="themeLabel">Dark Mode</span>
       </button>
 
-      <div className="settings-layout d-grid gap-3">
-        <aside className="settings-menu ema-panel-surface">
+      <div className="settings-layout d-grid gap-3" style={moduleLayoutStyle}>
+        <aside className="settings-menu ema-panel-surface" style={moduleMenuStyle}>
           <div className="panel-head">
             <span>SETTINGS CENTER</span>
             <strong>Configuration Area</strong>
@@ -2505,7 +2521,7 @@ export default function Settings() {
           </div>
         </aside>
 
-        <section className="settings-content d-grid gap-3">
+        <section className="settings-content d-grid gap-3" style={moduleContentStyle}>
           <div className={`settings-hero ema-panel-surface ${active.key === "users" ? "users-hero" : ""}`}>
             <div>
               <span className="eyebrow">ADMINISTRATION CONTROL</span>
@@ -2678,7 +2694,7 @@ export default function Settings() {
               </div>
             )}
 
-            <div className="content-body" id="contentBody">
+            <div className="content-body" id="contentBody" style={moduleContentBodyStyle}>
               {activeSection === "roles" && <RoleContent roles={accessRoles} loading={rolesLoading} error={rolesError} search={filteredContentTerm} onEdit={openAccessRoleModal} onDelete={requestDeleteAccessRole} />}
               {activeSection === "users" && <UserAccessContent users={visibleUsers} sourceUsers={users} loading={usersLoading} error={usersError} search={sectionSearch} onSearchChange={setSectionSearch} onReload={loadUsers} onAdd={() => openUserModal(null)} onEdit={openUserModal} onDelete={requestDeleteUser} />}
               {activeSection === "modules" && <ModuleMatrixContent roles={accessRoles.filter((role) => role.status === "Active")} modules={moduleCatalog} permissions={modulePermissions} loading={moduleLoading} error={moduleError} search={filteredContentTerm} savingKey={moduleSavingKey} onReload={loadModuleAccess} onToggle={toggleRoleModuleAccess} />}
@@ -3721,6 +3737,30 @@ function UserAccessContent({ users, sourceUsers, loading, error, search, onSearc
 
 function ModuleMatrixContent({ roles, modules, permissions, loading, error, search, savingKey, onReload, onToggle }: { roles: AccessRole[]; modules: ModuleControlModule[]; permissions: ModulePermission[]; loading: boolean; error: string; search: string; savingKey: string; onReload: () => void; onToggle: (module: ModuleControlModule, role: AccessRole) => void }) {
   const term = search.trim().toLowerCase();
+  const moduleScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const handleModuleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const scrollArea = moduleScrollRef.current;
+    if (!scrollArea) return;
+
+    const canScrollY = scrollArea.scrollHeight > scrollArea.clientHeight;
+    const canScrollX = scrollArea.scrollWidth > scrollArea.clientWidth;
+    const deltaY = event.deltaY;
+    const deltaX = event.deltaX;
+
+    if (canScrollY && Math.abs(deltaY) >= Math.abs(deltaX)) {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollArea.scrollTop += deltaY;
+      return;
+    }
+
+    if (canScrollX && deltaX !== 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      scrollArea.scrollLeft += deltaX;
+    }
+  };
 
   const sortedModules = [...modules].sort((a, b) => {
     const aOrder = Number(a.sortOrder || 0);
@@ -3792,7 +3832,7 @@ function ModuleMatrixContent({ roles, modules, permissions, loading, error, sear
   let displayIndex = 0;
 
   return (
-    <div className="uam-panel clean module-control-panel">
+    <div className="uam-panel clean module-control-panel" onWheelCapture={handleModuleWheel} style={{ height: "100%", minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>
       {error && (
         <div className="settings-inline-alert error">
           <strong>Module access API error</strong>
@@ -3805,60 +3845,87 @@ function ModuleMatrixContent({ roles, modules, permissions, loading, error, sear
         <span>Use this page to turn module and submodule access on or off for each active role.</span>
       </div>
 
-      <div className="user-access-table advanced clean-table module-control-table" style={{ "--module-role-count": Math.max(roles.length, 1) } as CSSProperties}>
-        <div className="user-row head advanced clean-table-row module-control-row">
-          <div className="user-cell">No</div>
-          <div className="user-cell">Module</div>
-          {roles.length > 0 ? roles.map((role) => (
-            <div className="user-cell module-role-head" key={String(getAccessRoleId(role))}>{role.name}</div>
-          )) : <div className="user-cell module-role-head">Roles</div>}
-        </div>
+      <div
+        ref={moduleScrollRef}
+        className="module-control-scroll-area"
+        onWheel={handleModuleWheel}
+        style={{
+          flex: 1,
+          maxHeight: "none",
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "auto",
+          overscrollBehavior: "contain",
+          scrollbarGutter: "stable",
+          touchAction: "pan-x pan-y",
+          pointerEvents: "auto",
+          paddingRight: 4,
+        }}
+      >
+        <div
+          className="user-access-table advanced clean-table module-control-table"
+          style={{
+            "--module-role-count": Math.max(roles.length, 1),
+            minWidth: `max(820px, ${300 + Math.max(roles.length, 1) * 150}px)`,
+          } as CSSProperties}
+        >
+          <div
+            className="user-row head advanced clean-table-row module-control-row"
+            style={{ position: "sticky", top: 0, zIndex: 5 }}
+          >
+            <div className="user-cell">No</div>
+            <div className="user-cell">Module</div>
+            {roles.length > 0 ? roles.map((role) => (
+              <div className="user-cell module-role-head" key={String(getAccessRoleId(role))}>{role.name}</div>
+            )) : <div className="user-cell module-role-head">Roles</div>}
+          </div>
 
-        {loading && <div className="settings-empty-state">Loading module access from EMA_Modules...</div>}
-        {!loading && visibleModuleCount === 0 && <div className="settings-empty-state">No data available.</div>}
-        {!loading && roles.length === 0 && visibleModuleCount > 0 && <div className="settings-empty-state">No active roles found. Create active roles in Role Based Control first.</div>}
+          {loading && <div className="settings-empty-state">Loading module access from EMA_Modules...</div>}
+          {!loading && visibleModuleCount === 0 && <div className="settings-empty-state">No data available.</div>}
+          {!loading && roles.length === 0 && visibleModuleCount > 0 && <div className="settings-empty-state">No active roles found. Create active roles in Role Based Control first.</div>}
 
-        {!loading && roles.length > 0 && groupedRows.map((row) => {
-          if (row.type === "group") {
+          {!loading && roles.length > 0 && groupedRows.map((row) => {
+            if (row.type === "group") {
+              return (
+                <div className="module-control-group-row compact" key={`group-${row.groupName}`}>
+                  <span>{row.groupName}</span>
+                </div>
+              );
+            }
+
+            displayIndex += 1;
+            const module = row.module;
             return (
-              <div className="module-control-group-row compact" key={`group-${row.groupName}`}>
-                <span>{row.groupName}</span>
+              <div className={`user-row advanced clean-table-row module-control-row ${row.isSubmodule ? "submodule-row" : "parent-module-row"}`} key={String(getModuleId(module))}>
+                <div className="user-cell row-number"><span className="row-index-pill">{String(displayIndex).padStart(2, "0")}</span></div>
+                <div className="user-cell">
+                  <div className={`role-info-cell module-info-cell ${row.isSubmodule ? "submodule-info" : ""}`}>
+                    <strong>{module.moduleName}</strong>
+                    <small>{module.description || module.routePath || (row.isSubmodule ? "Submodule" : "Main module")}</small>
+                  </div>
+                </div>
+                {roles.map((role) => {
+                  const moduleId = String(getModuleId(module));
+                  const roleId = String(getAccessRoleId(role));
+                  const key = `${moduleId}:${roleId}`;
+                  const enabled = hasModulePermission(permissions, module, role);
+                  return (
+                    <div className="user-cell module-toggle-cell" key={key}>
+                      <button
+                        className={`toggle ${enabled ? "on" : ""}`}
+                        type="button"
+                        disabled={savingKey === key}
+                        title={`${enabled ? "Disable" : "Enable"} ${module.moduleName} for ${role.name}`}
+                        aria-label={`${enabled ? "Disable" : "Enable"} ${module.moduleName} for ${role.name}`}
+                        onClick={() => onToggle(module, role)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             );
-          }
-
-          displayIndex += 1;
-          const module = row.module;
-          return (
-            <div className={`user-row advanced clean-table-row module-control-row ${row.isSubmodule ? "submodule-row" : "parent-module-row"}`} key={String(getModuleId(module))}>
-              <div className="user-cell row-number"><span className="row-index-pill">{String(displayIndex).padStart(2, "0")}</span></div>
-              <div className="user-cell">
-                <div className={`role-info-cell module-info-cell ${row.isSubmodule ? "submodule-info" : ""}`}>
-                  <strong>{module.moduleName}</strong>
-                  <small>{module.description || module.routePath || (row.isSubmodule ? "Submodule" : "Main module")}</small>
-                </div>
-              </div>
-              {roles.map((role) => {
-                const moduleId = String(getModuleId(module));
-                const roleId = String(getAccessRoleId(role));
-                const key = `${moduleId}:${roleId}`;
-                const enabled = hasModulePermission(permissions, module, role);
-                return (
-                  <div className="user-cell module-toggle-cell" key={key}>
-                    <button
-                      className={`toggle ${enabled ? "on" : ""}`}
-                      type="button"
-                      disabled={savingKey === key}
-                      title={`${enabled ? "Disable" : "Enable"} ${module.moduleName} for ${role.name}`}
-                      aria-label={`${enabled ? "Disable" : "Enable"} ${module.moduleName} for ${role.name}`}
-                      onClick={() => onToggle(module, role)}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+          })}
+        </div>
       </div>
     </div>
   );
