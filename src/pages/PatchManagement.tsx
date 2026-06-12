@@ -201,7 +201,7 @@ function PatchManagement() {
   const [assetsByRelation, setAssetsByRelation] = useState<Record<number, AssetItem[]>>({});
   const [loadingAssets, setLoadingAssets] = useState<Record<number, boolean>>({});
   const [treeLoading, setTreeLoading] = useState(false);
-  const [selectedScope, setSelectedScope] = useState<ScopeSelection>({ scope: 'all', label: 'Organization' });
+  const [selectedScope, setSelectedScope] = useState<ScopeSelection>({ scope: 'all', label: 'All Branches' });
 
   const [summary, setSummary] = useState<OnlinePatchSummary>(defaultSummary);
   const [statusResult, setStatusResult] = useState<PagedPatchResponse>({ rows: [], page: 1, limit: 10, totalRecords: 0 });
@@ -352,7 +352,7 @@ function PatchManagement() {
   }, [loadPatchData]);
 
   const selectOrganization = () => {
-    setSelectedScope({ scope: 'all', label: 'Organization' });
+    setSelectedScope({ scope: 'all', label: 'All Branches' });
   };
 
   const toggleDepartment = (node: DepartmentNode) => {
@@ -498,7 +498,7 @@ function PatchManagement() {
             <button className={cx('setting-btn', selectedScope.scope === 'all' && 'active')} onClick={selectOrganization} type="button">
               <span className="setting-icon"><Globe2 /></span>
               <span>
-                <strong>Organization</strong>
+                <strong>Branch</strong>
                 <small>Whole company</small>
               </span>
             </button>
@@ -1002,7 +1002,7 @@ function ConfirmModal({ state, scope, loading, onCancel, onConfirm }: { state: N
         <p>{isInstall ? 'This will create an install action for the selected endpoint.' : 'This will create a scan job for the selected scope.'}</p>
         <div className="settings-helper-card my-3">
           <strong>Target: {target}</strong>
-          <span>{isInstall ? `${getKbText(state.row)} - ${state.row.Title}` : scope.scope === 'all' ? 'Whole company' : scope.scope === 'relation' ? 'Organization unit' : 'Device'}</span>
+          <span>{isInstall ? `${getKbText(state.row)} - ${state.row.Title}` : scope.scope === 'all' ? 'Whole company' : scope.scope === 'relation' ? 'Branch' : 'Device'}</span>
         </div>
         <div className="settings-confirm-actions">
           <button className="soft-btn" type="button" onClick={onCancel} disabled={loading}>Cancel</button>

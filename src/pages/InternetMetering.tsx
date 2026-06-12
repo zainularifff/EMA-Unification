@@ -1232,7 +1232,7 @@ export default function InternetMetering() {
 
   const getScopeTypeLabel = (node: TreeNodeType) => {
     if (node.type === 'device') return 'Individual device';
-    if (node.type === 'folder') return 'Organization';
+    if (node.type === 'folder') return 'Branch';
     return 'Whole company';
   };
 
@@ -1425,7 +1425,7 @@ export default function InternetMetering() {
             <button
               type="button"
               className={clsx(sidebarTab === 'organization' ? 'primary-btn' : 'soft-btn', 'w-100 flex-column gap-1 px-2 py-2')}
-              title="Scope - Departments and devices"
+              title="Scope - Branches and devices"
               onClick={() => setSidebarTab('organization')}
             >
               <FolderOpen size={15} />

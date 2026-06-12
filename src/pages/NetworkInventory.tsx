@@ -1118,7 +1118,7 @@ export default function NetworkInventory() {
               }}
             >
               <span className="setting-icon"><Network size={16} /></span>
-              <span><strong>Organization</strong><small>IP scope</small></span>
+              <span><strong>Branch</strong><small>IP branch scope</small></span>
             </button>
           </nav>
 
@@ -1127,7 +1127,7 @@ export default function NetworkInventory() {
               <label className="section-search ema-sidebar-field">
                 <Search size={15} />
                 <input
-                  placeholder="Search IP / subnet..."
+                  placeholder="Search branch / IP / subnet..."
                   value={treeSearch}
                   onChange={(event) => setTreeSearch(event.target.value)}
                 />
@@ -1140,7 +1140,7 @@ export default function NetworkInventory() {
 
               <div className="ema-sidebar-tree" aria-label="Network organization tree">
                 <div className="ema-sidebar-section-title justify-content-between">
-                  <span className="d-inline-flex align-items-center gap-1"><FolderOpen size={14} /> Organization</span>
+                  <span className="d-inline-flex align-items-center gap-1"><FolderOpen size={14} /> Branch</span>
                 </div>
                 <div className="network-tree-shell">
                   {loading ? (
@@ -1165,7 +1165,7 @@ export default function NetworkInventory() {
 
           {/* <div className="settings-helper-card m-3 mt-0">
             <strong>Selected scope</strong>
-            <span>{selectedNode?.label || selectedWorkgroup || "Organization"}</span>
+            <span>{selectedNode?.label || selectedWorkgroup || "All Branches"}</span>
             <small>{`${selectedIps.length.toLocaleString()} scan target(s)`}</small>
           </div> */}
         </aside>
@@ -1271,7 +1271,7 @@ export default function NetworkInventory() {
                   <DeviceStatusOverview
                     counts={selectedCounts}
                     total={countTotal(selectedCounts)}
-                    selectedLabel={selectedNode?.label || "Organization"}
+                    selectedLabel={selectedNode?.label || "All Branches"}
                     targetCount={selectedIps.length}
                     onOpenStatus={(type) => void openStatusDetails(type)}
                   />
@@ -1965,7 +1965,7 @@ function AddFolderModal({
       <form className="user-modal advanced" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="user-modal-head">
           <div>
-            <span>Organization Tree</span>
+            <span>Branch Tree</span>
             <h2>Add Folder</h2>
             <p>Add a folder under {parentLabel}. This keeps the hierarchy action separate from network scan jobs.</p>
           </div>

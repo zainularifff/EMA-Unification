@@ -432,7 +432,7 @@ const emptyDevice: Device = {
   storage: "-",
   platformModel: "- / -",
   lastConnected: "-",
-  groupPath: "Organization",
+  groupPath: "All Branches",
   ip: "-",
   status: "Offline",
   folderKey: "organization",
@@ -443,7 +443,7 @@ const emptyDevice: Device = {
   lastUpdate: "-",
 };
 
-const initialTreeData: TreeNode[] = [{ key: "organization", label: "Organization", children: [] }];
+const initialTreeData: TreeNode[] = [{ key: "organization", label: "All Branches", children: [] }];
 
 const STATISTIC_CATEGORY_KEY_MAP: Record<string, string> = {
   "stat-os": "os",
@@ -1055,7 +1055,7 @@ function mapDepartmentTree(departments: ApiDepartment[]): TreeNode[] {
   return [
     {
       key: "organization",
-      label: "Organization",
+      label: "All Branches",
       children: departments.map((department) => mapDepartmentNode(department)),
     },
   ];
@@ -2119,14 +2119,37 @@ export default function HardwareInventory() {
       const departmentsResponse = await apiRequest<ApiDepartment[]>("/api/departments");
       const departmentTree = mapDepartmentTree(departmentsResponse.data || []);
       const departmentPaths = collectDepartmentPaths(departmentTree);
+      const deviceChunks = new Map<number, Device[]>();
 
       setDepartmentOptions(departmentPaths);
       setTreeNodes(departmentTree);
+      setApiDevices([]);
+      setSelectedDeviceId("NO-DEVICE");
+      setShowDeviceDetails(false);
+      setDetailDeviceId("NO-DEVICE");
+      setActiveModal(null);
+      setNote("Loading device records...");
+
+      const publishDevices = () => {
+        const partialDevices = Array.from(deviceChunks.values())
+          .flat()
+          .map(applyPersistentLockState)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        setApiDevices(partialDevices);
+        return partialDevices;
+      };
 
       const assetResults = await Promise.allSettled(
         departmentPaths.map(async (department) => {
           const response = await apiRequest<ApiAsset[]>(`/api/assets/${department.relationID}`);
-          return (response.data || []).map((asset) => mapApiAssetToDevice(asset, department));
+          const mappedDevices = (response.data || []).map((asset) => mapApiAssetToDevice(asset, department));
+
+          deviceChunks.set(department.relationID, mappedDevices);
+          const partialDevices = publishDevices();
+          setNote(`Loading device records... ${partialDevices.length} loaded`);
+
+          return mappedDevices;
         })
       );
 
@@ -2137,9 +2160,6 @@ export default function HardwareInventory() {
 
       setApiDevices(nextDevices);
       setSelectedDeviceId((current) => (nextDevices.some((device) => device.id === current) ? current : "NO-DEVICE"));
-      setShowDeviceDetails(false);
-      setDetailDeviceId("NO-DEVICE");
-      setActiveModal(null);
       setNote(`Loaded ${nextDevices.length} devices. Select a device row to view available actions.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load hardware inventory.";
@@ -2179,8 +2199,8 @@ export default function HardwareInventory() {
   }, [allTreeNodes]);
 
   const selectedFolderDescendants = useMemo(() => descendantMap.get(selectedFolderKey) ?? [selectedFolderKey], [descendantMap, selectedFolderKey]);
-  const selectedFolderLabel = allTreeNodes.find((node) => node.key === selectedFolderKey)?.label ?? "Organization";
-  const folderModalParentLabel = allTreeNodes.find((node) => node.key === folderModalParentKey)?.label ?? "Organization";
+  const selectedFolderLabel = allTreeNodes.find((node) => node.key === selectedFolderKey)?.label ?? "All Branches";
+  const folderModalParentLabel = allTreeNodes.find((node) => node.key === folderModalParentKey)?.label ?? "All Branches";
   const allDevices = apiDevices;
 
   const baseDevices = useMemo(() => {
@@ -2193,6 +2213,7 @@ export default function HardwareInventory() {
         device.ip.toLowerCase().includes(keyword) ||
         device.owner.toLowerCase().includes(keyword) ||
         device.department.toLowerCase().includes(keyword) ||
+        device.groupPath.toLowerCase().includes(keyword) ||
         device.id.toLowerCase().includes(keyword) ||
         String(device.deviceIdentifier || "").toLowerCase().includes(keyword);
       return inFolder && inSearch;
@@ -2293,7 +2314,7 @@ export default function HardwareInventory() {
     setActiveKpiFilter("all");
     setPage(1);
     setFolderMenuKey(null);
-    setNote(`Organization filtered by ${allTreeNodes.find((node) => node.key === key)?.label ?? key}. Device panel remains open until closed.`);
+    setNote(`Branch filtered by ${allTreeNodes.find((node) => node.key === key)?.label ?? key}. Device panel remains open until closed.`);
   };
 
   const handleAddFolder = (parentKey?: string) => {
@@ -2505,7 +2526,7 @@ export default function HardwareInventory() {
 
     const relationID = getSelectedRelationID();
     const title = STATISTIC_TITLE_MAP[selectedStatistic] || selectedStatistic;
-    const descriptionPrefix = selectedFolderLabel && selectedFolderLabel !== "Organization" ? `Live data for ${selectedFolderLabel}` : "Live data for all available departments";
+    const descriptionPrefix = selectedFolderLabel && selectedFolderLabel !== "All Branches" ? `Live data for ${selectedFolderLabel}` : "Live data for all available branches";
 
     setStatisticLoading(true);
     setStatisticError("");
@@ -3598,7 +3619,7 @@ export default function HardwareInventory() {
       <style>{`
 
 
-        /* Hardware sidebar fix: wider panel + keep Organization/Statistics switcher compact. */
+        /* Hardware sidebar fix: wider panel + keep Branch/Statistics switcher compact. */
         .hardware-module-root .settings-layout.hardware-settings-layout {
           grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
         }
@@ -3625,6 +3646,161 @@ export default function HardwareInventory() {
           min-height: 0 !important;
         }
 
+        /* Device registry table: force 7 fixed grid columns after adding Branch.
+           This prevents Network/IP from wrapping into a second header/body line. */
+        .hardware-module-root .hardware-device-table {
+          width: 100% !important;
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+        }
+
+        .hardware-module-root .hardware-device-table .hardware-device-table-row {
+          display: grid !important;
+          grid-template-columns: 52px minmax(240px, 1.55fr) minmax(150px, 0.95fr) minmax(210px, 1.35fr) minmax(105px, 0.65fr) minmax(150px, 0.9fr) minmax(130px, 0.8fr) !important;
+          align-items: center !important;
+          column-gap: 0 !important;
+          min-width: 1037px !important;
+          width: 100% !important;
+        }
+
+        .hardware-module-root .hardware-device-table .user-cell {
+          min-width: 0 !important;
+          overflow: hidden !important;
+        }
+
+        .hardware-module-root .hardware-device-table .head .user-cell {
+          display: flex !important;
+          align-items: center !important;
+          min-height: 44px !important;
+        }
+
+        .hardware-module-root .hardware-device-table .hardware-sort-btn {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .hardware-module-root .hardware-device-main-cell,
+        .hardware-module-root .hardware-user-name,
+        .hardware-module-root .hardware-user-name > div {
+          min-width: 0 !important;
+        }
+
+        /* Strong override for existing global Hardware table CSS.
+           The global stylesheet still has the old 6-column grid with higher specificity,
+           so these selectors pin every header/body cell into one 7-column row. */
+        .hardware-module-root .hardware-device-table.hardware-standard-table {
+          display: block !important;
+          width: calc(100% - 2.1rem) !important;
+          max-width: calc(100% - 2.1rem) !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+        }
+
+        .hardware-module-root .hardware-device-table .user-row.advanced.clean-table-row.hardware-standard-row.hardware-device-table-row,
+        .hardware-module-root .hardware-device-table .hardware-standard-row.hardware-device-table-row,
+        .hardware-module-root .hardware-device-table .hardware-device-table-row {
+          display: grid !important;
+          grid-template-columns: 56px minmax(250px, 1.6fr) minmax(170px, 0.95fr) minmax(220px, 1.25fr) 112px 180px 160px !important;
+          grid-auto-flow: row !important;
+          grid-auto-rows: auto !important;
+          align-items: center !important;
+          gap: 0 !important;
+          column-gap: 0 !important;
+          min-width: 1160px !important;
+          width: 100% !important;
+        }
+
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(4) { grid-column: 4 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(5) { grid-column: 5 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(6) { grid-column: 6 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(7) { grid-column: 7 !important; grid-row: 1 !important; }
+
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell,
+        .hardware-module-root .hardware-device-table .hardware-standard-row.hardware-device-table-row > .user-cell {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+        }
+
+        .hardware-module-root .hardware-device-table .head.hardware-device-table-row > .user-cell {
+          min-height: 44px !important;
+          white-space: nowrap !important;
+        }
+
+        .hardware-module-root .hardware-location-cell,
+        .hardware-module-root .hardware-network-cell {
+          min-width: 0 !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          display: grid !important;
+          gap: 0.12rem !important;
+          align-content: center !important;
+        }
+
+        .hardware-module-root .hardware-location-cell strong,
+        .hardware-module-root .hardware-location-cell small,
+        .hardware-module-root .hardware-network-cell strong,
+        .hardware-module-root .hardware-network-cell small,
+        .hardware-module-root .hardware-model-text,
+        .hardware-module-root .hardware-date-cell {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .hardware-module-root .hardware-user-name strong,
+        .hardware-module-root .hardware-user-name small,
+        .hardware-module-root .hardware-user-name em,
+        .hardware-module-root .hardware-model-text,
+        .hardware-module-root .hardware-date-cell {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .hardware-module-root .hardware-location-cell,
+        .hardware-module-root .hardware-network-cell {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: flex-start !important;
+          justify-content: center !important;
+          gap: 0.18rem !important;
+          min-width: 0 !important;
+        }
+
+        .hardware-module-root .hardware-location-cell strong,
+        .hardware-module-root .hardware-network-cell strong {
+          display: block !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          font-size: 0.76rem !important;
+          font-weight: 900 !important;
+          color: #102a5a !important;
+          line-height: 1.1 !important;
+        }
+
+        .hardware-module-root .hardware-location-cell small {
+          display: block !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          color: #64748b !important;
+          font-size: 0.66rem !important;
+          font-weight: 800 !important;
+          line-height: 1.15 !important;
+        }
+
         @media (max-width: 1100px) {
           .hardware-module-root .settings-layout.hardware-settings-layout {
             grid-template-columns: 1fr !important;
@@ -3635,24 +3811,103 @@ export default function HardwareInventory() {
           }
         }
 
-        .hardware-registry-toolbar-stacked {
-          display: flex;
-          flex-direction: column;
-          align-items: stretch;
-          gap: 14px;
+
+
+        /* Hardware registry table vertical-scroll fix.
+           Keep toolbar + summary + pagination visible, and scroll only the device rows/table area. */
+        .hardware-module-root .hardware-settings-content,
+        .hardware-module-root .hardware-main-grid {
+          min-height: 0 !important;
+          overflow: hidden !important;
         }
 
-        .hardware-scan-command-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          width: 100%;
-          min-width: 0;
-          flex-wrap: wrap;
+        .hardware-module-root .hardware-registry-card {
+          display: flex !important;
+          flex-direction: column !important;
+          min-height: 0 !important;
+          max-height: calc(100dvh - 196px) !important;
+          overflow: hidden !important;
         }
 
-        .hardware-command-btn {
+        .hardware-module-root .hardware-registry-toolbar,
+        .hardware-module-root .hardware-registry-subhead,
+        .hardware-module-root .hardware-pagination {
+          flex: 0 0 auto !important;
+        }
+
+        .hardware-module-root .hardware-device-table.hardware-standard-table {
+          flex: 1 1 auto !important;
+          min-height: 260px !important;
+          max-height: min(54vh, 560px) !important;
+          overflow-y: auto !important;
+          overflow-x: auto !important;
+          padding-bottom: 0 !important;
+          scrollbar-gutter: stable !important;
+          -webkit-overflow-scrolling: touch !important;
+        }
+
+        .hardware-module-root .hardware-device-table.hardware-standard-table::-webkit-scrollbar {
+          width: 8px !important;
+          height: 8px !important;
+        }
+
+        .hardware-module-root .hardware-device-table.hardware-standard-table::-webkit-scrollbar-track {
+          background: rgba(226, 232, 240, 0.58) !important;
+          border-radius: 999px !important;
+        }
+
+        .hardware-module-root .hardware-device-table.hardware-standard-table::-webkit-scrollbar-thumb {
+          background: rgba(100, 116, 139, 0.62) !important;
+          border-radius: 999px !important;
+          border: 2px solid rgba(248, 250, 252, 0.9) !important;
+        }
+
+        .hardware-module-root .hardware-device-table .head.hardware-device-table-row {
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 8 !important;
+          background: #f3f6fb !important;
+          box-shadow: 0 1px 0 rgba(203, 213, 225, 0.85) !important;
+        }
+
+        .hardware-module-root .hardware-device-table .hardware-device-row {
+          min-height: 58px !important;
+        }
+
+        @media (max-height: 760px) {
+          .hardware-module-root .hardware-registry-card {
+            max-height: calc(100dvh - 168px) !important;
+          }
+
+          .hardware-module-root .hardware-device-table.hardware-standard-table {
+            max-height: min(48vh, 440px) !important;
+          }
+        }
+
+
+        /* Hardware toolbar layout fix: keep actions, search, refresh and filters aligned. */
+        .hardware-module-root .hardware-registry-toolbar.hardware-registry-toolbar-stacked {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) !important;
+          align-items: stretch !important;
+          gap: 12px !important;
+          width: 100% !important;
+          min-width: 0 !important;
+        }
+
+        .hardware-module-root .hardware-scan-command-row {
+          display: grid !important;
+          grid-template-columns: max-content max-content max-content minmax(280px, 1fr) 42px !important;
+          align-items: center !important;
+          gap: 10px !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          flex-wrap: nowrap !important;
+        }
+
+        .hardware-module-root .hardware-command-btn {
           height: 38px;
+          min-width: 132px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -3693,23 +3948,68 @@ export default function HardwareInventory() {
           line-height: 1;
         }
 
-        .hardware-toolbar-search {
-          flex: 1 1 260px;
-          min-width: 220px;
-          max-width: none;
-          height: 38px;
+        .hardware-module-root .hardware-toolbar-search {
+          flex: 1 1 auto !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          height: 38px !important;
         }
 
-        .hardware-toolbar-refresh {
-          flex: 0 0 auto;
+        .hardware-module-root .hardware-toolbar-refresh {
+          flex: 0 0 auto !important;
+          width: 42px !important;
+          height: 38px !important;
+          justify-self: end !important;
+          align-self: center !important;
         }
 
-        .hardware-registry-filter-row {
-          display: grid;
-          grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
-          align-items: end;
-          gap: 10px;
-          width: 100%;
+        .hardware-module-root .hardware-registry-filter-row {
+          display: grid !important;
+          grid-template-columns: minmax(210px, 240px) minmax(210px, 240px) max-content !important;
+          justify-content: end !important;
+          align-items: end !important;
+          gap: 10px !important;
+          width: 100% !important;
+          min-width: 0 !important;
+        }
+
+        .hardware-module-root .hardware-filter-group,
+        .hardware-module-root .hardware-custom-select,
+        .hardware-module-root .hardware-custom-select-trigger {
+          min-width: 0 !important;
+          width: 100% !important;
+        }
+
+        .hardware-module-root .hardware-clear-filters-btn {
+          height: 38px !important;
+          align-self: end !important;
+          white-space: nowrap !important;
+        }
+
+        /* Hardware toast position fix: always top-right, not bottom-right. */
+        .hardware-module-root .hardware-toast,
+        body .hardware-toast {
+          position: fixed !important;
+          top: 86px !important;
+          right: 24px !important;
+          bottom: auto !important;
+          left: auto !important;
+          z-index: 2147483647 !important;
+          max-width: min(26rem, calc(100vw - 32px)) !important;
+          pointer-events: auto !important;
+        }
+
+        @media (max-width: 720px) {
+          .hardware-module-root .hardware-toast,
+          body .hardware-toast {
+            top: 18px !important;
+            right: 16px !important;
+            left: 16px !important;
+            bottom: auto !important;
+            width: auto !important;
+            max-width: none !important;
+          }
         }
 
 
@@ -3776,12 +4076,43 @@ export default function HardwareInventory() {
           text-transform: uppercase;
         }
 
-        @media (max-width: 1100px) {
-          .hardware-registry-filter-row {
-            grid-template-columns: 1fr;
+        @media (max-width: 1250px) {
+          .hardware-module-root .hardware-scan-command-row {
+            grid-template-columns: repeat(3, minmax(132px, 1fr)) 42px !important;
           }
-          .hardware-toolbar-search {
-            flex-basis: 100%;
+
+          .hardware-module-root .hardware-toolbar-search {
+            grid-column: 1 / -2 !important;
+            grid-row: 2 !important;
+          }
+
+          .hardware-module-root .hardware-toolbar-refresh {
+            grid-column: -2 / -1 !important;
+            grid-row: 2 !important;
+          }
+        }
+
+        @media (max-width: 1100px) {
+          .hardware-module-root .hardware-registry-filter-row {
+            grid-template-columns: 1fr !important;
+            justify-content: stretch !important;
+          }
+          .hardware-module-root .hardware-toolbar-search {
+            flex-basis: 100% !important;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .hardware-module-root .hardware-scan-command-row {
+            grid-template-columns: 1fr !important;
+          }
+
+          .hardware-module-root .hardware-toolbar-search,
+          .hardware-module-root .hardware-toolbar-refresh {
+            grid-column: auto !important;
+            grid-row: auto !important;
+            width: 100% !important;
+            justify-self: stretch !important;
           }
         }
       `}</style>
@@ -3805,7 +4136,7 @@ export default function HardwareInventory() {
               onClick={() => setActiveTab("organization")}
             >
               <span className="setting-icon"><FolderOpen size={16} /></span>
-              <span><strong>Organization</strong><small>Folders and endpoint scope</small></span>
+              <span><strong>Branch</strong><small>Branch endpoint scope</small></span>
             </button>
             <button
               type="button"
@@ -3823,12 +4154,12 @@ export default function HardwareInventory() {
                 <>
                   <div className="section-search ema-sidebar-field">
                     <Search size={15} />
-                    <input value={searchHierarchy} onChange={(event) => setSearchHierarchy(event.target.value)} placeholder="Search folders..." />
+                    <input value={searchHierarchy} onChange={(event) => setSearchHierarchy(event.target.value)} placeholder="Search branches..." />
                   </div>
 
-                  <button type="button" className="soft-btn d-inline-flex align-items-center gap-1 px-2" onClick={() => handleAddFolder()}><FolderPlus size={13} /> New Path</button>
+                  <button type="button" className="soft-btn d-inline-flex align-items-center gap-1 px-2" onClick={() => handleAddFolder()}><FolderPlus size={13} /> New Branch Path</button>
 
-                  <div className="ema-sidebar-tree" aria-label="Hardware organization tree">
+                  <div className="ema-sidebar-tree" aria-label="Hardware location tree">
                     {treeNodes.map((node) => (
                       <FolderTree
                         key={node.key}
@@ -4037,6 +4368,11 @@ export default function HardwareInventory() {
                 </button>
               </div>
               <div className="user-cell">
+                <button type="button" className="hardware-sort-btn" onClick={() => handleSort("groupPath")}>
+                  Branch {renderSortIndicator("groupPath")}
+                </button>
+              </div>
+              <div className="user-cell">
                 <button type="button" className="hardware-sort-btn" onClick={() => handleSort("platformModel")}>
                   Platform / Model {renderSortIndicator("platformModel")}
                 </button>
@@ -4094,12 +4430,15 @@ export default function HardwareInventory() {
                     </div>
                   </div>
                 </div>
+                <div className="user-cell hardware-location-cell">
+                  <strong>{device.department}</strong>
+                  <small title={device.groupPath}>{device.groupPath}</small>
+                </div>
                 <div className="user-cell"><span className="hardware-model-text">{device.platformModel}</span></div>
                 <div className="user-cell"><span className={`user-pill hardware-status-pill ${getStatusClass(device.status)}`}>{device.status}</span></div>
                 <div className="user-cell"><span className="muted-cell hardware-date-cell">{device.lastConnected}</span></div>
                 <div className="user-cell hardware-network-cell">
                   <strong>{device.ip}</strong>
-                  <small>{device.groupPath}</small>
                 </div>
               </div>
             ))}
@@ -4266,7 +4605,7 @@ export default function HardwareInventory() {
             >
               <div className="hardware-form-group">
                 <label>Folder Name</label>
-                <input autoFocus type="text" value={folderNameInput} disabled={folderCreateLoading} onChange={(event) => setFolderNameInput(event.target.value)} placeholder="Example: Finance, Servers, HQ Branch" />
+                <input autoFocus type="text" value={folderNameInput} disabled={folderCreateLoading} onChange={(event) => setFolderNameInput(event.target.value)} placeholder="Example: Johor, Kuala Lumpur, HQ" />
                 {folderNameError && <div className="hardware-form-error">{folderNameError}</div>}
               </div>
               <div className="hardware-preview-card">

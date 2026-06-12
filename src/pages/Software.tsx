@@ -8,6 +8,7 @@ import {
   Database,
   Download,
   FileText,
+  Folder,
   FolderOpen,
   HardDrive,
   Layers,
@@ -131,23 +132,24 @@ type ToastState = {
 
 type ApiRowsPayload = unknown[] | { data?: unknown[] | Record<string, unknown>; success?: boolean; totalRecords?: number };
 
-const API_BASE_CANDIDATES = Array.from(
-  new Set(
-    [
-      (import.meta.env.VITE_API_BASE_URL as string | undefined),
-      (import.meta.env.VITE_API_URL as string | undefined),
-      "",
-      typeof window !== "undefined" && window.location.hostname
-        ? `${window.location.protocol}//${window.location.hostname}:3001`
-        : "http://localhost:3001",
-      "http://localhost:3001",
-      "http://127.0.0.1:3001",
-      "http://localhost:3000",
-    ]
-      .filter((value): value is string => Boolean(value !== undefined && value !== null))
-      .map((value) => String(value).replace(/\/$/, ""))
-  )
-);
+function resolveApiBaseUrl() {
+  const envUrl = ((import.meta.env.VITE_API_BASE_URL as string | undefined) || (import.meta.env.VITE_API_URL as string | undefined) || "").trim();
+  if (envUrl) return envUrl.replace(/\/$/, "");
+
+  if (typeof window !== "undefined") {
+    const { hostname, port, protocol } = window.location;
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+    const isViteDevPort = port === "5173" || port === "5174" || port === "3000";
+
+    if (isLocalHost && isViteDevPort) {
+      return `${protocol}//${hostname}:3001`;
+    }
+  }
+
+  return "";
+}
+
+const API_BASE_CANDIDATES = [resolveApiBaseUrl()];
 
 const PAGE_SIZE = 10;
 const EMPTY_VALUE = "-";
@@ -178,7 +180,7 @@ const statisticTree: TreeNode[] = [
 const fallbackDeviceTree: TreeNode[] = [
   {
     id: "org-root",
-    label: "Organization",
+    label: "All Branches",
     type: "org",
     children: [],
     relationId: -1,
@@ -504,7 +506,7 @@ function mapDepartmentsToTree(departments: DepartmentNode[], depth = 0): TreeNod
 }
 
 function buildDeviceTreeFromDepartments(departments: DepartmentNode[]): TreeNode[] {
-  return [{ id: "org-root", label: "Organization", type: "org", relationId: -1, children: mapDepartmentsToTree(departments) }];
+  return [{ id: "org-root", label: "All Branches", type: "org", relationId: -1, children: mapDepartmentsToTree(departments) }];
 }
 
 function collectDepartmentRelationIds(departments: DepartmentNode[]): number[] {
@@ -612,7 +614,7 @@ export default function Software() {
   const [deviceTree, setDeviceTree] = useState<TreeNode[]>(fallbackDeviceTree);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["org-root", "stat-extension"]));
   const [currentRelationId, setCurrentRelationId] = useState(-1);
-  const [selectedFolder, setSelectedFolder] = useState<{ id: number; label: string } | null>({ id: -1, label: "Organization" });
+  const [selectedFolder, setSelectedFolder] = useState<{ id: number; label: string } | null>({ id: -1, label: "All Branches" });
   const [selectedDevice, setSelectedDevice] = useState<TreeNode | null>(null);
   const [selected, setSelected] = useState<SelectedContext>({ mode: "registry", tableKey: "registry", label: "Software", relationId: -1 });
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("organization");
@@ -649,31 +651,25 @@ export default function Software() {
     setLoading(true);
     setApiError("");
 
-    const [softwareResult, categoriesResult] = await Promise.allSettled([
-      apiGet<ApiSoftwareRecord[] | { data?: ApiSoftwareRecord[] }>("/api/software"),
-      apiGet<string[] | { data?: string[] }>("/api/software/categories"),
-    ]);
+    void apiGet<string[] | { data?: string[] }>("/api/software/categories")
+      .then((categoriesResponse) => {
+        const categoryPayload = Array.isArray(categoriesResponse) ? categoriesResponse : Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [];
+        setCategoriesFromApi(categoryPayload.map((item) => cleanCategory(item)).filter(Boolean));
+      })
+      .catch(() => setCategoriesFromApi([]));
 
-    if (softwareResult.status === "fulfilled") {
-      const softwareResponse = softwareResult.value;
+    try {
+      const softwareResponse = await apiGet<ApiSoftwareRecord[] | { data?: ApiSoftwareRecord[] }>("/api/software");
       const softwarePayload = Array.isArray(softwareResponse) ? softwareResponse : Array.isArray(softwareResponse.data) ? softwareResponse.data : [];
       setSoftwareRecords(softwarePayload.map(normalizeSoftwareRecord));
-    } else {
-      const message = softwareResult.reason instanceof Error ? softwareResult.reason.message : "Unable to load software data.";
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load software data.";
       setApiError(message);
       setSoftwareRecords([]);
       showToast({ type: "error", title: "Software API failed", message });
+    } finally {
+      setLoading(false);
     }
-
-    if (categoriesResult.status === "fulfilled") {
-      const categoriesResponse = categoriesResult.value;
-      const categoryPayload = Array.isArray(categoriesResponse) ? categoriesResponse : Array.isArray(categoriesResponse.data) ? categoriesResponse.data : [];
-      setCategoriesFromApi(categoryPayload.map((item) => cleanCategory(item)).filter(Boolean));
-    } else {
-      setCategoriesFromApi([]);
-    }
-
-    setLoading(false);
   };
 
   const loadDepartmentTree = async () => {
@@ -684,7 +680,7 @@ export default function Software() {
       const departments = Array.isArray(response) ? response : Array.isArray(response.data) ? response.data : [];
       setDeviceTree(buildDeviceTreeFromDepartments(departments));
     } catch (error) {
-      const message = "Organization view is not available right now.";
+      const message = "Branch view is not available right now.";
       setTreeError(message);
       setDeviceTree(fallbackDeviceTree);
     } finally {
@@ -1100,10 +1096,16 @@ export default function Software() {
       {nodes.map((node) => {
         const hasChildren = Boolean(node.children?.length);
         const isExpanded = expandedGroups.has(node.id);
-        const isActive = mode === "organization"
-          ? (selected.mode === "device" && selected.assetId === node.assetId) || (selected.mode === "folder" && selected.relationId === node.relationId && node.type !== "device")
-          : selected.tableKey === tableKeyFromStatistic(node.id);
         const isDevice = node.type === "device";
+        const isSelectedFolderNode = mode === "organization"
+          && !isDevice
+          && node.relationId !== undefined
+          && selectedFolder?.id === node.relationId;
+        const isActive = mode === "organization"
+          ? (selected.mode === "device" && selected.assetId === node.assetId)
+            || isSelectedFolderNode
+            || (selected.mode === "folder" && selected.relationId === node.relationId && node.type !== "device")
+          : selected.tableKey === tableKeyFromStatistic(node.id);
         const canLazyLoadDevices = mode === "organization"
           && !isDevice
           && node.relationId !== undefined
@@ -1121,7 +1123,7 @@ export default function Software() {
 
         return (
           <div key={node.id} className="ema-sidebar-tree-branch">
-            <div className={cx("ema-sidebar-tree-node", `depth-${Math.min(depth, 8)}`, isActive && "is-selected", isDevice && "is-device", isExpandable && "is-expandable")}>
+            <div className={cx("ema-sidebar-tree-node", `depth-${Math.min(depth, 8)}`, isActive && "is-selected is-active", isDevice && "is-device", isExpandable && "is-expandable")}>
               <button
                 type="button"
                 className="ema-sidebar-tree-toggle"
@@ -1133,7 +1135,13 @@ export default function Software() {
 
               <button type="button" className="ema-sidebar-tree-main" onClick={handleNodeAction}>
                 <span className="ema-sidebar-tree-icon">
-                  {isDevice ? <MonitorSmartphone size={13} /> : mode === "statistic" ? <Database size={13} /> : <FolderOpen size={13} />}
+                  {isDevice
+                    ? <MonitorSmartphone size={13} />
+                    : mode === "statistic"
+                      ? <Database size={13} />
+                      : hasChildren && isExpanded
+                        ? <FolderOpen size={15} />
+                        : <Folder size={15} />}
                 </span>
                 <span className="ema-sidebar-tree-label">{node.label}</span>
               </button>
@@ -1232,7 +1240,7 @@ export default function Software() {
               onClick={() => setSidebarTab("organization")}
             >
               <span className="setting-icon"><FolderOpen size={16} /></span>
-              <span><strong>Organization</strong><small>Folders and endpoint scope</small></span>
+              <span><strong>Branch</strong><small>Branch endpoint scope</small></span>
             </button>
             <button
               type="button"
@@ -1248,7 +1256,11 @@ export default function Software() {
             <div className="ema-sidebar-subpanel">
               <div className="section-search ema-sidebar-field">
                 <Search size={15} />
-                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software..." />
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder={sidebarTab === "organization" ? "Search branches..." : "Search statistics..."}
+                />
                 {searchTerm && <button type="button" className="ema-sidebar-search-clear" onClick={() => setSearchTerm("")}><X size={14} /></button>}
               </div>
 

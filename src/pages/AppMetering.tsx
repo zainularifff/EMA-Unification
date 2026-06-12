@@ -166,7 +166,7 @@ const METERING_ACTIVE_STORAGE_KEY = "ema-application-metering-active-scopes";
 
 const emptyNode: TreeNode = {
   id: "organization",
-  label: "Organization",
+  label: "All Branches",
   type: "folder",
   relationID: -1,
   count: 0,
@@ -486,9 +486,9 @@ function departmentPathFromNode(node: TreeNode): DepartmentPath {
   return {
     key: node.id,
     relationID: node.relationID ?? -1,
-    label: node.label || "Organization",
+    label: node.label || "All Branches",
     pathKeys: [node.id],
-    groupPath: node.subLabel || node.label || "Organization",
+    groupPath: node.subLabel || node.label || "All Branches",
   };
 }
 
@@ -822,14 +822,14 @@ export default function AppMetering() {
     ? "Individual"
     : currentMeteringScopeNode.id === "organization"
       ? "Company"
-      : "Organization";
+      : "Branch";
 
   const isCurrentMeteringScopeActive = isScopeMeteringActive(currentMeteringScopeNode, activePackageId);
   const currentMeteringButtonLabel = `${isCurrentMeteringScopeActive ? "Stop" : "Metering"} ${currentMeteringScopeType}`;
   const currentMeteringButtonTitle = currentMeteringScopeType === "Company"
     ? "Create one application metering job for the whole company."
-    : currentMeteringScopeType === "Organization"
-      ? "Create one application metering job for the selected organization folder only."
+    : currentMeteringScopeType === "Branch"
+      ? "Create one application metering job for the selected branch only."
       : "Create one application metering job for the selected individual device.";
 
   const showToast = useCallback((type: ToastType, title: string, message: string) => {
@@ -851,7 +851,7 @@ export default function AppMetering() {
       setScopeDeviceRows([]);
       setAssetCache({});
     } catch (err) {
-      setError("Organization view is not available right now.");
+      setError("Branch view is not available right now.");
       setAppMeteringDevices([]);
       setScopeDeviceRows([]);
     } finally {
@@ -1079,7 +1079,7 @@ export default function AppMetering() {
 
   const statusCounts = statusOrder.map((status) => ({ status, count: usageRows.filter((row) => row.status === status).length }));
   const kpiScopeType = selectedNode.type === "package" ? "Package" : selectedNode.type === "device" ? "Device" : "Scope";
-  const kpiScopeLabel = selectedNode.label || "Organization";
+  const kpiScopeLabel = selectedNode.label || "All Branches";
   const kpiPeriodLabel = oneYearMode ? `One year window${nextPageMode ? " · next page" : ""}` : `${startDate} to ${endDate}`;
   const kpiFilterLabel = `${filters.status === "all" ? "All status" : filters.status} · ${filters.license === "all" ? "All licenses" : filters.license}`;
 
@@ -1254,20 +1254,20 @@ export default function AppMetering() {
             <div className="ema-sidebar-subpanel">
               <label className="section-search ema-sidebar-field" htmlFor="appmSidebarSearch">
                 <Search size={15} />
-                <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder="Search folders, devices..." />
+                <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder="Search branches, devices..." />
               </label>
 
               <div className="ema-sidebar-tree" id="appmeteringMenu" role="tree" aria-label="Application metering target tree">
                 <div className="ema-sidebar-section-title">
                   {viewMode === "device" ? <Folder size={14} /> : <Package size={14} />}
-                  <span>{viewMode === "device" ? "Organization" : "Packages"}</span>
+                  <span>{viewMode === "device" ? "Branch" : "Packages"}</span>
                 </div>
                 {loading.hierarchy || loading.packages ? (
-                  <div className="ema-sidebar-empty">{viewMode === "device" ? "Preparing organization view..." : "Preparing package list..."}</div>
+                  <div className="ema-sidebar-empty">{viewMode === "device" ? "Preparing branch view..." : "Preparing package list..."}</div>
                 ) : activeTree.length > 0 ? (
                   <AppMeteringTree nodes={activeTree} selectedId={selectedNode.id} onSelect={handleNodeSelect} />
                 ) : (
-                  <div className="ema-sidebar-empty">{viewMode === "device" ? "No organization entries found." : "No packages found."}</div>
+                  <div className="ema-sidebar-empty">{viewMode === "device" ? "No branch entries found." : "No packages found."}</div>
                 )}
               </div>
             </div>

@@ -2081,6 +2081,14 @@ function parseDepartmentRelationId(value, fallback = 0) {
     return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+function quoteSqlIdentifier(name) {
+    return `[${String(name || '').replace(/]/g, ']]')}]`;
+}
+
+function normalizeDepartmentColumnKey(name) {
+    return String(name || '').toLowerCase();
+}
+
 async function getDepartmentById(pool, relationID) {
     const result = await pool.request()
         .input("Object_Rel_Idn", sql.Int, relationID)
@@ -2090,6 +2098,7 @@ async function getDepartmentById(pool, relationID) {
                 Object_Rel_Name,
                 Object_Full_Name,
                 Object_PR_Idn,
+                Object_Rel_Code,
                 Object_Rel_Deleted
             FROM TS_OBJECT_RELATION WITH (NOLOCK)
             WHERE Object_Rel_Idn = @Object_Rel_Idn
@@ -2097,6 +2106,87 @@ async function getDepartmentById(pool, relationID) {
         `);
 
     return getSafeRecordset(result)[0] || null;
+}
+
+async function getDepartmentTableColumns(pool) {
+    const result = await pool.request().query(`
+        SELECT
+            c.name AS columnName,
+            t.name AS typeName,
+            c.max_length AS maxLength,
+            c.precision AS precisionValue,
+            c.scale AS scaleValue,
+            c.is_nullable AS isNullable,
+            c.is_identity AS isIdentity,
+            dc.definition AS defaultDefinition
+        FROM sys.columns c
+        INNER JOIN sys.types t
+            ON c.user_type_id = t.user_type_id
+        LEFT JOIN sys.default_constraints dc
+            ON c.default_object_id = dc.object_id
+        WHERE c.object_id = OBJECT_ID(N'dbo.TS_OBJECT_RELATION')
+        ORDER BY c.column_id;
+    `);
+
+    return getSafeRecordset(result);
+}
+
+function getDepartmentColumn(columns, name) {
+    const target = normalizeDepartmentColumnKey(name);
+    return (columns || []).find((column) => normalizeDepartmentColumnKey(column.columnName) === target) || null;
+}
+
+function getDepartmentSqlInputType(column) {
+    const typeName = normalizeDepartmentColumnKey(column?.typeName);
+    const maxLength = Number(column?.maxLength || 0);
+    const precision = Number(column?.precisionValue || 18);
+    const scale = Number(column?.scaleValue || 0);
+
+    switch (typeName) {
+        case 'bigint': return sql.BigInt;
+        case 'bit': return sql.Bit;
+        case 'date': return sql.Date;
+        case 'datetime': return sql.DateTime;
+        case 'datetime2': return sql.DateTime2;
+        case 'smalldatetime': return sql.SmallDateTime;
+        case 'decimal':
+        case 'numeric': return sql.Decimal(precision || 18, scale || 0);
+        case 'float': return sql.Float;
+        case 'int': return sql.Int;
+        case 'money': return sql.Money;
+        case 'real': return sql.Real;
+        case 'smallint': return sql.SmallInt;
+        case 'smallmoney': return sql.SmallMoney;
+        case 'tinyint': return sql.TinyInt;
+        case 'uniqueidentifier': return sql.UniqueIdentifier;
+        case 'varchar': return sql.VarChar(maxLength === -1 ? sql.MAX : Math.max(1, maxLength || 255));
+        case 'char': return sql.Char(Math.max(1, maxLength || 1));
+        case 'nvarchar': return sql.NVarChar(maxLength === -1 ? sql.MAX : Math.max(1, Math.floor((maxLength || 510) / 2)));
+        case 'nchar': return sql.NChar(Math.max(1, Math.floor((maxLength || 2) / 2)));
+        default: return sql.NVarChar(sql.MAX);
+    }
+}
+
+function getDepartmentFallbackValue(column) {
+    const typeName = normalizeDepartmentColumnKey(column?.typeName);
+    const columnName = normalizeDepartmentColumnKey(column?.columnName);
+
+    if (columnName.includes('date') || columnName.includes('time')) return new Date();
+
+    if (['bigint', 'decimal', 'float', 'int', 'money', 'numeric', 'real', 'smallint', 'smallmoney', 'tinyint'].includes(typeName)) return 0;
+    if (typeName === 'bit') return 0;
+    if (typeName === 'date' || typeName === 'datetime' || typeName === 'datetime2' || typeName === 'smalldatetime') return new Date();
+    if (typeName === 'uniqueidentifier') return typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+    return '';
+}
+
+async function getNextDepartmentRelationId(pool) {
+    const result = await pool.request().query(`
+        SELECT ISNULL(MAX(Object_Rel_Idn), 0) + 1 AS nextRelationID
+        FROM TS_OBJECT_RELATION WITH (UPDLOCK, HOLDLOCK);
+    `);
+
+    return Number(getSafeRecordset(result)[0]?.nextRelationID || 1);
 }
 
 async function buildDepartmentFullName(pool, parentID, name) {
@@ -2112,8 +2202,6 @@ async function buildDepartmentFullName(pool, parentID, name) {
 }
 
 async function refreshDepartmentDescendantFullNames(pool, relationID) {
-    // Keep Object_Full_Name aligned after a parent folder is renamed.
-    // The frontend displays Object_Rel_Name but some search/table mappings use Object_Full_Name.
     await pool.request()
         .input("RootRelationID", sql.Int, relationID)
         .query(`
@@ -2155,13 +2243,165 @@ async function refreshDepartmentDescendantFullNames(pool, relationID) {
         `);
 }
 
+function normalizeDepartmentCodeText(value) {
+    return String(value || "").trim();
+}
+
+function makeTemporaryDepartmentCode(name) {
+    const slug = String(name || "BRANCH")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 32) || "BRANCH";
+    return `TMP-${slug}-${Date.now()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+async function buildDepartmentRelationCode(pool, parentID, relationID) {
+    const cleanRelationID = parseDepartmentRelationId(relationID, 0);
+    const cleanParentID = parseDepartmentRelationId(parentID, -1);
+    if (!cleanRelationID) return makeTemporaryDepartmentCode("branch");
+
+    if (cleanParentID <= 0) return `-${cleanRelationID}-`;
+
+    const parentResult = await pool.request()
+        .input("Object_Rel_Idn", sql.Int, cleanParentID)
+        .query(`
+            SELECT TOP 1 Object_Rel_Code
+            FROM TS_OBJECT_RELATION WITH (NOLOCK)
+            WHERE Object_Rel_Idn = @Object_Rel_Idn
+              AND ISNULL(Object_Rel_Deleted, 0) = 0;
+        `);
+
+    const parentCode = normalizeDepartmentCodeText(getSafeRecordset(parentResult)[0]?.Object_Rel_Code);
+    if (parentCode) {
+        return parentCode.endsWith("-") ? `${parentCode}${cleanRelationID}-` : `${parentCode}-${cleanRelationID}-`;
+    }
+
+    return `-${cleanParentID}-${cleanRelationID}-`;
+}
+
+async function insertDepartmentRow(pool, { name, fullName, parentID }) {
+    const columns = await getDepartmentTableColumns(pool);
+    if (!Array.isArray(columns) || columns.length === 0) {
+        const error = new Error('TS_OBJECT_RELATION table metadata could not be read.');
+        error.statusCode = 500;
+        throw error;
+    }
+
+    const values = new Map();
+    const setValue = (columnName, value) => {
+        const column = getDepartmentColumn(columns, columnName);
+        if (!column || column.isIdentity === true || column.isIdentity === 1) return;
+        values.set(column.columnName, { column, value });
+    };
+
+    const relationColumn = getDepartmentColumn(columns, 'Object_Rel_Idn');
+    let plannedRelationID = 0;
+    if (relationColumn && !(relationColumn.isIdentity === true || relationColumn.isIdentity === 1)) {
+        plannedRelationID = await getNextDepartmentRelationId(pool);
+        setValue('Object_Rel_Idn', plannedRelationID);
+    }
+
+    const hasObjectRelCode = Boolean(getDepartmentColumn(columns, 'Object_Rel_Code'));
+    const temporaryObjectRelCode = hasObjectRelCode
+        ? (plannedRelationID ? await buildDepartmentRelationCode(pool, parentID, plannedRelationID) : makeTemporaryDepartmentCode(name))
+        : '';
+
+    setValue('Object_Rel_Name', name);
+    setValue('Object_Full_Name', fullName);
+    setValue('Object_PR_Idn', parentID);
+    setValue('Object_Rel_Deleted', 0);
+    if (hasObjectRelCode) setValue('Object_Rel_Code', temporaryObjectRelCode);
+
+    for (const column of columns) {
+        const columnName = column.columnName;
+        if (values.has(columnName)) continue;
+        if (column.isIdentity === true || column.isIdentity === 1) continue;
+        if (column.isNullable === true || column.isNullable === 1) continue;
+        if (column.defaultDefinition) continue;
+
+        setValue(columnName, getDepartmentFallbackValue(column));
+    }
+
+    const insertColumns = [...values.keys()];
+    if (insertColumns.length === 0) {
+        const error = new Error('No insertable columns were found for TS_OBJECT_RELATION.');
+        error.statusCode = 500;
+        throw error;
+    }
+
+    const request = pool.request();
+    const valueParams = insertColumns.map((columnName, index) => {
+        const entry = values.get(columnName);
+        const paramName = `DeptCol${index}`;
+        request.input(paramName, getDepartmentSqlInputType(entry.column), entry.value);
+        return `@${paramName}`;
+    });
+
+    const returnColumnNames = ['Object_Rel_Idn', 'Object_Rel_Name', 'Object_Full_Name', 'Object_PR_Idn', 'Object_Rel_Code']
+        .filter((columnName) => getDepartmentColumn(columns, columnName));
+
+    const outputColumns = returnColumnNames
+        .map((columnName) => `INSERTED.${quoteSqlIdentifier(columnName)}`)
+        .join(',\n                    ');
+
+    const selectColumns = returnColumnNames
+        .map((columnName) => quoteSqlIdentifier(columnName))
+        .join(',\n                ');
+
+    const result = await request.query(`
+        INSERT INTO TS_OBJECT_RELATION
+        (
+            ${insertColumns.map(quoteSqlIdentifier).join(',\n            ')}
+        )
+        OUTPUT
+            ${outputColumns}
+        VALUES
+        (
+            ${valueParams.join(',\n            ')}
+        );
+    `);
+
+    let row = getSafeRecordset(result)[0] || null;
+    const createdRelationID = Number(row?.Object_Rel_Idn || plannedRelationID || values.get('Object_Rel_Idn')?.value || 0);
+
+    if (hasObjectRelCode && createdRelationID > 0) {
+        const finalObjectRelCode = await buildDepartmentRelationCode(pool, parentID, createdRelationID);
+        if (finalObjectRelCode && finalObjectRelCode !== temporaryObjectRelCode) {
+            await pool.request()
+                .input('Object_Rel_Idn', sql.Int, createdRelationID)
+                .input('Object_Rel_Code', getDepartmentSqlInputType(getDepartmentColumn(columns, 'Object_Rel_Code')), finalObjectRelCode)
+                .query(`
+                    UPDATE TS_OBJECT_RELATION
+                    SET Object_Rel_Code = @Object_Rel_Code
+                    WHERE Object_Rel_Idn = @Object_Rel_Idn;
+                `);
+        }
+    }
+
+    if (createdRelationID > 0) {
+        const reloadResult = await pool.request()
+            .input('Object_Rel_Idn', sql.Int, createdRelationID)
+            .query(`
+                SELECT TOP 1
+                    ${selectColumns}
+                FROM TS_OBJECT_RELATION WITH (NOLOCK)
+                WHERE Object_Rel_Idn = @Object_Rel_Idn;
+            `);
+
+        row = getSafeRecordset(reloadResult)[0] || row;
+    }
+
+    return row;
+}
 app.post("/api/departments", authenticateToken, async (req, res) => {
     try {
         const name = normalizeDepartmentName(req.body?.name || req.body?.Object_Rel_Name || req.body?.departmentName);
         const parentID = parseDepartmentRelationId(req.body?.parentID ?? req.body?.parentId ?? req.body?.Object_PR_Idn, -1);
 
         if (!name) {
-            return res.status(400).json({ success: false, message: "Department name is required." });
+            return res.status(400).json({ success: false, message: "Branch name is required." });
         }
 
         const pool = await sql.connect(dbConfig);
@@ -2169,7 +2409,7 @@ app.post("/api/departments", authenticateToken, async (req, res) => {
         if (parentID !== -1) {
             const parent = await getDepartmentById(pool, parentID);
             if (!parent) {
-                return res.status(404).json({ success: false, message: `Parent department '${parentID}' was not found.` });
+                return res.status(404).json({ success: false, message: `Parent branch '${parentID}' was not found.` });
             }
         }
 
@@ -2185,41 +2425,25 @@ app.post("/api/departments", authenticateToken, async (req, res) => {
             `);
 
         if (getSafeRecordset(duplicateResult).length > 0) {
-            return res.status(409).json({ success: false, message: "A folder with the same name already exists under this parent." });
+            return res.status(409).json({ success: false, message: "A branch with the same name already exists under this parent." });
         }
 
         const fullName = await buildDepartmentFullName(pool, parentID, name);
-        const insertResult = await pool.request()
-            .input("Object_Rel_Name", sql.NVarChar(255), name)
-            .input("Object_Full_Name", sql.NVarChar(1000), fullName)
-            .input("Object_PR_Idn", sql.Int, parentID)
-            .query(`
-                INSERT INTO TS_OBJECT_RELATION
-                (
-                    Object_Rel_Name,
-                    Object_Full_Name,
-                    Object_PR_Idn,
-                    Object_Rel_Deleted
-                )
-                OUTPUT
-                    INSERTED.Object_Rel_Idn,
-                    INSERTED.Object_Rel_Name,
-                    INSERTED.Object_Full_Name,
-                    INSERTED.Object_PR_Idn
-                VALUES
-                (
-                    @Object_Rel_Name,
-                    @Object_Full_Name,
-                    @Object_PR_Idn,
-                    0
-                );
-            `);
+        const row = await insertDepartmentRow(pool, { name, fullName, parentID });
 
-        const row = getSafeRecordset(insertResult)[0];
-        return res.json({ success: true, data: row, message: "Department created successfully." });
+        if (!row) {
+            return res.status(500).json({ success: false, message: "Branch was created but the new row could not be read." });
+        }
+
+        return res.json({ success: true, data: row, message: "Branch created successfully." });
     } catch (err) {
         console.error("POST /api/departments error:", err);
-        return res.status(500).json({ success: false, message: "Failed to create department", error: err.message });
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: "Failed to create branch",
+            error: err.message,
+            details: err.originalError?.info?.message || err.precedingErrors?.map((item) => item.message).join(' | ') || undefined
+        });
     }
 });
 
@@ -2229,18 +2453,18 @@ app.put("/api/departments/:relationID", authenticateToken, async (req, res) => {
         const name = normalizeDepartmentName(req.body?.name || req.body?.Object_Rel_Name || req.body?.departmentName);
 
         if (!relationID) {
-            return res.status(400).json({ success: false, message: "Invalid department ID." });
+            return res.status(400).json({ success: false, message: "Invalid branch ID." });
         }
 
         if (!name) {
-            return res.status(400).json({ success: false, message: "Department name is required." });
+            return res.status(400).json({ success: false, message: "Branch name is required." });
         }
 
         const pool = await sql.connect(dbConfig);
         const current = await getDepartmentById(pool, relationID);
 
         if (!current) {
-            return res.status(404).json({ success: false, message: `Department '${relationID}' was not found.` });
+            return res.status(404).json({ success: false, message: `Branch '${relationID}' was not found.` });
         }
 
         const parentID = parseDepartmentRelationId(current.Object_PR_Idn, -1);
@@ -2258,7 +2482,7 @@ app.put("/api/departments/:relationID", authenticateToken, async (req, res) => {
             `);
 
         if (getSafeRecordset(duplicateResult).length > 0) {
-            return res.status(409).json({ success: false, message: "A folder with the same name already exists under this parent." });
+            return res.status(409).json({ success: false, message: "A branch with the same name already exists under this parent." });
         }
 
         const fullName = await buildDepartmentFullName(pool, parentID, name);
@@ -2282,10 +2506,10 @@ app.put("/api/departments/:relationID", authenticateToken, async (req, res) => {
         const row = getSafeRecordset(updateResult)[0];
         await refreshDepartmentDescendantFullNames(pool, relationID);
 
-        return res.json({ success: true, data: row, message: "Department renamed successfully." });
+        return res.json({ success: true, data: row, message: "Branch renamed successfully." });
     } catch (err) {
         console.error("PUT /api/departments/:relationID error:", err);
-        return res.status(500).json({ success: false, message: "Failed to rename department", error: err.message });
+        return res.status(500).json({ success: false, message: "Failed to rename branch", error: err.message });
     }
 });
 
@@ -2295,14 +2519,14 @@ app.delete("/api/departments/:relationID", authenticateToken, async (req, res) =
         const forceDelete = String(req.query.force || req.body?.force || "").toLowerCase() === "true" || String(req.query.force || req.body?.force || "") === "1";
 
         if (!relationID) {
-            return res.status(400).json({ success: false, message: "Invalid department ID." });
+            return res.status(400).json({ success: false, message: "Invalid branch ID." });
         }
 
         const pool = await sql.connect(dbConfig);
         const current = await getDepartmentById(pool, relationID);
 
         if (!current) {
-            return res.status(404).json({ success: false, message: `Department '${relationID}' was not found.` });
+            return res.status(404).json({ success: false, message: `Branch '${relationID}' was not found.` });
         }
 
         const usageResult = await pool.request()
@@ -2329,7 +2553,7 @@ app.delete("/api/departments/:relationID", authenticateToken, async (req, res) =
         if (!forceDelete && (childCount > 0 || emAssetCount > 0 || mdmAssetCount > 0)) {
             return res.status(409).json({
                 success: false,
-                message: "This folder still has subfolders or assigned devices. Move/delete them first before deleting the folder.",
+                message: "This branch still has sub-branches or assigned devices. Move/delete them first before deleting the branch.",
                 data: { childCount, emAssetCount, mdmAssetCount }
             });
         }
@@ -2364,12 +2588,13 @@ app.delete("/api/departments/:relationID", authenticateToken, async (req, res) =
             `);
 
         const row = getSafeRecordset(deleteResult)[0];
-        return res.json({ success: true, data: row, message: "Department deleted successfully." });
+        return res.json({ success: true, data: row, message: "Branch deleted successfully." });
     } catch (err) {
         console.error("DELETE /api/departments/:relationID error:", err);
-        return res.status(500).json({ success: false, message: "Failed to delete department", error: err.message });
+        return res.status(500).json({ success: false, message: "Failed to delete branch", error: err.message });
     }
 });
+
 
 // GET /api/departments/:parentID
 app.get("/api/departments/:parentID", authenticateToken, async (req, res) => {
@@ -9742,6 +9967,9 @@ async function handleSendMdmTextMessageByPlatformType(req, res) {
 }
 
 // Java-compatible endpoints
+app.post("/api/mdm/SendMDMTextMessage", authenticateToken, handleSendMdmTextMessageByObject);
+app.post("/api/mdm/SendMDMTextMessageNonWindows", authenticateToken, handleSendMdmTextMessageByMdmAsset);
+app.post("/api/mdm/SendMDMTextMessageByPlatformType", authenticateToken, handleSendMdmTextMessageByPlatformType);
 
 // React-friendly endpoints
 app.post("/api/mdm/text-message/object", authenticateToken, handleSendMdmTextMessageByObject);
@@ -10944,7 +11172,46 @@ app.get("/api/mdm/assets", authenticateToken, async (req, res) => {
     }
 });
 
+app.post("/api/mdm/GetMDMRemoteControl", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "object"));
+app.post("/api/mdm/GetMDMRemoteControlNonWindows", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "mdm"));
 app.post("/api/mdm/remote-control", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "auto"));
+
+// Legacy RemoteSupport.aspx fallback kept for compatibility with the previous Advanced Remote Control build.
+app.post("/api/mdm/remote-control-legacy", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const target = await remoteResolveTarget(pool, req.body || {});
+        const permissions = remoteNormalizePermissions(req.body || {});
+        const url = remoteBuildSupportUrl(target, permissions);
+
+        return res.json({
+            success: true,
+            message: "Success",
+            data: [{
+                message: "Success",
+                url,
+                method: "documented-remote-support",
+                objectAgent: target.objectAgent,
+                Object_Root_Idn: target.Object_Root_Idn,
+                MDM_Asset_Idn: target.MDM_Asset_Idn,
+                deviceID: target.deviceID,
+                deviceName: target.deviceName,
+                platformType: target.platformType,
+                agentVersion: target.agentVersion,
+                permissions,
+                perm: permissions.join(",")
+            }]
+        });
+    } catch (err) {
+        const responseData = err.response?.data || err.responseData;
+        return res.status(500).json({
+            success: false,
+            message: "Unable to start remote-control session.",
+            errorMessage: remoteGetMdmErrorMessage(responseData, err.message || String(err)),
+            data: []
+        });
+    }
+});
 
 /* ============================================================
    EMA MDM ACTION PATCH - Advanced Remote Control + Lock/Unlock
@@ -11794,6 +12061,14 @@ app.post("/api/mdm/remote-control", authenticateToken, async (req, res) => rcHan
         const action = normalizeMdmValue(firstMdmDefined(req.body?.action, req.body?.Action), "lock").toLowerCase() === "unlock" ? "unlock" : "lock";
         return handleMdmLockUnlock(req, res, action, "auto");
     });
+
+    // Java-compatible lock/unlock aliases restored from nabil_server.js.
+    app.post("/api/mdm/LockDevice", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "lock", "object"));
+    app.post("/api/mdm/UnlockDevice", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "unlock", "object"));
+    app.post("/api/mdm/LockDeviceNonWindows", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "lock", "mdm"));
+    app.post("/api/mdm/UnlockDeviceNonWindows", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "unlock", "mdm"));
+    app.post("/api/mdm/lock-device", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "lock", "auto"));
+    app.post("/api/mdm/unlock-device", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "unlock", "auto"));
     
     
 })();

@@ -431,9 +431,9 @@ const VIEW_TITLES: Record<string, { title: string; subtitle: string }> = {
   geolocation: { title: 'Location Coverage', subtitle: 'Tracked devices, stale locations and unknown location records.' },
   tasks: { title: 'Automation Jobs', subtitle: 'Running, completed, failed jobs and recent task execution.' },
   risk: { title: 'engineering Risk Register', subtitle: 'Critical and high-risk signals across endpoint, OS, BIOS, patch, network and geo.' },
-  departments: { title: 'Department Health', subtitle: 'Department asset coverage, incident load, patch compliance and health score.' },
+  departments: { title: 'Branch Health', subtitle: 'Branch asset coverage, incident load, patch compliance and health score.' },
   serviceDesk: { title: 'operations Service Operations', subtitle: 'Ticket queue, overdue SLA, response performance and priority mix.' },
-  patch: { title: 'Patch Compliance', subtitle: 'Department patch score and remediation priority.' },
+  patch: { title: 'Patch Compliance', subtitle: 'Branch patch score and remediation priority.' },
   alerts: { title: 'Active Alerts', subtitle: 'Critical and high-priority items requiring operational triage.' },
   attention: { title: 'Exception Evidence', subtitle: 'Detailed evidence for generated follow-up signals.' },
   dataConfidence: { title: 'Data Confidence', subtitle: 'Source freshness and mapping reliability across operational domains.' },
@@ -1219,7 +1219,7 @@ export default function ITOperationsDashboard() {
   const [dashboardData, setDashboardData] = useState<ItOpsDashboardData>(EMPTY_DASHBOARD_DATA);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedDepartment, setSelectedDepartment] = useState('All Departments');
+  const [selectedDepartment, setSelectedDepartment] = useState('All Branches');
   const [search, setSearch] = useState('');
   const [activeView, setActiveView] = useState<string | null>(null);
   const [viewHistory, setViewHistory] = useState<(string | null)[]>([]);
@@ -1402,19 +1402,19 @@ export default function ITOperationsDashboard() {
     return values.reduce((total, item) => total + clampPercent(item), 0) / values.length;
   }, [dataConfidenceScore, endpointOnlinePercent, patchComplianceAverage, serviceDesk.slaAchievement, taskCompletionPercent, networkRegistrationPercent, locationFreshPercent]);
 
-  const departments = useMemo(() => ['All Departments', ...patchDepartments.map((item) => item.name)], [patchDepartments]);
+  const departments = useMemo(() => ['All Branches', ...patchDepartments.map((item) => item.name)], [patchDepartments]);
 
   const filteredDepartments = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return departmentRows.filter((row) => {
-      const matchesDepartment = selectedDepartment === 'All Departments' || row.department === selectedDepartment;
+      const matchesDepartment = selectedDepartment === 'All Branches' || row.department === selectedDepartment;
       const matchesSearch = !keyword || row.department.toLowerCase().includes(keyword);
       return matchesDepartment && matchesSearch;
     });
   }, [departmentRows, search, selectedDepartment]);
 
   const filteredPatchDepartments = useMemo(() => {
-    if (selectedDepartment === 'All Departments') return patchDepartments;
+    if (selectedDepartment === 'All Branches') return patchDepartments;
     return patchDepartments.filter((item) => item.name === selectedDepartment);
   }, [patchDepartments, selectedDepartment]);
 

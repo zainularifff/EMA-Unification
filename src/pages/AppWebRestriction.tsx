@@ -846,7 +846,7 @@ export default function AppWebRestriction() {
         return findFirstTarget(data) || null;
       });
     } catch (error) {
-      setMessage('Organization view is not available right now.');
+      setMessage('Branch view is not available right now.');
     } finally {
       setLoading(false);
     }
@@ -871,7 +871,7 @@ export default function AppWebRestriction() {
   const loadPolicyData = useCallback(async () => {
     const target: RestrictionTarget = selectedTarget || {
       id: 'root-policy',
-      label: 'Organization',
+      label: 'All Branches',
       type: 'root',
       target_type: 1,
       target_id: '-1',
@@ -1730,7 +1730,7 @@ export default function AppWebRestriction() {
               <div className="ema-sidebar-tree" role="tree" aria-label="App and web restriction organization tree">
                 <div className="ema-sidebar-section-title">
                   <Building2 size={14} />
-                  <span>Organization</span>
+                  <span>Branch</span>
                 </div>
               </div>
             </div>
@@ -1940,7 +1940,7 @@ export default function AppWebRestriction() {
             <>
               <div>
                 <strong className="ema-title">{statusTitle}</strong>
-                <span>{selectedTarget?.label || 'Organization'} · {startDate} until {endDate}</span>
+                <span>{selectedTarget?.label || 'All Branches'} · {startDate} until {endDate}</span>
               </div>
               <span className="badge rounded-pill text-bg-light border">
                 {loading ? 'Loading...' : `${rows.length} record${rows.length === 1 ? '' : 's'}`}
@@ -2483,7 +2483,7 @@ export default function AppWebRestriction() {
             <>
               <div>
                 <strong className="ema-title">Policy Status List</strong>
-                <span>{moduleConfig.label} · {selectedTarget?.label || 'Organization'}</span>
+                <span>{moduleConfig.label} · {selectedTarget?.label || 'All Branches'}</span>
               </div>
               <span className="badge rounded-pill text-bg-light border">
                 {loading ? 'Loading...' : `${rows.length} record${rows.length === 1 ? '' : 's'}`}
