@@ -15,8 +15,10 @@ import {
   Eye,
   Folder,
   FolderOpen,
+  FolderPlus,
   Loader2,
   Monitor,
+  MoreVertical,
   Network,
   Play,
   Plus,
@@ -424,6 +426,14 @@ function statusTone(status: ManualDeviceStatus) {
   return "inactive";
 }
 
+function getNetworkBranchLabel(node?: Pick<NetworkHierarchyNode, "id" | "label"> | null) {
+  const label = getString(node?.label, "All Network");
+  const normalized = label.trim().toLowerCase();
+  if (!label || normalized === "organization" || normalized === "organisation" || node?.id === "organization") return "All Network";
+  return label;
+}
+
+
 function findNode(node: NetworkHierarchyNode | null, id: string | null): NetworkHierarchyNode | null {
   if (!node || !id) return null;
   if (node.id === id) return node;
@@ -617,6 +627,7 @@ export default function NetworkInventory() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [treeSearch, setTreeSearch] = useState("");
   const [expandedTreeIds, setExpandedTreeIds] = useState<Set<string>>(() => new Set());
+  const [folderMenuId, setFolderMenuId] = useState<string | null>(null);
   const [lastSearchDate, setLastSearchDate] = useState("-");
   const [workgroupApiRows, setWorkgroupApiRows] = useState<Record<string, unknown>[]>([]);
   const [selectedWorkgroup, setSelectedWorkgroup] = useState<string>("");
@@ -653,6 +664,16 @@ export default function NetworkInventory() {
   const showNotice = useCallback((message: string) => {
     setNotice(message);
     window.setTimeout(() => setNotice(null), 4200);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.add("ema-settings-page-active");
+    document.body.classList.add("ema-settings-page-active");
+
+    return () => {
+      document.documentElement.classList.remove("ema-settings-page-active");
+      document.body.classList.remove("ema-settings-page-active");
+    };
   }, []);
 
   const loadManualDevices = useCallback(async () => {
@@ -765,9 +786,11 @@ export default function NetworkInventory() {
   };
 
 
-  const openAddFolderDialog = () => {
+  const openAddFolderDialog = (targetNode?: NetworkHierarchyNode | null) => {
     if (!hierarchy) return;
-    const target = selectedNode && !isIpAddress(selectedNode.label) ? selectedNode : hierarchy;
+    const candidate = targetNode && !isIpAddress(targetNode.label) ? targetNode : selectedNode;
+    const target = candidate && !isIpAddress(candidate.label) ? candidate : hierarchy;
+    setFolderMenuId(null);
     setAddFolderDialog({ parentId: target.id, parentLabel: target.label });
   };
 
@@ -788,6 +811,7 @@ export default function NetworkInventory() {
     });
     setSelectedNodeId(folder.id);
     setAddFolderDialog(null);
+    setFolderMenuId(null);
     showNotice(`Folder "${cleanName}" added under ${addFolderDialog.parentLabel}.`);
   };
 
@@ -799,7 +823,7 @@ export default function NetworkInventory() {
   };
 
   const openStatusDetails = async (type: CountKey, nextPage = 1) => {
-    const title = `${displayCountTitle(type)}${selectedNode?.label ? ` • ${selectedNode.label}` : ""}`;
+    const title = `${displayCountTitle(type)}${getNetworkBranchLabel(selectedNode) ? ` • ${getNetworkBranchLabel(selectedNode)}` : ""}`;
     setStatusDetail({ type, title, rows: [], page: nextPage, totalPages: 1, totalRecords: 0, source: "loading", loading: true });
     setIpDetail(null);
 
@@ -986,75 +1010,79 @@ export default function NetworkInventory() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root network-inventory-module container-fluid p-3 p-xl-4" data-section="users">
+    <main className="settings-module-root network-inventory-module ema-settings-pro container-fluid p-3 p-xl-4" data-section="users">
       <style>{`
-        /* Network sidebar alignment: same width/flow as Hardware sidebar. */
+        /* Network page canvas only. Do not override AppShell/topbar/global sidebar colors. */
+        .network-inventory-module.settings-module-root {
+          background:
+            radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
+            radial-gradient(circle at 100% 10%, rgba(8, 126, 164, 0.045), transparent 24rem),
+            linear-gradient(135deg, #eef3f9 0%, #f9fbfd 45%, #e8eff7 100%) !important;
+        }
+
+        /* Network sidebar: intentionally mirrors Hardware sidebar structure/spacing. */
         .network-inventory-module .settings-layout.network-settings-layout {
           grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
-          height: 100% !important;
-          min-height: 0 !important;
-          gap: 0.85rem !important;
-          overflow: hidden !important;
         }
 
         .network-inventory-module .settings-menu.network-left-panel {
           min-width: 300px !important;
-          max-width: 322px !important;
-          min-height: 0 !important;
-          overflow: hidden !important;
-          display: flex !important;
-          flex-direction: column !important;
         }
 
         .network-inventory-module .settings-menu > .ema-module-sidebar-switcher {
           flex: 0 0 auto !important;
           margin: 0 !important;
-          overflow: visible !important;
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          width: 100% !important;
         }
+
+        .network-inventory-module .settings-menu > .ema-module-sidebar-switcher .setting-btn {
+          width: 100% !important;
+          min-height: 86px !important;
+          justify-content: flex-start !important;
+        }
+        .network-inventory-module .ema-module-sidebar-switcher .setting-btn.active {
+          min-height: 86px !important;
+          width: 100% !important;
+        }
+
+        .network-inventory-module .ema-module-sidebar-switcher .setting-btn:not(.active) {
+          display: none !important;
+        }
+
 
         .network-inventory-module .settings-menu > .ema-sidebar-content {
           flex: 1 1 auto !important;
-          min-height: 0 !important;
           padding-top: 0.65rem !important;
         }
 
         .network-inventory-module .ema-sidebar-subpanel {
           justify-content: flex-start !important;
-          min-height: 0 !important;
         }
 
         .network-inventory-module .ema-sidebar-tree {
           min-height: 0 !important;
         }
 
-        .network-inventory-module .network-tree-shell,
-        .network-inventory-module .network-tree-shell > .d-grid {
-          display: grid !important;
-          gap: 0.35rem !important;
+        .network-inventory-module .network-tree-shell {
+          display: contents !important;
         }
 
-        .network-inventory-module .network-tree-shell .setting-btn {
-          min-height: 2.15rem !important;
-          padding: 0.36rem 0.48rem !important;
-          border-radius: 0.82rem !important;
-          box-shadow: none !important;
+        /* Root node must look like Hardware root: no expand arrow, no count badge, no menu. */
+        .network-inventory-module .ema-sidebar-tree-node.is-network-root {
+          grid-template-columns: 24px minmax(0, 1fr) !important;
         }
 
-        .network-inventory-module .network-tree-shell .setting-btn .setting-icon {
-          width: 1.45rem !important;
-          height: 1.45rem !important;
-          min-width: 1.45rem !important;
-          border-radius: 0.48rem !important;
+        .network-inventory-module .ema-sidebar-tree-node.is-network-root .ema-sidebar-tree-toggle svg,
+        .network-inventory-module .ema-sidebar-tree-node.is-network-root .ema-sidebar-tree-count,
+        .network-inventory-module .ema-sidebar-tree-node.is-network-root .ema-sidebar-tree-menu-wrap {
+          display: none !important;
         }
 
-        .network-inventory-module .network-tree-shell .setting-btn strong {
-          font-size: 0.72rem !important;
-          line-height: 1.1 !important;
-        }
-
-        .network-inventory-module .network-tree-shell .setting-btn small {
-          font-size: 0.58rem !important;
-          line-height: 1.05 !important;
+        .network-inventory-module .network-folder-modal.hardware-modal.hardware-folder-modal {
+          max-width: 520px !important;
+          border-radius: 22px !important;
         }
 
         @media (max-width: 1100px) {
@@ -1068,6 +1096,10 @@ export default function NetworkInventory() {
           }
         }
       `}</style>
+      <input aria-hidden="true" id="globalSearch" type="hidden" />
+      <button hidden id="themeBtn" type="button">
+        <span id="themeLabel">Dark Mode</span>
+      </button>
 
       {notice && (
         <div className="settings-toast-layer">
@@ -1102,7 +1134,7 @@ export default function NetworkInventory() {
       <div className="settings-layout network-settings-layout d-grid gap-3">
         <aside className="settings-menu network-left-panel ema-panel-surface">
           <div className="panel-head">
-            <span>Network Inventory</span>
+            <span>NETWORK INVENTORY</span>
             <strong>Network Control</strong>
             <small>IP/subnet hierarchy and synchronized device records.</small>
           </div>
@@ -1115,59 +1147,61 @@ export default function NetworkInventory() {
                 setTreeMode("organization");
                 setTreeSearch("");
                 setExpandedTreeIds(new Set<string>());
+                setFolderMenuId(null);
               }}
             >
-              <span className="setting-icon"><Network size={16} /></span>
-              <span><strong>Branch</strong><small>IP branch scope</small></span>
+              <span className="setting-icon"><FolderOpen size={16} /></span>
+              <span><strong>Network</strong><small>IP / subnet scope</small></span>
             </button>
           </nav>
 
           <div className="ema-sidebar-content">
             <div className="ema-sidebar-subpanel">
-              <label className="section-search ema-sidebar-field">
-                <Search size={15} />
-                <input
-                  placeholder="Search branch / IP / subnet..."
-                  value={treeSearch}
-                  onChange={(event) => setTreeSearch(event.target.value)}
-                />
-              </label>
-
-              <button type="button" className="soft-btn ema-sidebar-action-btn d-inline-flex align-items-center gap-1 px-2" onClick={openAddFolderDialog} disabled={!hierarchy || treeMode !== "organization" || busy}>
-                <Plus size={14} />
-                Add Folder
-              </button>
-
-              <div className="ema-sidebar-tree" aria-label="Network organization tree">
-                <div className="ema-sidebar-section-title justify-content-between">
-                  <span className="d-inline-flex align-items-center gap-1"><FolderOpen size={14} /> Branch</span>
-                </div>
-                <div className="network-tree-shell">
-                  {loading ? (
-                    <div className="ema-sidebar-empty"><Loader2 className="me-2" size={14} /> Loading network hierarchy...</div>
-                  ) : filteredHierarchy ? (
-                    <NetworkTree
-                      key={treeSearch.trim() ? `search-${treeSearch.trim()}` : hierarchy?.id || "network-tree"}
-                      node={filteredHierarchy}
-                      selectedNodeId={selectedNode?.id || null}
-                      expandedIds={expandedTreeIds}
-                      onToggle={handleToggleTreeNode}
-                      onSelect={handleSelectNode}
-                      forceOpen={Boolean(treeSearch.trim())}
+              {(
+                <>
+                  <div className="section-search ema-sidebar-field">
+                    <Search size={15} />
+                    <input
+                      placeholder="Search IP / subnet..."
+                      value={treeSearch}
+                      onChange={(event) => {
+                        setTreeSearch(event.target.value);
+                        setFolderMenuId(null);
+                      }}
                     />
-                  ) : (
-                    <div className="ema-sidebar-empty">No IP segment found.</div>
-                  )}
-                </div>
-              </div>
+                  </div>
+
+                  <button type="button" className="soft-btn d-inline-flex align-items-center gap-1 px-2" onClick={() => openAddFolderDialog()} disabled={!hierarchy || busy}>
+                    <FolderPlus size={13} />
+                    New Network Path
+                  </button>
+
+                  <div className="ema-sidebar-tree" aria-label="Network IP and subnet tree">
+                    {loading ? (
+                      <div className="ema-sidebar-empty"><Loader2 className="me-2" size={14} /> Loading network hierarchy...</div>
+                    ) : filteredHierarchy ? (
+                      <div className="network-tree-shell">
+                        <NetworkTree
+                          key={treeSearch.trim() ? `search-${treeSearch.trim()}` : hierarchy?.id || "network-tree"}
+                          node={filteredHierarchy}
+                          selectedNodeId={selectedNode?.id || null}
+                          expandedIds={expandedTreeIds}
+                          onToggle={handleToggleTreeNode}
+                          onSelect={handleSelectNode}
+                          folderMenuId={folderMenuId}
+                          onMenu={setFolderMenuId}
+                          onAddFolder={openAddFolderDialog}
+                          forceOpen={Boolean(treeSearch.trim())}
+                        />
+                      </div>
+                    ) : (
+                      <div className="ema-sidebar-empty">No IP segment found.</div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
-
-          {/* <div className="settings-helper-card m-3 mt-0">
-            <strong>Selected scope</strong>
-            <span>{selectedNode?.label || selectedWorkgroup || "All Branches"}</span>
-            <small>{`${selectedIps.length.toLocaleString()} scan target(s)`}</small>
-          </div> */}
         </aside>
 
         <section className="settings-content">
@@ -1190,7 +1224,7 @@ export default function NetworkInventory() {
             <header className="content-head">
               <div>
                 <span className="section-tag">{activeTab === "device" ? "Device Status" : "Network Device Status"}</span>
-                <h3>{activeTab === "device" ? `Device Status${selectedNode?.label ? `: ${selectedNode.label}` : ""}` : "Network Device Registry"}</h3>
+                <h3>{activeTab === "device" ? `Device Status${getNetworkBranchLabel(selectedNode) ? `: ${getNetworkBranchLabel(selectedNode)}` : ""}` : "Network Device Registry"}</h3>
                 <p>{activeTab === "device" ? "Registered, not registered, not installed, and other network object counts." : `Showing ${manualFilteredRows.length.toLocaleString()} managed network devices.`}</p>
               </div>
 
@@ -1271,7 +1305,7 @@ export default function NetworkInventory() {
                   <DeviceStatusOverview
                     counts={selectedCounts}
                     total={countTotal(selectedCounts)}
-                    selectedLabel={selectedNode?.label || "All Branches"}
+                    selectedLabel={getNetworkBranchLabel(selectedNode)}
                     targetCount={selectedIps.length}
                     onOpenStatus={(type) => void openStatusDetails(type)}
                   />
@@ -1400,6 +1434,9 @@ function NetworkTree({
   expandedIds,
   onToggle,
   onSelect,
+  folderMenuId,
+  onMenu,
+  onAddFolder,
   forceOpen = false,
 }: {
   node: NetworkHierarchyNode;
@@ -1408,36 +1445,84 @@ function NetworkTree({
   expandedIds: Set<string>;
   onToggle: (node: NetworkHierarchyNode) => void;
   onSelect: (node: NetworkHierarchyNode) => void;
+  folderMenuId: string | null;
+  onMenu: (id: string | null) => void;
+  onAddFolder: (node?: NetworkHierarchyNode | null) => void;
   forceOpen?: boolean;
 }) {
   const hasChildren = Boolean(node.children?.length);
   const isOpen = forceOpen || expandedIds.has(node.id);
   const total = countTotal(node.counts);
-  const isLeafIp = isIpAddress(node.label);
+  const displayLabel = getNetworkBranchLabel(node);
+  const isLeafIp = isIpAddress(displayLabel);
+  const isRootNode = level === 0 || node.id === "organization" || String(node.label || "").trim().toLowerCase() === "organization";
   const isSelected = selectedNodeId === node.id;
   const Icon = isLeafIp ? Monitor : isOpen ? FolderOpen : Folder;
 
+  const handleMainClick = () => {
+    if (hasChildren) onToggle(node);
+    onSelect(node);
+    onMenu(null);
+  };
+
   return (
-    <div className={cx("d-grid gap-2", level > 0 && "ms-3")}>
-      <button
-        type="button"
-        className={cx("setting-btn", isSelected && "active")}
-        onClick={() => {
-          if (hasChildren) onToggle(node);
-          onSelect(node);
-        }}
-        title={node.label}
-      >
-        <span className="setting-icon"><Icon /></span>
-        <span>
-          <strong>{node.label}</strong>
-          <small>{isLeafIp ? "IP endpoint" : isOpen ? "Click to collapse scope" : "Click to expand scope"}</small>
-        </span>
-        {total > 0 && <b>{total.toLocaleString()}</b>}
-      </button>
+    <div className="ema-sidebar-tree-branch">
+      <div className={cx("ema-sidebar-tree-node", `depth-${Math.min(level, 8)}`, isSelected && "is-selected is-active", hasChildren && "is-expandable", isLeafIp && "is-leaf-ip", isRootNode && "is-network-root")}>
+        <button
+          type="button"
+          className="ema-sidebar-tree-toggle"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (hasChildren) onToggle(node);
+          }}
+          aria-label={hasChildren ? `${isOpen ? "Collapse" : "Expand"} ${displayLabel}` : displayLabel}
+        >
+          {!isRootNode && hasChildren ? isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} /> : <span />}
+        </button>
+
+        <button type="button" className="ema-sidebar-tree-main" onClick={handleMainClick} title={displayLabel}>
+          <span className="ema-sidebar-tree-icon">
+            <Icon size={15} />
+          </span>
+          <span className="ema-sidebar-tree-label">{displayLabel}</span>
+          {!isRootNode && total > 0 && <span className="ema-sidebar-tree-count">{total.toLocaleString()}</span>}
+        </button>
+
+        {!isLeafIp && !isRootNode ? (
+          <div className="ema-sidebar-tree-menu-wrap">
+            <button
+              type="button"
+              className="ema-sidebar-tree-menu-btn"
+              onClick={(event) => {
+                event.stopPropagation();
+                onMenu(folderMenuId === node.id ? null : node.id);
+              }}
+              aria-label={`Open actions for ${node.label}`}
+            >
+              <MoreVertical size={14} />
+            </button>
+
+            {folderMenuId === node.id && (
+              <div className="ema-sidebar-tree-menu">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onAddFolder(node);
+                  }}
+                >
+                  Add subfolder
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <span />
+        )}
+      </div>
 
       {hasChildren && isOpen && (
-        <div className="d-grid gap-2 ms-3">
+        <div className="ema-sidebar-tree-children is-nested">
           {(node.children || []).map((child) => (
             <NetworkTree
               key={child.id}
@@ -1447,6 +1532,9 @@ function NetworkTree({
               expandedIds={expandedIds}
               onToggle={onToggle}
               onSelect={onSelect}
+              folderMenuId={folderMenuId}
+              onMenu={onMenu}
+              onAddFolder={onAddFolder}
               forceOpen={forceOpen}
             />
           ))}
@@ -1954,47 +2042,56 @@ function AddFolderModal({
   onSave: (folderName: string) => void;
 }) {
   const [folderName, setFolderName] = useState("");
+  const [folderNameError, setFolderNameError] = useState("");
+  const safeParentLabel = parentLabel.trim().toLowerCase() === "organization" ? "All Network" : parentLabel;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSave(folderName);
+    const cleanName = folderName.trim();
+    if (!cleanName) {
+      setFolderNameError("Folder name is required.");
+      return;
+    }
+    setFolderNameError("");
+    onSave(cleanName);
   };
 
   return (
-    <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <form className="user-modal advanced" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
-        <div className="user-modal-head">
-          <div>
-            <span>Branch Tree</span>
-            <h2>Add Folder</h2>
-            <p>Add a folder under {parentLabel}. This keeps the hierarchy action separate from network scan jobs.</p>
+    <div className="hardware-modal-overlay" onClick={onClose}>
+      <div className="hardware-modal hardware-folder-modal network-folder-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="hardware-modal-header blue">
+          <div className="hardware-modal-title">
+            <FolderPlus size={20} />
+            <div>
+              <strong>{safeParentLabel === "All Network" ? "CREATE MAIN NETWORK PATH" : "CREATE SUBPATH"}</strong>
+              <span>{safeParentLabel === "All Network" ? "Create a new top-level network path." : `Parent network path: ${safeParentLabel}`}</span>
+            </div>
           </div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close add folder">
+          <button type="button" className="hardware-modal-close inverse" onClick={onClose} disabled={busy} aria-label="Close add branch path">
             <X size={18} />
           </button>
         </div>
 
-        <div className="user-modal-body content-body">
-          <label className="form-field wide">
-            <span>Folder Name</span>
-            <input required value={folderName} onChange={(event) => setFolderName(event.target.value)} placeholder="Example: Data Centre / Server Room / Branch A" className="setting-input" autoFocus />
-          </label>
-          <div className="settings-helper-card wide">
-            <strong>Parent:</strong>
-            <span>{parentLabel}</span>
+        <form className="hardware-modal-body" onSubmit={submit}>
+          <div className="hardware-form-group">
+            <label>Network Path Name</label>
+            <input autoFocus type="text" value={folderName} disabled={busy} onChange={(event) => setFolderName(event.target.value)} placeholder="Example: 10.10.0.0, HQ Network, Server VLAN" />
+            {folderNameError && <div className="hardware-form-error">{folderNameError}</div>}
           </div>
-        </div>
-
-        <div className="user-modal-foot">
-          <button type="button" className="soft-btn" onClick={onClose} disabled={busy}>
-            Cancel
-          </button>
-          <button type="submit" className="primary-btn" disabled={busy}>
-            {busy ? <Loader2 size={16} className="spinner-border spinner-border-sm" /> : <Plus size={16} />}
-            Add Folder
-          </button>
-        </div>
-      </form>
+          <div className="hardware-preview-card">
+            <span>Preview</span>
+            <strong>{safeParentLabel === "All Network" ? folderName.trim() || "New Network Path" : `${safeParentLabel} \\ ${folderName.trim() || "New Subpath"}`}</strong>
+          </div>
+          <div className="hardware-modal-footer embedded">
+            <button type="button" className="hardware-btn link" onClick={onClose} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" className="hardware-btn primary" disabled={busy || !folderName.trim()}>
+              {busy ? "Creating..." : "Create Path"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -2032,7 +2129,7 @@ function DeviceFormModal({
 
   return (
     <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <form className="user-modal advanced" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+      <form className="user-modal advanced network-folder-modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="user-modal-head">
           <div>
             <span>{mode === "edit" ? "Edit Network Device" : "Register Network Device"}</span>
@@ -2168,7 +2265,7 @@ function ScanJobModal({
 
   return (
     <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <form className="user-modal advanced" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+      <form className="user-modal advanced network-folder-modal" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="user-modal-head">
           <div>
             <span>Network Inventory Scan Job</span>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   AlertCircle,
   AlertTriangle,
@@ -9,9 +10,11 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Database,
   Download,
   Filter,
   Folder,
+  FolderOpen,
   Gauge,
   Layers3,
   Package,
@@ -720,41 +723,77 @@ function exportCsv(rows: UsageRow[]) {
   URL.revokeObjectURL(link.href);
 }
 
-function AppMeteringTree({ nodes, selectedId, onSelect }: { nodes: TreeNode[]; selectedId: string; onSelect: (node: TreeNode) => void }) {
-  const [open, setOpen] = useState<Record<string, boolean>>({ organization: true, "all-packages": true });
+function appMeteringTreeMatchesSearch(node: TreeNode, search: string): boolean {
+  const keyword = search.trim().toLowerCase();
+  if (!keyword) return true;
 
-  const renderNode = (node: TreeNode, depth = 0) => {
+  const ownText = [node.label, node.subLabel, node.status, node.type]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return ownText.includes(keyword) || Boolean(node.children?.some((child) => appMeteringTreeMatchesSearch(child, keyword)));
+}
+
+function AppMeteringTree({
+  nodes,
+  selectedId,
+  onSelect,
+  search = "",
+}: {
+  nodes: TreeNode[];
+  selectedId: string;
+  onSelect: (node: TreeNode) => void;
+  search?: string;
+}) {
+  const [open, setOpen] = useState<Record<string, boolean>>({ organization: true, "all-packages": true });
+  const keyword = search.trim().toLowerCase();
+
+  const renderNode = (node: TreeNode, depth = 0): ReactNode => {
+    if (!appMeteringTreeMatchesSearch(node, keyword)) return null;
+
     const hasChildren = Boolean(node.children?.length);
-    const isOpen = open[node.id] ?? depth < 1;
-    const Icon = node.type === "package" ? Package : node.type === "device" ? UserRound : Folder;
+    const isOpen = keyword ? true : open[node.id] ?? depth < 1;
     const isSelected = selectedId === node.id;
-    const nodeMeta = node.type === "device" ? node.status || "Endpoint" : String(node.count ?? 0);
+    const isRoot = node.id === "organization" || node.id === "all-packages";
+    const isDevice = node.type === "device";
+    const isPackage = node.type === "package";
+    const Icon = isPackage ? Package : isDevice ? UserRound : isOpen ? FolderOpen : Folder;
+
+    const handleToggle = () => {
+      if (!hasChildren) return;
+      setOpen((prev) => ({ ...prev, [node.id]: !isOpen }));
+    };
+
+    const handleSelect = () => {
+      if (hasChildren) handleToggle();
+      onSelect(node);
+    };
 
     return (
       <div key={node.id} className="ema-sidebar-tree-branch">
-        <div className={cx("ema-sidebar-tree-node", `depth-${Math.min(depth, 8)}`, isSelected && "is-selected", hasChildren && "is-expandable")}>
+        <div className={cx("ema-sidebar-tree-node", `depth-${Math.min(depth, 8)}`, isSelected && "is-selected is-active", hasChildren && "is-expandable", isRoot && "is-appmetering-root", isDevice && "is-appmetering-device", isPackage && "is-appmetering-package")}>
           <button
             type="button"
             className="ema-sidebar-tree-toggle"
-            aria-label={hasChildren ? (isOpen ? "Collapse" : "Expand") : "Open"}
-            onClick={() => {
-              if (hasChildren) setOpen((prev) => ({ ...prev, [node.id]: !isOpen }));
+            aria-label={hasChildren ? (isOpen ? `Collapse ${node.label}` : `Expand ${node.label}`) : node.label}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleToggle();
             }}
           >
-            {hasChildren ? (isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span />}
+            {hasChildren ? (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <span />}
           </button>
 
           <button
             type="button"
             className="ema-sidebar-tree-main"
             title={node.subLabel ? `${node.label} · ${node.subLabel}` : node.label}
-            onClick={() => onSelect(node)}
+            onClick={handleSelect}
           >
-            <span className="ema-sidebar-tree-icon"><Icon size={14} /></span>
+            <span className="ema-sidebar-tree-icon"><Icon size={15} /></span>
             <span className="ema-sidebar-tree-label">{node.label}</span>
           </button>
-
-          <span className="ema-sidebar-tree-count">{nodeMeta}</span>
         </div>
 
         {hasChildren && isOpen ? (
@@ -1225,47 +1264,96 @@ export default function AppMetering() {
   }, []);
 
   return (
-    <main className="settings-module-root ema-module-root ema-settings-pro" data-section="application-metering">
+    <main className="settings-module-root appmetering-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section="application-metering">
+      <style>{`
+        /* App Metering sidebar: mirrors Hardware sidebar panel structure without overriding the global app sidebar. */
+        .appmetering-module-root .settings-layout.appmetering-settings-layout {
+          grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
+        }
+
+        .appmetering-module-root .settings-menu.appmetering-left-panel {
+          min-width: 300px !important;
+        }
+
+        .appmetering-module-root .settings-menu > .ema-module-sidebar-switcher {
+          flex: 0 0 auto !important;
+          margin: 0 !important;
+        }
+
+        .appmetering-module-root .settings-menu > .ema-sidebar-content {
+          flex: 1 1 auto !important;
+          padding-top: 0.65rem !important;
+        }
+
+        .appmetering-module-root .ema-sidebar-subpanel {
+          justify-content: flex-start !important;
+        }
+
+        .appmetering-module-root .ema-sidebar-tree {
+          min-height: 0 !important;
+        }
+
+        .appmetering-module-root .ema-sidebar-tree-node.is-appmetering-device .ema-sidebar-tree-icon,
+        .appmetering-module-root .ema-sidebar-tree-node.is-appmetering-package .ema-sidebar-tree-icon {
+          opacity: 0.95 !important;
+        }
+
+        @media (max-width: 1100px) {
+          .appmetering-module-root .settings-layout.appmetering-settings-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .appmetering-module-root .settings-menu.appmetering-left-panel {
+            min-width: 0 !important;
+            max-width: none !important;
+          }
+        }
+      `}</style>
       <input aria-hidden="true" id="globalSearch" type="hidden" />
       <button hidden id="themeBtn" type="button">
         <span id="themeLabel">Dark Mode</span>
       </button>
 
-      <div className="settings-layout">
-        <aside className="settings-menu ema-panel-surface">
+      <div className="settings-layout appmetering-settings-layout d-grid gap-3">
+        <aside className="settings-menu appmetering-left-panel ema-panel-surface">
           <div className="panel-head">
-            <span>APPLICATION METERING</span>
-            <strong>Metering Scope</strong>
-            <small>Browse organization, devices and software packages.</small>
+            <span>APP METERING</span>
+            <strong>Application Metering</strong>
+            <small>Manage metering branches and package records.</small>
           </div>
 
-          <div className="ema-module-sidebar-nav ema-module-sidebar-switcher">
-            <button type="button" className={cx("setting-btn", viewMode === "device" && "active")} onClick={() => setViewMode("device")}>
-              <span className="setting-icon"><UserRound size={18} /></span>
-              <span><strong>Devices</strong><small>Folder and endpoint scope</small></span>
+          <nav className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher" id="appmeteringMenu" role="tablist" aria-label="Application metering navigation">
+            <button
+              type="button"
+              className={cx("setting-btn", viewMode === "device" && "active")}
+              onClick={() => setViewMode("device")}
+            >
+              <span className="setting-icon"><FolderOpen size={16} /></span>
+              <span><strong>Branch</strong><small>Branch endpoint scope</small></span>
             </button>
-            <button type="button" className={cx("setting-btn", viewMode === "package" && "active")} onClick={() => setViewMode("package")}>
-              <span className="setting-icon"><Layers3 size={18} /></span>
-              <span><strong>Packages</strong><small>Software package list</small></span>
+            <button
+              type="button"
+              className={cx("setting-btn", viewMode === "package" && "active")}
+              onClick={() => setViewMode("package")}
+            >
+              <span className="setting-icon"><Database size={16} /></span>
+              <span><strong>Packages</strong><small>Application package views</small></span>
             </button>
-          </div>
+          </nav>
 
           <div className="ema-sidebar-content">
             <div className="ema-sidebar-subpanel">
               <label className="section-search ema-sidebar-field" htmlFor="appmSidebarSearch">
                 <Search size={15} />
-                <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder="Search branches, devices..." />
+                <input id="appmSidebarSearch" value={treeSearch} onChange={(event) => handleTreeSearch(event.target.value)} placeholder={viewMode === "device" ? "Search branches..." : "Search packages..."} />
               </label>
 
-              <div className="ema-sidebar-tree" id="appmeteringMenu" role="tree" aria-label="Application metering target tree">
-                <div className="ema-sidebar-section-title">
-                  {viewMode === "device" ? <Folder size={14} /> : <Package size={14} />}
-                  <span>{viewMode === "device" ? "Branch" : "Packages"}</span>
-                </div>
+              <div className="ema-sidebar-tree" role="tree" aria-label="Application metering target tree">
+
                 {loading.hierarchy || loading.packages ? (
                   <div className="ema-sidebar-empty">{viewMode === "device" ? "Preparing branch view..." : "Preparing package list..."}</div>
                 ) : activeTree.length > 0 ? (
-                  <AppMeteringTree nodes={activeTree} selectedId={selectedNode.id} onSelect={handleNodeSelect} />
+                  <AppMeteringTree nodes={activeTree} selectedId={selectedNode.id} onSelect={handleNodeSelect} search={treeSearch} />
                 ) : (
                   <div className="ema-sidebar-empty">{viewMode === "device" ? "No branch entries found." : "No packages found."}</div>
                 )}
@@ -1274,7 +1362,7 @@ export default function AppMetering() {
           </div>
         </aside>
 
-        <section className="settings-content">
+        <section className="settings-content appmetering-settings-content d-grid gap-3">
           <div className="settings-hero ema-hero-kpi-right ema-panel-surface">
             <div>
               <span className="eyebrow">APPLICATION COMMAND CENTER</span>

@@ -15,6 +15,7 @@ import {
   FileDown,
   Folder,
   FolderOpen,
+  FolderPlus,
   Globe2,
   Info,
   Laptop,
@@ -54,6 +55,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 type PatchMode = 'online' | 'offline';
 type PatchTab = 'status' | 'catalog';
+type PatchSidebarMode = 'organization' | 'statistics';
 type PatchKpiAction = 'coverage' | 'applicable' | 'missing' | 'installed' | 'devices' | 'lastScan';
 type ConfirmState =
   | { type: 'scan' }
@@ -145,6 +147,28 @@ const getDeviceName = (asset?: AssetItem | null) => {
   );
 };
 
+const getDepartmentLabel = (node: DepartmentNode) => (
+  node.Object_Full_Name || node.Object_Rel_Name || `Branch ${Number(node.Object_Rel_Idn || 0)}`
+);
+
+const getDepartmentShortLabel = (node: DepartmentNode) => (
+  node.Object_Rel_Name || getDepartmentLabel(node)
+);
+
+function filterDepartmentNodes(nodes: DepartmentNode[], keyword: string): DepartmentNode[] {
+  const text = keyword.trim().toLowerCase();
+  if (!text) return nodes;
+
+  return nodes
+    .map((node) => {
+      const children = filterDepartmentNodes(node.children || [], text);
+      const label = `${getDepartmentLabel(node)} ${getDepartmentShortLabel(node)}`.toLowerCase();
+      if (label.includes(text) || children.length) return { ...node, children };
+      return null;
+    })
+    .filter(Boolean) as DepartmentNode[];
+}
+
 const getKbText = (row?: OnlinePatchRow | null) => {
   if (!row) return '-';
   if (row.KB) return String(row.KB);
@@ -196,6 +220,8 @@ const toScopeParams = (selection: ScopeSelection): OnlinePatchScopeParams => ({
 function PatchManagement() {
   const [mode, setMode] = useState<PatchMode>('online');
   const [activeTab, setActiveTab] = useState<PatchTab>('status');
+  const [sidebarMode, setSidebarMode] = useState<PatchSidebarMode>('organization');
+  const [scopeSearch, setScopeSearch] = useState('');
   const [departments, setDepartments] = useState<DepartmentNode[]>([]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [assetsByRelation, setAssetsByRelation] = useState<Record<number, AssetItem[]>>({});
@@ -224,6 +250,7 @@ function PatchManagement() {
   const [toast, setToast] = useState<ToastState>(null);
 
   const scopeParams = useMemo(() => toScopeParams(selectedScope), [selectedScope]);
+  const filteredDepartments = useMemo(() => filterDepartmentNodes(departments, scopeSearch), [departments, scopeSearch]);
   const currentResult = activeTab === 'status' ? statusResult : catalogResult;
   const totalPages = Math.max(1, Math.ceil((currentResult.totalRecords || 0) / limit));
 
@@ -242,6 +269,16 @@ function PatchManagement() {
   const showToast = useCallback((nextToast: ToastState) => {
     setToast(nextToast);
     window.setTimeout(() => setToast(null), 3800);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.add('ema-settings-page-active');
+    document.body.classList.add('ema-settings-page-active');
+
+    return () => {
+      document.documentElement.classList.remove('ema-settings-page-active');
+      document.body.classList.remove('ema-settings-page-active');
+    };
   }, []);
 
   useEffect(() => {
@@ -476,54 +513,201 @@ function PatchManagement() {
   };
 
   return (
-    <main className="settings-module-root hardware-module-root patch-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="patch-management">
+    <main className="settings-module-root hardware-module-root patch-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section="patch-management">
+      <style>{`
+        /* Patch page shell: match Hardware without touching the global AppShell sidebar. */
+        .patch-module-root.settings-module-root {
+          background:
+            radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
+            radial-gradient(circle at 100% 10%, rgba(8, 126, 164, 0.045), transparent 24rem),
+            linear-gradient(135deg, #eef3f9 0%, #f9fbfd 45%, #e8eff7 100%) !important;
+        }
+
+        /* Patch sidebar: mirror Hardware sidebar panel. */
+        .patch-module-root .settings-layout.patch-settings-layout {
+          grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
+        }
+
+        .patch-module-root .settings-menu.patch-left-panel {
+          min-width: 300px !important;
+        }
+
+        .patch-module-root .settings-menu > .ema-module-sidebar-switcher {
+          flex: 0 0 auto !important;
+          margin: 0 !important;
+        }
+
+        .patch-module-root .settings-menu > .ema-sidebar-content {
+          flex: 1 1 auto !important;
+          padding-top: 0.65rem !important;
+        }
+
+        .patch-module-root .ema-sidebar-subpanel {
+          justify-content: flex-start !important;
+        }
+
+        .patch-module-root .ema-sidebar-tree {
+          min-height: 0 !important;
+        }
+
+        .patch-module-root .patch-tree-root {
+          display: contents !important;
+        }
+
+        .patch-module-root .ema-sidebar-tree-node.is-patch-root {
+          grid-template-columns: 24px minmax(0, 1fr) !important;
+        }
+
+        .patch-module-root .ema-sidebar-tree-node.is-patch-root .ema-sidebar-tree-toggle svg,
+        .patch-module-root .ema-sidebar-tree-node.is-patch-root .ema-sidebar-tree-count,
+        .patch-module-root .ema-sidebar-tree-node.is-patch-root .ema-sidebar-tree-menu-wrap {
+          display: none !important;
+        }
+
+        .patch-module-root .patch-stat-list {
+          display: grid !important;
+          gap: 0.55rem !important;
+        }
+
+        .patch-module-root .patch-stat-list .setting-btn {
+          width: 100% !important;
+        }
+
+        @media (max-width: 1100px) {
+          .patch-module-root .settings-layout.patch-settings-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .patch-module-root .settings-menu.patch-left-panel {
+            min-width: 0 !important;
+            max-width: none !important;
+          }
+        }
+      `}</style>
+      <input aria-hidden="true" id="globalSearch" type="hidden" />
+      <button hidden id="themeBtn" type="button">
+        <span id="themeLabel">Dark Mode</span>
+      </button>
+
       {toast && <PatchToast toast={toast} onClose={() => setToast(null)} />}
 
-      <div className="settings-layout d-grid gap-3">
-        <aside className="settings-menu ema-panel-surface">
+      <div className="settings-layout patch-settings-layout d-grid gap-3">
+        <aside className="settings-menu patch-left-panel ema-panel-surface">
           <div className="panel-head">
-            <span>Patch Scope</span>
-            <strong>Package Library</strong>
-            <small>Choose organization, department, or device.</small>
+            <span>PATCH MANAGEMENT</span>
+            <strong>Patch Management</strong>
+            <small>Manage patch scope and update records.</small>
           </div>
 
-          <div className="p-3 pb-2">
-            <label className="section-search">
-              <Search size={15} />
-              <input placeholder="Search scope" readOnly />
-            </label>
-          </div>
-
-          <div className="settings-menu-list">
-            <button className={cx('setting-btn', selectedScope.scope === 'all' && 'active')} onClick={selectOrganization} type="button">
-              <span className="setting-icon"><Globe2 /></span>
-              <span>
-                <strong>Branch</strong>
-                <small>Whole company</small>
-              </span>
+          <nav className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher" role="tablist" aria-label="Patch navigation">
+            <button
+              type="button"
+              className={cx('setting-btn', sidebarMode === 'organization' && 'active')}
+              onClick={() => {
+                setSidebarMode('organization');
+                setScopeSearch('');
+              }}
+            >
+              <span className="setting-icon"><FolderOpen size={16} /></span>
+              <span><strong>Branch</strong><small>Patch endpoint scope</small></span>
             </button>
+            <button
+              type="button"
+              className={cx('setting-btn', sidebarMode === 'statistics' && 'active')}
+              onClick={() => setSidebarMode('statistics')}
+            >
+              <span className="setting-icon"><Database size={16} /></span>
+              <span><strong>Statistics</strong><small>Patch operational views</small></span>
+            </button>
+          </nav>
 
-            {departments.map((node) => (
-              <TreeNode
-                key={node.Object_Rel_Idn}
-                node={node}
-                level={0}
-                selectedScope={selectedScope}
-                expanded={expanded}
-                assetsByRelation={assetsByRelation}
-                loadingAssets={loadingAssets}
-                onToggle={toggleDepartment}
-                onSelectDepartment={selectDepartment}
-                onSelectDevice={selectDevice}
-              />
-            ))}
+          <div className="ema-sidebar-content">
+            <div className="ema-sidebar-subpanel">
+              {sidebarMode === 'organization' ? (
+                <>
+                  <div className="section-search ema-sidebar-field">
+                    <Search size={15} />
+                    <input
+                      placeholder="Search branches..."
+                      value={scopeSearch}
+                      onChange={(event) => setScopeSearch(event.target.value)}
+                    />
+                  </div>
 
-            {treeLoading && <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading organization...</div>}
-            {!treeLoading && departments.length === 0 && <div className="settings-helper-card">No organization scope available.</div>}
+                  <button
+                    type="button"
+                    className="soft-btn d-inline-flex align-items-center gap-1 px-2"
+                    onClick={() => showToast({ type: 'info', message: 'Branch path creation is managed from the organization settings.' })}
+                  >
+                    <FolderPlus size={13} />
+                    New Branch Path
+                  </button>
+
+                  <div className="ema-sidebar-tree" aria-label="Patch scope tree">
+                    <div className="patch-tree-root">
+                      <div className={cx('ema-sidebar-tree-node depth-0 is-patch-root', selectedScope.scope === 'all' && 'is-selected is-active')}>
+                        <button type="button" className="ema-sidebar-tree-toggle" aria-label="All Branches"><span /></button>
+                        <button type="button" className="ema-sidebar-tree-main" onClick={selectOrganization} title="All Branches">
+                          <span className="ema-sidebar-tree-icon"><Folder size={15} /></span>
+                          <span className="ema-sidebar-tree-label">All Branches</span>
+                        </button>
+                      </div>
+
+                      <div className="ema-sidebar-tree-children is-nested">
+                        {filteredDepartments.map((node) => (
+                          <TreeNode
+                            key={node.Object_Rel_Idn}
+                            node={node}
+                            level={1}
+                            selectedScope={selectedScope}
+                            expanded={expanded}
+                            assetsByRelation={assetsByRelation}
+                            loadingAssets={loadingAssets}
+                            onToggle={toggleDepartment}
+                            onSelectDepartment={selectDepartment}
+                            onSelectDevice={selectDevice}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {treeLoading && <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading organization...</div>}
+                    {!treeLoading && filteredDepartments.length === 0 && <div className="settings-helper-card">No organization scope available.</div>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="settings-helper-card ema-sidebar-scope-card">
+                    <strong>{selectedScope.label}</strong>
+                    <span>{selectedScope.scope === 'all' ? 'All departments' : selectedScope.scope === 'relation' ? 'Selected branch' : 'Selected device'}</span>
+                  </div>
+
+                  <div className="ema-sidebar-tree patch-stat-list" aria-label="Patch statistics tree">
+                    <div className="ema-sidebar-section-title"><Database size={14} /><span>Statistics</span></div>
+                    <button className={cx('setting-btn', activeKpi === 'coverage' && 'active')} type="button" onClick={() => handleKpiClick('coverage')}>
+                      <span className="setting-icon"><ShieldCheck size={15} /></span>
+                      <span><strong>Coverage</strong><small>{patchCoverage}% installed rate</small></span>
+                    </button>
+                    <button className={cx('setting-btn', activeKpi === 'applicable' && 'active')} type="button" onClick={() => handleKpiClick('applicable')}>
+                      <span className="setting-icon"><ListChecks size={15} /></span>
+                      <span><strong>Applicable</strong><small>{formatNumber(summary.ApplicablePatches)} detected updates</small></span>
+                    </button>
+                    <button className={cx('setting-btn', (activeKpi === 'missing' || statusFilter === 'missing') && 'active')} type="button" onClick={() => handleKpiClick('missing')}>
+                      <span className="setting-icon"><ShieldAlert size={15} /></span>
+                      <span><strong>Missing</strong><small>{formatNumber(summary.MissingPatches)} pending patches</small></span>
+                    </button>
+                    <button className={cx('setting-btn', (activeKpi === 'installed' || statusFilter === 'installed') && 'active')} type="button" onClick={() => handleKpiClick('installed')}>
+                      <span className="setting-icon"><PackageCheck size={15} /></span>
+                      <span><strong>Installed</strong><small>{formatNumber(summary.InstalledPatches)} completed updates</small></span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </aside>
 
-        <section className="settings-content">
+        <section className="settings-content hardware-settings-content d-grid gap-3">
           <section className="settings-hero hardware-hero ema-panel-surface">
             <div>
               <span className="eyebrow">PATCH OPERATIONS</span>
@@ -690,37 +874,48 @@ function TreeNode({
   onSelectDevice: (asset: AssetItem, relationID: number) => void;
 }) {
   const relationID = Number(node.Object_Rel_Idn || 0);
-  const label = node.Object_Full_Name || node.Object_Rel_Name || `Department ${relationID}`;
-  const shortLabel = node.Object_Rel_Name || label;
+  const label = getDepartmentLabel(node);
+  const shortLabel = getDepartmentShortLabel(node);
   const isExpanded = expanded.has(relationID);
   const isSelected = selectedScope.scope === 'relation' && selectedScope.Object_Rel_Idn === relationID;
   const children = node.children || [];
   const devices = assetsByRelation[relationID] || [];
   const isLoading = Boolean(loadingAssets[relationID]);
   const hasLoadedDevices = Object.prototype.hasOwnProperty.call(assetsByRelation, relationID);
+  const canExpand = Boolean(relationID);
   const Icon = isExpanded ? FolderOpen : Folder;
-  const indentClass = level > 0 ? `ms-${Math.min(level, 4)}` : '';
 
   return (
-    <div className={cx('d-grid gap-2', indentClass)}>
-      <button
-        className={cx('setting-btn', isSelected && 'active')}
-        type="button"
-        onClick={() => {
-          onToggle(node);
-          onSelectDepartment(node);
-        }}
-        title={label}
-      >
-        <span className="setting-icon"><Icon /></span>
-        <span>
-          <strong>{shortLabel}</strong>
-          <small>{isExpanded ? 'Click to collapse scope' : 'Click to expand scope'}</small>
-        </span>
-      </button>
+    <div className="ema-sidebar-tree-branch">
+      <div className={cx('ema-sidebar-tree-node', `depth-${Math.min(level, 8)}`, isSelected && 'is-selected is-active', canExpand && 'is-expandable')}>
+        <button
+          type="button"
+          className="ema-sidebar-tree-toggle"
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle(node);
+          }}
+          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${shortLabel}`}
+        >
+          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        <button
+          type="button"
+          className="ema-sidebar-tree-main"
+          onClick={() => {
+            onToggle(node);
+            onSelectDepartment(node);
+          }}
+          title={label}
+        >
+          <span className="ema-sidebar-tree-icon"><Icon size={15} /></span>
+          <span className="ema-sidebar-tree-label">{shortLabel}</span>
+        </button>
+      </div>
 
       {isExpanded && (
-        <div className="d-grid gap-2 ms-3">
+        <div className="ema-sidebar-tree-children is-nested">
           {children.map((child) => (
             <TreeNode
               key={child.Object_Rel_Idn}
@@ -743,18 +938,20 @@ function TreeNode({
             const deviceID = getDeviceId(asset);
             const isDeviceSelected = selectedScope.scope === 'device' && selectedScope.Object_Root_Idn === deviceID;
             return (
-              <button
-                key={`${relationID}-${deviceID}-${getDeviceName(asset)}`}
-                className={cx('setting-btn', isDeviceSelected && 'active')}
-                type="button"
-                onClick={() => onSelectDevice(asset, relationID)}
-              >
-                <span className="setting-icon"><Laptop /></span>
-                <span>
-                  <strong>{getDeviceName(asset)}</strong>
-                  <small>{asset.IP || asset.Object_DeviceID || asset.DeviceID || 'Endpoint device'}</small>
-                </span>
-              </button>
+              <div className="ema-sidebar-tree-branch" key={`${relationID}-${deviceID}-${getDeviceName(asset)}`}>
+                <div className={cx('ema-sidebar-tree-node', `depth-${Math.min(level + 1, 8)}`, isDeviceSelected && 'is-selected is-active', 'is-leaf-ip')}>
+                  <button type="button" className="ema-sidebar-tree-toggle" aria-label={getDeviceName(asset)}><span /></button>
+                  <button
+                    type="button"
+                    className="ema-sidebar-tree-main"
+                    onClick={() => onSelectDevice(asset, relationID)}
+                    title={getDeviceName(asset)}
+                  >
+                    <span className="ema-sidebar-tree-icon"><Laptop size={14} /></span>
+                    <span className="ema-sidebar-tree-label">{getDeviceName(asset)}</span>
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>

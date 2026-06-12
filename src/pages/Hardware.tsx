@@ -8,6 +8,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Database,
+  Download,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -2680,6 +2681,71 @@ export default function HardwareInventory() {
     void loadHardwareInventory();
   };
 
+  const handleExportHardwareTable = () => {
+    if (!filteredDevices.length) {
+      showToast("info", "No data to export", "The current table has no device records to export.");
+      return;
+    }
+
+    const escapeCsvCell = (value: unknown) => {
+      const text = value === undefined || value === null ? "" : String(value);
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      "No",
+      "Device",
+      "Device ID",
+      "Owner",
+      "Branch",
+      "Branch Path",
+      "Platform / Model",
+      "Status",
+      "Last Connected",
+      "Network",
+      "Asset ID",
+      "Agent",
+      "Latitude",
+      "Longitude",
+      "Accuracy",
+      "Last Update",
+    ];
+
+    const rows = filteredDevices.map((device, index) => [
+      index + 1,
+      device.name,
+      device.deviceIdentifier || device.id,
+      device.owner,
+      device.department,
+      device.groupPath,
+      device.platformModel,
+      device.status,
+      device.lastConnected,
+      device.ip,
+      device.assetId || "",
+      device.objectAgent || "",
+      device.latitude,
+      device.longitude,
+      device.accuracy,
+      device.lastUpdate,
+    ]);
+
+    const csv = [headers, ...rows].map((row) => row.map(escapeCsvCell).join(",")).join("\n");
+    const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `hardware-inventory-${dateStamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    showToast("success", "Hardware table exported", `${filteredDevices.length} device record(s) exported to CSV.`);
+    setNote(`${filteredDevices.length} current table record(s) exported.`);
+  };
+
   const openMoveDepartmentModal = () => {
     if (!hasSelectedDevice) {
       showToast("info", "Select a device first", "Click a device row before using device actions.");
@@ -3897,7 +3963,7 @@ export default function HardwareInventory() {
 
         .hardware-module-root .hardware-scan-command-row {
           display: grid !important;
-          grid-template-columns: max-content max-content max-content minmax(280px, 1fr) 42px !important;
+          grid-template-columns: max-content max-content max-content minmax(280px, 1fr) 42px max-content !important;
           align-items: center !important;
           gap: 10px !important;
           width: 100% !important;
@@ -3962,6 +4028,30 @@ export default function HardwareInventory() {
           height: 38px !important;
           justify-self: end !important;
           align-self: center !important;
+        }
+
+        .hardware-module-root .hardware-toolbar-export {
+          flex: 0 0 auto !important;
+          height: 38px !important;
+          min-width: 92px !important;
+          justify-self: end !important;
+          align-self: center !important;
+          border-color: #0b7ed7 !important;
+          background: linear-gradient(135deg, #1d6fd7 0%, #0b83c7 100%) !important;
+          color: #ffffff !important;
+          box-shadow: 0 14px 28px rgba(11, 126, 215, 0.22) !important;
+        }
+
+        .hardware-module-root .hardware-toolbar-export:hover:not(:disabled) {
+          border-color: #075fa7 !important;
+          box-shadow: 0 18px 34px rgba(11, 126, 215, 0.28) !important;
+        }
+
+        .hardware-module-root .hardware-toolbar-export:disabled {
+          border-color: #cbd5e1 !important;
+          background: #eff4fb !important;
+          color: #94a3b8 !important;
+          box-shadow: none !important;
         }
 
         .hardware-module-root .hardware-registry-filter-row {
@@ -4078,15 +4168,20 @@ export default function HardwareInventory() {
 
         @media (max-width: 1250px) {
           .hardware-module-root .hardware-scan-command-row {
-            grid-template-columns: repeat(3, minmax(132px, 1fr)) 42px !important;
+            grid-template-columns: repeat(3, minmax(132px, 1fr)) 42px max-content !important;
           }
 
           .hardware-module-root .hardware-toolbar-search {
-            grid-column: 1 / -2 !important;
+            grid-column: 1 / -3 !important;
             grid-row: 2 !important;
           }
 
           .hardware-module-root .hardware-toolbar-refresh {
+            grid-column: -3 / -2 !important;
+            grid-row: 2 !important;
+          }
+
+          .hardware-module-root .hardware-toolbar-export {
             grid-column: -2 / -1 !important;
             grid-row: 2 !important;
           }
@@ -4108,7 +4203,8 @@ export default function HardwareInventory() {
           }
 
           .hardware-module-root .hardware-toolbar-search,
-          .hardware-module-root .hardware-toolbar-refresh {
+          .hardware-module-root .hardware-toolbar-refresh,
+          .hardware-module-root .hardware-toolbar-export {
             grid-column: auto !important;
             grid-row: auto !important;
             width: 100% !important;
@@ -4307,6 +4403,17 @@ export default function HardwareInventory() {
               <button type="button" className="hardware-icon-btn hardware-toolbar-refresh" onClick={handleRefresh} title="Refresh inventory">
                 <RefreshCw size={16} />
               </button>
+
+              <button
+                type="button"
+                className="hardware-command-btn hardware-toolbar-export"
+                onClick={handleExportHardwareTable}
+                disabled={!filteredDevices.length}
+                title="Export current table data"
+              >
+                <Download size={15} />
+                Export
+              </button>
             </div>
 
             <div className="hardware-registry-filters hardware-registry-filter-row">
@@ -4345,9 +4452,6 @@ export default function HardwareInventory() {
 
           <div className="hardware-registry-subhead">
             <div>
-              <strong>
-                Showing {filteredDevices.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredDevices.length)} of {filteredDevices.length} devices
-              </strong>
               <span>
                 {selectedFolderLabel} scope
                 {activeKpiFilter !== "all" ? ` • KPI filter: ${activeKpiLabel}` : ""}
