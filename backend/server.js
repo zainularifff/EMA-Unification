@@ -13565,6 +13565,202 @@ app.post("/api/software-distribution/send", authenticateToken, async (req, res) 
 });
 /*
 |--------------------------------------------------------------------------
+| Software Distribution job status/history sync
+|--------------------------------------------------------------------------
+| The agent/webagent may update TS_JOB, but Task List reads endpoint status
+| from TS_JOB_HISTORY. Keep both tables aligned for software distribution.
+|--------------------------------------------------------------------------
+*/
+
+app.post("/api/software-distribution/job-status", authenticateToken, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const objectDeviceID = sdistText(sdistFirst(body.Object_DeviceID, body.objectDeviceID, body.deviceID));
+        const jobIdn = sdistInt(sdistFirst(body.Job_Idn, body.jobIdn, body.jobID), 0);
+        const jobStatus = sdistInt(sdistFirst(body.Job_Status, body.jobStatus, body.status), 0);
+        const packageFile = sdistText(sdistFirst(body.package_file, body.packageFile, body.file));
+
+        if (!objectDeviceID || !jobIdn || !jobStatus) {
+            return res.status(400).json({
+                success: false,
+                message: "Object_DeviceID, Job_Idn, and Job_Status are required"
+            });
+        }
+
+        let externalResult = null;
+        try {
+            externalResult = await sdistFetchJava("/sd/UpdateJobStatus", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    Object_DeviceID: objectDeviceID,
+                    Job_Idn: String(jobIdn),
+                    Job_Status: String(jobStatus),
+                    package_file: packageFile
+                })
+            });
+        } catch (externalErr) {
+            externalResult = {
+                success: false,
+                warning: "External software-distribution status API failed; local TS_JOB/TS_JOB_HISTORY sync still executed.",
+                error: externalErr.message || String(externalErr)
+            };
+        }
+
+        const pool = await sql.connect(dbConfig);
+        const dbResult = await pool.request()
+            .input("Job_Idn", sql.Int, jobIdn)
+            .input("Job_Status", sql.Int, jobStatus)
+            .input("Object_DeviceID", sql.VarChar(255), objectDeviceID)
+            .query(`
+                DECLARE @Object_Root_Idn int = NULL;
+                DECLARE @IP varchar(255) = '';
+                DECLARE @updatedJob int = 0;
+                DECLARE @updatedHistory int = 0;
+                DECLARE @insertedHistory int = 0;
+
+                SELECT TOP 1
+                    @Object_Root_Idn = Object_Root_Idn,
+                    @IP = ISNULL(IP, '')
+                FROM dbo.TS_OBJECT_ROOT WITH (NOLOCK)
+                WHERE Object_DeviceID = @Object_DeviceID;
+
+                UPDATE dbo.TS_JOB
+                SET Job_Status = @Job_Status
+                WHERE Job_Idn = @Job_Idn;
+                SET @updatedJob = @@ROWCOUNT;
+
+                IF OBJECT_ID(N'dbo.TS_JOB_HISTORY', N'U') IS NOT NULL
+                BEGIN
+                    UPDATE dbo.TS_JOB_HISTORY
+                    SET Job_Status = @Job_Status,
+                        LastChangedTime = GETDATE(),
+                        Object_DeviceID = CASE
+                            WHEN (Object_DeviceID IS NULL OR Object_DeviceID = '') THEN @Object_DeviceID
+                            ELSE Object_DeviceID
+                        END,
+                        IP = CASE
+                            WHEN (IP IS NULL OR IP = '') THEN ISNULL(@IP, '')
+                            ELSE IP
+                        END
+                    WHERE Job_Idn = @Job_Idn
+                      AND (
+                            Object_DeviceID = @Object_DeviceID
+                            OR (@Object_Root_Idn IS NOT NULL AND Object_Root_Idn = @Object_Root_Idn)
+                          );
+                    SET @updatedHistory = @@ROWCOUNT;
+
+                    IF @updatedHistory = 0
+                    BEGIN
+                        INSERT INTO dbo.TS_JOB_HISTORY
+                        (
+                            Job_Idn,
+                            Object_Root_Idn,
+                            Job_Status,
+                            LastChangedTime,
+                            Object_DeviceID,
+                            IP
+                        )
+                        VALUES
+                        (
+                            @Job_Idn,
+                            ISNULL(@Object_Root_Idn, -1),
+                            @Job_Status,
+                            GETDATE(),
+                            @Object_DeviceID,
+                            ISNULL(@IP, '')
+                        );
+                        SET @insertedHistory = @@ROWCOUNT;
+                    END
+                END
+
+                SELECT
+                    @Job_Idn AS Job_Idn,
+                    @Object_DeviceID AS Object_DeviceID,
+                    ISNULL(@Object_Root_Idn, -1) AS Object_Root_Idn,
+                    @Job_Status AS Job_Status,
+                    @updatedJob AS updatedJob,
+                    @updatedHistory AS updatedHistory,
+                    @insertedHistory AS insertedHistory;
+            `);
+
+        return res.json({
+            success: true,
+            message: "Software distribution job status synchronized.",
+            data: externalResult,
+            database: dbResult.recordset?.[0] || null
+        });
+    } catch (err) {
+        console.error("Software distribution job status sync failed:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update software distribution job status.",
+            error: err.message || String(err)
+        });
+    }
+});
+
+app.get("/api/software-distribution/jobs", authenticateToken, async (req, res) => {
+    try {
+        const pkgName = sdistText(req.query.pkgName || req.query.Pkg_Name || req.query.pkg_Name);
+        const jobIdn = sdistInt(req.query.jobIdn || req.query.Job_Idn, 0);
+        const pool = await sql.connect(dbConfig);
+
+        const result = await pool.request()
+            .input("pkgName", sql.VarChar(255), pkgName)
+            .input("jobIdn", sql.Int, jobIdn)
+            .query(`
+                SELECT
+                    j.Job_Idn,
+                    j.Job_Type,
+                    j.Job_Command,
+                    j.Job_Style,
+                    j.Job_StartTime,
+                    j.Job_EndTime,
+                    j.Job_ScheduleTime,
+                    j.Job_Status AS JobStatusCode,
+                    j.Job_Description,
+                    p.Pkg_Idn,
+                    p.Pkg_Name,
+                    p.Pkg_Version,
+                    h.Job_Status AS HistoryStatusCode,
+                    h.LastChangedTime,
+                    d.Object_Root_Idn,
+                    d.Object_Rel_Idn,
+                    d.Object_Server_Idn
+                FROM TS_JOB j WITH (NOLOCK)
+                LEFT JOIN TS_PKGJOB pj WITH (NOLOCK)
+                    ON j.Job_Idn = pj.Job_Idn
+                LEFT JOIN TSSD_PACKAGES p WITH (NOLOCK)
+                    ON pj.Pkg_Idn = p.Pkg_Idn
+                LEFT JOIN TS_JOB_HISTORY h WITH (NOLOCK)
+                    ON j.Job_Idn = h.Job_Idn
+                LEFT JOIN TS_JOB_DEST d WITH (NOLOCK)
+                    ON j.Job_Idn = d.Job_Idn
+                WHERE (@jobIdn = 0 OR j.Job_Idn = @jobIdn)
+                    AND (@pkgName = '' OR p.Pkg_Name = @pkgName)
+                ORDER BY j.Job_Idn DESC;
+            `);
+
+        return res.json({
+            success: true,
+            totalRecords: result.recordset?.length || 0,
+            pkgName,
+            jobIdn,
+            data: result.recordset || []
+        });
+    } catch (err) {
+        console.error("Failed to retrieve software distribution jobs:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve software distribution jobs.",
+            error: err.message || String(err)
+        });
+    }
+});
+
+/*
+|--------------------------------------------------------------------------
 /* END SOFTWARE DISTRIBUTION APIs */
 
 
@@ -16565,7 +16761,7 @@ async function getTaskRows(pool, filters = {}) {
     const startTimeValue = normalizeTaskValue(firstTaskDefined(filters.job_starttime, filters.jobStartTime, filters.fromDate), "1990-01-01");
     const parsedStartDate = new Date(startTimeValue);
     const startDate = Number.isNaN(parsedStartDate.getTime()) ? new Date("1990-01-01T00:00:00") : parsedStartDate;
-    const limit = Math.min(Math.max(parseTaskInt(filters.limit, 1000), 1), 5000);
+    const limit = Math.min(Math.max(parseTaskInt(filters.limit, 500), 1), 5000);
 
     const result = await pool.request()
         .input("Job_Type", sql.Int, jobType)
@@ -16573,58 +16769,48 @@ async function getTaskRows(pool, filters = {}) {
         .input("Job_StartTime", sql.DateTime, startDate)
         .input("Limit", sql.Int, limit)
         .query(`
-            ;WITH CandidateTasks AS (
-                SELECT TOP (@Limit)
-                    j.Job_Idn,
-                    j.Job_Type,
-                    j.Job_Command,
-                    j.Job_Style,
-                    j.Job_StartTime,
-                    j.Job_EndTime,
-                    j.Job_ScheduleTime,
-                    j.Job_Status AS Raw_Job_Status,
-                    CASE
-                        WHEN j.Job_Status IN (2203, 2204) THEN j.Job_Status
-                        WHEN j.Job_Command IN (1401, 1405, 1408, 1409, 1411, 1413, 1810, 2301) THEN 2203
-                        WHEN j.Job_Command = 2150 THEN 2204
-                        ELSE j.Job_Status
-                    END AS EffectiveJob_Status,
-                    CASE
-                        WHEN j.Job_Status = 2203 THEN 'raw_job_status_stop'
-                        WHEN j.Job_Status = 2204 THEN 'raw_job_status_cancelled'
-                        WHEN j.Job_Status = 2202 THEN 'raw_job_status_transferred'
-                        WHEN j.Job_Command IN (1401, 1405, 1408, 1409, 1411, 1413, 1810, 2301) THEN 'this_job_is_stop_command'
-                        WHEN j.Job_Command = 2150 THEN 'this_job_is_cancel_command'
-                        ELSE 'active_raw_status'
-                    END AS EffectiveStatusReason,
-                    CAST(0 AS int) AS RelatedStopJob_Idn,
-                    j.Job_Description,
-                    j.Console_Idn,
-                    c.UserID
-                FROM TS_JOB j WITH (NOLOCK)
-                LEFT JOIN TS_CONSOLE c WITH (NOLOCK)
-                    ON c.Console_Idn = j.Console_Idn
-                WHERE (@Job_Type = -1 OR j.Job_Type = @Job_Type)
-                  AND COALESCE(TRY_CONVERT(datetime, j.Job_StartTime), TRY_CONVERT(datetime, j.Job_ScheduleTime), TRY_CONVERT(datetime, j.Job_EndTime), '1900-01-01') >= @Job_StartTime
-                ORDER BY COALESCE(TRY_CONVERT(datetime, j.Job_StartTime), TRY_CONVERT(datetime, j.Job_ScheduleTime), TRY_CONVERT(datetime, j.Job_EndTime), '1900-01-01') DESC,
-                         j.Job_Idn DESC
+            ;WITH LatestHistory AS (
+                SELECT
+                    h.Job_Idn,
+                    h.Job_Status AS HistoryJobStatus,
+                    h.LastChangedTime AS HistoryLastChangedTime,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY h.Job_Idn
+                        ORDER BY TRY_CONVERT(datetime, h.LastChangedTime) DESC, h.Job_Status DESC
+                    ) AS rn
+                FROM TS_JOB_HISTORY h
             )
-            SELECT
-                *,
-                EffectiveJob_Status AS Job_Status,
-                CASE WHEN EffectiveJob_Status IN (2202, 2203, 2204) THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END AS CanStop,
-                CASE WHEN EffectiveJob_Status IN (2202, 2203, 2204) THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END AS CanCancel,
-                CAST(1 AS bit) AS CanDelete,
-                CASE
-                    WHEN EffectiveJob_Status = 2203 THEN 'This task is already stopped from the main module or by a stop command.'
-                    WHEN EffectiveJob_Status = 2204 THEN 'This task is already cancelled.'
-                    WHEN EffectiveJob_Status = 2202 THEN 'This task has already completed.'
-                    ELSE ''
-                END AS ActionDisabledReason
-            FROM CandidateTasks
-            WHERE (@Job_Status = -1 OR EffectiveJob_Status = @Job_Status)
-            ORDER BY COALESCE(TRY_CONVERT(datetime, Job_StartTime), TRY_CONVERT(datetime, Job_ScheduleTime), TRY_CONVERT(datetime, Job_EndTime), '1900-01-01') DESC,
-                     Job_Idn DESC;
+            SELECT TOP (@Limit)
+                j.Job_Idn,
+                j.Job_Type,
+                j.Job_Command,
+                j.Job_Style,
+                j.Job_StartTime,
+                j.Job_EndTime,
+                j.Job_ScheduleTime,
+                ISNULL(lh.HistoryJobStatus, j.Job_Status) AS Job_Status,
+                j.Job_Status AS JobStatusCode,
+                lh.HistoryJobStatus,
+                lh.HistoryLastChangedTime,
+                j.Job_Description,
+                j.Console_Idn,
+                c.UserID
+            FROM TS_JOB j
+            LEFT JOIN LatestHistory lh
+                ON lh.Job_Idn = j.Job_Idn
+               AND lh.rn = 1
+            LEFT JOIN TS_CONSOLE c
+                ON c.Console_Idn = j.Console_Idn
+            WHERE (@Job_Type = -1 OR j.Job_Type = @Job_Type)
+              AND (@Job_Status = -1 OR ISNULL(lh.HistoryJobStatus, j.Job_Status) = @Job_Status)
+              AND (
+                    @Job_StartTime <= '1990-01-02'
+                    OR TRY_CONVERT(datetime, j.Job_StartTime) >= @Job_StartTime
+                    OR TRY_CONVERT(datetime, j.Job_ScheduleTime) >= @Job_StartTime
+                  )
+            ORDER BY
+                COALESCE(TRY_CONVERT(datetime, j.Job_StartTime), TRY_CONVERT(datetime, j.Job_ScheduleTime), TRY_CONVERT(datetime, j.Job_EndTime)) DESC,
+                j.Job_Idn DESC;
         `);
 
     return result.recordset || [];
@@ -16634,52 +16820,34 @@ async function getTaskBaseRow(pool, jobId) {
     const result = await pool.request()
         .input("Job_Idn", sql.Int, jobId)
         .query(`
-            ;WITH CandidateTask AS (
+            ;WITH LatestHistory AS (
                 SELECT TOP 1
-                    j.Job_Idn,
-                    j.Job_Type,
-                    j.Job_Command,
-                    j.Job_Style,
-                    j.Job_StartTime,
-                    j.Job_EndTime,
-                    j.Job_ScheduleTime,
-                    j.Job_Status AS Raw_Job_Status,
-                    CASE
-                        WHEN j.Job_Status IN (2203, 2204) THEN j.Job_Status
-                        WHEN j.Job_Command IN (1401, 1405, 1408, 1409, 1411, 1413, 1810, 2301) THEN 2203
-                        WHEN j.Job_Command = 2150 THEN 2204
-                        ELSE j.Job_Status
-                    END AS EffectiveJob_Status,
-                    CASE
-                        WHEN j.Job_Status = 2203 THEN 'raw_job_status_stop'
-                        WHEN j.Job_Status = 2204 THEN 'raw_job_status_cancelled'
-                        WHEN j.Job_Status = 2202 THEN 'raw_job_status_transferred'
-                        WHEN j.Job_Command IN (1401, 1405, 1408, 1409, 1411, 1413, 1810, 2301) THEN 'this_job_is_stop_command'
-                        WHEN j.Job_Command = 2150 THEN 'this_job_is_cancel_command'
-                        ELSE 'active_raw_status'
-                    END AS EffectiveStatusReason,
-                    CAST(0 AS int) AS RelatedStopJob_Idn,
-                    j.Job_Description,
-                    j.Console_Idn,
-                    c.UserID
-                FROM TS_JOB j WITH (NOLOCK)
-                LEFT JOIN TS_CONSOLE c WITH (NOLOCK)
-                    ON c.Console_Idn = j.Console_Idn
-                WHERE j.Job_Idn = @Job_Idn
+                    h.Job_Status AS HistoryJobStatus,
+                    h.LastChangedTime AS HistoryLastChangedTime
+                FROM TS_JOB_HISTORY h
+                WHERE h.Job_Idn = @Job_Idn
+                ORDER BY TRY_CONVERT(datetime, h.LastChangedTime) DESC, h.Job_Status DESC
             )
-            SELECT
-                *,
-                EffectiveJob_Status AS Job_Status,
-                CASE WHEN EffectiveJob_Status IN (2202, 2203, 2204) THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END AS CanStop,
-                CASE WHEN EffectiveJob_Status IN (2202, 2203, 2204) THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END AS CanCancel,
-                CAST(1 AS bit) AS CanDelete,
-                CASE
-                    WHEN EffectiveJob_Status = 2203 THEN 'This task is already stopped from the main module or by a stop command.'
-                    WHEN EffectiveJob_Status = 2204 THEN 'This task is already cancelled.'
-                    WHEN EffectiveJob_Status = 2202 THEN 'This task has already completed.'
-                    ELSE ''
-                END AS ActionDisabledReason
-            FROM CandidateTask;
+            SELECT TOP 1
+                j.Job_Idn,
+                j.Job_Type,
+                j.Job_Command,
+                j.Job_Style,
+                j.Job_StartTime,
+                j.Job_EndTime,
+                j.Job_ScheduleTime,
+                ISNULL(lh.HistoryJobStatus, j.Job_Status) AS Job_Status,
+                j.Job_Status AS JobStatusCode,
+                lh.HistoryJobStatus,
+                lh.HistoryLastChangedTime,
+                j.Job_Description,
+                j.Console_Idn,
+                c.UserID
+            FROM TS_JOB j
+            OUTER APPLY (SELECT * FROM LatestHistory) lh
+            LEFT JOIN TS_CONSOLE c
+                ON c.Console_Idn = j.Console_Idn
+            WHERE j.Job_Idn = @Job_Idn;
         `);
 
     return result.recordset?.[0] || null;
@@ -16789,7 +16957,13 @@ async function getTaskProgressSummary(pool, jobId) {
                 jb.Job_StartTime,
                 jb.Job_EndTime,
                 jb.Job_ScheduleTime,
-                jb.Job_Status,
+                COALESCE((
+                    SELECT TOP 1 h2.Job_Status
+                    FROM TS_JOB_HISTORY h2 WITH (NOLOCK)
+                    WHERE h2.Job_Idn = @Job_Idn
+                    ORDER BY TRY_CONVERT(datetime, h2.LastChangedTime) DESC, h2.Job_Status DESC
+                ), jb.Job_Status) AS Job_Status,
+                jb.Job_Status AS JobStatusCode,
                 COALESCE(NULLIF(h.HistoryCount, 0), NULLIF(d.DestCount, 0), 0) AS TotalObjects,
                 ISNULL(h.CommandCompleted, 0) AS CommandCompleted,
                 ISNULL(h.TaskCompleted, 0) AS TaskCompleted,
@@ -17031,6 +17205,7 @@ async function sendTaskActionResponse(req, res) {
                 DECLARE @archivedDest int = 0;
                 DECLARE @deletedDest int = 0;
                 DECLARE @deletedPkgJob int = 0;
+                DECLARE @deletedHistory int = 0;
                 DECLARE @deletedJob int = 0;
 
                 IF NOT EXISTS (SELECT 1 FROM dbo.TS_JOB WHERE Job_Idn = @Job_Idn)
@@ -17040,6 +17215,7 @@ async function sendTaskActionResponse(req, res) {
                         @archivedDest AS archivedDest,
                         @deletedDest AS deletedDest,
                         @deletedPkgJob AS deletedPkgJob,
+                        @deletedHistory AS deletedHistory,
                         @deletedJob AS deletedJob,
                         0 AS keptHistory;
                     RETURN;
@@ -17150,6 +17326,12 @@ async function sendTaskActionResponse(req, res) {
                     SET @deletedPkgJob = @@ROWCOUNT;
                 END
 
+                IF OBJECT_ID(N'dbo.TS_JOB_HISTORY', N'U') IS NOT NULL
+                BEGIN
+                    DELETE FROM dbo.TS_JOB_HISTORY WHERE Job_Idn = @Job_Idn;
+                    SET @deletedHistory = @@ROWCOUNT;
+                END
+
                 DELETE FROM dbo.TS_JOB WHERE Job_Idn = @Job_Idn;
                 SET @deletedJob = @@ROWCOUNT;
 
@@ -17158,8 +17340,9 @@ async function sendTaskActionResponse(req, res) {
                     @archivedDest AS archivedDest,
                     @deletedDest AS deletedDest,
                     @deletedPkgJob AS deletedPkgJob,
+                    @deletedHistory AS deletedHistory,
                     @deletedJob AS deletedJob,
-                    1 AS keptHistory;
+                    0 AS keptHistory;
             `);
 
         await transaction.commit();

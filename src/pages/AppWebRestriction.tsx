@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react';
 import clsx from 'clsx';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -677,6 +677,99 @@ export default function AppWebRestriction() {
   // Saving App Whitelist for a selected device/department should create/update a policy
   // on that selected target instead of keeping it locked to Root/parent policy.
   const isInherited = activeModule === 'appWhitelist' ? false : form.inheritPolicy;
+
+
+  const moduleSelectorPanelStyle: CSSProperties = {
+    width: '100%',
+    margin: '0 0 0.85rem',
+    padding: '0.55rem',
+    border: '1px solid rgba(148, 163, 184, 0.28)',
+    borderRadius: '1rem',
+    background: '#ffffff',
+    boxShadow: '0 8px 18px rgba(15, 23, 42, 0.035)',
+    height: 'auto',
+    minHeight: 0,
+    overflow: 'visible',
+    position: 'relative',
+    zIndex: 1,
+  };
+
+  const moduleSelectorGridStyle: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: '0.65rem',
+    alignItems: 'stretch',
+    width: '100%',
+    margin: 0,
+    padding: 0,
+    minHeight: 0,
+  };
+
+  const getModuleSelectorCardStyle = (selected: boolean): CSSProperties => ({
+    width: '100%',
+    height: '3.1rem',
+    minHeight: '3.1rem',
+    maxHeight: '3.1rem',
+    margin: 0,
+    padding: '0.55rem 0.75rem',
+    border: selected ? '1px solid rgba(37, 99, 235, 0.82)' : '1px solid rgba(148, 163, 184, 0.36)',
+    borderRadius: '0.86rem',
+    background: selected ? 'linear-gradient(135deg, #2563eb 0%, #0284c7 100%)' : '#ffffff',
+    color: selected ? '#ffffff' : '#17345c',
+    boxShadow: selected ? '0 9px 18px rgba(37, 99, 235, 0.14)' : 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: '0.68rem',
+    textAlign: 'left',
+    cursor: 'pointer',
+    overflow: 'hidden',
+    position: 'relative',
+  });
+
+  const getModuleSelectorIconStyle = (selected: boolean): CSSProperties => ({
+    width: '1.85rem',
+    height: '1.85rem',
+    minWidth: '1.85rem',
+    borderRadius: '0.68rem',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: selected ? 'rgba(255, 255, 255, 0.2)' : 'rgba(37, 99, 235, 0.1)',
+    color: selected ? '#ffffff' : '#2563eb',
+    flexShrink: 0,
+  });
+
+  const moduleSelectorTextStyle: CSSProperties = {
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.06rem',
+    overflow: 'hidden',
+  };
+
+  const moduleSelectorTitleStyle: CSSProperties = {
+    display: 'block',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontSize: '0.82rem',
+    lineHeight: 1.08,
+    fontWeight: 900,
+  };
+
+  const moduleSelectorHelperStyle = (selected: boolean): CSSProperties => ({
+    display: 'block',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    fontSize: '0.64rem',
+    lineHeight: 1.12,
+    fontWeight: 800,
+    opacity: selected ? 0.92 : 0.7,
+  });
 
   useEffect(() => {
     if (!message) return;
@@ -1567,6 +1660,36 @@ export default function AppWebRestriction() {
 
   return (
     <main className="settings-module-root ema-module-root ema-settings-pro appwebrestriction-module appweb-scroll-module" data-section="appwebrestriction">
+      <style>{`
+        main[data-section="appwebrestriction"] .appweb-module-selector-panel,
+        main[data-section="appwebrestriction"] .appweb-module-selector-grid,
+        main[data-section="appwebrestriction"] .appweb-module-selector-card {
+          box-sizing: border-box !important;
+          transform: none !important;
+          top: auto !important;
+          bottom: auto !important;
+          float: none !important;
+        }
+        main[data-section="appwebrestriction"] .appweb-module-selector-card:hover {
+          border-color: rgba(37, 99, 235, 0.52) !important;
+          filter: brightness(0.995);
+        }
+        main[data-section="appwebrestriction"] .appweb-main-card {
+          margin-top: 0 !important;
+          position: relative !important;
+          z-index: 0 !important;
+          clear: both !important;
+        }
+        main[data-section="appwebrestriction"] .appweb-list-scroll {
+          max-height: 14.5rem !important;
+          overflow: auto !important;
+        }
+        @media (max-width: 1199.98px) {
+          main[data-section="appwebrestriction"] .appweb-module-selector-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
       {notice && (
         <div className="settings-toast-layer">
           <div className={clsx('settings-toast', `settings-toast-${notice.tone}`)}>
@@ -1645,32 +1768,35 @@ export default function AppWebRestriction() {
             </div>
           </div>
 
-          <div className="settings-score appweb-module-switcher">
-            {modules.map((item) => {
-              const Icon = item.icon;
-              const selected = item.id === activeModule;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveModule(item.id);
-                    setActiveTab(item.tabs[0]);
-                    setSearchText('');
-                    setMessage(null);
-                  }}
-                  className={clsx('setting-btn', selected && 'active')}
-                >
-                  <span className="setting-icon">
-                    <Icon size={17} />
-                  </span>
-                  <span>
-                    <strong>{item.label}</strong>
-                    <small>{item.helper} / policy {item.policyType}</small>
-                  </span>
-                </button>
-              );
-            })}
+          <div className="appweb-module-selector-panel" style={moduleSelectorPanelStyle}>
+            <div className="appweb-module-selector-grid" style={moduleSelectorGridStyle}>
+              {modules.map((item) => {
+                const Icon = item.icon;
+                const selected = item.id === activeModule;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveModule(item.id);
+                      setActiveTab(item.tabs[0]);
+                      setSearchText('');
+                      setMessage(null);
+                    }}
+                    className="appweb-module-selector-card"
+                    style={getModuleSelectorCardStyle(selected)}
+                  >
+                    <span className="appweb-module-selector-icon" style={getModuleSelectorIconStyle(selected)}>
+                      <Icon size={17} />
+                    </span>
+                    <span className="appweb-module-selector-text" style={moduleSelectorTextStyle}>
+                      <strong style={moduleSelectorTitleStyle}>{item.label}</strong>
+                      <small style={moduleSelectorHelperStyle(selected)}>{item.helper} / policy {item.policyType}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="content-shell ema-panel-surface appweb-main-card">
