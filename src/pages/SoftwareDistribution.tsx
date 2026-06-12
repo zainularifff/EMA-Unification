@@ -807,8 +807,12 @@ function DeployPackageModal({
       <div
         className="user-modal advanced"
         style={{
-          width: "min(1500px, calc(100vw - 96px))",
-          maxHeight: "min(90vh, 900px)",
+          width: "min(1840px, calc(100vw - 24px))",
+          maxWidth: "calc(100vw - 24px)",
+          height: "min(96vh, 1040px)",
+          maxHeight: "calc(100vh - 24px)",
+          display: "flex",
+          flexDirection: "column",
         }}
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -826,7 +830,10 @@ function DeployPackageModal({
           </button>
         </div>
 
-        <div className="user-modal-body content-body gap-3">
+        <div
+          className="user-modal-body content-body gap-3"
+          style={{ flex: "1 1 auto", overflowY: "auto" }}
+        >
           <section className="policy-card wide p-4">
             <div className="policy-top">
               <div>
