@@ -3596,6 +3596,45 @@ export default function HardwareInventory() {
   return (
     <main className={`settings-module-root hardware-module-root ema-settings-pro container-fluid p-3 p-xl-4 ${hasSelectedDevice ? "has-selected-device" : "no-selected-device"}`} data-section={activeTab}>
       <style>{`
+
+
+        /* Hardware sidebar fix: wider panel + keep Organization/Statistics switcher compact. */
+        .hardware-module-root .settings-layout.hardware-settings-layout {
+          grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel {
+          min-width: 300px !important;
+        }
+
+        .hardware-module-root .settings-menu > .ema-module-sidebar-switcher {
+          flex: 0 0 auto !important;
+          margin: 0 !important;
+        }
+
+        .hardware-module-root .settings-menu > .ema-sidebar-content {
+          flex: 1 1 auto !important;
+          padding-top: 0.65rem !important;
+        }
+
+        .hardware-module-root .ema-sidebar-subpanel {
+          justify-content: flex-start !important;
+        }
+
+        .hardware-module-root .ema-sidebar-tree {
+          min-height: 0 !important;
+        }
+
+        @media (max-width: 1100px) {
+          .hardware-module-root .settings-layout.hardware-settings-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .hardware-module-root .settings-menu.hardware-left-panel {
+            min-width: 0 !important;
+          }
+        }
+
         .hardware-registry-toolbar-stacked {
           display: flex;
           flex-direction: column;
@@ -3751,8 +3790,8 @@ export default function HardwareInventory() {
         <span id="themeLabel">Dark Mode</span>
       </button>
 
-      <div className="settings-layout d-grid gap-3">
-        <aside className="settings-menu ema-panel-surface">
+      <div className="settings-layout hardware-settings-layout d-grid gap-3">
+        <aside className="settings-menu hardware-left-panel ema-panel-surface">
           <div className="panel-head">
             <span>HARDWARE</span>
             <strong>Hardware Inventory</strong>
@@ -3790,10 +3829,6 @@ export default function HardwareInventory() {
                   <button type="button" className="soft-btn d-inline-flex align-items-center gap-1 px-2" onClick={() => handleAddFolder()}><FolderPlus size={13} /> New Path</button>
 
                   <div className="ema-sidebar-tree" aria-label="Hardware organization tree">
-                    <div className="ema-sidebar-section-title justify-content-between">
-                      <span className="d-inline-flex align-items-center gap-1"><FolderOpen size={14} /> Organization</span>
-                    </div>
-
                     {treeNodes.map((node) => (
                       <FolderTree
                         key={node.key}

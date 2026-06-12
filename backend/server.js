@@ -41,7 +41,6 @@ const { getMdmConfig } = require("./src/utils/mdmConfig");
 
 const app = express();
 
-
 // ============================================================
 // LIGHTWEIGHT DASHBOARD RESPONSE CACHE
 // Keeps expensive dashboard aggregation from running repeatedly
@@ -84,7 +83,6 @@ function shouldBypassDashboardCache(req) {
     const refresh = String(req?.query?.refresh || req?.query?.noCache || req?.query?.nocache || '').toLowerCase();
     return refresh === '1' || refresh === 'true' || refresh === 'yes';
 }
-
 
 // ============================================================
 // GENERIC LIGHTWEIGHT GET RESPONSE CACHE
@@ -411,7 +409,6 @@ function buildPermissionsByRole(role) {
     };
 }
 
-
 function normalizeAuthValue(value, fallback = "") {
     if (value === undefined || value === null) return fallback;
     const text = String(value).trim();
@@ -445,8 +442,6 @@ function buildModuleAccessMap(modules = []) {
     }
     return access;
 }
-
-
 
 // ============================================================
 // ACCESS CONTROL ENFORCEMENT
@@ -934,7 +929,6 @@ async function updateEmaLoginFailure(pool, userID) {
     }
 }
 
-
 /*
 |--------------------------------------------------------------------------
 | AUTH MODULE - TOTP / AUTHENTICATOR 2FA HELPERS
@@ -1243,7 +1237,6 @@ app.post("/api/auth/login", async (req, res) => {
         });
     }
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -1589,7 +1582,6 @@ function authenticateToken(req, res, next) {
     );
 }
 
-
 // GET /api/auth/me
 // Return current logged-in user based on valid JWT token
 app.get("/api/auth/me", authenticateToken, async (req, res) => {
@@ -1723,11 +1715,31 @@ app.get("/api/auth/logout", (req, res) => {
     return res.json({ success: true, message: "Logged out successfully" });
 });
 
+function getSafeRecordset(result) {
+    if (Array.isArray(result?.recordset)) return result.recordset;
+    if (Array.isArray(result?.recordsets?.[0])) return result.recordsets[0];
+    return [];
+}
+
+function cloneDbRow(row) {
+    const mappedRow = {};
+    Object.keys(row || {}).forEach(columnName => {
+        mappedRow[columnName] = row[columnName];
+    });
+    return mappedRow;
+}
+
 async function executeQuery(pool, query, inputs = {}) {
+    if (!query || typeof query !== "string" || !query.trim()) {
+        console.warn("[executeQuery] Empty or invalid SQL query skipped.");
+        return [];
+    }
+
     const request = pool.request();
 
-    Object.keys(inputs).forEach(key => {
+    Object.keys(inputs || {}).forEach(key => {
         const input = inputs[key];
+        if (!input || !input.type) return;
 
         request.input(
             key,
@@ -1737,18 +1749,8 @@ async function executeQuery(pool, query, inputs = {}) {
     });
 
     const result = await request.query(query);
-    
-    return result.recordset.map(row => {
-        const mappedRow = {};
-
-        Object.keys(row).forEach(columnName => {
-            mappedRow[columnName] = row[columnName];
-        });
-
-        return mappedRow;
-    });
+    return getSafeRecordset(result).map(cloneDbRow);
 }
-
 
 async function tableExists(pool, tableName) {
     const result = await pool.request()
@@ -1854,7 +1856,6 @@ WHERE a.Object_PR_Idn = @parentID
     }
     return departments;
 }
-
 
 async function getAllHardwareInventoryAssets(pool, options = {}) {
     const limit = Math.max(1, Math.min(parseInt(options.limit, 10) || 10000, 50000));
@@ -2040,15 +2041,7 @@ union
             .input("RelationID", sql.Int, relationID)
             .query(query);
 
-    const responseData = result.recordset.map(row => {
-        const mappedRow = {};
-        Object.keys(row).forEach(columnName => {
-            mappedRow[columnName] = row[columnName];
-        });
-        return mappedRow;
-    });
-
-    return responseData;
+    return getSafeRecordset(result).map(cloneDbRow);
 }
 
 // GET /api/departments
@@ -2070,6 +2063,311 @@ app.get("/api/departments", authenticateToken, async (req, res) => {
             success: false,
             message: "Failed to retrieve departments"
         });
+    }
+});
+
+
+// HARDWARE INVENTORY - DEPARTMENT/FOLDER CRUD
+// Used by Hardware.tsx folder actions:
+// POST /api/departments
+// PUT /api/departments/:relationID
+// DELETE /api/departments/:relationID
+function normalizeDepartmentName(value) {
+    return String(value || "").trim();
+}
+
+function parseDepartmentRelationId(value, fallback = 0) {
+    const parsed = parseInt(value, 10);
+    return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+async function getDepartmentById(pool, relationID) {
+    const result = await pool.request()
+        .input("Object_Rel_Idn", sql.Int, relationID)
+        .query(`
+            SELECT TOP 1
+                Object_Rel_Idn,
+                Object_Rel_Name,
+                Object_Full_Name,
+                Object_PR_Idn,
+                Object_Rel_Deleted
+            FROM TS_OBJECT_RELATION WITH (NOLOCK)
+            WHERE Object_Rel_Idn = @Object_Rel_Idn
+              AND ISNULL(Object_Rel_Deleted, 0) = 0;
+        `);
+
+    return getSafeRecordset(result)[0] || null;
+}
+
+async function buildDepartmentFullName(pool, parentID, name) {
+    const cleanName = normalizeDepartmentName(name);
+    if (!cleanName) return "";
+    if (parentID === -1 || parentID === 0 || parentID === null || parentID === undefined) return cleanName;
+
+    const parent = await getDepartmentById(pool, parentID);
+    if (!parent) return cleanName;
+
+    const parentFullName = normalizeDepartmentName(parent.Object_Full_Name || parent.Object_Rel_Name);
+    return parentFullName ? `${parentFullName} > ${cleanName}` : cleanName;
+}
+
+async function refreshDepartmentDescendantFullNames(pool, relationID) {
+    // Keep Object_Full_Name aligned after a parent folder is renamed.
+    // The frontend displays Object_Rel_Name but some search/table mappings use Object_Full_Name.
+    await pool.request()
+        .input("RootRelationID", sql.Int, relationID)
+        .query(`
+            ;WITH DepartmentTree AS (
+                SELECT
+                    child.Object_Rel_Idn,
+                    child.Object_Rel_Name,
+                    child.Object_PR_Idn,
+                    CAST(
+                        CASE
+                            WHEN parent.Object_Rel_Idn IS NULL THEN child.Object_Rel_Name
+                            WHEN NULLIF(parent.Object_Full_Name, '') IS NULL THEN child.Object_Rel_Name
+                            ELSE parent.Object_Full_Name + ' > ' + child.Object_Rel_Name
+                        END AS NVARCHAR(1000)
+                    ) AS NextFullName
+                FROM TS_OBJECT_RELATION child
+                LEFT JOIN TS_OBJECT_RELATION parent
+                    ON parent.Object_Rel_Idn = child.Object_PR_Idn
+                WHERE child.Object_PR_Idn = @RootRelationID
+                  AND ISNULL(child.Object_Rel_Deleted, 0) = 0
+
+                UNION ALL
+
+                SELECT
+                    nextChild.Object_Rel_Idn,
+                    nextChild.Object_Rel_Name,
+                    nextChild.Object_PR_Idn,
+                    CAST(dt.NextFullName + ' > ' + nextChild.Object_Rel_Name AS NVARCHAR(1000)) AS NextFullName
+                FROM TS_OBJECT_RELATION nextChild
+                INNER JOIN DepartmentTree dt
+                    ON nextChild.Object_PR_Idn = dt.Object_Rel_Idn
+                WHERE ISNULL(nextChild.Object_Rel_Deleted, 0) = 0
+            )
+            UPDATE rel
+            SET Object_Full_Name = dt.NextFullName
+            FROM TS_OBJECT_RELATION rel
+            INNER JOIN DepartmentTree dt
+                ON dt.Object_Rel_Idn = rel.Object_Rel_Idn;
+        `);
+}
+
+app.post("/api/departments", authenticateToken, async (req, res) => {
+    try {
+        const name = normalizeDepartmentName(req.body?.name || req.body?.Object_Rel_Name || req.body?.departmentName);
+        const parentID = parseDepartmentRelationId(req.body?.parentID ?? req.body?.parentId ?? req.body?.Object_PR_Idn, -1);
+
+        if (!name) {
+            return res.status(400).json({ success: false, message: "Department name is required." });
+        }
+
+        const pool = await sql.connect(dbConfig);
+
+        if (parentID !== -1) {
+            const parent = await getDepartmentById(pool, parentID);
+            if (!parent) {
+                return res.status(404).json({ success: false, message: `Parent department '${parentID}' was not found.` });
+            }
+        }
+
+        const duplicateResult = await pool.request()
+            .input("ParentID", sql.Int, parentID)
+            .input("Name", sql.NVarChar(255), name)
+            .query(`
+                SELECT TOP 1 Object_Rel_Idn
+                FROM TS_OBJECT_RELATION WITH (NOLOCK)
+                WHERE ISNULL(Object_Rel_Deleted, 0) = 0
+                  AND Object_PR_Idn = @ParentID
+                  AND LOWER(Object_Rel_Name) = LOWER(@Name);
+            `);
+
+        if (getSafeRecordset(duplicateResult).length > 0) {
+            return res.status(409).json({ success: false, message: "A folder with the same name already exists under this parent." });
+        }
+
+        const fullName = await buildDepartmentFullName(pool, parentID, name);
+        const insertResult = await pool.request()
+            .input("Object_Rel_Name", sql.NVarChar(255), name)
+            .input("Object_Full_Name", sql.NVarChar(1000), fullName)
+            .input("Object_PR_Idn", sql.Int, parentID)
+            .query(`
+                INSERT INTO TS_OBJECT_RELATION
+                (
+                    Object_Rel_Name,
+                    Object_Full_Name,
+                    Object_PR_Idn,
+                    Object_Rel_Deleted
+                )
+                OUTPUT
+                    INSERTED.Object_Rel_Idn,
+                    INSERTED.Object_Rel_Name,
+                    INSERTED.Object_Full_Name,
+                    INSERTED.Object_PR_Idn
+                VALUES
+                (
+                    @Object_Rel_Name,
+                    @Object_Full_Name,
+                    @Object_PR_Idn,
+                    0
+                );
+            `);
+
+        const row = getSafeRecordset(insertResult)[0];
+        return res.json({ success: true, data: row, message: "Department created successfully." });
+    } catch (err) {
+        console.error("POST /api/departments error:", err);
+        return res.status(500).json({ success: false, message: "Failed to create department", error: err.message });
+    }
+});
+
+app.put("/api/departments/:relationID", authenticateToken, async (req, res) => {
+    try {
+        const relationID = parseDepartmentRelationId(req.params.relationID, 0);
+        const name = normalizeDepartmentName(req.body?.name || req.body?.Object_Rel_Name || req.body?.departmentName);
+
+        if (!relationID) {
+            return res.status(400).json({ success: false, message: "Invalid department ID." });
+        }
+
+        if (!name) {
+            return res.status(400).json({ success: false, message: "Department name is required." });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        const current = await getDepartmentById(pool, relationID);
+
+        if (!current) {
+            return res.status(404).json({ success: false, message: `Department '${relationID}' was not found.` });
+        }
+
+        const parentID = parseDepartmentRelationId(current.Object_PR_Idn, -1);
+        const duplicateResult = await pool.request()
+            .input("RelationID", sql.Int, relationID)
+            .input("ParentID", sql.Int, parentID)
+            .input("Name", sql.NVarChar(255), name)
+            .query(`
+                SELECT TOP 1 Object_Rel_Idn
+                FROM TS_OBJECT_RELATION WITH (NOLOCK)
+                WHERE ISNULL(Object_Rel_Deleted, 0) = 0
+                  AND Object_Rel_Idn <> @RelationID
+                  AND Object_PR_Idn = @ParentID
+                  AND LOWER(Object_Rel_Name) = LOWER(@Name);
+            `);
+
+        if (getSafeRecordset(duplicateResult).length > 0) {
+            return res.status(409).json({ success: false, message: "A folder with the same name already exists under this parent." });
+        }
+
+        const fullName = await buildDepartmentFullName(pool, parentID, name);
+        const updateResult = await pool.request()
+            .input("Object_Rel_Idn", sql.Int, relationID)
+            .input("Object_Rel_Name", sql.NVarChar(255), name)
+            .input("Object_Full_Name", sql.NVarChar(1000), fullName)
+            .query(`
+                UPDATE TS_OBJECT_RELATION
+                SET Object_Rel_Name = @Object_Rel_Name,
+                    Object_Full_Name = @Object_Full_Name
+                OUTPUT
+                    INSERTED.Object_Rel_Idn,
+                    INSERTED.Object_Rel_Name,
+                    INSERTED.Object_Full_Name,
+                    INSERTED.Object_PR_Idn
+                WHERE Object_Rel_Idn = @Object_Rel_Idn
+                  AND ISNULL(Object_Rel_Deleted, 0) = 0;
+            `);
+
+        const row = getSafeRecordset(updateResult)[0];
+        await refreshDepartmentDescendantFullNames(pool, relationID);
+
+        return res.json({ success: true, data: row, message: "Department renamed successfully." });
+    } catch (err) {
+        console.error("PUT /api/departments/:relationID error:", err);
+        return res.status(500).json({ success: false, message: "Failed to rename department", error: err.message });
+    }
+});
+
+app.delete("/api/departments/:relationID", authenticateToken, async (req, res) => {
+    try {
+        const relationID = parseDepartmentRelationId(req.params.relationID, 0);
+        const forceDelete = String(req.query.force || req.body?.force || "").toLowerCase() === "true" || String(req.query.force || req.body?.force || "") === "1";
+
+        if (!relationID) {
+            return res.status(400).json({ success: false, message: "Invalid department ID." });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        const current = await getDepartmentById(pool, relationID);
+
+        if (!current) {
+            return res.status(404).json({ success: false, message: `Department '${relationID}' was not found.` });
+        }
+
+        const usageResult = await pool.request()
+            .input("Object_Rel_Idn", sql.Int, relationID)
+            .query(`
+                SELECT
+                    (SELECT COUNT(1)
+                     FROM TS_OBJECT_RELATION WITH (NOLOCK)
+                     WHERE Object_PR_Idn = @Object_Rel_Idn
+                       AND ISNULL(Object_Rel_Deleted, 0) = 0) AS childCount,
+                    (SELECT COUNT(1)
+                     FROM TS_OBJECT_ROOT WITH (NOLOCK)
+                     WHERE Object_Rel_Idn = @Object_Rel_Idn) AS emAssetCount,
+                    (SELECT COUNT(1)
+                     FROM TSMDM_OBJECT_RELATION WITH (NOLOCK)
+                     WHERE Object_Rel_Idn = @Object_Rel_Idn) AS mdmAssetCount;
+            `);
+
+        const usage = getSafeRecordset(usageResult)[0] || {};
+        const childCount = Number(usage.childCount || 0);
+        const emAssetCount = Number(usage.emAssetCount || 0);
+        const mdmAssetCount = Number(usage.mdmAssetCount || 0);
+
+        if (!forceDelete && (childCount > 0 || emAssetCount > 0 || mdmAssetCount > 0)) {
+            return res.status(409).json({
+                success: false,
+                message: "This folder still has subfolders or assigned devices. Move/delete them first before deleting the folder.",
+                data: { childCount, emAssetCount, mdmAssetCount }
+            });
+        }
+
+        if (forceDelete) {
+            await pool.request()
+                .input("Object_Rel_Idn", sql.Int, relationID)
+                .input("FallbackParentID", sql.Int, parseDepartmentRelationId(current.Object_PR_Idn, -1))
+                .query(`
+                    UPDATE TS_OBJECT_ROOT
+                    SET Object_Rel_Idn = @FallbackParentID
+                    WHERE Object_Rel_Idn = @Object_Rel_Idn;
+
+                    UPDATE TSMDM_OBJECT_RELATION
+                    SET Object_Rel_Idn = @FallbackParentID
+                    WHERE Object_Rel_Idn = @Object_Rel_Idn;
+                `);
+        }
+
+        const deleteResult = await pool.request()
+            .input("Object_Rel_Idn", sql.Int, relationID)
+            .query(`
+                UPDATE TS_OBJECT_RELATION
+                SET Object_Rel_Deleted = 1
+                OUTPUT
+                    DELETED.Object_Rel_Idn,
+                    DELETED.Object_Rel_Name,
+                    DELETED.Object_Full_Name,
+                    DELETED.Object_PR_Idn
+                WHERE Object_Rel_Idn = @Object_Rel_Idn
+                  AND ISNULL(Object_Rel_Deleted, 0) = 0;
+            `);
+
+        const row = getSafeRecordset(deleteResult)[0];
+        return res.json({ success: true, data: row, message: "Department deleted successfully." });
+    } catch (err) {
+        console.error("DELETE /api/departments/:relationID error:", err);
+        return res.status(500).json({ success: false, message: "Failed to delete department", error: err.message });
     }
 });
 
@@ -2102,14 +2400,7 @@ WHERE a.Object_PR_Idn = @parentID
             .input("parentID", sql.Int, parentID)
             .query(query);
 
-        const departments = await Promise.all(result.recordset.map(async row => {
-            const mappedRow = {};
-            Object.keys(row).forEach(columnName => {
-                mappedRow[columnName] = row[columnName];
-            });
-
-            return mappedRow;
-        }));
+        const departments = getSafeRecordset(result).map(cloneDbRow);
 
         let responseData = {};
         responseData['departments'] = departments;
@@ -2130,7 +2421,6 @@ WHERE a.Object_PR_Idn = @parentID
         });
     }
 });
-
 
 // GET /api/assets
 // Used by Service Desk asset lookup.
@@ -2304,7 +2594,6 @@ async function handleServiceDeskAssets(req, res) {
         `);
 
         let data = (result.recordset || []).map(sdNormalizeAssetRow);
-
 
         return res.json(data);
     } catch (err) {
@@ -2564,8 +2853,6 @@ async function handleMoveAssetDepartment(req, res) {
 app.put("/api/assets/:objectAgent/:assetId/department", authenticateToken, handleMoveAssetDepartment);
 app.patch("/api/assets/:objectAgent/:assetId/department", authenticateToken, handleMoveAssetDepartment);
 
-
-
 // GET /api/hardware-inventory/assets
 // Optimized Hardware Inventory loader. Returns all EM + unmapped MDM assets in one request
 // so the frontend does not need to call /api/assets/:relationID for every department.
@@ -2779,11 +3066,8 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
         if (objectAgent=='EM') {
             data = await getEMAData(pool, assetId);
 
-            let MDM_Asset_Idn = data['HWMainInfo'][0].MDM_Asset_Idn;
-            if (MDM_Asset_Idn)
-                data['MDM'] = await getTSMDMData(pool, MDM_Asset_Idn);
-            else
-                data['MDM'] = [];
+            const MDM_Asset_Idn = Array.isArray(data?.HWMainInfo) ? data.HWMainInfo[0]?.MDM_Asset_Idn : null;
+            data['MDM'] = MDM_Asset_Idn ? await getTSMDMData(pool, MDM_Asset_Idn) : [];
         }
         else if (objectAgent=='MDM')
             data = await getTSMDMData(pool, assetId);
@@ -2808,7 +3092,6 @@ app.get("/api/asset/:objectAgent/:assetId", authenticateToken, async (req, res) 
 | WANI
 |--------------------------------------------------------------------------
 */
-
 
 // ============================================================
 // FRONTEND SERVICE SUPPORT API
@@ -2973,9 +3256,6 @@ app.put('/api/roles/:id', authenticateToken, async (req, res) => {
 app.delete('/api/roles/:id', authenticateToken, async (req, res) => {
     return res.status(501).json({ success: false, message: 'Use Role Based Control to remove roles.' });
 });
-
-
-
 
 function normalizeServiceDeskIncidentStatus(value, fallback = 'Awaiting') {
     const text = String(value || '').trim();
@@ -4417,8 +4697,6 @@ app.delete('/api/engineer-availability/:id', authenticateToken, async (req, res)
     }
 });
 
-
-
 // ============================================================
 // EMAUNI SETTINGS API
 // Added for Settings.tsx sections:
@@ -4633,7 +4911,6 @@ async function logEmaAudit(pool, req, action, moduleName, severity = 'Info', det
     }
 }
 
-
 function sanitizeAuditDetails(value, depth = 0) {
     if (depth > 5) return '[MaxDepth]';
     if (value === undefined || value === null) return value;
@@ -4724,7 +5001,6 @@ function buildPricingAuditAction(actionType, beforeRow, afterRow) {
     return 'Updated device pricing rule';
 }
 
-
 // GENERAL
 app.get("/api/settings/general", authenticateToken, async (req, res) => {
     try {
@@ -4806,7 +5082,6 @@ function buildEmaUsername(username, email, fullName) {
     const generated = nameText.replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
     return generated || `user.${Date.now()}`;
 }
-
 
 function splitEmaRoleNames(value) {
     if (Array.isArray(value)) {
@@ -5539,8 +5814,6 @@ app.put("/api/settings/users/:id/mfa", authenticateToken, async (req, res) => {
     }
 });
 
-
-
 app.put("/api/settings/users/:id/2fa/reset", authenticateToken, async (req, res) => {
     try {
         const userID = parseInt(req.params.id, 10);
@@ -6153,7 +6426,6 @@ app.delete("/api/settings/clients/:id", authenticateToken, async (req, res) => {
 });
 
 // INCIDENT CONFIG - SLA
-
 
 // ============================================================
 // INCIDENT CONFIG API - FIXED FOR EMAUni HD_ TABLES
@@ -7022,7 +7294,6 @@ app.delete("/api/settings/incident-config/details/:id", authenticateToken, async
     }
 });
 
-
 // NOTIFICATION CHANNELS
 app.get("/api/settings/notifications", authenticateToken, async (req, res) => {
     try {
@@ -7257,7 +7528,6 @@ app.post('/api/settings/audit-logs', authenticateToken, async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 });
-
 
 // POST /api/settings/audit-logs/export-event
 // Frontend can call this after exporting CSV so export evidence is also captured.
@@ -7524,7 +7794,6 @@ async function getMdmAssetByObjectRoot(pool, objectRootIdn, options = {}) {
 | and backfill missing LocationName values using LocationIQ reverse geocoding.
 |--------------------------------------------------------------------------
 */
-
 
 function parseMdmBoolean(value, fallback = false) {
     if (value === undefined || value === null || value === "") return fallback;
@@ -7897,7 +8166,7 @@ async function getGeolocationRowsByDeviceID(pool, deviceID, mode = "All") {
             ORDER BY g.[Time] DESC;
         `);
 
-    return result.recordset.map(normalizeGeoDbRow);
+    return getSafeRecordset(result).map(normalizeGeoDbRow);
 }
 
 async function getLiveGeolocationAll(pool, deviceID = "") {
@@ -7936,7 +8205,7 @@ async function getLiveGeolocationAll(pool, deviceID = "") {
             ORDER BY g.[Time] DESC;
         `);
 
-    return result.recordset.map(normalizeGeoDbRow);
+    return getSafeRecordset(result).map(normalizeGeoDbRow);
 }
 
 async function fetchSureMdmLastLocation(deviceID) {
@@ -8502,7 +8771,6 @@ app.post("/api/geolocation/history", authenticateToken, async (req, res) => {
     return handleGetMdmGeolocation(req, res);
 });
 
-
 /*
 |--------------------------------------------------------------------------
 | Java-style Scheduled Geolocation Debug Jobs
@@ -8674,7 +8942,6 @@ async function runGeolocationSyncDebugJob(options = {}) {
     javaShape.trigger = normalizeMdmValue(options.trigger, "manual");
     return javaShape;
 }
-
 
 async function runUpdateAssetsGeolocation(options = {}) {
     if (geoWorkerState.scheduledGeolocation.running) {
@@ -8922,7 +9189,6 @@ app.post("/api/mdm/UpdateAssetsGeolocation", authenticateToken, async (req, res)
     return res.status(result.status === 1 ? 200 : 500).json(result);
 });
 
-
 app.get("/api/mdm/UpdateAssetsGeolocation/CustomReport", authenticateToken, async (req, res) => {
     const result = await runUpdateAssetsGeolocationCustomReport({
         trigger: "api:/api/mdm/UpdateAssetsGeolocation/CustomReport",
@@ -8969,7 +9235,6 @@ app.get("/api/mdm/UpdateAssetsGeolocation/ReverseGeocode", authenticateToken, as
     logGeoDebugResult("UpdateAssetsGeolocation_ReverseGeocode", result);
     return res.status(result.status === 1 ? 200 : 500).json(result);
 });
-
 
 // Keep API failures JSON-formatted instead of Express HTML error pages.
 
@@ -9477,9 +9742,6 @@ async function handleSendMdmTextMessageByPlatformType(req, res) {
 }
 
 // Java-compatible endpoints
-app.post("/api/mdm/SendMDMTextMessage", authenticateToken, handleSendMdmTextMessageByObject);
-app.post("/api/mdm/SendMDMTextMessageNonWindows", authenticateToken, handleSendMdmTextMessageByMdmAsset);
-app.post("/api/mdm/SendMDMTextMessageByPlatformType", authenticateToken, handleSendMdmTextMessageByPlatformType);
 
 // React-friendly endpoints
 app.post("/api/mdm/text-message/object", authenticateToken, handleSendMdmTextMessageByObject);
@@ -9490,7 +9752,6 @@ app.post("/api/mdm/text-message", authenticateToken, async (req, res) => {
     if (objectRootIdn) return handleSendMdmTextMessageByObject(req, res);
     return handleSendMdmTextMessageByMdmAsset(req, res);
 });
-
 
 app.use((err, req, res, next) => {
     console.error(err);
@@ -9952,42 +10213,6 @@ function remoteBuildSupportUrl(target, permissions) {
 }
 
 // Legacy RemoteSupport.aspx route kept for fallback only. Do not use for Hardware Inventory Advanced Remote Control.
-app.post("/api/mdm/remote-control-legacy", authenticateToken, async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const target = await remoteResolveTarget(pool, req.body || {});
-        const permissions = remoteNormalizePermissions(req.body || {});
-        const url = remoteBuildSupportUrl(target, permissions);
-
-        return res.json({
-            success: true,
-            message: "Success",
-            data: [{
-                message: "Success",
-                url,
-                method: "documented-remote-support",
-                objectAgent: target.objectAgent,
-                Object_Root_Idn: target.Object_Root_Idn,
-                MDM_Asset_Idn: target.MDM_Asset_Idn,
-                deviceID: target.deviceID,
-                deviceName: target.deviceName,
-                platformType: target.platformType,
-                agentVersion: target.agentVersion,
-                permissions,
-                perm: permissions.join(",")
-            }]
-        });
-    } catch (err) {
-        const responseData = err.response?.data || err.responseData;
-        return res.status(500).json({
-            success: false,
-            message: "Unable to start remote-control session.",
-            errorMessage: remoteGetMdmErrorMessage(responseData, err.message || String(err)),
-            data: []
-        });
-    }
-});
-
 
 /*
 |--------------------------------------------------------------------------
@@ -10719,10 +10944,7 @@ app.get("/api/mdm/assets", authenticateToken, async (req, res) => {
     }
 });
 
-app.post("/api/mdm/GetMDMRemoteControl", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "object"));
-app.post("/api/mdm/GetMDMRemoteControlNonWindows", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "mdm"));
 app.post("/api/mdm/remote-control", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "auto"));
-
 
 /* ============================================================
    EMA MDM ACTION PATCH - Advanced Remote Control + Lock/Unlock
@@ -10730,741 +10952,6 @@ app.post("/api/mdm/remote-control", authenticateToken, async (req, res) => rcHan
    Paste/register this block after authenticateToken and before other routes.
 ============================================================ */
 (() => {
-    /*
-    |--------------------------------------------------------------------------
-    | MDM / SureMDM iframe remote-control APIs
-    |--------------------------------------------------------------------------
-    | Uses SureMDM iframeRS/rsauthtoken flow and returns a temporary
-    | IframeRemoteSupport.aspx?AuthToken=... URL to the frontend.
-    | Paste this block before the error-handler / START SERVER section.
-    |--------------------------------------------------------------------------
-    */
-
-    function rcNormalize(value, fallback = "") {
-        if (value === undefined || value === null) return fallback;
-        return String(value).trim();
-    }
-
-    function rcParseInt(value, fallback = 0) {
-        const parsed = parseInt(value, 10);
-        return Number.isNaN(parsed) ? fallback : parsed;
-    }
-
-    function rcFirstDefined(...values) {
-        return values.find(value => value !== undefined && value !== null && String(value).trim() !== "");
-    }
-
-    function rcParseBoolean(value, fallback = false) {
-        if (value === undefined || value === null || value === "") return fallback;
-        if (typeof value === "boolean") return value;
-        if (typeof value === "number") return value !== 0;
-
-        const text = String(value).trim().toLowerCase();
-        if (["true", "1", "yes", "y", "on"].includes(text)) return true;
-        if (["false", "0", "no", "n", "off"].includes(text)) return false;
-        return fallback;
-    }
-
-    function rcNormalizeRemoteParam(value, fallback = "null") {
-        const text = rcNormalize(value);
-        return text || fallback;
-    }
-
-    function rcCleanApiPath(apiPath, baseUrl = "") {
-        let clean = rcNormalize(apiPath).replace(/^\/+/, "");
-        const base = rcNormalize(baseUrl).replace(/\/+$/, "").toLowerCase();
-
-        // Avoid https://tenant/api/api/... only when base URL already ends with /api.
-        if (base.endsWith("/api") && clean.toLowerCase().startsWith("api/")) {
-            clean = clean.slice(4);
-        }
-
-        return clean;
-    }
-
-    async function rcGetSqlPoolWithRetry() {
-        try {
-            return await sql.connect(dbConfig);
-        } catch (err) {
-            console.warn("SQL connect failed. Retrying with a fresh pool:", err.message || err);
-            try { await sql.close(); } catch (_) {}
-            return await sql.connect(dbConfig);
-        }
-    }
-
-    function rcBuildMdmHeaders(mdmConfig, options = {}) {
-        const headers = { Accept: "application/json" };
-        const contentType = rcNormalize(options.contentType ?? mdmConfig.contentType);
-        if (contentType) headers["Content-Type"] = contentType;
-
-        const rawToken = rcNormalize(mdmConfig.token);
-        const authScheme = rcNormalize(mdmConfig.authScheme, "Basic");
-
-        if (rawToken) {
-            if (/^basic\s+/i.test(rawToken) || /^bearer\s+/i.test(rawToken)) {
-                headers.Authorization = rawToken;
-            } else if (rawToken.includes(":")) {
-                headers.Authorization = `Basic ${Buffer.from(rawToken, "utf8").toString("base64")}`;
-            } else {
-                headers.Authorization = `${authScheme} ${rawToken}`;
-            }
-        }
-
-        if (mdmConfig.apiKey) {
-            headers[rcNormalize(mdmConfig.apiKeyHeader, "ApiKey")] = mdmConfig.apiKey;
-        }
-
-        return headers;
-    }
-
-    function rcJoinMdmUrl(baseUrl, apiPath) {
-        const base = rcNormalize(baseUrl).replace(/\/+$/, "");
-        const path = rcCleanApiPath(apiPath, baseUrl);
-        if (!base) throw new Error("MDM_API.url is missing in config.ini.");
-        if (!path) throw new Error("MDM API path is missing.");
-        return `${base}/${path}`;
-    }
-
-    function rcGetMdmErrorMessage(payload, fallback = "SureMDM request failed.") {
-        if (!payload) return fallback;
-        if (typeof payload === "string") return payload;
-        return payload.errorMsg || payload.ErrorMsg || payload.errorMessage || payload.message || payload.Message || fallback;
-    }
-
-    function rcAsSureMdmArray(payload) {
-        if (!payload) return [];
-        if (Array.isArray(payload)) return payload;
-
-        if (typeof payload === "string") {
-            const trimmed = payload.trim();
-            if (!trimmed) return [];
-            try {
-                return rcAsSureMdmArray(JSON.parse(trimmed));
-            } catch (_) {
-                return [];
-            }
-        }
-
-        if (Array.isArray(payload.rows)) return payload.rows;
-        if (Array.isArray(payload.data)) return payload.data;
-        if (payload.data && Array.isArray(payload.data.rows)) return payload.data.rows;
-
-        return [payload];
-    }
-
-    function rcPickSureMdmDevice(devices, match = {}) {
-        const targetDeviceID = rcNormalize(match.deviceID).toLowerCase();
-        const targetName = rcNormalize(match.deviceName).toLowerCase();
-
-        if (!Array.isArray(devices) || devices.length === 0) return null;
-
-        if (targetDeviceID) {
-            const byId = devices.find(device => {
-                return rcNormalize(rcFirstDefined(device.DeviceID, device.deviceID, device.DeviceId, device.id)).toLowerCase() === targetDeviceID;
-            });
-            if (byId) return byId;
-        }
-
-        if (targetName) {
-            const exact = devices.find(device => {
-                return rcNormalize(rcFirstDefined(device.DeviceName, device.deviceName, device.RealDeviceName, device.Hostname, device.name)).toLowerCase() === targetName;
-            });
-            if (exact) return exact;
-
-            const loose = devices.find(device => {
-                return rcNormalize(rcFirstDefined(device.DeviceName, device.deviceName, device.RealDeviceName, device.Hostname, device.name)).toLowerCase().includes(targetName);
-            });
-            if (loose) return loose;
-        }
-
-        return devices[0];
-    }
-
-    async function rcCallSureMdmApi(apiPath, options = {}) {
-        const mdmConfig = getMdmConfig();
-        const method = rcNormalize(options.method, "GET").toUpperCase();
-        const contentType = rcNormalize(options.contentType);
-        const url = rcJoinMdmUrl(mdmConfig.url, apiPath);
-        const headers = rcBuildMdmHeaders(mdmConfig, { contentType });
-
-        const requestOptions = {
-            method,
-            url,
-            headers,
-            timeout: Number(options.timeout || mdmConfig.remoteControlTimeout || mdmConfig.timeout || 60000)
-        };
-
-        if (options.data !== undefined && options.data !== null && method !== "GET") {
-            requestOptions.data = options.data;
-        }
-
-        console.log("SureMDM remote-control API request:", {
-            method,
-            url,
-            authScheme: headers.Authorization ? String(headers.Authorization).split(" ")[0] : "missing",
-            hasApiKey: Boolean(headers[rcNormalize(mdmConfig.apiKeyHeader, "ApiKey")])
-        });
-
-        const response = await axios(requestOptions);
-        return { data: response.data, url };
-    }
-
-    async function rcSearchSureMdmDeviceByName(deviceName, limit = 20) {
-        const searchValue = rcNormalize(deviceName);
-        if (!searchValue) throw new Error("DeviceName is required for SureMDM device search.");
-
-        const payload = {
-            ID: "AllDevices",
-            IsSearch: true,
-            Limit: limit,
-            SearchColumns: ["DeviceName"],
-            SearchValue: searchValue,
-            SortColumn: "LastTimeStamp",
-            SortOrder: "asc"
-        };
-
-        const response = await rcCallSureMdmApi("device", {
-            method: "POST",
-            contentType: "application/json",
-            data: payload
-        });
-
-        const devices = rcAsSureMdmArray(response.data);
-        const device = rcPickSureMdmDevice(devices, { deviceName: searchValue });
-
-        if (!device) {
-            const err = new Error(`SureMDM device '${searchValue}' was not found.`);
-            err.responseData = response.data;
-            throw err;
-        }
-
-        return {
-            device,
-            devices,
-            raw: response.data,
-            requestUrl: response.url
-        };
-    }
-
-    async function rcGetSureMdmDeviceDetails(deviceID) {
-        const id = rcNormalize(deviceID);
-        if (!id) throw new Error("DeviceID is required for SureMDM device details.");
-
-        const response = await rcCallSureMdmApi(`device/${encodeURIComponent(id)}`, {
-            method: "GET",
-            contentType: "application/json"
-        });
-
-        const devices = rcAsSureMdmArray(response.data);
-        const device = rcPickSureMdmDevice(devices, { deviceID: id }) || devices[0];
-
-        if (!device) {
-            const err = new Error(`SureMDM device details were not found for DeviceID '${id}'.`);
-            err.responseData = response.data;
-            throw err;
-        }
-
-        return {
-            device,
-            raw: response.data,
-            requestUrl: response.url
-        };
-    }
-
-    function rcGetIframeRemoteOptions(body = {}) {
-        const mdmConfig = getMdmConfig();
-
-        return {
-            ShowOnlyRemoteScreen: rcParseBoolean(rcFirstDefined(
-                body.ShowOnlyRemoteScreen,
-                body.showOnlyRemoteScreen,
-                body.onlyRemoteScreen,
-                mdmConfig.showOnlyRemoteScreen,
-                mdmConfig.remoteSupportShowOnlyRemoteScreen
-            ), false),
-            ScrBgClr: rcNormalizeRemoteParam(rcFirstDefined(
-                body.ScrBgClr,
-                body.scrBgClr,
-                body.screenBackgroundColor,
-                mdmConfig.ScrBgClr,
-                mdmConfig.scrBgClr,
-                mdmConfig.remoteSupportScrBgClr
-            ), "null"),
-            ScrImg: rcNormalizeRemoteParam(rcFirstDefined(
-                body.ScrImg,
-                body.scrImg,
-                body.screenImage,
-                mdmConfig.ScrImg,
-                mdmConfig.scrImg,
-                mdmConfig.remoteSupportScrImg
-            ), "null")
-        };
-    }
-
-    async function rcGenerateIframeRemoteSupportUrl(deviceID, options = {}) {
-        const sureMdmDeviceID = rcNormalize(deviceID);
-        if (!sureMdmDeviceID) throw new Error("SureMDM DeviceID is required for iframe remote support.");
-
-        const mdmConfig = getMdmConfig();
-        const remoteControlPath = rcNormalize(mdmConfig.remoteControlPath, "iframeRS/rsauthtoken");
-        const iframeOptions = {
-            ShowOnlyRemoteScreen: rcParseBoolean(options.ShowOnlyRemoteScreen, false),
-            ScrBgClr: rcNormalizeRemoteParam(options.ScrBgClr, "null"),
-            ScrImg: rcNormalizeRemoteParam(options.ScrImg, "null")
-        };
-
-        const params = new URLSearchParams({
-            ShowOnlyRemoteScreen: String(iframeOptions.ShowOnlyRemoteScreen),
-            deviceid: sureMdmDeviceID,
-            ScrBgClr: iframeOptions.ScrBgClr,
-            ScrImg: iframeOptions.ScrImg
-        });
-
-        const response = await rcCallSureMdmApi(`${remoteControlPath}?${params.toString()}`, {
-            method: "GET",
-            contentType: ""
-        });
-
-        let payload = response.data;
-        if (typeof payload === "string") {
-            const trimmed = payload.trim();
-            try {
-                payload = trimmed ? JSON.parse(trimmed) : {};
-            } catch (_) {
-                payload = { data: trimmed, isSuccess: Boolean(trimmed), errorMsg: "" };
-            }
-        }
-
-        const isSuccess = payload?.isSuccess ?? payload?.IsSuccess ?? payload?.success ?? payload?.Success;
-        const remoteUrl = rcNormalize(rcFirstDefined(
-            payload?.data,
-            payload?.Data,
-            payload?.url,
-            payload?.Url,
-            payload?.URL
-        ));
-
-        if (isSuccess === false) {
-            const err = new Error(rcGetMdmErrorMessage(payload, "SureMDM iframe remote support token generation failed."));
-            err.responseData = payload;
-            throw err;
-        }
-
-        if (!remoteUrl) {
-            const err = new Error("SureMDM iframe remote support URL was not returned.");
-            err.responseData = payload;
-            throw err;
-        }
-
-        return {
-            url: remoteUrl,
-            requestUrl: response.url,
-            raw: payload,
-            options: iframeOptions,
-            tokenExpiresInSeconds: 300
-        };
-    }
-
-    async function rcGetEmRemoteControlCandidate(pool, objectRootIdn) {
-        const result = await pool.request()
-            .input("Object_Root_Idn", sql.Int, objectRootIdn)
-            .query(`
-                SELECT TOP 1
-                    r.Object_Root_Idn,
-                    r.Object_DeviceID AS EM_Object_DeviceID,
-                    r.ComputerName,
-                    r.Object_Client_Name,
-                    r.Model,
-                    map.MDM_Asset_Idn,
-                    a.DeviceID AS MDM_DeviceID,
-                    a.DeviceName AS MDM_DeviceName,
-                    a.PlatformType AS MDM_PlatformType,
-                    a.AgentVersion AS MDM_AgentVersion,
-                    a.ConnectionStatus AS MDM_ConnectionStatus
-                FROM TS_OBJECT_ROOT r
-                LEFT JOIN TSMDM_TS_OBJECT_MAPPING map
-                    ON map.Object_Root_Idn = r.Object_Root_Idn
-                LEFT JOIN TSMDM_ASSET a
-                    ON a.MDM_Asset_Idn = map.MDM_Asset_Idn
-                WHERE r.Object_Root_Idn = @Object_Root_Idn;
-            `);
-
-        return result.recordset?.[0] || null;
-    }
-
-    async function rcGetMdmAssetByMdmAssetId(pool, mdmAssetIdn) {
-        const result = await pool.request()
-            .input("MDM_Asset_Idn", sql.Int, mdmAssetIdn)
-            .query(`
-                SELECT TOP 1 *
-                FROM TSMDM_ASSET
-                WHERE MDM_Asset_Idn = @MDM_Asset_Idn;
-            `);
-
-        return result.recordset?.[0] || null;
-    }
-
-    async function rcGetMdmAssetByDeviceID(pool, deviceID) {
-        const result = await pool.request()
-            .input("DeviceID", sql.VarChar(255), rcNormalize(deviceID))
-            .query(`
-                SELECT TOP 1 *
-                FROM TSMDM_ASSET
-                WHERE DeviceID = @DeviceID;
-            `);
-
-        return result.recordset?.[0] || null;
-    }
-
-    async function rcGetMdmAssets(pool, mdmAssetIdn = 0, platformType = "") {
-        const result = await pool.request()
-            .input("MDM_Asset_Idn", sql.Int, mdmAssetIdn)
-            .input("PlatformType", sql.VarChar(255), rcNormalize(platformType))
-            .query(`
-                SELECT *,
-                       CASE WHEN DeviceLocalIPAddress IS NULL OR DeviceLocalIPAddress = ''
-                            THEN DeviceIPAddress ELSE DeviceLocalIPAddress END AS IPAddress
-                FROM TSMDM_ASSET
-                WHERE (@MDM_Asset_Idn = 0 OR MDM_Asset_Idn = @MDM_Asset_Idn)
-                  AND (@PlatformType = '' OR PlatformType LIKE @PlatformType + '%')
-                ORDER BY DeviceName ASC;
-            `);
-
-        return result.recordset || [];
-    }
-
-    async function rcResolveRemoteControlTarget(req, mode = "auto") {
-        const body = req.body || {};
-        const pool = await rcGetSqlPoolWithRetry();
-
-        const objectAgent = rcNormalize(rcFirstDefined(
-            body.objectAgent,
-            body.Object_Agent,
-            body.agent
-        ), mode === "mdm" ? "MDM" : "EM").toUpperCase();
-
-        const objectRootIdn = rcParseInt(rcFirstDefined(
-            body.Object_Root_Idn,
-            body.objectRootIdn,
-            body.objectRootID,
-            (objectAgent === "EM" || mode === "object") ? body.assetId : undefined
-        ), 0);
-
-        const mdmAssetIdn = rcParseInt(rcFirstDefined(
-            body.MDM_Asset_Idn,
-            body.mdmAssetIdn,
-            body.mdmAssetID,
-            (objectAgent === "MDM" || mode === "mdm") ? body.assetId : undefined
-        ), 0);
-
-        // For EM/TCO rows, Object_DeviceID is not the SureMDM DeviceID.
-        // Only use raw DeviceID directly for MDM mode.
-        const requestedDeviceID = rcNormalize(rcFirstDefined(
-            body.MDM_DeviceID,
-            body.mdmDeviceID,
-            body.DeviceID,
-            body.deviceID,
-            body.deviceId,
-            objectAgent === "MDM" ? body.Object_DeviceID : undefined,
-            objectAgent === "MDM" ? body.objectDeviceID : undefined
-        ));
-
-        const requestedDeviceName = rcNormalize(rcFirstDefined(
-            body.DeviceName,
-            body.deviceName,
-            body.ComputerName,
-            body.computerName
-        ));
-
-        let localAsset = null;
-        let deviceID = "";
-        let deviceName = "";
-
-        if (objectAgent === "EM" || mode === "object") {
-            if (!objectRootIdn && !requestedDeviceName) {
-                throw new Error("Object_Root_Idn, assetId, or DeviceName is required for EM remote control.");
-            }
-
-            if (objectRootIdn) {
-                localAsset = await rcGetEmRemoteControlCandidate(pool, objectRootIdn);
-            }
-
-            if (!localAsset && !requestedDeviceName) {
-                throw new Error(`EM asset was not found for Object_Root_Idn '${objectRootIdn}'.`);
-            }
-
-            deviceName = rcNormalize(rcFirstDefined(
-                requestedDeviceName,
-                localAsset?.MDM_DeviceName,
-                localAsset?.ComputerName,
-                localAsset?.Object_Client_Name
-            ));
-            deviceID = rcNormalize(localAsset?.MDM_DeviceID);
-        } else if (objectAgent === "MDM" || mode === "mdm") {
-            if (mdmAssetIdn) {
-                localAsset = await rcGetMdmAssetByMdmAssetId(pool, mdmAssetIdn);
-            }
-
-            if (!localAsset && requestedDeviceID) {
-                localAsset = await rcGetMdmAssetByDeviceID(pool, requestedDeviceID);
-            }
-
-            deviceID = rcNormalize(rcFirstDefined(localAsset?.DeviceID, requestedDeviceID));
-            deviceName = rcNormalize(rcFirstDefined(localAsset?.DeviceName, requestedDeviceName));
-        } else {
-            throw new Error(`Unsupported objectAgent '${objectAgent}'.`);
-        }
-
-        if (!deviceID && !deviceName) {
-            throw new Error("Could not resolve a SureMDM DeviceID or DeviceName for remote control.");
-        }
-
-        return {
-            objectAgent,
-            objectRootIdn,
-            mdmAssetIdn: mdmAssetIdn || localAsset?.MDM_Asset_Idn || 0,
-            deviceID,
-            deviceName,
-            localAsset
-        };
-    }
-
-    async function rcCreateSureMdmRemoteSupportSession(target, options = {}) {
-        let searchResult = null;
-        let selectedDevice = null;
-        let sureMdmDeviceID = rcNormalize(target.deviceID);
-
-        if (!sureMdmDeviceID) {
-            searchResult = await rcSearchSureMdmDeviceByName(target.deviceName);
-            selectedDevice = searchResult.device;
-
-            sureMdmDeviceID = rcNormalize(rcFirstDefined(
-                selectedDevice.DeviceID,
-                selectedDevice.deviceID,
-                selectedDevice.DeviceId,
-                selectedDevice.id
-            ));
-
-            if (!sureMdmDeviceID) {
-                throw new Error(`SureMDM search found '${target.deviceName}', but the result did not contain DeviceID.`);
-            }
-        } else {
-            selectedDevice = {
-                DeviceID: sureMdmDeviceID,
-                DeviceName: target.deviceName,
-                PlatformType: rcFirstDefined(target.localAsset?.PlatformType, target.localAsset?.MDM_PlatformType),
-                AgentVersion: rcFirstDefined(target.localAsset?.AgentVersion, target.localAsset?.MDM_AgentVersion)
-            };
-        }
-
-        const iframeResult = await rcGenerateIframeRemoteSupportUrl(sureMdmDeviceID, options);
-
-        return {
-            url: iframeResult.url,
-            selectedDevice,
-            searchRaw: searchResult?.raw || null,
-            iframeRaw: iframeResult.raw,
-            iframeRequestUrl: iframeResult.requestUrl,
-            iframeOptions: iframeResult.options,
-            tokenExpiresInSeconds: iframeResult.tokenExpiresInSeconds,
-            method: "iframe-remote-support"
-        };
-    }
-
-    async function rcHandleMdmRemoteControl(req, res, mode = "auto") {
-        try {
-            const target = await rcResolveRemoteControlTarget(req, mode);
-
-            console.log("Remote control resolved local target:", {
-                objectAgent: target.objectAgent,
-                Object_Root_Idn: target.objectRootIdn || undefined,
-                MDM_Asset_Idn: target.mdmAssetIdn || undefined,
-                deviceID: target.deviceID || undefined,
-                deviceName: target.deviceName || undefined
-            });
-
-            const remoteOptions = rcGetIframeRemoteOptions(req.body || {});
-            const remoteResult = await rcCreateSureMdmRemoteSupportSession(target, remoteOptions);
-            const selectedDevice = remoteResult.selectedDevice || {};
-
-            return res.json({
-                success: true,
-                data: [{
-                    message: "Success",
-                    url: remoteResult.url,
-                    method: remoteResult.method,
-                    objectAgent: target.objectAgent,
-                    Object_Root_Idn: target.objectRootIdn || undefined,
-                    MDM_Asset_Idn: target.mdmAssetIdn || undefined,
-                    deviceID: rcNormalize(rcFirstDefined(selectedDevice.DeviceID, target.deviceID)),
-                    deviceName: rcNormalize(rcFirstDefined(selectedDevice.DeviceName, target.deviceName)),
-                    platformType: rcNormalize(rcFirstDefined(selectedDevice.PlatformType, selectedDevice.platformType)),
-                    agentVersion: rcNormalize(rcFirstDefined(selectedDevice.AgentVersion, selectedDevice.agentVersion, selectedDevice.AgentFormatVersion)),
-                    iframeOptions: remoteResult.iframeOptions,
-                    tokenExpiresInSeconds: remoteResult.tokenExpiresInSeconds
-                }]
-            });
-        } catch (err) {
-            const responseData = err.responseData || err.response?.data;
-            const message = rcGetMdmErrorMessage(responseData, err.message || String(err));
-
-            console.error("MDM remote control failed:", responseData || err);
-
-            return res.status(500).json({
-                success: false,
-                message: "Failed to start remote control session.",
-                errorMessage: message,
-                data: [{ message, url: "" }]
-            });
-        }
-    }
-
-    app.get("/api/mdm/version", authenticateToken, async (req, res) => {
-        try {
-            const response = await rcCallSureMdmApi("v2/version", { method: "GET", contentType: "" });
-            return res.json({ success: true, data: response.data });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to retrieve SureMDM version.",
-                errorMessage: rcGetMdmErrorMessage(err.response?.data, err.message || String(err))
-            });
-        }
-    });
-
-    app.post("/api/mdm/devices/search", authenticateToken, async (req, res) => {
-        try {
-            const deviceName = rcNormalize(rcFirstDefined(req.body?.DeviceName, req.body?.deviceName, req.body?.SearchValue, req.body?.searchValue));
-            const limit = rcParseInt(req.body?.Limit || req.body?.limit, 20);
-            const result = await rcSearchSureMdmDeviceByName(deviceName, limit);
-
-            return res.json({
-                success: true,
-                totalRecords: result.devices.length,
-                selectedDevice: result.device,
-                data: result.raw
-            });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to search SureMDM device.",
-                errorMessage: rcGetMdmErrorMessage(err.response?.data || err.responseData, err.message || String(err))
-            });
-        }
-    });
-
-    app.get("/api/mdm/devices/:deviceID", authenticateToken, async (req, res) => {
-        try {
-            const result = await rcGetSureMdmDeviceDetails(req.params.deviceID);
-            return res.json({
-                success: true,
-                selectedDevice: result.device,
-                data: result.raw
-            });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to retrieve SureMDM device details.",
-                errorMessage: rcGetMdmErrorMessage(err.response?.data || err.responseData, err.message || String(err))
-            });
-        }
-    });
-
-    app.post("/api/mdm/remote-support-url", authenticateToken, async (req, res) => {
-        try {
-            const target = await rcResolveRemoteControlTarget(req, "auto");
-            const remoteOptions = rcGetIframeRemoteOptions(req.body || {});
-            const remoteResult = await rcCreateSureMdmRemoteSupportSession(target, remoteOptions);
-
-            return res.json({
-                success: true,
-                data: [{
-                    message: "Success",
-                    url: remoteResult.url,
-                    method: remoteResult.method,
-                    selectedDevice: remoteResult.selectedDevice,
-                    iframeOptions: remoteResult.iframeOptions,
-                    tokenExpiresInSeconds: remoteResult.tokenExpiresInSeconds
-                }]
-            });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to generate SureMDM remote support URL.",
-                errorMessage: rcGetMdmErrorMessage(err.response?.data || err.responseData, err.message || String(err)),
-                data: [{ message: err.message || String(err), url: "" }]
-            });
-        }
-    });
-
-    app.post("/api/mdm/iframe-remote-support-url", authenticateToken, async (req, res) => {
-        try {
-            const target = await rcResolveRemoteControlTarget(req, "auto");
-            const remoteOptions = rcGetIframeRemoteOptions(req.body || {});
-            const remoteResult = await rcCreateSureMdmRemoteSupportSession(target, remoteOptions);
-
-            return res.json({
-                success: true,
-                data: [{
-                    message: "Success",
-                    url: remoteResult.url,
-                    method: remoteResult.method,
-                    selectedDevice: remoteResult.selectedDevice,
-                    iframeOptions: remoteResult.iframeOptions,
-                    tokenExpiresInSeconds: remoteResult.tokenExpiresInSeconds
-                }]
-            });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to generate SureMDM iframe remote support URL.",
-                errorMessage: rcGetMdmErrorMessage(err.response?.data || err.responseData, err.message || String(err)),
-                data: [{ message: err.message || String(err), url: "" }]
-            });
-        }
-    });
-
-    app.get("/api/mdm/assets/:mdmAssetIdn", authenticateToken, async (req, res) => {
-        try {
-            const mdmAssetIdn = rcParseInt(req.params.mdmAssetIdn, 0);
-            if (!mdmAssetIdn) return res.status(400).json({ success: false, message: "Invalid MDM_Asset_Idn." });
-
-            const pool = await rcGetSqlPoolWithRetry();
-            const asset = await rcGetMdmAssetByMdmAssetId(pool, mdmAssetIdn);
-
-            return res.json({
-                success: Boolean(asset),
-                message: asset ? "Success" : "MDM asset not found.",
-                data: asset ? [asset] : []
-            });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to retrieve MDM asset.",
-                errorMessage: err.message || String(err)
-            });
-        }
-    });
-
-    app.get("/api/mdm/assets", authenticateToken, async (req, res) => {
-        try {
-            const pool = await rcGetSqlPoolWithRetry();
-            const data = await rcGetMdmAssets(pool, rcParseInt(req.query.mdmAssetIdn, 0), req.query.platformType || "");
-            return res.json({ success: true, totalRecords: data.length, data });
-        } catch (err) {
-            return res.status(500).json({
-                success: false,
-                message: "Failed to retrieve MDM assets.",
-                errorMessage: err.message || String(err)
-            });
-        }
-    });
-
-    app.post("/api/mdm/GetMDMRemoteControl", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "object"));
-    app.post("/api/mdm/GetMDMRemoteControlNonWindows", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "mdm"));
-    app.post("/api/mdm/remote-control", authenticateToken, async (req, res) => rcHandleMdmRemoteControl(req, res, "auto"));
-
-
     /*
     |--------------------------------------------------------------------------
     | Shared helpers
@@ -12298,22 +11785,19 @@ app.post("/api/mdm/remote-control", authenticateToken, async (req, res) => rcHan
         }
     }
 
-    app.post("/api/mdm/LockDevice", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "lock", "object"));
-    app.post("/api/mdm/UnlockDevice", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "unlock", "object"));
-    app.post("/api/mdm/LockDeviceNonWindows", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "lock", "mdm"));
-    app.post("/api/mdm/UnlockDeviceNonWindows", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "unlock", "mdm"));
+    
+    
+    
+    
 
     app.post("/api/mdm/lock-unlock", authenticateToken, async (req, res) => {
         const action = normalizeMdmValue(firstMdmDefined(req.body?.action, req.body?.Action), "lock").toLowerCase() === "unlock" ? "unlock" : "lock";
         return handleMdmLockUnlock(req, res, action, "auto");
     });
-    app.post("/api/mdm/lock-device", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "lock", "auto"));
-    app.post("/api/mdm/unlock-device", authenticateToken, async (req, res) => handleMdmLockUnlock(req, res, "unlock", "auto"));
+    
+    
 })();
 /* END EMA MDM ACTION PATCH */
-
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -13763,7 +13247,6 @@ app.get("/api/software-distribution/jobs", authenticateToken, async (req, res) =
 |--------------------------------------------------------------------------
 /* END SOFTWARE DISTRIBUTION APIs */
 
-
 /*
 |--------------------------------------------------------------------------
 | SOFTWARE INVENTORY APIs - RESTORED
@@ -14021,7 +13504,6 @@ app.get("/api/software/debug/summary", authenticateToken, handleSoftwareDebugSum
 app.get("/api/software-inventory", authenticateToken, handleSoftwareInventoryList);
 app.get("/api/software-inventory/categories", authenticateToken, handleSoftwareCategories);
 app.get("/api/software-inventory/debug/summary", authenticateToken, handleSoftwareDebugSummary);
-
 
 // ============================================================
 // SOFTWARE INVENTORY ADVANCED APIs - MERGED FROM JUNIOR MODULE
@@ -14789,7 +14271,6 @@ async function handleSoftInventoryScan(req, res) {
 app.post("/api/software-inventory/scan", authenticateToken, handleSoftInventoryScan);
 app.post("/api/software/scan", authenticateToken, handleSoftInventoryScan);
 
-
 // Old relation based route. Must stay after /categories and /debug/summary.
 app.get("/api/software/:relationID", authenticateToken, async (req, res) => {
     req.query.relationID = req.params.relationID;
@@ -15005,9 +14486,6 @@ function registerApplicationMeteringApis(dependencies = {}) {
             rows
         };
     }
-
-
-
 
     // React-friendly device list for App Metering.
     // This mirrors Hardware Inventory hierarchy, but App Metering jobs are created against
@@ -16243,63 +15721,23 @@ function registerApplicationMeteringApis(dependencies = {}) {
     app.post("/api/application-metering/stop", authenticateToken, async (req, res) => createApplicationMeteringJob(req, res, APP_METERING_STOP_COMMAND));
 
     // Java-compatible aliases from ApiSW_METER_Controller.java and ApiController.java.
-    app.post("/api/sw_meter/getMeterList4Console.do", authenticateToken, sendApplicationMeteringUsageResponse);
-    app.post("/api/sw_meter/getMeterList4Console_OneYear.do", authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendApplicationMeteringUsageResponse(req, res); });
-    app.post("/api/sw_meter/getMeterList4Console_OneYear_nextpage.do", authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true, nextpage: true }; return sendApplicationMeteringUsageResponse(req, res); });
-    app.post("/api/sw_meter/getMeterUserList4Console.do", authenticateToken, sendApplicationMeteringUsageResponse);
-    app.post("/api/sw_meter/getMeterUserList4ConsoleOneYear.do", authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendApplicationMeteringUsageResponse(req, res); });
-    app.post("/api/sw_meter/getMeterUserList4Console_OneYear_nextpage.do", authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true, nextpage: true }; return sendApplicationMeteringUsageResponse(req, res); });
-    app.post("/api/sw_meter/getMeterStat4Console.do", authenticateToken, sendApplicationMeteringStatsResponse);
-    app.post("/api/sw_meter/getMeterStat4Console_OneYear.do", authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendApplicationMeteringStatsResponse(req, res); });
-    app.post("/api/sw_meter/getMeterStat4Console_OneYear_nextpage.do", authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true, nextpage: true }; return sendApplicationMeteringStatsResponse(req, res); });
-    app.post("/api/sw_meter/getMeterUserStat4Console.do", authenticateToken, sendApplicationMeteringStatsResponse);
-    app.post("/api/sw_meter/getMeterUserStat4Console_OneYear.do", authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendApplicationMeteringStatsResponse(req, res); });
-    app.post("/api/sw_meter/getCommand_Software_List.do", authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const meterDate = formatAppMeteringDate(firstAmDefined(req.body?.meterDate, req.query?.meterDate), 0);
-            const rawRows = await executeStoredProcedure(pool, "spGetMeterSWPackageList", {
-                MeterDate: { type: sql.VarChar(50), value: meterDate }
-            });
-            const data = rawRows.map((row, index) => normalizeAppMeteringPackageRow(row, index));
-            return res.json({ success: true, totalRecords: data.length, procedure: "spGetMeterSWPackageList", data, raw: rawRows });
-        } catch (err) {
-            console.error("Failed to retrieve command software list:", err);
-            return res.status(500).json({ success: false, message: "Failed to retrieve command software list", error: err.message || String(err) });
-        }
-    });
-    app.post("/api/sw_meter/getUpdate_Software_Package_List.do", authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const rawRows = await executeStoredProcedure(pool, "spGetSWPackageList", {
-                SW_Catg: { type: sql.Int, value: -1 },
-                Use_Statistices: { type: sql.Int, value: -1 }
-            });
-            const data = rawRows.map((row, index) => normalizeAppMeteringPackageRow(row, index));
-            return res.json({ success: true, totalRecords: data.length, procedure: "spGetSWPackageList", data, raw: rawRows });
-        } catch (err) {
-            console.error("Failed to retrieve update software package list:", err);
-            return res.status(500).json({ success: false, message: "Failed to retrieve update software package list", error: err.message || String(err) });
-        }
-    });
-    app.post("/api/sw_meter/get_SWPackageFileGroup.do", authenticateToken, async (req, res) => {
-        try {
-            const packageId = parseAmInt(firstAmDefined(req.body?.sw_pkg_id, req.body?.SW_Pkg_Idn, req.body?.packageId), 0);
-            if (!packageId) return res.status(400).json({ success: false, message: "sw_pkg_id is required" });
-            const pool = await sql.connect(dbConfig);
-            const rawRows = await executeStoredProcedure(pool, "spGetSWPackageFileGroup", {
-                SW_Pkg_Idn: { type: sql.Int, value: packageId }
-            });
-            return res.json({ success: true, totalRecords: rawRows.length, procedure: "spGetSWPackageFileGroup", data: rawRows });
-        } catch (err) {
-            console.error("Failed to retrieve software package file group:", err);
-            return res.status(500).json({ success: false, message: "Failed to retrieve software package file group", error: err.message || String(err) });
-        }
-    });
-    app.post("/api/update/sw_Metering.do", authenticateToken, async (req, res) => createApplicationMeteringJob(req, res, parseAmInt(firstAmDefined(req.body?.commandID, req.body?.commandId), APP_METERING_START_COMMAND)));
-    app.post("/api/update/Collect_Metering.do", authenticateToken, async (req, res) => createApplicationMeteringJob(req, res, parseAmInt(firstAmDefined(req.body?.commandID, req.body?.commandId), APP_METERING_COLLECT_COMMAND)));
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 }
-
 
 registerApplicationMeteringApis({
     app,
@@ -16312,7 +15750,6 @@ registerApplicationMeteringApis({
 // ============================================================================
 // END APPLICATION METERING API BLOCK
 // ============================================================================
-
 
 // TASK LIST API ONLY - paste into your existing server.js after dbConfig and authenticateToken are declared.
 // Requires existing variables/imports in server.js: app, sql, dbConfig, authenticateToken.
@@ -17387,22 +16824,6 @@ app.get("/api/task-list/:jobId/detail", authenticateToken, sendTaskDetailRespons
 app.post("/api/task-list/:jobId/action", authenticateToken, sendTaskActionResponse);
 
 // Java-compatible aliases from Api_TASK_MANAGEController.java and older React adapters.
-app.get("/api/task_manage/options.do", authenticateToken, sendTaskOptionsResponse);
-app.get("/api/task_manage/getJobList.do", authenticateToken, sendTaskListResponse);
-app.post("/api/task_manage/getJobList.do", authenticateToken, sendTaskListResponse);
-app.get("/api/task_manage/getJobStatus.do", authenticateToken, sendTaskProgressResponse);
-app.post("/api/task_manage/getJobStatus.do", authenticateToken, sendTaskProgressResponse);
-app.post("/api/task_manage/getJobProgress_Status.do", authenticateToken, sendTaskProgressResponse);
-app.get("/api/task_manage/getJobProgressDetail.do", authenticateToken, sendTaskProgressDetailsResponse);
-app.post("/api/task_manage/getJobProgressDetail.do", authenticateToken, sendTaskProgressDetailsResponse);
-app.post("/api/task_manage/getJobProgress_Detail.do", authenticateToken, sendTaskProgressDetailsResponse);
-app.get("/api/task_manage/getJobTargets.do", authenticateToken, sendTaskTargetsResponse);
-app.post("/api/task_manage/getJobTargets.do", authenticateToken, sendTaskTargetsResponse);
-app.post("/api/task_manage/getTargetList.do", authenticateToken, sendTaskTargetsResponse);
-app.get("/api/task_manage/getJobDetail.do", authenticateToken, sendTaskDetailResponse);
-app.post("/api/task_manage/getJobDetail.do", authenticateToken, sendTaskDetailResponse);
-app.post("/api/task_manage/getJob_Detail.do", authenticateToken, sendTaskDetailResponse);
-app.post("/api/task_manage/action.do", authenticateToken, sendTaskActionResponse);
 
 /*
 |--------------------------------------------------------------------------
@@ -17415,7 +16836,6 @@ app.post("/api/task_manage/action.do", authenticateToken, sendTaskActionResponse
 // Replace the OLD Internet Metering block in server.js with this whole file.
 // Paste before START SERVER / app.listen, after app, authenticateToken, sql, dbConfig exist.
 // Fixes:
-// - registerCollectAlias is false so App Metering Collect_Metering.do is not duplicated.
 // - Collect no-target does NOT return HTTP 404 anymore.
 // - Adds /api/internet-metering/ping for route registration test.
 // ============================================================================
@@ -17433,7 +16853,6 @@ app.post("/api/task_manage/action.do", authenticateToken, sendTaskActionResponse
 |     authenticateToken,
 |     sql,
 |     dbConfig,
-|     registerCollectAlias: false // App Metering already owns /api/update/Collect_Metering.do
 | });
 |
 | This module does not create Express, JWT middleware, or MSSQL config.
@@ -17446,8 +16865,7 @@ function registerInternetMeteringApis(options = {}) {
         app,
         authenticateToken,
         sql,
-        dbConfig,
-        registerCollectAlias = false
+        dbConfig
     } = options;
 
     if (!app) throw new Error('registerInternetMeteringApis requires app.');
@@ -18354,129 +17772,7 @@ function registerInternetMeteringApis(options = {}) {
             return res.status(500).json({ success: false, message: 'Failed to remove web metering URL', error: err.message || String(err) });
         }
     });
-
-    app.post('/api/web_meter/getMeterURLStat4Console.do', authenticateToken, sendWebMeteringStatsResponse);
-    app.post('/api/web_meter/getMeterURLStat4Console_OneYear.do', authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendWebMeteringStatsResponse(req, res); });
-    app.post('/api/web_meter/getMeterURLStat4Console_OneYear_NextPage.do', authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true, nextpage: true }; return sendWebMeteringStatsResponse(req, res); });
-    app.post('/api/web_meter/getMeterURLUserStat4Console.do', authenticateToken, sendWebMeteringStatsResponse);
-    app.post('/api/web_meter/getMeterURLUserStat4Console_OneYear.do', authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendWebMeteringStatsResponse(req, res); });
-    app.post('/api/web_meter/getMeterURLList4Console.do', authenticateToken, sendWebMeteringUsageResponse);
-    app.post('/api/web_meter/getMeterURLList4Console_OneYear.do', authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendWebMeteringUsageResponse(req, res); });
-    app.post('/api/web_meter/getMeterURLList4Console_OneYear_nextPage.do', authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true, nextpage: true }; return sendWebMeteringUsageResponse(req, res); });
-    app.post('/api/web_meter/getMeterURLUserList4Console.do', authenticateToken, sendWebMeteringUsageResponse);
-    app.post('/api/web_meter/getMeterURLUserList4Console_OneYear.do', authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true }; return sendWebMeteringUsageResponse(req, res); });
-    app.post('/api/web_meter/getMeterURLUserList4Console_OneYear_nextPage.do', authenticateToken, (req, res) => { req.body = { ...(req.body || {}), oneYear: true, nextpage: true }; return sendWebMeteringUsageResponse(req, res); });
-
-    app.post('/api/web_meter/getURL_ParentList.do', authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const restrictID = parseWebInt(firstWebDefined(req.body?.restrict_id, req.body?.restrictID), -1);
-            const data = await executeStoredProcedure(pool, 'spGetMeterMainURLExt', {
-                nRestrict: { type: sql.Int, value: restrictID }
-            });
-            return res.json({ success: true, totalRecords: data.length, data });
-        } catch (err) {
-            console.error('Failed to retrieve URL parent list:', err);
-            return res.status(500).json({ success: false, message: 'Failed to retrieve URL parent list', error: err.message || String(err) });
-        }
-    });
-
-    app.post('/api/web_meter/getURL_ChildList.do', authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const restrictID = parseWebInt(firstWebDefined(req.body?.restrict_id, req.body?.restrictID), -1);
-            const urlMain = normalizeWebValue(firstWebDefined(req.body?.url_main, req.body?.urlMain, req.body?.url));
-            const data = await getWebUrlChildrenRows(pool, restrictID, urlMain);
-            return res.json({ success: true, totalRecords: data.length, data });
-        } catch (err) {
-            console.error('Failed to retrieve URL child list:', err);
-            return res.status(500).json({ success: false, message: 'Failed to retrieve URL child list', error: err.message || String(err) });
-        }
-    });
-
-    app.post('/api/web_meter/setMeterMainURLList4Console.do', authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const restrictID = parseWebInt(firstWebDefined(req.body?.restrict_id, req.body?.restrictID), 0);
-            const urlMain = normalizeWebValue(firstWebDefined(req.body?.url_main, req.body?.urlMain, req.body?.url));
-            if (!urlMain) return res.status(400).json({ success: false, message: 'url_main is required' });
-            const data = await executeStoredProcedure(pool, 'spSetMeterMainURLList4Console', {
-                URLMain: { type: sql.VarChar(255), value: urlMain },
-                nRestrict: { type: sql.Int, value: restrictID }
-            });
-            return res.json({ success: true, message: 'success', data });
-        } catch (err) {
-            console.error('Failed to set web metering URL:', err);
-            return res.status(500).json({ success: false, message: 'Failed to set web metering URL', error: err.message || String(err) });
-        }
-    });
-
-    app.post('/api/web_meter/removeWebMeteringList.do', authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const urlMain = normalizeWebValue(firstWebDefined(req.body?.url_main, req.body?.urlMain, req.body?.url));
-            if (!urlMain) return res.status(400).json({ success: false, message: 'url_main is required' });
-            const data = await executeStoredProcedure(pool, 'spRemMeterMainURLList4Console', {
-                URLMain: { type: sql.VarChar(255), value: urlMain }
-            });
-            return res.json({ success: true, message: 'success', data });
-        } catch (err) {
-            console.error('Failed to remove web metering URL:', err);
-            return res.status(500).json({ success: false, message: 'Failed to remove web metering URL', error: err.message || String(err) });
-        }
-    });
-
-    app.post('/api/web_meter/getURLMeterParent_Paging.do', authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const data = await getWebUrlParentRows(pool, req.body || {});
-            return res.json({ success: true, totalRecords: data.length, data });
-        } catch (err) {
-            console.error('Failed to retrieve paged URL parent list:', err);
-            return res.status(500).json({ success: false, message: 'Failed to retrieve paged URL parent list', error: err.message || String(err) });
-        }
-    });
-
-    app.post('/api/web_meter/getURLMeterParent_NextPageTotal.do', authenticateToken, async (req, res) => {
-        try {
-            const pool = await sql.connect(dbConfig);
-            const source = req.body || {};
-            const restrictID = parseWebInt(firstWebDefined(source.restrict_id, source.restrictID, source.restrict), -1);
-            const page = Math.max(parseWebInt(source.page, 1), 1) + 1;
-            const limit = Math.min(Math.max(parseWebInt(firstWebDefined(source.rowperpage, source.limit), 500), 1), 1000);
-            const data = await getWebUrlParentRows(pool, { restrictID, page, limit, order: source.order });
-            return res.json({ success: true, totalRecords: data.length, data: [{ total: data.length }] });
-        } catch (err) {
-            console.error('Failed to retrieve next URL parent page total:', err);
-            return res.status(500).json({ success: false, message: 'Failed to retrieve next URL parent page total', error: err.message || String(err) });
-        }
-    });
-
-    app.post('/api/update/Web_Metering.do', authenticateToken, async (req, res) => {
-        return createWebMeteringJob(req, res, parseWebInt(firstWebDefined(req.body?.commandID, req.body?.commandId), WEB_METERING_START_COMMAND));
-    });
-
-    if (registerCollectAlias) {
-        app.post('/api/update/Collect_Metering.do', authenticateToken, async (req, res) => {
-            const commandID = parseWebInt(firstWebDefined(req.body?.commandID, req.body?.commandId), WEB_METERING_COLLECT_COMMAND);
-            if (commandID !== WEB_METERING_COLLECT_COMMAND) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'This standalone Internet Metering module only handles Collect Web Metering Result commandID 1407. Merge this route with App Metering if commandID 1406 is also required.'
-                });
-            }
-            return createWebMeteringJob(req, res, WEB_METERING_COLLECT_COMMAND);
-        });
-    }
-
-    app.all(/^\/api\/internet-metering\/.*$/, authenticateToken, async (req, res) => {
-        return res.status(400).json({
-            success: false,
-            message: `Unsupported Internet Metering endpoint: ${req.method} ${req.originalUrl}`
-        });
-    });
-
-    return {
+return {
         WEB_METERING_JOB_TYPE,
         WEB_METERING_START_COMMAND,
         WEB_METERING_COLLECT_COMMAND,
@@ -18490,8 +17786,7 @@ registerInternetMeteringApis({
     app,
     authenticateToken,
     sql,
-    dbConfig,
-    registerCollectAlias: false
+    dbConfig
 });
 
 console.log('[Internet Metering] API registered: /api/internet-metering, /usage, /stats, /collect, /urls/tree');
@@ -18499,7 +17794,6 @@ console.log('[Internet Metering] API registered: /api/internet-metering, /usage,
 // ============================================================================
 // END INTERNET / WEB METERING API
 // ============================================================================
-
 
 // networkInventoryApis.only.js
 // Extracted Network Inventory API section from server.js.
@@ -19150,181 +18444,6 @@ app.delete("/api/network/network-device-status/:id", authenticateToken, async (r
 | Backward-compatible old Java-style POST aliases
 |--------------------------------------------------------------------------
 */
-
-app.post("/api/net/getIPSegment_DeviceStatus.do", authenticateToken, async (req, res) => {
-    try {
-        const subnet = normalizeNetworkValue(req.body.subnet);
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetNIIPSegmentCount", {
-            IP: { type: sql.VarChar(50), value: subnet }
-        });
-        return sendNetworkResponse(res, data, { subnet });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve IP segment device status" });
-    }
-});
-
-app.post("/api/net/getNIWorkGroupCount.do", authenticateToken, async (req, res) => {
-    try {
-        const workgroup = normalizeNetworkValue(req.body.workgroup);
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetNIWorkGroupCount", {
-            WorkGroup: { type: sql.VarChar(255), value: workgroup }
-        });
-        return sendNetworkResponse(res, data, { workgroup });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve NI workgroup count" });
-    }
-});
-
-app.post("/api/net/getSubnetNIAgentDetail2.do", authenticateToken, async (req, res) => {
-    try {
-        const subnet = normalizeNetworkValue(req.body.subnet);
-        const ncode = parseNetworkInt(req.body.ncode, 1);
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetSubnetNIAgentDetail2", {
-            Subnet: { type: sql.VarChar(50), value: subnet },
-            nCode: { type: sql.Int, value: ncode }
-        });
-        return sendNetworkResponse(res, data, { subnet, ncode });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve subnet NI agent detail" });
-    }
-});
-
-app.post("/api/net/getNIAgentList2.do", authenticateToken, async (req, res) => {
-    try {
-        const workgroup = normalizeNetworkValue(req.body.workgroup);
-        const destDate = normalizeDateForNetwork(req.body.destDate);
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetNIAgentList2", {
-            WorkGroup: { type: sql.VarChar(255), value: workgroup },
-            tmpDestDate: { type: sql.VarChar(50), value: destDate }
-        });
-        return sendNetworkResponse(res, data, { workgroup, destDate });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve NI agent list" });
-    }
-});
-
-app.post("/api/net/getSubnetNIObjectDetail3.do", authenticateToken, async (req, res) => {
-    try {
-        const subnet = normalizeNetworkValue(req.body.subnet);
-        const systemType = parseNetworkInt(req.body.systemType, 0);
-        const destDate = normalizeDateForNetwork(req.body.destDate);
-        const tca = parseNetworkInt(req.body.tca, 0);
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetSubnetNIObjectDetail3", {
-            Subnet: { type: sql.VarChar(50), value: subnet },
-            nSystemType: { type: sql.Int, value: systemType },
-            tmpDestDate: { type: sql.VarChar(50), value: destDate },
-            bTCA: { type: sql.Int, value: tca }
-        });
-        return sendNetworkResponse(res, data, { subnet, systemType, destDate, tca });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve subnet NI object detail" });
-    }
-});
-
-app.post("/api/net/getNIObjectList2.do", authenticateToken, async (req, res) => {
-    try {
-        const workgroup = normalizeNetworkValue(req.body.workgroup);
-        const systemType = parseNetworkInt(req.body.systemType, 0);
-        const destDate = normalizeDateForNetwork(req.body.destDate);
-        const tca = parseNetworkInt(req.body.tca, 0);
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetNIObjectList2", {
-            WorkGroup: { type: sql.VarChar(255), value: workgroup },
-            SystemType: { type: sql.Int, value: systemType },
-            tmpDestDate: { type: sql.VarChar(50), value: destDate },
-            bTCA: { type: sql.Int, value: tca }
-        });
-        return sendNetworkResponse(res, data, { workgroup, systemType, destDate, tca });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve NI object list" });
-    }
-});
-
-app.post("/api/net/getNIClient.do", authenticateToken, async (req, res) => {
-    try {
-        const clientID = parseNetworkInt(req.body.clientID, 0);
-        if (!clientID) return res.status(400).json({ success: false, message: "clientID is required" });
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetNIClient", {
-            Object_Root_Idn: { type: sql.Int, value: clientID }
-        });
-        return sendNetworkResponse(res, data, { clientID });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve NI client" });
-    }
-});
-
-app.post("/api/net/getNIObject.do", authenticateToken, async (req, res) => {
-    try {
-        const inventoryID = parseNetworkInt(req.body.inventoryID, 0);
-        if (!inventoryID) return res.status(400).json({ success: false, message: "inventoryID is required" });
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetNIObject", {
-            InventoryID: { type: sql.Int, value: inventoryID }
-        });
-        return sendNetworkResponse(res, data, { inventoryID });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve NI object" });
-    }
-});
-
-app.post("/api/net/getSubnetObject.do", authenticateToken, async (req, res) => {
-    try {
-        const subnet = normalizeNetworkValue(req.body.subnet);
-        if (!subnet) return res.status(400).json({ success: false, message: "subnet is required" });
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetSubnetObject", {
-            Subnet: { type: sql.VarChar(50), value: subnet }
-        });
-        return sendNetworkResponse(res, data, { subnet });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve subnet object" });
-    }
-});
-
-app.post("/api/net/getSubnetAgent.do", authenticateToken, async (req, res) => {
-    try {
-        const subnet = normalizeNetworkValue(req.body.subnet);
-        if (!subnet) return res.status(400).json({ success: false, message: "subnet is required" });
-        const pool = await sql.connect(dbConfig);
-        const data = await executeNetworkProcedure(pool, "spGetSubnetAgent", {
-            Subnet: { type: sql.VarChar(50), value: subnet }
-        });
-        return sendNetworkResponse(res, data, { subnet });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve subnet agent" });
-    }
-});
-
-app.post("/api/net/getSearchDate.do", authenticateToken, async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const lastSearchDate = await getNetworkLastSearchDate(pool);
-        return res.json({ success: true, data: [{ LastSearchDateStr: lastSearchDate }] });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: "Failed to retrieve search date" });
-    }
-});
-
-
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -20068,7 +19187,6 @@ async function erColumnExists(pool, tableName, columnName) {
   return result.recordset.length > 0;
 }
 
-
 async function erFirstAvailableColumnExpr(pool, tableName, alias, candidates = [], fallbackExpr = "CAST('' AS NVARCHAR(255))") {
   for (const columnName of candidates) {
     if (await erColumnExists(pool, tableName, columnName)) {
@@ -20792,7 +19910,6 @@ function erBuildMetrics({ assets, incidents, software, jobs, geo }) {
   };
 }
 
-
 function erRiskRows(metrics) {
   return [
     { area: "Endpoint availability", severity: metrics.offlineEndpoints > 0 ? "High" : "Low", finding: `${metrics.offlineEndpoints} endpoint(s) are currently classified as offline/not online.`, action: "Validate agent health, network access and endpoint ownership." },
@@ -21159,7 +20276,6 @@ function erBuildRnrDerivedRows(data, derivedRows = null) {
   };
 }
 
-
 function erLatestInventoryDate(rows = []) {
   const latest = (rows || [])
     .map((row) => erSqlDate(row?.lastUpdated, null))
@@ -21279,7 +20395,6 @@ function erBuildSoftwareGovernanceRows(data, derivedRows = null) {
     browserVulnerabilityRows: erSoftwareGovernanceRows(rnr.browserVulnerabilityRows, "Web Browser Vulnerability", "Update candidate", "Update or validate browser vulnerability candidate records.", 80)
   };
 }
-
 
 const EMA_HARDWARE_REPORT_IDS = [
   "manufacturer-brand",
@@ -22573,14 +21688,11 @@ app.post("/api/reports/generate", authenticateToken, async (req, res) => {
   }
 });
 
-
 /*
 |--------------------------------------------------------------------------
 | END OF REPORT
 |--------------------------------------------------------------------------
 */
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -23263,8 +22375,6 @@ app.delete("/api/settings/device-pricing/:id", authenticateToken, async (req, re
 | END PC AGING RULES API
 |--------------------------------------------------------------------------
 */
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -23966,8 +23076,6 @@ app.post("/api/settings/management-policy", authenticateToken, async (req, res) 
     }
 });
 
-
-
 // online_patching_apis_only.js
 // Extracted Online Patching API block for EMA backend.
 // Paste this block into server.js after these existing items are available:
@@ -23976,7 +23084,6 @@ app.post("/api/settings/management-policy", authenticateToken, async (req, res) 
 //   - dbConfig (MSSQL config)
 //   - authenticateToken (JWT middleware)
 // This block intentionally excludes the old Patch Files tab API and Activity Log API.
-
 
 /*
 |--------------------------------------------------------------------------
@@ -24250,8 +23357,6 @@ function getOnlinePatchStatusFilterSql() {
         )
     `;
 }
-
-
 
 let onlinePatchMasterColumnsCache = null;
 
@@ -24608,7 +23713,6 @@ app.get("/api/patch/online/updates/:updateID/:revisionNumber", authenticateToken
     }
 });
 
-
 async function getOnlinePatchInstallPayload(pool, objectRootIdn, updateID, revisionNumber) {
     const optionalMasterSelectSql = await getOnlinePatchOptionalMasterSelectSql(pool, "");
     const [deviceResult, patchResult, filesResult, statusResult] = await Promise.all([
@@ -24955,8 +24059,6 @@ app.post("/api/patch/online/install", authenticateToken, async (req, res) => {
         return res.status(500).json({ success: false, message: "Failed to create online patch install job", error: err.message || String(err) });
     }
 });
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -25845,6 +24947,78 @@ async function getItOpsNetworkSummary(pool) {
         subnetCount: subnetSet.size,
         lastScan: itopsDateLabel(lastScan),
         workgroups
+    };
+}
+
+async function getItOpsHardwareSummary(pool) {
+    const rows = await itopsGetHardwareInventoryRows(pool).catch((err) => {
+        console.warn("ITOps hardware inventory summary failed:", err.message || err);
+        return [];
+    });
+
+    const totalDevices = rows.length;
+    const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const onlineDevices = rows.filter((row) => itopsIsOnlineStatus(row.status)).length;
+    const offlineDevices = Math.max(totalDevices - onlineDevices, 0);
+    const staleSync = rows.filter((row) => {
+        const lastSeen = itopsDateValue(row.lastSeen);
+        return !lastSeen || lastSeen < staleCutoff;
+    }).length;
+    const lockedDevices = rows.filter((row) => itopsLower(row.status).includes("lock")).length;
+    const mdmDevices = rows.filter((row) => itopsLower(row.source) === "mdm").length;
+    const emDevices = rows.filter((row) => itopsLower(row.source) === "em").length;
+
+    const bucket = (field, fallback) => {
+        const map = new Map();
+        for (const row of rows) {
+            const name = itopsText(row[field], fallback);
+            map.set(name, (map.get(name) || 0) + 1);
+        }
+        return [...map.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+            .map(([name, value]) => ({ name, value, percent: itopsPercent(value, totalDevices) }));
+    };
+
+    const endpointRows = rows.map((row) => {
+        const lastSeen = itopsDateValue(row.lastSeen);
+        const isOnline = itopsIsOnlineStatus(row.status);
+        const isStale = !lastSeen || lastSeen < staleCutoff;
+        const hasMissingIdentity = !itopsText(row.deviceName) || !itopsText(row.model) || row.model === "-" || !itopsText(row.ipAddress);
+        const riskScore = (isOnline ? 0 : 20) + (isStale ? 25 : 0) + (hasMissingIdentity ? 10 : 0);
+        const reasons = [
+            !isOnline ? "Offline endpoint" : "",
+            isStale ? "Stale connection" : "",
+            hasMissingIdentity ? "Missing identity" : ""
+        ].filter(Boolean).join("; ");
+
+        return {
+            deviceName: row.deviceName || "-",
+            deviceId: row.deviceId || row.assetId || "",
+            platform: row.platform || row.osName || "Unknown",
+            osName: row.osName || row.platform || "Unknown",
+            model: row.model || "-",
+            department: row.department || "Unmapped",
+            lastSeen: itopsDateLabel(row.lastSeen),
+            status: row.status || (isOnline ? "Online" : "Offline"),
+            isOnline,
+            isStale,
+            riskScore,
+            reasons: reasons || "Inventory evidence"
+        };
+    }).sort((a, b) => b.riskScore - a.riskScore || a.deviceName.localeCompare(b.deviceName)).slice(0, 500);
+
+    return {
+        totalDevices,
+        onlineDevices,
+        offlineDevices,
+        staleSync,
+        lockedDevices,
+        mdmDevices,
+        emDevices,
+        topModels: bucket("model", "Unknown Model"),
+        platformBreakdown: bucket("platform", "Unknown"),
+        endpointRows
     };
 }
 
@@ -26817,6 +25991,857 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
     };
 }
 
+// ============================================================
+// ITOPS DASHBOARD SOURCE-MAPPING OVERRIDES
+// These overrides keep dashboard domains separated by the correct API/source:
+// - Hardware: TS_OBJECT_ROOT + TSMDM_ASSET inventory only
+// - Geolocation: TSMDM_GEOLOCATION + hardware inventory for missing mappings
+// - Service Desk: service desk incident tables only
+// - Patch Compliance: online patch status/master tables only
+// - Critical Risk: hardware inventory + Settings PC aging rule + endoflife.date lifecycle API
+// ============================================================
+
+function itopsText(value, fallback = "") {
+    if (value === undefined || value === null) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
+function itopsLower(value) {
+    return itopsText(value).toLowerCase();
+}
+
+function itopsDateValue(value) {
+    if (!value || value === "-") return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function itopsYearsBetween(dateValue, now = new Date()) {
+    const date = itopsDateValue(dateValue);
+    if (!date) return null;
+    const years = (now.getTime() - date.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+    return Number.isFinite(years) && years >= 0 ? itopsRound(years, 1) : null;
+}
+
+function itopsRecordKey(...values) {
+    for (const value of values) {
+        const text = itopsText(value).toLowerCase();
+        if (text && text !== "-" && text !== "unknown") return text;
+    }
+    return "";
+}
+
+function itopsDeduplicateRows(rows = [], keyFactory = (row) => JSON.stringify(row)) {
+    const seen = new Set();
+    const output = [];
+    for (const row of Array.isArray(rows) ? rows : []) {
+        const key = keyFactory(row);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        output.push(row);
+    }
+    return output;
+}
+
+function itopsIsOnlineStatus(status) {
+    const text = itopsLower(status);
+    return text === "1" || text.includes("online") || text.includes("active") || text.includes("connected");
+}
+
+function itopsIsClosedTicket(status) {
+    const text = itopsLower(status);
+    return ["resolved", "closed", "solved", "completed", "done"].some((word) => text.includes(word));
+}
+
+function itopsPriorityLabel(priority) {
+    const text = itopsLower(priority);
+    if (text.includes("critical") || text === "p1" || text.includes("urgent")) return "Critical";
+    if (text.includes("high") || text === "p2") return "High";
+    if (text.includes("low") || text === "p4") return "Low";
+    return "Medium";
+}
+
+async function itopsFirstColumnExpr(pool, tableName, alias, candidates = [], fallbackExpr = "CAST('' AS NVARCHAR(255))") {
+    for (const columnName of candidates) {
+        if (await itopsColumnExists(pool, tableName, columnName)) {
+            return `CAST(${alias}.[${columnName}] AS NVARCHAR(255))`;
+        }
+    }
+    return fallbackExpr;
+}
+
+async function itopsReadPcAgingRule(pool) {
+    const fallbackRule = typeof DEFAULT_PC_AGING_RULE !== "undefined"
+        ? DEFAULT_PC_AGING_RULE
+        : { enabled: true, ageSource: "RegDate", healthyMaxYears: 3, monitorMaxYears: 5, agingMinYears: 5, includeUnknownAge: false, replacementWindowMonths: 6, notes: "" };
+
+    try {
+        if (!(await itopsTableExists(pool, "AssetSettings"))) return fallbackRule;
+
+        const result = await pool.request().query(`
+            SELECT TOP 1 SettingKey, SettingValue
+            FROM AssetSettings WITH (NOLOCK)
+            WHERE SettingKey IN ('PC_AGING_RULE', 'PCAgeLimit')
+            ORDER BY CASE WHEN SettingKey = 'PC_AGING_RULE' THEN 0 ELSE 1 END;
+        `);
+
+        const row = result.recordset?.[0];
+        if (!row) return fallbackRule;
+
+        if (String(row.SettingKey || "").toUpperCase() === "PCAgeLimit") {
+            const limit = parseInt(row.SettingValue, 10);
+            return {
+                ...fallbackRule,
+                enabled: true,
+                monitorMaxYears: Number.isFinite(limit) ? Math.max(1, limit - 1) : fallbackRule.monitorMaxYears,
+                agingMinYears: Number.isFinite(limit) ? limit : fallbackRule.agingMinYears
+            };
+        }
+
+        if (typeof safeParsePcAgingJson === "function") return safeParsePcAgingJson(row.SettingValue);
+        return { ...fallbackRule, ...JSON.parse(String(row.SettingValue || "{}")) };
+    } catch (err) {
+        console.warn("ITOps PC aging rule lookup failed:", err.message || err);
+        return fallbackRule;
+    }
+}
+
+function itopsPickDateByPcAgingRule(asset = {}, rule = {}) {
+    const source = itopsLower(rule.ageSource || "RegDate");
+    if (source.includes("bios")) return asset.biosDate || asset.regDate || asset.lastSeen;
+    if (source.includes("connect") || source.includes("last")) return asset.lastSeen || asset.regDate || asset.biosDate;
+    return asset.regDate || asset.biosDate || asset.lastSeen;
+}
+
+function itopsPcAgeYears(asset = {}, rule = {}) {
+    const explicitAge = itopsToNumber(asset.pcAgeYears, NaN);
+    if (Number.isFinite(explicitAge) && explicitAge > 0) return itopsRound(explicitAge, 1);
+    return itopsYearsBetween(itopsPickDateByPcAgingRule(asset, rule));
+}
+
+function itopsPcAgingStatus(asset = {}, rule = {}) {
+    if (rule && rule.enabled === false) {
+        return { label: "PC aging rule disabled", severity: "Low", ageYears: null, reason: "Settings PC aging rule is disabled." };
+    }
+
+    const ageYears = itopsPcAgeYears(asset, rule);
+    if (ageYears === null) {
+        return {
+            label: "Unknown PC age",
+            severity: rule.includeUnknownAge ? "Medium" : "Low",
+            ageYears: null,
+            reason: rule.includeUnknownAge ? "PC age evidence is missing and Settings includes unknown age." : "PC age evidence is missing."
+        };
+    }
+
+    const agingMin = Math.max(1, itopsToNumber(rule.agingMinYears, 5));
+    const monitorMax = Math.max(1, itopsToNumber(rule.monitorMaxYears, Math.max(agingMin - 1, 1)));
+    const healthyMax = Math.max(0, itopsToNumber(rule.healthyMaxYears, Math.max(monitorMax - 1, 0)));
+
+    if (ageYears >= agingMin) {
+        return { label: "High PC aging risk", severity: "High", ageYears, reason: `PC age ${ageYears} year(s) is >= aging threshold ${agingMin}.` };
+    }
+
+    if (ageYears >= monitorMax) {
+        return { label: "Monitor PC aging", severity: "Medium", ageYears, reason: `PC age ${ageYears} year(s) is in monitor range ${monitorMax}-${agingMin - 0.1}.` };
+    }
+
+    if (ageYears <= healthyMax) {
+        return { label: "PC age healthy", severity: "Low", ageYears, reason: `PC age ${ageYears} year(s) is within healthy range <= ${healthyMax}.` };
+    }
+
+    return { label: "PC age watch", severity: "Low", ageYears, reason: `PC age ${ageYears} year(s) is below aging threshold.` };
+}
+
+async function itopsGetHardwareInventoryRows(pool) {
+    const hasEmAssets = await itopsTableExists(pool, "TS_OBJECT_ROOT");
+    const hasMdmAssets = await itopsTableExists(pool, "TSMDM_ASSET");
+    const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
+    const hasMdmRel = await itopsTableExists(pool, "TSMDM_OBJECT_RELATION");
+    const hasMdmMapping = await itopsTableExists(pool, "TSMDM_TS_OBJECT_MAPPING");
+
+    const parts = [];
+
+    if (hasEmAssets) {
+        const emOsNameExpr = await itopsFirstColumnExpr(pool, "TS_OBJECT_ROOT", "r", ["OS", "OSName", "OperatingSystem", "Operating_System", "PlatformType", "Object_OS"], "CAST('Windows' AS NVARCHAR(255))");
+        const emOsBuildExpr = await itopsFirstColumnExpr(pool, "TS_OBJECT_ROOT", "r", ["OSBuild", "OS_Build", "Build", "BuildNumber", "OSVersion", "Version"], "CAST('' AS NVARCHAR(255))");
+        const emRegDateExpr = await itopsFirstColumnExpr(pool, "TS_OBJECT_ROOT", "r", ["RegDate", "RegisterDate", "RegisteredDate", "CreatedAt", "CreatedDate", "InstallDate"], "CAST(NULL AS NVARCHAR(255))");
+        const emPcAgeExpr = await itopsFirstColumnExpr(pool, "TS_OBJECT_ROOT", "r", ["PCAge", "PcAge", "pc_age_years", "AgeYears", "AgeYear"], "CAST(NULL AS NVARCHAR(255))");
+        const emBiosDateExpr = await itopsFirstColumnExpr(pool, "TS_OBJECT_ROOT", "r", ["BiosDate", "BIOSDate", "Bios_Date", "BIOS_Date"], "CAST(NULL AS NVARCHAR(255))");
+        const emIpExpr = await itopsFirstColumnExpr(pool, "TS_OBJECT_ROOT", "r", ["IP", "IPAddress", "IP_Address"], "CAST('' AS NVARCHAR(255))");
+
+        parts.push(`
+            SELECT
+                'EM' AS source,
+                CAST(r.Object_Root_Idn AS NVARCHAR(100)) AS assetId,
+                ISNULL(NULLIF(CAST(r.Object_DeviceID AS NVARCHAR(255)), ''), CAST(r.Object_Root_Idn AS NVARCHAR(100))) AS deviceId,
+                ISNULL(NULLIF(CAST(r.ComputerName AS NVARCHAR(255)), ''), ISNULL(NULLIF(CAST(r.Object_DeviceID AS NVARCHAR(255)), ''), CAST(r.Object_Root_Idn AS NVARCHAR(100)))) AS deviceName,
+                ISNULL(NULLIF(CAST(r.Model AS NVARCHAR(255)), ''), '-') AS model,
+                ${hasRelations ? "ISNULL(NULLIF(rel.Object_Full_Name, ''), ISNULL(NULLIF(rel.Object_Rel_Name, ''), 'Unmapped'))" : "'Unmapped'"} AS department,
+                ${emOsNameExpr} AS osName,
+                ${emOsBuildExpr} AS osBuild,
+                ${emRegDateExpr} AS regDate,
+                ${emPcAgeExpr} AS pcAgeYears,
+                ${emBiosDateExpr} AS biosDate,
+                ${emIpExpr} AS ipAddress,
+                TRY_CONVERT(datetime, r.ConnectionTime) AS lastSeen,
+                CASE WHEN TRY_CONVERT(int, r.ConnectionStatus) = 1 THEN 'Online' ELSE 'Offline' END AS status
+            FROM TS_OBJECT_ROOT r WITH (NOLOCK)
+            ${hasRelations ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON r.Object_Rel_Idn = rel.Object_Rel_Idn" : ""}
+            WHERE ISNULL(r.Object_Root_Idn, 0) > 0
+        `);
+    }
+
+    if (hasMdmAssets) {
+        const mdmOsNameExpr = await itopsFirstColumnExpr(pool, "TSMDM_ASSET", "a", ["OS", "OSName", "OperatingSystem", "DeviceOS", "DeviceOperatingSystem", "PlatformType"], "CAST('MDM' AS NVARCHAR(255))");
+        const mdmOsBuildExpr = await itopsFirstColumnExpr(pool, "TSMDM_ASSET", "a", ["OSBuild", "OS_Build", "Build", "BuildNumber", "DeviceOSBuild", "OSVersion", "Version"], "CAST('' AS NVARCHAR(255))");
+        const mdmRegDateExpr = await itopsFirstColumnExpr(pool, "TSMDM_ASSET", "a", ["RegDate", "RegisterDate", "RegisteredDate", "EnrolledDate", "EnrollmentDate", "CreatedAt", "DeviceTimeStamp"], "CAST(NULL AS NVARCHAR(255))");
+        const mdmPcAgeExpr = await itopsFirstColumnExpr(pool, "TSMDM_ASSET", "a", ["PCAge", "PcAge", "pc_age_years", "AgeYears", "AgeYear"], "CAST(NULL AS NVARCHAR(255))");
+        const mdmBiosDateExpr = await itopsFirstColumnExpr(pool, "TSMDM_ASSET", "a", ["BiosDate", "BIOSDate", "Bios_Date", "BIOS_Date"], "CAST(NULL AS NVARCHAR(255))");
+        const mdmIpExpr = await itopsFirstColumnExpr(pool, "TSMDM_ASSET", "a", ["DeviceLocalIPAddress", "DeviceIPAddress", "IPAddress", "IP_Address"], "CAST('' AS NVARCHAR(255))");
+        const mdmLastSeenExpr = await itopsFirstColumnExpr(pool, "TSMDM_ASSET", "a", ["DeviceTimeStamp", "LastTimeStamp", "LastSeen", "UpdatedAt", "ModifiedAt"], "CAST(NULL AS NVARCHAR(255))");
+        const mdmExcludeMappedSql = hasMdmMapping
+            ? "AND NOT EXISTS (SELECT 1 FROM TSMDM_TS_OBJECT_MAPPING map WITH (NOLOCK) WHERE map.MDM_Asset_Idn = a.MDM_Asset_Idn)"
+            : "";
+
+        parts.push(`
+            SELECT
+                'MDM' AS source,
+                CAST(a.MDM_Asset_Idn AS NVARCHAR(100)) AS assetId,
+                ISNULL(NULLIF(CAST(a.DeviceID AS NVARCHAR(255)), ''), CAST(a.MDM_Asset_Idn AS NVARCHAR(100))) AS deviceId,
+                ISNULL(NULLIF(CAST(a.DeviceName AS NVARCHAR(255)), ''), ISNULL(NULLIF(CAST(a.DeviceID AS NVARCHAR(255)), ''), CAST(a.MDM_Asset_Idn AS NVARCHAR(100)))) AS deviceName,
+                ISNULL(NULLIF(CAST(a.DeviceModelName AS NVARCHAR(255)), ''), '-') AS model,
+                ${hasRelations && hasMdmRel ? "ISNULL(NULLIF(rel.Object_Full_Name, ''), ISNULL(NULLIF(rel.Object_Rel_Name, ''), 'MDM Unmapped'))" : "'MDM Unmapped'"} AS department,
+                ${mdmOsNameExpr} AS osName,
+                ${mdmOsBuildExpr} AS osBuild,
+                ${mdmRegDateExpr} AS regDate,
+                ${mdmPcAgeExpr} AS pcAgeYears,
+                ${mdmBiosDateExpr} AS biosDate,
+                ${mdmIpExpr} AS ipAddress,
+                TRY_CONVERT(datetime, ${mdmLastSeenExpr}) AS lastSeen,
+                ISNULL(NULLIF(CAST(a.ConnectionStatus AS NVARCHAR(100)), ''), 'Unknown') AS status
+            FROM TSMDM_ASSET a WITH (NOLOCK)
+            ${hasMdmRel ? "LEFT JOIN TSMDM_OBJECT_RELATION mor WITH (NOLOCK) ON a.MDM_Asset_Idn = mor.MDM_Asset_Idn" : ""}
+            ${hasRelations && hasMdmRel ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON mor.Object_Rel_Idn = rel.Object_Rel_Idn" : ""}
+            WHERE ISNULL(a.MDM_Asset_Idn, 0) > 0
+            ${mdmExcludeMappedSql}
+        `);
+    }
+
+    if (!parts.length) return [];
+
+    const result = await pool.request().query(`
+        ;WITH InventoryRows AS (
+            ${parts.join("\nUNION ALL\n")}
+        )
+        SELECT TOP 3000 *
+        FROM InventoryRows
+        ORDER BY ISNULL(lastSeen, '1900-01-01') DESC, deviceName ASC;
+    `);
+
+    return itopsDeduplicateRows((result.recordset || []).map((row) => ({
+        source: row.source || row.Source || "Hardware",
+        assetId: itopsText(row.assetId || row.AssetID),
+        deviceId: itopsText(row.deviceId || row.DeviceID),
+        deviceName: itopsText(row.deviceName || row.DeviceName, "-"),
+        model: itopsText(row.model || row.Model, "-"),
+        department: itopsText(row.department || row.Department, "Unmapped"),
+        platform: itopsText(row.osName || row.platform || row.Platform, "Unknown"),
+        osName: itopsText(row.osName || row.OSName || row.platform || row.Platform, "Unknown"),
+        osBuild: itopsText(row.osBuild || row.OSBuild),
+        regDate: row.regDate || row.RegDate || null,
+        pcAgeYears: row.pcAgeYears || row.PCAgeYears || null,
+        biosDate: row.biosDate || row.BiosDate || null,
+        ipAddress: itopsText(row.ipAddress || row.IPAddress || row.IP),
+        lastSeen: row.lastSeen || row.LastSeen || null,
+        status: itopsText(row.status || row.Status, "Unknown")
+    })), (row) => itopsRecordKey(row.deviceId, row.deviceName, row.assetId));
+}
+
+async function getItOpsGeoSummary(pool) {
+    const hasGeo = await itopsTableExists(pool, "TSMDM_GEOLOCATION");
+    const hardwareRows = await itopsGetHardwareInventoryRows(pool).catch((err) => {
+        console.warn("ITOps geolocation hardware mapping failed:", err.message || err);
+        return [];
+    });
+
+    if (!hasGeo) {
+        return {
+            trackedDevices: 0,
+            staleLocations: 0,
+            unknownLocations: 0,
+            latestLocationTime: "-",
+            topLocations: [],
+            locationRows: [],
+            trackedRows: [],
+            staleRows: [],
+            unknownRows: [],
+            missingGeoRows: hardwareRows.map((row) => ({
+                deviceName: row.deviceName,
+                deviceId: row.deviceId,
+                platform: row.platform,
+                department: row.department,
+                locationName: "Missing Geolocation",
+                lastSeen: itopsDateLabel(row.lastSeen),
+                status: row.status,
+                reason: "No TSMDM_GEOLOCATION table was found for this hardware endpoint.",
+                signal: "Missing Geo Identity"
+            }))
+        };
+    }
+
+    const hasAsset = await itopsTableExists(pool, "TSMDM_ASSET");
+    const result = await pool.request().query(`
+        SELECT TOP 3000
+            CAST(g.DeviceID AS NVARCHAR(255)) AS deviceId,
+            g.Latitude AS latitude,
+            g.Longitude AS longitude,
+            TRY_CONVERT(datetime, g.[Time]) AS locationTime,
+            ISNULL(g.LocationName, '') AS locationName,
+            ${hasAsset ? "ISNULL(NULLIF(a.DeviceName, ''), g.DeviceID)" : "g.DeviceID"} AS deviceName,
+            ${hasAsset ? "ISNULL(NULLIF(a.PlatformType, ''), 'MDM')" : "'MDM'"} AS platform
+        FROM TSMDM_GEOLOCATION g WITH (NOLOCK)
+        ${hasAsset ? "LEFT JOIN TSMDM_ASSET a WITH (NOLOCK) ON g.DeviceID = a.DeviceID" : ""}
+        ORDER BY TRY_CONVERT(datetime, g.[Time]) DESC;
+    `);
+
+    const latestByDevice = new Map();
+    for (const row of result.recordset || []) {
+        const key = itopsRecordKey(row.deviceId, row.deviceName);
+        if (!key || latestByDevice.has(key)) continue;
+        latestByDevice.set(key, row);
+    }
+
+    const mappedHardware = new Map(hardwareRows.map((row) => [itopsRecordKey(row.deviceId, row.deviceName, row.assetId), row]));
+    const locationRows = [];
+    const trackedRows = [];
+    const staleRows = [];
+    const unknownRows = [];
+    const locationCounts = new Map();
+    let latestLocationTime = null;
+
+    for (const row of latestByDevice.values()) {
+        const key = itopsRecordKey(row.deviceId, row.deviceName);
+        const hardware = mappedHardware.get(key) || {};
+        const locationName = itopsText(row.locationName, "Unknown Location");
+        const isUnknown = !itopsText(row.locationName) || /unable to fetch|unknown|null/i.test(locationName);
+        const locationTime = itopsDateValue(row.locationTime);
+        const isStale = !locationTime || locationTime < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        if (locationTime && (!latestLocationTime || locationTime > latestLocationTime)) latestLocationTime = locationTime;
+
+        const normalized = {
+            deviceName: itopsText(row.deviceName || hardware.deviceName, "-"),
+            deviceId: itopsText(row.deviceId || hardware.deviceId),
+            platform: itopsText(row.platform || hardware.platform, "MDM"),
+            department: itopsText(hardware.department, "Unmapped"),
+            locationName: isUnknown ? "Unknown Location" : locationName,
+            lastSeen: itopsDateLabel(row.locationTime || hardware.lastSeen),
+            status: isUnknown ? "Unknown Location" : isStale ? "Stale Location" : "Tracked",
+            reason: isUnknown
+                ? "Geolocation API returned an empty/unknown address."
+                : isStale
+                    ? "Geolocation timestamp is older than 7 days."
+                    : "Fresh geolocation evidence from TSMDM_GEOLOCATION.",
+            signal: isUnknown ? "Unknown Locations" : isStale ? "Stale Location Records" : "Tracked Devices",
+            latitude: row.latitude,
+            longitude: row.longitude
+        };
+
+        locationRows.push(normalized);
+        if (isUnknown) unknownRows.push(normalized);
+        else if (isStale) staleRows.push(normalized);
+        else trackedRows.push(normalized);
+
+        const locationKey = normalized.locationName || "Unknown Location";
+        locationCounts.set(locationKey, (locationCounts.get(locationKey) || 0) + 1);
+    }
+
+    const geoKeys = new Set([...latestByDevice.keys()]);
+    const missingGeoRows = hardwareRows
+        .filter((row) => !geoKeys.has(itopsRecordKey(row.deviceId, row.deviceName, row.assetId)))
+        .map((row) => ({
+            deviceName: row.deviceName,
+            deviceId: row.deviceId,
+            platform: row.platform,
+            department: row.department,
+            locationName: "Missing Geolocation",
+            lastSeen: itopsDateLabel(row.lastSeen),
+            status: row.status,
+            reason: "Hardware endpoint exists but no matching latest geolocation record was found.",
+            signal: "Missing Geo Identity"
+        }));
+
+    const totalLocationRows = Math.max(locationRows.length, 1);
+    const topLocations = [...locationCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([name, value]) => ({ name, value, percent: itopsPercent(value, totalLocationRows) }));
+
+    return {
+        trackedDevices: trackedRows.length,
+        staleLocations: staleRows.length,
+        unknownLocations: unknownRows.length,
+        latestLocationTime: itopsDateLabel(latestLocationTime),
+        topLocations,
+        locationRows,
+        trackedRows,
+        staleRows,
+        unknownRows,
+        missingGeoRows,
+        totalHardwareDevices: hardwareRows.length
+    };
+}
+
+async function itopsGetServiceDeskRows(pool) {
+    const hasHdIncidents = await itopsTableExists(pool, "HD_Incidents");
+    const hasEmaIncidents = await itopsTableExists(pool, "EMA_Incidents");
+    const incidentTable = hasHdIncidents ? "HD_Incidents" : hasEmaIncidents ? "EMA_Incidents" : "";
+    if (!incidentTable) return { source: "none", rows: [] };
+
+    const idExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["IncidentID", "IncidentId", "TicketID", "TicketId", "ID"], "CAST(ROW_NUMBER() OVER (ORDER BY (SELECT 1)) AS NVARCHAR(100))");
+    const titleExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["Title", "Subject", "Summary", "Description", "IncidentDetails"], "CAST('Service desk ticket' AS NVARCHAR(255))");
+    const priorityExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["Priority", "Severity", "Urgency"], "CAST('Medium' AS NVARCHAR(50))");
+    const statusExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["Status", "State", "IncidentStatus"], "CAST('Open' AS NVARCHAR(50))");
+    const assetExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["AssetID", "AssetId", "DeviceID", "DeviceId", "ComputerName"], "CAST('' AS NVARCHAR(100))");
+    const ownerExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["AssignedTo", "AssignedUser", "Owner", "AssignedLevel"], "CAST('' AS NVARCHAR(255))");
+    const createdExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["CreatedAt", "CreatedDate", "OpenDate", "ReportedDate"], "CAST(NULL AS NVARCHAR(255))");
+    const firstResponseExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["FirstResponseAt", "FirstResponseDate", "RespondedAt"], "CAST(NULL AS NVARCHAR(255))");
+    const resolvedExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["ResolvedAt", "ResolvedDate", "ClosedAt", "ClosedDate"], "CAST(NULL AS NVARCHAR(255))");
+    const slaExpr = await itopsFirstColumnExpr(pool, incidentTable, "i", ["SlaDue", "SLADue", "SlaDueDate", "DueDate", "TargetResolutionDate"], "CAST(NULL AS NVARCHAR(255))");
+
+    const result = await pool.request().query(`
+        SELECT TOP 3000
+            ${idExpr} AS id,
+            ${titleExpr} AS title,
+            ${priorityExpr} AS priority,
+            ${statusExpr} AS status,
+            ${assetExpr} AS assetId,
+            ${ownerExpr} AS owner,
+            TRY_CONVERT(datetime, ${createdExpr}) AS createdAt,
+            TRY_CONVERT(datetime, ${firstResponseExpr}) AS firstResponseAt,
+            TRY_CONVERT(datetime, ${resolvedExpr}) AS resolvedAt,
+            TRY_CONVERT(datetime, ${slaExpr}) AS slaDue
+        FROM ${incidentTable} i WITH (NOLOCK)
+        ORDER BY ISNULL(TRY_CONVERT(datetime, ${createdExpr}), '1900-01-01') DESC;
+    `);
+
+    return { source: incidentTable, rows: result.recordset || [] };
+}
+
+async function getItOpsIncidentSummary(pool) {
+    const { source, rows } = await itopsGetServiceDeskRows(pool);
+
+    if (!rows.length) {
+        return {
+            source,
+            openIncidents: 0,
+            overdueTickets: 0,
+            mttrMinutes: 0,
+            firstResponseMinutes: 0,
+            slaAchievement: 0,
+            priorityBreakdown: [
+                { label: "Critical", value: 0, tone: "red" },
+                { label: "High", value: 0, tone: "amber" },
+                { label: "Medium", value: 0, tone: "yellow" },
+                { label: "Low", value: 0, tone: "green" }
+            ],
+            incidentTrend: [],
+            trendSummary: { newIncidents: 0, resolved: 0, openBacklog: 0 },
+            activeAlerts: [],
+            problematicSystems: []
+        };
+    }
+
+    const now = new Date();
+    const openRows = rows.filter((row) => !itopsIsClosedTicket(row.status));
+    const overdueRows = openRows.filter((row) => {
+        const due = itopsDateValue(row.slaDue);
+        return due && due < now;
+    });
+
+    const resolvedWithDates = rows.filter((row) => itopsDateValue(row.createdAt) && itopsDateValue(row.resolvedAt));
+    const mttrMinutes = resolvedWithDates.length
+        ? resolvedWithDates.reduce((total, row) => total + Math.max(0, (itopsDateValue(row.resolvedAt) - itopsDateValue(row.createdAt)) / 60000), 0) / resolvedWithDates.length
+        : 0;
+
+    const firstResponseRows = rows.filter((row) => itopsDateValue(row.createdAt) && itopsDateValue(row.firstResponseAt));
+    const firstResponseMinutes = firstResponseRows.length
+        ? firstResponseRows.reduce((total, row) => total + Math.max(0, (itopsDateValue(row.firstResponseAt) - itopsDateValue(row.createdAt)) / 60000), 0) / firstResponseRows.length
+        : 0;
+
+    const resolvedWithSla = rows.filter((row) => itopsDateValue(row.resolvedAt) && itopsDateValue(row.slaDue));
+    const resolvedWithinSla = resolvedWithSla.filter((row) => itopsDateValue(row.resolvedAt) <= itopsDateValue(row.slaDue));
+    const slaAchievement = resolvedWithSla.length ? itopsPercent(resolvedWithinSla.length, resolvedWithSla.length, 0) : 0;
+
+    const priorityOrder = ["Critical", "High", "Medium", "Low"];
+    const priorityCounts = new Map(priorityOrder.map((item) => [item, 0]));
+    for (const row of openRows) {
+        const label = itopsPriorityLabel(row.priority);
+        priorityCounts.set(label, (priorityCounts.get(label) || 0) + 1);
+    }
+
+    const dayRows = [];
+    for (let offset = 6; offset >= 0; offset -= 1) {
+        const day = new Date(now);
+        day.setDate(now.getDate() - offset);
+        day.setHours(0, 0, 0, 0);
+        const nextDay = new Date(day);
+        nextDay.setDate(day.getDate() + 1);
+        const dayLabel = day.toLocaleDateString("en-MY", { day: "2-digit", month: "short" });
+        const newIncidents = rows.filter((row) => {
+            const created = itopsDateValue(row.createdAt);
+            return created && created >= day && created < nextDay;
+        }).length;
+        const resolved = rows.filter((row) => {
+            const resolvedAt = itopsDateValue(row.resolvedAt);
+            return resolvedAt && resolvedAt >= day && resolvedAt < nextDay;
+        }).length;
+        const open = rows.filter((row) => {
+            const created = itopsDateValue(row.createdAt);
+            const resolvedAt = itopsDateValue(row.resolvedAt);
+            return created && created < nextDay && (!resolvedAt || resolvedAt >= nextDay || !itopsIsClosedTicket(row.status));
+        }).length;
+        dayRows.push({ day: dayLabel, newIncidents, resolved, open });
+    }
+
+    const assetBuckets = new Map();
+    for (const row of rows) {
+        const key = itopsText(row.assetId, "Unassigned Asset");
+        const current = assetBuckets.get(key) || { incidents: 0, open: 0, weight: 0 };
+        current.incidents += 1;
+        if (!itopsIsClosedTicket(row.status)) current.open += 1;
+        const priority = itopsPriorityLabel(row.priority);
+        current.weight += priority === "Critical" ? 8 : priority === "High" ? 5 : priority === "Medium" ? 3 : 1;
+        assetBuckets.set(key, current);
+    }
+
+    return {
+        source,
+        openIncidents: openRows.length,
+        overdueTickets: overdueRows.length,
+        mttrMinutes,
+        firstResponseMinutes,
+        slaAchievement,
+        priorityBreakdown: [
+            { label: "Critical", value: priorityCounts.get("Critical") || 0, tone: "red" },
+            { label: "High", value: priorityCounts.get("High") || 0, tone: "amber" },
+            { label: "Medium", value: priorityCounts.get("Medium") || 0, tone: "yellow" },
+            { label: "Low", value: priorityCounts.get("Low") || 0, tone: "green" }
+        ],
+        incidentTrend: dayRows,
+        trendSummary: {
+            newIncidents: dayRows.reduce((total, row) => total + row.newIncidents, 0),
+            resolved: dayRows.reduce((total, row) => total + row.resolved, 0),
+            openBacklog: openRows.length
+        },
+        activeAlerts: openRows
+            .sort((a, b) => {
+                const weight = (row) => ({ Critical: 4, High: 3, Medium: 2, Low: 1 }[itopsPriorityLabel(row.priority)] || 1);
+                return weight(b) - weight(a) || (itopsDateValue(b.createdAt)?.getTime() || 0) - (itopsDateValue(a.createdAt)?.getTime() || 0);
+            })
+            .slice(0, 50)
+            .map((row) => ({
+                severity: itopsPriorityLabel(row.priority),
+                alert: itopsText(row.title, "Service desk ticket requires attention"),
+                system: itopsText(row.assetId, "-"),
+                owner: itopsText(row.owner, "Unassigned"),
+                status: itopsText(row.status, "Open"),
+                tone: itopsStatusTone(row.status, row.priority)
+            })),
+        problematicSystems: [...assetBuckets.entries()]
+            .filter(([device]) => device && device !== "Unassigned Asset")
+            .sort((a, b) => b[1].weight - a[1].weight || b[1].incidents - a[1].incidents)
+            .slice(0, 20)
+            .map(([device, item], index) => {
+                const score = Math.min(99, Math.max(10, item.weight * 8 + item.open * 4));
+                return {
+                    rank: index + 1,
+                    device,
+                    score,
+                    trend: [Math.max(0, score - 18), Math.max(0, score - 12), Math.max(0, score - 20), Math.max(0, score - 8), Math.max(0, score - 6), Math.max(0, score - 10), score]
+                };
+            })
+    };
+}
+
+async function getItOpsPatchSummary(pool) {
+    const hasPatchStatus = await itopsTableExists(pool, "TS_UPDATE_ONLINE_STATUS");
+    const hasPatchMaster = await itopsTableExists(pool, "TS_UPDATE_ONLINE_MASTER");
+    const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
+    const hasRoot = await itopsTableExists(pool, "TS_OBJECT_ROOT");
+
+    if (!hasPatchStatus) {
+        return {
+            patchCompliance: 0,
+            missingPatches: 0,
+            criticalVulnerabilities: 0,
+            patchDepartments: [],
+            source: "TS_UPDATE_ONLINE_STATUS not found"
+        };
+    }
+
+    const hasSeverityColumn = hasPatchMaster && await itopsColumnExists(pool, "TS_UPDATE_ONLINE_MASTER", "MsrcSeverity");
+    const hasTitleColumn = hasPatchMaster && await itopsColumnExists(pool, "TS_UPDATE_ONLINE_MASTER", "Title");
+    const hasKbColumn = hasPatchMaster && await itopsColumnExists(pool, "TS_UPDATE_ONLINE_MASTER", "KB");
+    const masterJoin = hasPatchMaster
+        ? `LEFT JOIN TS_UPDATE_ONLINE_MASTER m WITH (NOLOCK)
+              ON m.UpdateID = s.UpdateID
+             AND m.RevisionNumber = s.RevisionNumber`
+        : "";
+    const severityExpr = hasSeverityColumn ? "LOWER(ISNULL(m.MsrcSeverity, ''))" : "''";
+    const titleExpr = hasTitleColumn ? "ISNULL(m.Title, '')" : "''";
+    const kbExpr = hasKbColumn ? "ISNULL(m.KB, '')" : "''";
+
+    const summaryResult = await pool.request().query(`
+        SELECT
+            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
+            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND (ISNULL(s.IsInstalled, 0) = 1 OR ISNULL(s.IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches,
+            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND ISNULL(s.IsInstalled, 0) = 0 AND ISNULL(s.IsDownloaded, 0) = 0 THEN 1 END) AS MissingPatches,
+            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND ISNULL(s.IsInstalled, 0) = 0 AND ISNULL(s.IsDownloaded, 0) = 0 AND (${severityExpr} = 'critical' OR ${titleExpr} LIKE '%critical%' OR ${kbExpr} LIKE '%critical%') THEN 1 END) AS CriticalMissing
+        FROM TS_UPDATE_ONLINE_STATUS s WITH (NOLOCK)
+        ${masterJoin};
+    `);
+
+    let patchDepartments = [];
+    if (hasRelations && hasRoot) {
+        const departmentResult = await pool.request().query(`
+            SELECT TOP 7
+                ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned')) AS Department,
+                COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
+                COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND (ISNULL(s.IsInstalled, 0) = 1 OR ISNULL(s.IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches
+            FROM TS_UPDATE_ONLINE_STATUS s WITH (NOLOCK)
+            LEFT JOIN TS_OBJECT_ROOT r WITH (NOLOCK)
+                ON s.Object_Root_Idn = r.Object_Root_Idn
+            LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
+                ON r.Object_Rel_Idn = rel.Object_Rel_Idn
+            GROUP BY ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned'))
+            ORDER BY COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) DESC;
+        `);
+
+        patchDepartments = (departmentResult.recordset || []).map(row => ({
+            name: row.Department || "Unassigned",
+            percent: itopsPercent(row.InstalledPatches, row.ApplicablePatches, 0)
+        }));
+    }
+
+    const summary = summaryResult.recordset?.[0] || {};
+    const missingPatches = itopsToNumber(summary.MissingPatches);
+    const criticalVulnerabilities = itopsToNumber(summary.CriticalMissing);
+
+    return {
+        patchCompliance: itopsPercent(summary.InstalledPatches, summary.ApplicablePatches, 0),
+        missingPatches,
+        criticalVulnerabilities: hasPatchMaster ? criticalVulnerabilities : missingPatches,
+        patchDepartments,
+        source: hasPatchMaster ? "TS_UPDATE_ONLINE_STATUS + TS_UPDATE_ONLINE_MASTER" : "TS_UPDATE_ONLINE_STATUS"
+    };
+}
+
+async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geolocation, tasks }) {
+    const pcAgingRule = await itopsReadPcAgingRule(pool);
+    const totalDevices = itopsToNumber(hardware.totalDevices);
+    const inventoryRows = await itopsGetHardwareInventoryRows(pool).catch((err) => {
+        console.warn("ITOps risk hardware inventory lookup failed:", err.message || err);
+        return Array.isArray(hardware.endpointRows) ? hardware.endpointRows : [];
+    });
+
+    let lifecycleRows = inventoryRows;
+    try {
+        lifecycleRows = typeof erApplyWindowsLifecycle === "function"
+            ? await erApplyWindowsLifecycle(inventoryRows)
+            : inventoryRows;
+    } catch (err) {
+        console.warn("ITOps risk endoflife.date enrichment failed:", err.message || err);
+        lifecycleRows = inventoryRows;
+    }
+
+    const now = new Date();
+    const staleCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const riskRows = [];
+    const osBucket = new Map();
+    const ageBucket = new Map();
+
+    let unsupportedOsDevices = 0;
+    let outdatedOsDevices = 0;
+    let lifecycleUnknownDevices = 0;
+    let oldBiosDevices = 0;
+    let missingHardwareIdentity = 0;
+    let staleHardwareDevices = 0;
+
+    for (const asset of lifecycleRows) {
+        const lifecycleStatus = itopsText(asset.osLifecycleStatus, "Lifecycle Not Checked");
+        const lifecycleSeverity = itopsText(asset.osLifecycleSeverity, "Low");
+        const lifecycleLower = itopsLower(lifecycleStatus);
+        const pcAge = itopsPcAgingStatus(asset, pcAgingRule);
+        const lastSeen = itopsDateValue(asset.lastSeen);
+        const isStale = !lastSeen || lastSeen < staleCutoff || itopsLower(asset.status).includes("offline");
+        const hasMissingIdentity = !itopsText(asset.deviceName) || !itopsText(asset.model) || asset.model === "-" || !itopsText(asset.ipAddress);
+        const isUnsupported = lifecycleLower.includes("eol") || lifecycleLower.includes("eos") || lifecycleSeverity === "High";
+        const isNearEos = lifecycleLower.includes("near");
+        const isLifecycleUnknown = lifecycleLower.includes("not mapped") || lifecycleLower.includes("not found") || lifecycleLower.includes("missing") || lifecycleLower.includes("unknown");
+        const isPcAgingHigh = pcAge.severity === "High";
+        const isPcAgingMedium = pcAge.severity === "Medium";
+
+        if (isUnsupported) unsupportedOsDevices += 1;
+        if (isNearEos) outdatedOsDevices += 1;
+        if (isLifecycleUnknown) lifecycleUnknownDevices += 1;
+        if (isPcAgingHigh) oldBiosDevices += 1;
+        if (hasMissingIdentity) missingHardwareIdentity += 1;
+        if (isStale) staleHardwareDevices += 1;
+
+        const osKey = isUnsupported ? "EOL / EOS Windows" : isNearEos ? "Near EOS Windows" : isLifecycleUnknown ? "Lifecycle mapping review" : "Supported OS";
+        osBucket.set(osKey, (osBucket.get(osKey) || 0) + 1);
+        ageBucket.set(pcAge.label, (ageBucket.get(pcAge.label) || 0) + 1);
+
+        const score = Math.min(100,
+            (isUnsupported ? 50 : 0) +
+            (isNearEos ? 30 : 0) +
+            (isLifecycleUnknown ? 15 : 0) +
+            (isPcAgingHigh ? 35 : 0) +
+            (isPcAgingMedium ? 20 : 0) +
+            (isStale ? 18 : 0) +
+            (hasMissingIdentity ? 12 : 0)
+        );
+
+        if (score > 0) {
+            const reasons = [
+                isUnsupported ? `OS lifecycle: ${lifecycleStatus}` : "",
+                isNearEos ? `OS lifecycle: ${lifecycleStatus}` : "",
+                isLifecycleUnknown ? `OS lifecycle requires review: ${lifecycleStatus}` : "",
+                pcAge.severity !== "Low" ? pcAge.reason : "",
+                isStale ? "Stale/offline hardware telemetry" : "",
+                hasMissingIdentity ? "Missing hardware identity/IP/model evidence" : ""
+            ].filter(Boolean).join("; ");
+
+            riskRows.push({
+                deviceName: itopsText(asset.deviceName, "-"),
+                platform: itopsText(asset.platform || asset.osName, "Windows"),
+                model: itopsText(asset.model, "-"),
+                department: itopsText(asset.department || asset.site, "Unmapped"),
+                lastSeen: itopsDateLabel(asset.lastSeen),
+                biosDate: asset.biosDate ? itopsDateLabel(asset.biosDate) : "-",
+                osName: itopsText(asset.osName || asset.platform, "-"),
+                riskScore: score,
+                reasons: reasons || "Hardware risk signal",
+                osLifecycleStatus: lifecycleStatus,
+                osLifecycleSeverity: lifecycleSeverity,
+                osLifecycleCycle: asset.osLifecycleCycle || "",
+                osLifecycleEolDate: asset.osLifecycleEolDate || "",
+                osLifecycleSource: asset.osLifecycleSource || "endoflife.date",
+                osLifecycleBasis: asset.osLifecycleBasis || "Lifecycle evidence from endoflife.date where available.",
+                pcAgeYears: pcAge.ageYears,
+                pcAgingStatus: pcAge.label,
+                pcAgingRule: {
+                    enabled: pcAgingRule.enabled,
+                    ageSource: pcAgingRule.ageSource,
+                    healthyMaxYears: pcAgingRule.healthyMaxYears,
+                    monitorMaxYears: pcAgingRule.monitorMaxYears,
+                    agingMinYears: pcAgingRule.agingMinYears,
+                    includeUnknownAge: pcAgingRule.includeUnknownAge
+                }
+            });
+        }
+    }
+
+    const missingGeoDevices = Array.isArray(geolocation.missingGeoRows)
+        ? geolocation.missingGeoRows.length
+        : Math.max(totalDevices - itopsToNumber(geolocation.trackedDevices), 0);
+    const staleGeoDevices = itopsToNumber(geolocation.staleLocations);
+    const unknownGeoDevices = itopsToNumber(geolocation.unknownLocations);
+    const geolocationRiskItems = missingGeoDevices + staleGeoDevices + unknownGeoDevices;
+    const patchCriticalItems = itopsToNumber(patchSummary.criticalVulnerabilities);
+    const failedTaskItems = itopsToNumber(tasks.failedTasks);
+    const networkRiskItems = itopsToNumber(network.unregisteredIps);
+    const hardwareRiskItems = riskRows.length;
+
+    const criticalHardwareRows = riskRows.filter((row) => row.riskScore >= 70).length;
+    const highHardwareRows = riskRows.filter((row) => row.riskScore >= 45 && row.riskScore < 70).length;
+    const mediumHardwareRows = riskRows.filter((row) => row.riskScore >= 25 && row.riskScore < 45).length;
+
+    const totalCritical = patchCriticalItems + criticalHardwareRows + Math.floor(failedTaskItems * 0.25);
+    const totalHigh = highHardwareRows + staleGeoDevices + Math.floor(networkRiskItems * 0.25) + failedTaskItems;
+    const totalMedium = mediumHardwareRows + missingHardwareIdentity + unknownGeoDevices + missingGeoDevices + Math.floor(networkRiskItems * 0.75) + lifecycleUnknownDevices;
+    const totalRiskItems = hardwareRiskItems + geolocationRiskItems + patchCriticalItems + failedTaskItems + networkRiskItems;
+
+    const endpointExposure = itopsExposureRatio(hardwareRiskItems, Math.max(inventoryRows.length, totalDevices, 1));
+    const patchExposure = itopsExposureRatio(patchCriticalItems, patchSummary.missingPatches || patchCriticalItems || 1);
+    const geoExposure = itopsExposureRatio(geolocationRiskItems, Math.max(totalDevices + itopsToNumber(geolocation.trackedDevices), totalDevices, itopsToNumber(geolocation.trackedDevices), 1));
+    const networkExposure = itopsExposureRatio(networkRiskItems, itopsToNumber(network.knownIps) || networkRiskItems || 1);
+    const taskExposure = itopsExposureRatio(failedTaskItems, itopsToNumber(tasks.totalTasks) || failedTaskItems || 1);
+    const score = Math.max(0, Math.min(100, Math.round(
+        endpointExposure * 0.40 +
+        patchExposure * 0.20 +
+        geoExposure * 0.15 +
+        networkExposure * 0.15 +
+        taskExposure * 0.10
+    )));
+
+    const severityTotal = Math.max(totalCritical + totalHigh + totalMedium, 1);
+    const categoryTotal = Math.max(totalRiskItems, 1);
+    const riskAssetTotal = Math.max(inventoryRows.length, totalDevices, 1);
+
+    const topFindings = [
+        { id: "risk-pc-aging", module: "Hardware / Settings", title: "PC aging rule risk from Settings", count: oldBiosDevices, severity: itopsRiskSeverityCount(oldBiosDevices, 1, 10), recommendation: `Use Settings PC Aging Rule: healthy <= ${pcAgingRule.healthyMaxYears}, monitor <= ${pcAgingRule.monitorMaxYears}, aging >= ${pcAgingRule.agingMinYears}.` },
+        { id: "risk-eol-os", module: "Hardware / endoflife.date", title: "Windows EOL/EOS lifecycle exposure", count: unsupportedOsDevices, severity: itopsRiskSeverityCount(unsupportedOsDevices, 1, 10), recommendation: "Plan OS upgrade/isolation based on endoflife.date lifecycle evidence." },
+        { id: "risk-near-eos", module: "Hardware / endoflife.date", title: "Windows near-EOS lifecycle watch", count: outdatedOsDevices, severity: itopsRiskSeverityCount(outdatedOsDevices, 10, 25), recommendation: "Schedule upgrade before EOS window becomes critical." },
+        { id: "risk-location-coverage", module: "Geolocation + Hardware", title: "Location coverage and freshness risk", count: geolocationRiskItems, severity: itopsRiskSeverityCount(geolocationRiskItems, 50, 250), recommendation: "Compare hardware inventory against geolocation rows and refresh MDM location collection." },
+        { id: "risk-patch-critical", module: "Patch Compliance", title: "Critical missing patch exposure", count: patchCriticalItems, severity: patchCriticalItems > 0 ? "Critical" : "Low", recommendation: "Prioritize critical patch deployment from online patch status/master API." },
+        { id: "risk-failed-tasks", module: "Task List", title: "Stopped or cancelled automation jobs", count: failedTaskItems, severity: itopsRiskSeverityCount(failedTaskItems, 50, 150), recommendation: "Review failed jobs and rerun inventory or remote tasks." },
+        { id: "risk-network-registration", module: "Network", title: "Unregistered network IP records", count: networkRiskItems, severity: itopsRiskSeverityCount(networkRiskItems, 100, 250), recommendation: "Validate unmanaged or unmapped IP records against hardware inventory." }
+    ].filter(item => item.count > 0).sort((a, b) => b.count - a.count);
+
+    const topHardwareRisk = riskRows.sort((a, b) => b.riskScore - a.riskScore || a.deviceName.localeCompare(b.deviceName)).slice(0, 25);
+
+    return {
+        score,
+        totalRiskItems,
+        totalCritical,
+        totalHigh,
+        totalMedium,
+        hardwareRiskItems,
+        oldBiosDevices,
+        unsupportedOsDevices,
+        outdatedOsDevices,
+        staleHardwareDevices,
+        missingHardwareIdentity,
+        geolocationRiskItems,
+        missingGeoDevices,
+        staleGeoDevices,
+        unknownGeoDevices,
+        patchCriticalItems,
+        failedTaskItems,
+        networkRiskItems,
+        severityBreakdown: [
+            { name: "Critical", value: totalCritical, percent: itopsRiskPercent(totalCritical, severityTotal), tone: "critical" },
+            { name: "High", value: totalHigh, percent: itopsRiskPercent(totalHigh, severityTotal), tone: "warning" },
+            { name: "Medium", value: totalMedium, percent: itopsRiskPercent(totalMedium, severityTotal), tone: "neutral" }
+        ],
+        categoryBreakdown: [
+            { name: "Hardware + PC Aging + EOL", value: hardwareRiskItems, percent: itopsRiskPercent(hardwareRiskItems, categoryTotal), tone: hardwareRiskItems ? "critical" : "good" },
+            { name: "Geolocation + Hardware", value: geolocationRiskItems, percent: itopsRiskPercent(geolocationRiskItems, categoryTotal), tone: geolocationRiskItems ? "warning" : "good" },
+            { name: "Critical Patch", value: patchCriticalItems, percent: itopsRiskPercent(patchCriticalItems, categoryTotal), tone: patchCriticalItems ? "critical" : "good" },
+            { name: "Task Failures", value: failedTaskItems, percent: itopsRiskPercent(failedTaskItems, categoryTotal), tone: failedTaskItems ? "warning" : "good" },
+            { name: "Network Registration", value: networkRiskItems, percent: itopsRiskPercent(networkRiskItems, categoryTotal), tone: networkRiskItems ? "neutral" : "good" }
+        ],
+        osBreakdown: [...osBucket.entries()].map(([name, value]) => ({
+            name,
+            value,
+            percent: itopsRiskPercent(value, riskAssetTotal),
+            tone: name.includes("EOL") ? "critical" : name.includes("Near") || name.includes("review") ? "warning" : "good"
+        })).sort((a, b) => b.value - a.value),
+        biosAgeBreakdown: [...ageBucket.entries()].map(([name, value]) => ({
+            name,
+            value,
+            percent: itopsRiskPercent(value, riskAssetTotal),
+            tone: name.includes("High") ? "critical" : name.includes("Monitor") || name.includes("Unknown") ? "warning" : "good"
+        })).sort((a, b) => b.value - a.value),
+        topFindings,
+        topHardwareRisk,
+        pcAgingRule
+    };
+}
+
 function buildItOpsAttentionQueue({ incidentSummary, hardware, patchSummary, software, network, geolocation, tasks }) {
     const queue = [];
 
@@ -27044,9 +27069,6 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
         });
     }
 });
-
-
-
 
 // ============================================================
 // HARDWARE INVENTORY STATISTICS / REPORTS / SCAN APIs
@@ -27465,8 +27487,6 @@ app.get("/api/hardware-reports/:relationID/:reportKey", authenticateToken, async
     }
 });
 
-
-
 /*
 |--------------------------------------------------------------------------
 | HARDWARE INVENTORY SCAN JOB APIs
@@ -27503,7 +27523,6 @@ function parseHwScanInt(value, fallback = 0) {
 function firstHwScanDefined(...values) {
     return values.find(value => value !== undefined && value !== null && String(value).trim() !== "");
 }
-
 
 /*
 |--------------------------------------------------------------------------
@@ -28159,7 +28178,6 @@ async function handleHardwareInventoryScan(req, res) {
 app.post("/api/hardware-inventory/scan", authenticateToken, handleHardwareInventoryScan);
 app.post("/api/hardware/scan", authenticateToken, handleHardwareInventoryScan);
 
-
 /*
 |--------------------------------------------------------------------------
 | APP / WEB RESTRICTION POLICY APIs
@@ -28651,7 +28669,6 @@ app.get("/api/restrictions/app/packages", authenticateToken, async (req, res) =>
         return res.status(500).json({ success: false, message: "Failed to retrieve restriction packages", error: err.message || String(err) });
     }
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -29165,7 +29182,6 @@ app.get("/api/restrictions/whitelist/software", authenticateToken, async (req, r
         return res.status(500).json({ success: false, message: "Failed to retrieve whitelist software", error: err.message || String(err) });
     }
 });
-
 
 /*
 |--------------------------------------------------------------------------
@@ -30607,7 +30623,6 @@ async function buildEmaAiContext(req, query) {
     return context;
 }
 
-
 function aiNumber(value) {
     const numberValue = Number(value);
     return Number.isFinite(numberValue) ? numberValue : 0;
@@ -30767,7 +30782,6 @@ function cleanGeminiAnswer(answer) {
     return cleaned.trim();
 }
 
-
 async function askGeminiWithEmaContext(question, context, history = []) {
     if (!process.env.GEMINI_API_KEY) {
         throw new Error("GEMINI_API_KEY is not configured.");
@@ -30877,7 +30891,6 @@ app.post("/api/ai/chat", authenticateToken, async (req, res) => {
         });
     }
 });
-
 
 /* =========================================================
    SETTINGS - MODULE CONTROL BY ROLE API
@@ -31005,7 +31018,6 @@ app.put('/api/settings/module-access', authenticateToken, async (req, res) => {
                 END
             `);
 
-
         const contextResult = await pool.request()
             .input('RoleID', sql.Int, roleId)
             .input('ModuleID', sql.Int, moduleId)
@@ -31051,7 +31063,6 @@ app.put('/api/settings/module-access', authenticateToken, async (req, res) => {
         });
     }
 });
-
 
 /* =========================================================
    SETTINGS - ACCESS CONTROL API
@@ -31654,7 +31665,6 @@ async function mdFetchIncidents(pool) {
         return { rows: [], monthlyCounts: [], totalTickets: 0, openTickets: 0, slaBreached: 0, highPriority: 0 };
     }
 }
-
 
 async function mdFetchSoftwareRows(pool, policy = null) {
     try {

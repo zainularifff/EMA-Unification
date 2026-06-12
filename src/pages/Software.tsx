@@ -1155,6 +1155,58 @@ export default function Software() {
 
   return (
     <main className="settings-module-root ema-settings-pro ema-module-root software-inventory-module" data-section="software">
+        <style>{`
+          /* Software sidebar alignment: match Hardware sidebar width and prevent the switcher from pushing the tree down. */
+          .software-inventory-module .settings-layout.software-settings-layout {
+            grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            gap: 0.85rem !important;
+            overflow: hidden !important;
+          }
+
+          .software-inventory-module .settings-menu.software-left-panel {
+            min-width: 300px !important;
+            max-width: 322px !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+          }
+
+          .software-inventory-module .settings-menu > .ema-module-sidebar-switcher {
+            flex: 0 0 auto !important;
+            margin: 0 !important;
+            overflow: visible !important;
+          }
+
+          .software-inventory-module .settings-menu > .ema-sidebar-content {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            padding-top: 0.65rem !important;
+          }
+
+          .software-inventory-module .ema-sidebar-subpanel {
+            justify-content: flex-start !important;
+            min-height: 0 !important;
+          }
+
+          .software-inventory-module .ema-sidebar-tree {
+            min-height: 0 !important;
+          }
+
+          @media (max-width: 1100px) {
+            .software-inventory-module .settings-layout.software-settings-layout {
+              grid-template-columns: 1fr !important;
+            }
+
+            .software-inventory-module .settings-menu.software-left-panel {
+              min-width: 0 !important;
+              max-width: none !important;
+            }
+          }
+        `}</style>
+
       {toast && (
         <div className="settings-toast-layer software-toast-layer">
           <div className={cx("settings-toast software-toast", toast.type === "error" ? "settings-toast-error" : toast.type === "info" ? "settings-toast-info" : "settings-toast-success")}>
@@ -1165,8 +1217,8 @@ export default function Software() {
         </div>
       )}
 
-      <div className="settings-layout">
-        <aside className="settings-menu ema-panel-surface">
+      <div className="settings-layout software-settings-layout d-grid gap-3">
+        <aside className="settings-menu software-left-panel ema-panel-surface">
           <div className="panel-head">
             <span>SOFTWARE</span>
             <strong>Software</strong>
@@ -1202,13 +1254,10 @@ export default function Software() {
 
               {sidebarTab === "organization" ? (
                 <div className="ema-sidebar-tree" aria-label="Software organization tree">
-                  <div className="ema-sidebar-section-title"><FolderOpen size={15} /><span>Organization</span></div>
                   {treeError ? <div className="ema-sidebar-empty is-error">{treeError}</div> : null}
-                  {treeLoading ? (
-                    <div className="ema-sidebar-empty">Preparing organization view...</div>
-                  ) : (
+                  {deviceTree && !treeError ? (
                     renderTree(deviceTree, 0, "organization")
-                  )}
+                  ) : null}
                 </div>
               ) : (
                 <div className="ema-sidebar-tree" aria-label="Software statistics tree">

@@ -986,7 +986,89 @@ export default function NetworkInventory() {
   };
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root container-fluid p-3 p-xl-4" data-section="users">
+    <main className="settings-module-root ema-settings-pro ema-module-root network-inventory-module container-fluid p-3 p-xl-4" data-section="users">
+      <style>{`
+        /* Network sidebar alignment: same width/flow as Hardware sidebar. */
+        .network-inventory-module .settings-layout.network-settings-layout {
+          grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
+          height: 100% !important;
+          min-height: 0 !important;
+          gap: 0.85rem !important;
+          overflow: hidden !important;
+        }
+
+        .network-inventory-module .settings-menu.network-left-panel {
+          min-width: 300px !important;
+          max-width: 322px !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
+        .network-inventory-module .settings-menu > .ema-module-sidebar-switcher {
+          flex: 0 0 auto !important;
+          margin: 0 !important;
+          overflow: visible !important;
+        }
+
+        .network-inventory-module .settings-menu > .ema-sidebar-content {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;
+          padding-top: 0.65rem !important;
+        }
+
+        .network-inventory-module .ema-sidebar-subpanel {
+          justify-content: flex-start !important;
+          min-height: 0 !important;
+        }
+
+        .network-inventory-module .ema-sidebar-tree {
+          min-height: 0 !important;
+        }
+
+        .network-inventory-module .network-tree-shell,
+        .network-inventory-module .network-tree-shell > .d-grid {
+          display: grid !important;
+          gap: 0.35rem !important;
+        }
+
+        .network-inventory-module .network-tree-shell .setting-btn {
+          min-height: 2.15rem !important;
+          padding: 0.36rem 0.48rem !important;
+          border-radius: 0.82rem !important;
+          box-shadow: none !important;
+        }
+
+        .network-inventory-module .network-tree-shell .setting-btn .setting-icon {
+          width: 1.45rem !important;
+          height: 1.45rem !important;
+          min-width: 1.45rem !important;
+          border-radius: 0.48rem !important;
+        }
+
+        .network-inventory-module .network-tree-shell .setting-btn strong {
+          font-size: 0.72rem !important;
+          line-height: 1.1 !important;
+        }
+
+        .network-inventory-module .network-tree-shell .setting-btn small {
+          font-size: 0.58rem !important;
+          line-height: 1.05 !important;
+        }
+
+        @media (max-width: 1100px) {
+          .network-inventory-module .settings-layout.network-settings-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .network-inventory-module .settings-menu.network-left-panel {
+            min-width: 0 !important;
+            max-width: none !important;
+          }
+        }
+      `}</style>
+
       {notice && (
         <div className="settings-toast-layer">
           <div className="settings-toast settings-toast-success" role="status" aria-live="polite">
@@ -1017,70 +1099,68 @@ export default function NetworkInventory() {
         </div>
       )}
 
-      <div className="settings-layout d-grid gap-3">
-        <aside className="settings-menu ema-panel-surface">
+      <div className="settings-layout network-settings-layout d-grid gap-3">
+        <aside className="settings-menu network-left-panel ema-panel-surface">
           <div className="panel-head">
             <span>Network Inventory</span>
             <strong>Network Control</strong>
             <small>IP/subnet hierarchy and synchronized device records.</small>
           </div>
 
-          <nav
-            className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher"
-            style={{ display: "flex", justifyContent: "center", padding: "18px 16px" }}
-          >
+          <nav className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher" role="tablist" aria-label="Network navigation">
             <button
               type="button"
               className={cx("setting-btn", treeMode === "organization" && "active")}
-              style={{ width: "100%", maxWidth: 170, justifyContent: "center", textAlign: "center" }}
               onClick={() => {
                 setTreeMode("organization");
                 setTreeSearch("");
                 setExpandedTreeIds(new Set<string>());
               }}
             >
-              <span className="setting-icon"><Network /></span>
-              <span style={{ alignItems: "center", textAlign: "center" }}>
-                <strong>Organization</strong>
-                <small>IP scope</small>
-              </span>
+              <span className="setting-icon"><Network size={16} /></span>
+              <span><strong>Organization</strong><small>IP scope</small></span>
             </button>
           </nav>
 
-          <div className="p-3 pb-2">
-            <label className="section-search">
-              <Search size={15} />
-              <input
-                placeholder="Search IP / subnet..."
-                value={treeSearch}
-                onChange={(event) => setTreeSearch(event.target.value)}
-              />
-            </label>
-          </div>
+          <div className="ema-sidebar-content">
+            <div className="ema-sidebar-subpanel">
+              <label className="section-search ema-sidebar-field">
+                <Search size={15} />
+                <input
+                  placeholder="Search IP / subnet..."
+                  value={treeSearch}
+                  onChange={(event) => setTreeSearch(event.target.value)}
+                />
+              </label>
 
-          <div className="px-3 pb-2">
-            <button type="button" className="soft-btn w-100" onClick={openAddFolderDialog} disabled={!hierarchy || treeMode !== "organization" || busy}>
-              <Plus size={14} />
-              Add Folder
-            </button>
-          </div>
+              <button type="button" className="soft-btn ema-sidebar-action-btn d-inline-flex align-items-center gap-1 px-2" onClick={openAddFolderDialog} disabled={!hierarchy || treeMode !== "organization" || busy}>
+                <Plus size={14} />
+                Add Folder
+              </button>
 
-          <div className="settings-menu-list">
-            {loading ? (
-              <div className="settings-helper-card"><Loader2 className="me-2" size={14} /> Loading network hierarchy...</div>
-            ) : filteredHierarchy ? (
-              <NetworkTree
-                key={treeSearch.trim() ? `search-${treeSearch.trim()}` : hierarchy?.id || "network-tree"}
-                node={filteredHierarchy}
-                selectedNodeId={selectedNode?.id || null}
-                expandedIds={expandedTreeIds}
-                onToggle={handleToggleTreeNode}
-                onSelect={handleSelectNode}
-                forceOpen={Boolean(treeSearch.trim())}
-              />
-            ) : (
-              <div className="settings-helper-card">No IP segment found.</div>
-            )}
+              <div className="ema-sidebar-tree" aria-label="Network organization tree">
+                <div className="ema-sidebar-section-title justify-content-between">
+                  <span className="d-inline-flex align-items-center gap-1"><FolderOpen size={14} /> Organization</span>
+                </div>
+                <div className="network-tree-shell">
+                  {loading ? (
+                    <div className="ema-sidebar-empty"><Loader2 className="me-2" size={14} /> Loading network hierarchy...</div>
+                  ) : filteredHierarchy ? (
+                    <NetworkTree
+                      key={treeSearch.trim() ? `search-${treeSearch.trim()}` : hierarchy?.id || "network-tree"}
+                      node={filteredHierarchy}
+                      selectedNodeId={selectedNode?.id || null}
+                      expandedIds={expandedTreeIds}
+                      onToggle={handleToggleTreeNode}
+                      onSelect={handleSelectNode}
+                      forceOpen={Boolean(treeSearch.trim())}
+                    />
+                  ) : (
+                    <div className="ema-sidebar-empty">No IP segment found.</div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* <div className="settings-helper-card m-3 mt-0">
