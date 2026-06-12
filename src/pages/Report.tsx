@@ -287,48 +287,48 @@ const FRONTEND_REPORT_CATALOG: ReportCategory[] = [
     items: [
       {
         id: "ai-executive-summary",
-        title: "AI Executive Summary Report",
-        description: "High-level management summary only: overall posture, key findings and priority recommendations.",
+        title: "AI Executive Summary",
+        description: "Executive KPI summary, key findings and priority recommendations.",
         type: "Summary",
         source: "Endpoint Inventory + Service Desk + Software Inventory + Jobs + Geolocation",
         outputs: ["PDF", "PowerPoint", "Excel"]
       },
       {
         id: "client-summary-rnr",
-        title: "Client Risk & Resource Planning Report",
-        description: "Client-facing Risk & Resources pack based on the agreed RNR reporting format.",
+        title: "Client RNR Report",
+        description: "Client-facing risk and resource planning pack.",
         type: "Summary",
         source: "Endpoint Inventory + Subscription + Asset Pricing + Software Inventory + Browser Risk",
         outputs: ["PDF", "PowerPoint", "Excel"]
       },
       {
         id: "hardware-asset-lifecycle",
-        title: "Hardware & Asset Lifecycle Report",
-        description: "Hardware lifecycle report only: asset estate, device age and replacement planning.",
+        title: "Hardware Lifecycle",
+        description: "Asset estate, device age and refresh planning.",
         type: "Summary",
         source: "Hardware Inventory + Asset Lifecycle + Endpoint Inventory",
         outputs: ["PDF", "Excel"]
       },
       {
         id: "operations-health-sla",
-        title: "Operations Health & SLA Report",
-        description: "Operations report only: endpoint health, service activity and SLA follow-up.",
+        title: "Ops Health & SLA",
+        description: "Endpoint health, service activity and SLA follow-up.",
         type: "Summary",
         source: "Endpoint Inventory + Jobs + HD_Incidents + SLA Due",
         outputs: ["PDF", "PowerPoint", "Excel"]
       },
       {
         id: "security-compliance-exposure",
-        title: "Security & Compliance Exposure Report",
-        description: "Security exposure report only: endpoint risk, compliance gaps and exception action list.",
+        title: "Security Exposure",
+        description: "Endpoint risk, compliance gaps and exception action list.",
         type: "Risk",
         source: "Device Status + OS Inventory + Software Inventory + Data Quality + Service Desk SLA",
         outputs: ["PDF", "Excel"]
       },
       {
         id: "software-application-governance",
-        title: "Software & Application Governance Report",
-        description: "Software governance report only: application inventory, licence review and cleanup actions.",
+        title: "Software Governance",
+        description: "Application inventory, licence review and cleanup actions.",
         type: "Compliance",
         source: "TSMDM_SW_LIST + TS_SW_CATEGORY + Application Metering + Browser Inventory",
         outputs: ["PDF", "Excel"]
@@ -774,9 +774,23 @@ const SHORT_FEATURED_REPORT_TITLES: Record<string, string> = {
   "software-application-governance": "Software Governance"
 };
 
+const SHORT_FEATURED_REPORT_SUBTITLES: Record<string, string> = {
+  "ai-executive-summary": "Executive snapshot",
+  "client-summary-rnr": "Client RNR pack",
+  "hardware-asset-lifecycle": "Asset lifecycle",
+  "operations-health-sla": "Ops and SLA health",
+  "security-compliance-exposure": "Risk exposure",
+  "software-application-governance": "BSA and software"
+};
+
 function getReportDisplayTitle(report?: Pick<ReportTemplate, "id" | "title"> | null) {
   if (!report) return "Select featured report";
   return SHORT_FEATURED_REPORT_TITLES[report.id] || String(report.title || "Report").replace(/\s+Report$/i, "").trim() || "Report";
+}
+
+function getReportNavSubtitle(report?: Pick<ReportTemplate, "id" | "description"> | null, blueprint?: FeaturedReportBlueprint) {
+  if (!report) return "Select report";
+  return SHORT_FEATURED_REPORT_SUBTITLES[report.id] || String(blueprint?.eyebrow || report.description || "Report pack").replace(/\s+Report$/i, "").trim();
 }
 
 function getFeaturedReportNumber(reports: ReportTemplate[], report?: ReportTemplate | null) {
@@ -4210,12 +4224,16 @@ export default function Report() {
         }
         .featured-report-nav-item:hover {
           transform: none;
-          background: #f4f8ff;
+          background: color-mix(in srgb, var(--pack-accent, #2563eb) 8%, #ffffff);
         }
         .featured-report-nav-item.active {
           color: #fff;
-          background: linear-gradient(135deg, #3169ee 0%, #0787b8 100%);
-          box-shadow: 0 12px 24px rgba(37, 99, 235, .18);
+          background: linear-gradient(
+            135deg,
+            var(--pack-accent, #2563eb) 0%,
+            color-mix(in srgb, var(--pack-accent, #2563eb) 72%, #071d3b) 100%
+          );
+          box-shadow: 0 14px 28px color-mix(in srgb, var(--pack-accent, #2563eb) 28%, transparent);
         }
         .featured-report-nav-icon {
           width: 42px;
@@ -4224,7 +4242,7 @@ export default function Report() {
           display: grid;
           place-items: center;
           color: var(--pack-accent, #2563eb);
-          background: #eef4ff;
+          background: color-mix(in srgb, var(--pack-accent, #2563eb) 10%, #ffffff);
           flex-shrink: 0;
         }
         .featured-report-nav-item.active .featured-report-nav-icon {
@@ -4241,6 +4259,7 @@ export default function Report() {
           margin-bottom: 3px;
           overflow: hidden;
           text-overflow: ellipsis;
+          white-space: nowrap;
         }
         .featured-report-nav-copy small {
           display: block;
@@ -4275,7 +4294,7 @@ export default function Report() {
           overflow: hidden;
           border-radius: 26px;
           border: 1px solid #d5e3f6;
-          background: linear-gradient(135deg, #ffffff 0%, #f7fbff 54%, rgba(37, 99, 235, .08) 100%);
+          background: linear-gradient(135deg, #ffffff 0%, #f7fbff 54%, color-mix(in srgb, var(--pack-accent, #2563eb) 10%, #ffffff) 100%);
           box-shadow: 0 20px 44px rgba(15, 35, 71, .08);
           padding: 24px;
         }
@@ -4304,8 +4323,8 @@ export default function Report() {
           gap: 8px;
           padding: 7px 11px;
           border-radius: 999px;
-          background: rgba(37, 99, 235, .10);
-          color: #2756c8;
+          background: color-mix(in srgb, var(--pack-accent, #2563eb) 10%, #ffffff);
+          color: var(--pack-accent, #2563eb);
           font-size: .72rem;
           font-weight: 900;
           letter-spacing: .1em;
@@ -7671,7 +7690,7 @@ export default function Report() {
                     <span className="featured-report-nav-icon" dangerouslySetInnerHTML={{ __html: icons[blueprint.icon] || icons.chart }} />
                     <span className="featured-report-nav-copy">
                       <strong>{getReportDisplayTitle(report)}</strong>
-                      <small>{blueprint.bestFor}</small>
+                      <small>{getReportNavSubtitle(report, blueprint)}</small>
                       <em className="featured-report-nav-badge">{blueprint.eyebrow}</em>
                     </span>
                   </button>
