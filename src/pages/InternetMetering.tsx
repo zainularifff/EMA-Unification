@@ -306,6 +306,134 @@ body.internet-metering-page-active .settings-helper-card {
   padding: 0.75rem;
 }
 
+
+.internet-metering-page .settings-content {
+  min-width: 0 !important;
+}
+
+.internet-metering-page .internet-metering-hero {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1rem !important;
+  overflow: visible !important;
+}
+
+.internet-metering-page .internet-metering-hero > .internet-metering-hero-copy {
+  flex: 0 1 360px !important;
+  min-width: 220px !important;
+  max-width: 460px !important;
+}
+
+.internet-metering-page .internet-metering-hero-score {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-auto-flow: column !important;
+  grid-auto-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  justify-content: end !important;
+  gap: 0.75rem !important;
+  flex: 1 1 640px !important;
+  width: auto !important;
+  min-width: 560px !important;
+  max-width: 760px !important;
+  overflow: visible !important;
+}
+
+.internet-metering-page .internet-metering-kpi-card {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 78px !important;
+  padding: 0.72rem 0.86rem !important;
+  border: 1px solid rgba(148, 163, 184, 0.36) !important;
+  border-radius: 16px !important;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(37, 99, 235, 0.08), transparent 44%),
+    linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,251,255,0.92)) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.internet-metering-page .internet-metering-kpi-content {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-content: center !important;
+  gap: 0.12rem !important;
+  min-width: 0 !important;
+  height: 100% !important;
+}
+
+.internet-metering-page .internet-metering-kpi-label,
+.internet-metering-page .internet-metering-kpi-value,
+.internet-metering-page .internet-metering-kpi-note {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.internet-metering-page .internet-metering-kpi-label {
+  font-size: 0.63rem !important;
+  line-height: 1 !important;
+  letter-spacing: 0.075em !important;
+  text-transform: uppercase !important;
+  font-weight: 900 !important;
+  color: #475569 !important;
+}
+
+.internet-metering-page .internet-metering-kpi-value {
+  font-size: clamp(1.15rem, 1.8vw, 1.52rem) !important;
+  line-height: 1.1 !important;
+  font-weight: 950 !important;
+  color: #0f2748 !important;
+}
+
+.internet-metering-page .internet-metering-kpi-note {
+  font-size: 0.62rem !important;
+  line-height: 1.05 !important;
+  font-weight: 800 !important;
+  color: #64748b !important;
+}
+
+@media (max-width: 1180px) {
+  .internet-metering-page .internet-metering-hero > .internet-metering-hero-copy {
+    flex-basis: 300px !important;
+  }
+
+  .internet-metering-page .internet-metering-hero-score {
+    min-width: 520px !important;
+    max-width: none !important;
+    gap: 0.55rem !important;
+  }
+
+  .internet-metering-page .internet-metering-kpi-card {
+    padding: 0.62rem 0.68rem !important;
+  }
+}
+
+@media (max-width: 960px) {
+  .internet-metering-page .internet-metering-hero {
+    align-items: flex-start !important;
+    overflow-x: auto !important;
+  }
+
+  .internet-metering-page .internet-metering-hero > .internet-metering-hero-copy {
+    flex: 0 0 260px !important;
+  }
+
+  .internet-metering-page .internet-metering-hero-score {
+    flex: 0 0 560px !important;
+    min-width: 560px !important;
+  }
+}
+
 @media (max-width: 1100px) {
   .internet-metering-page .settings-layout.internet-settings-layout {
     grid-template-columns: 1fr !important;
@@ -1571,32 +1699,40 @@ export default function InternetMetering() {
         </aside>
 
         <section className="settings-content d-grid gap-3">
-          <div className="settings-hero ema-panel-surface">
-            <div>
+          <div className="settings-hero hardware-hero internet-metering-hero ema-panel-surface">
+            <div className="internet-metering-hero-copy">
               <span className="eyebrow">URL MANAGEMENT</span>
               <h2>{usagePanelUrl ? 'Metering Results' : 'Internet Metering'}</h2>
               <p>Scope: {selectedScopeLabel} · Domain: {selectedUrlLabel}</p>
             </div>
-            <div className="settings-score users-hero-score">
-              <div className="score-box">
-                <span>Records</span>
-                <strong>{formatNumber(stats.totalRecords || totalRecords || filteredRows.length)}</strong>
-                <small>Usage rows</small>
+            <div className="hardware-hero-score internet-metering-hero-score">
+              <div className="hardware-kpi-card internet-metering-kpi-card">
+                <div className="hardware-kpi-content internet-metering-kpi-content">
+                  <span className="hardware-kpi-label internet-metering-kpi-label">Records</span>
+                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatNumber(stats.totalRecords || totalRecords || filteredRows.length)}</strong>
+                  <small className="hardware-kpi-note internet-metering-kpi-note">Usage rows</small>
+                </div>
               </div>
-              <div className="score-box">
-                <span>Domains</span>
-                <strong>{formatNumber(stats.totalDomains || visibleUrlRows.length)}</strong>
-                <small>Monitored rules</small>
+              <div className="hardware-kpi-card internet-metering-kpi-card">
+                <div className="hardware-kpi-content internet-metering-kpi-content">
+                  <span className="hardware-kpi-label internet-metering-kpi-label">Domains</span>
+                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatNumber(stats.totalDomains || visibleUrlRows.length)}</strong>
+                  <small className="hardware-kpi-note internet-metering-kpi-note">Monitored rules</small>
+                </div>
               </div>
-              <div className="score-box">
-                <span>Usage Time</span>
-                <strong>{formatDuration(stats.totalUsageSeconds)}</strong>
-                <small>Total duration</small>
+              <div className="hardware-kpi-card internet-metering-kpi-card">
+                <div className="hardware-kpi-content internet-metering-kpi-content">
+                  <span className="hardware-kpi-label internet-metering-kpi-label">Usage Time</span>
+                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatDuration(stats.totalUsageSeconds)}</strong>
+                  <small className="hardware-kpi-note internet-metering-kpi-note">Total duration</small>
+                </div>
               </div>
-              <div className="score-box">
-                <span>Access Count</span>
-                <strong>{formatNumber(stats.totalCounts)}</strong>
-                <small>Total hits</small>
+              <div className="hardware-kpi-card internet-metering-kpi-card">
+                <div className="hardware-kpi-content internet-metering-kpi-content">
+                  <span className="hardware-kpi-label internet-metering-kpi-label">Access Count</span>
+                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatNumber(stats.totalCounts)}</strong>
+                  <small className="hardware-kpi-note internet-metering-kpi-note">Total hits</small>
+                </div>
               </div>
             </div>
           </div>

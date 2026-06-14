@@ -189,26 +189,28 @@ function CompactPagination({
   });
 
   return (
-    <div className="uam-pagination global-style">
-      <span className="uam-page-status">{start}-{end} of {totalCount}</span>
-      <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => onPageChange(safePage - 1)}>
-        Previous
-      </button>
-      {pages.map((item, index) => {
-        const previous = pages[index - 1];
-        const needsGap = previous && item - previous > 1;
-        return (
-          <span key={item} className="d-inline-flex align-items-center gap-1">
-            {needsGap && <span className="uam-page-status">...</span>}
-            <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => onPageChange(item)}>
-              {item}
-            </button>
-          </span>
-        );
-      })}
-      <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => onPageChange(safePage + 1)}>
-        Next
-      </button>
+    <div className="uam-pagination global-style appweb-compact-pagination">
+      <span className="uam-page-status appweb-page-range">{start}-{end} of {totalCount}</span>
+      <div className="appweb-page-controls" aria-label="Pagination controls">
+        <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => onPageChange(safePage - 1)}>
+          Prev
+        </button>
+        {pages.map((item, index) => {
+          const previous = pages[index - 1];
+          const needsGap = previous && item - previous > 1;
+          return (
+            <span key={item} className="appweb-page-item">
+              {needsGap && <span className="uam-page-status appweb-page-gap">...</span>}
+              <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => onPageChange(item)}>
+                {item}
+              </button>
+            </span>
+          );
+        })}
+        <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => onPageChange(safePage + 1)}>
+          Next
+        </button>
+      </div>
     </div>
   );
 }
@@ -289,6 +291,8 @@ function AppTable<RowType extends { [key: string]: any }>({
     if (totalPages <= 7) return true;
     return item === 1 || item === totalPages || Math.abs(item - safePage) <= 1;
   });
+  const pageStart = rows.length === 0 ? 0 : startIndex + 1;
+  const pageEnd = Math.min(rows.length, startIndex + APPWEB_TABLE_PAGE_SIZE);
 
   return (
     <div className={clsx('pricing-table-card', className)}>
@@ -346,25 +350,28 @@ function AppTable<RowType extends { [key: string]: any }>({
       </div>
 
       {rows.length > APPWEB_TABLE_PAGE_SIZE && (
-        <div className="uam-pagination global-style">
-          <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-            Previous
-          </button>
-          {pages.map((item, index) => {
-            const previous = pages[index - 1];
-            const needsGap = previous && item - previous > 1;
-            return (
-              <span key={item} className="d-inline-flex align-items-center gap-1">
-                {needsGap && <span className="uam-page-status">...</span>}
-                <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => setPage(item)}>
-                  {item}
-                </button>
-              </span>
-            );
-          })}
-          <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
-            Next
-          </button>
+        <div className="uam-pagination global-style appweb-compact-pagination appweb-table-pagination">
+          <span className="uam-page-status appweb-page-range">{pageStart}-{pageEnd} of {rows.length}</span>
+          <div className="appweb-page-controls" aria-label="Table pagination controls">
+            <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+              Prev
+            </button>
+            {pages.map((item, index) => {
+              const previous = pages[index - 1];
+              const needsGap = previous && item - previous > 1;
+              return (
+                <span key={item} className="appweb-page-item">
+                  {needsGap && <span className="uam-page-status appweb-page-gap">...</span>}
+                  <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => setPage(item)}>
+                    {item}
+                  </button>
+                </span>
+              );
+            })}
+            <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1890,6 +1897,191 @@ export default function AppWebRestriction() {
 
         .hardware-module-root .ema-sidebar-tree {
           min-height: 0 !important;
+        }
+
+
+        /* Sidebar search fix: keep only one visible search container. */
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search {
+          width: 100% !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.5rem !important;
+          min-height: 42px !important;
+          padding: 0.55rem 0.65rem !important;
+          border: 1px solid rgba(148, 163, 184, 0.32) !important;
+          border-radius: 14px !important;
+          background: rgba(248, 250, 252, 0.92) !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search svg {
+          flex: 0 0 auto !important;
+          color: #64748b !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input {
+          flex: 1 1 auto !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          height: auto !important;
+          min-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          border-radius: 0 !important;
+          outline: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          color: #0f172a !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input:focus,
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input:focus-visible {
+          border: 0 !important;
+          outline: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-search-clear {
+          flex: 0 0 auto !important;
+          width: 24px !important;
+          height: 24px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 0 !important;
+          border: 0 !important;
+          border-radius: 999px !important;
+          background: transparent !important;
+          color: #64748b !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-search-clear:hover {
+          background: rgba(148, 163, 184, 0.16) !important;
+          color: #0f172a !important;
+        }
+
+
+
+        /* App Restriction pagination fix: keep every pagination control in one clean row. */
+        .appwebrestriction-module .appweb-compact-pagination {
+          width: 100% !important;
+          min-width: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 0.75rem !important;
+          flex-wrap: nowrap !important;
+          margin: 0 !important;
+          padding: 0.72rem 0.95rem !important;
+          border-top: 1px solid rgba(226, 232, 240, 0.95) !important;
+          background: rgba(248, 250, 252, 0.92) !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          scrollbar-width: thin !important;
+        }
+
+        .appwebrestriction-module .appweb-compact-pagination .appweb-page-range {
+          flex: 0 0 auto !important;
+          min-width: max-content !important;
+          margin: 0 !important;
+          white-space: nowrap !important;
+          font-size: 0.72rem !important;
+          font-weight: 800 !important;
+          color: #64748b !important;
+        }
+
+        .appwebrestriction-module .appweb-page-controls {
+          flex: 0 0 auto !important;
+          min-width: max-content !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          gap: 0.45rem !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-page-item {
+          flex: 0 0 auto !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 0.35rem !important;
+          margin: 0 !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-page-gap {
+          flex: 0 0 auto !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          min-width: 22px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          color: #64748b !important;
+        }
+
+        .appwebrestriction-module .appweb-compact-pagination .uam-page-icon {
+          flex: 0 0 auto !important;
+          width: auto !important;
+          min-width: 34px !important;
+          height: 34px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          margin: 0 !important;
+          padding: 0 0.7rem !important;
+          border-radius: 999px !important;
+          white-space: nowrap !important;
+          line-height: 1 !important;
+        }
+
+        .appwebrestriction-module .appweb-compact-pagination .uam-page-current {
+          min-width: 34px !important;
+          width: 34px !important;
+          padding: 0 !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination {
+          border-top: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: 0 0 16px 16px !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination .appweb-page-controls {
+          gap: 0.5rem !important;
+        }
+
+        .appwebrestriction-module .appweb-list-panel .appweb-compact-pagination {
+          border-top: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: 0 0 16px 16px !important;
+        }
+
+        .appwebrestriction-module .appweb-list-panel .appweb-list-scroll {
+          min-height: 0 !important;
+          max-height: 432px !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+
+        .appwebrestriction-module .appweb-list-panel .user-row {
+          min-width: 0 !important;
+        }
+
+        @media (max-width: 900px) {
+          .appwebrestriction-module .appweb-compact-pagination {
+            align-items: flex-start !important;
+            flex-direction: column !important;
+            gap: 0.55rem !important;
+          }
+
+          .appwebrestriction-module .appweb-page-controls {
+            width: 100% !important;
+            justify-content: flex-start !important;
+            overflow-x: auto !important;
+            padding-bottom: 0.1rem !important;
+          }
         }
 
         @media (max-width: 1100px) {

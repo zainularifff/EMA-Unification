@@ -180,26 +180,28 @@ function CompactPagination({
   });
 
   return (
-    <div className="uam-pagination global-style">
-      <span className="uam-page-status">{start}-{end} of {totalCount}</span>
-      <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => onPageChange(safePage - 1)}>
-        Previous
-      </button>
-      {pages.map((item, index) => {
-        const previous = pages[index - 1];
-        const needsGap = previous && item - previous > 1;
-        return (
-          <span key={item} className="d-inline-flex align-items-center gap-1">
-            {needsGap && <span className="uam-page-status">...</span>}
-            <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => onPageChange(item)}>
-              {item}
-            </button>
-          </span>
-        );
-      })}
-      <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => onPageChange(safePage + 1)}>
-        Next
-      </button>
+    <div className="uam-pagination global-style appweb-compact-pagination">
+      <span className="uam-page-status appweb-page-range">{start}-{end} of {totalCount}</span>
+      <div className="appweb-page-controls" aria-label="Pagination controls">
+        <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => onPageChange(safePage - 1)}>
+          Prev
+        </button>
+        {pages.map((item, index) => {
+          const previous = pages[index - 1];
+          const needsGap = previous && item - previous > 1;
+          return (
+            <span key={item} className="appweb-page-item">
+              {needsGap && <span className="uam-page-status appweb-page-gap">...</span>}
+              <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => onPageChange(item)}>
+                {item}
+              </button>
+            </span>
+          );
+        })}
+        <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => onPageChange(safePage + 1)}>
+          Next
+        </button>
+      </div>
     </div>
   );
 }
@@ -280,6 +282,8 @@ function AppTable<RowType extends { [key: string]: any }>({
     if (totalPages <= 7) return true;
     return item === 1 || item === totalPages || Math.abs(item - safePage) <= 1;
   });
+  const pageStart = rows.length === 0 ? 0 : startIndex + 1;
+  const pageEnd = Math.min(rows.length, startIndex + APPWEB_TABLE_PAGE_SIZE);
 
   return (
     <div className={clsx('pricing-table-card', className)}>
@@ -337,25 +341,28 @@ function AppTable<RowType extends { [key: string]: any }>({
       </div>
 
       {rows.length > APPWEB_TABLE_PAGE_SIZE && (
-        <div className="uam-pagination global-style">
-          <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-            Previous
-          </button>
-          {pages.map((item, index) => {
-            const previous = pages[index - 1];
-            const needsGap = previous && item - previous > 1;
-            return (
-              <span key={item} className="d-inline-flex align-items-center gap-1">
-                {needsGap && <span className="uam-page-status">...</span>}
-                <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => setPage(item)}>
-                  {item}
-                </button>
-              </span>
-            );
-          })}
-          <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
-            Next
-          </button>
+        <div className="uam-pagination global-style appweb-compact-pagination appweb-table-pagination">
+          <span className="uam-page-status appweb-page-range">{pageStart}-{pageEnd} of {rows.length}</span>
+          <div className="appweb-page-controls" aria-label="Table pagination controls">
+            <button type="button" className="uam-page-icon" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+              Prev
+            </button>
+            {pages.map((item, index) => {
+              const previous = pages[index - 1];
+              const needsGap = previous && item - previous > 1;
+              return (
+                <span key={item} className="appweb-page-item">
+                  {needsGap && <span className="uam-page-status appweb-page-gap">...</span>}
+                  <button type="button" className={clsx('uam-page-icon', item === safePage && 'uam-page-current')} onClick={() => setPage(item)}>
+                    {item}
+                  </button>
+                </span>
+              );
+            })}
+            <button type="button" className="uam-page-icon" disabled={safePage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+              Next
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -831,6 +838,78 @@ export default function WebRestriction() {
     }
   }, [activeModule, selectedTarget, startDate, endDate, includeSub]);
 
+  const normalizeWebDomain = (value: string) => {
+    return value
+      .trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .split(/[\s,]+/)[0]
+      .split('/')[0]
+      .toLowerCase();
+  };
+
+  const getWebGroupUrlValue = (item: unknown): string => {
+    if (typeof item === 'string') return item.trim();
+    if (!item || typeof item !== 'object') return '';
+
+    const record = item as Record<string, unknown>;
+    return String(record.url ?? record.URL ?? record.Url ?? record.DomainName ?? record.domainName ?? record.WebUrl ?? record.webUrl ?? '').trim();
+  };
+
+  const normalizeWebGroupUrlRows = (rows: unknown, fallbackGroupId = selectedWebsiteGroupId || editingWebGroup?.idx || 0): WebGroupUrl[] => {
+    const sourceRows = Array.isArray(rows)
+      ? rows
+      : Array.isArray((rows as { data?: unknown[] })?.data)
+        ? (rows as { data: unknown[] }).data
+        : [];
+
+    return sourceRows
+      .map((item, index) => {
+        const record = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        const url = getWebGroupUrlValue(item);
+        if (!url) return null;
+
+        return {
+          ...(record as Partial<WebGroupUrl>),
+          idx: Number(record.idx ?? record.IDX ?? record.groupId ?? record.GroupId ?? fallbackGroupId) || fallbackGroupId,
+          seq: Number(record.seq ?? record.Seq ?? record.SEQ ?? record.sequence ?? record.Sequence ?? index + 1) || index + 1,
+          url,
+        } as WebGroupUrl;
+      })
+      .filter((item): item is WebGroupUrl => Boolean(item));
+  };
+
+  const mergeWebGroupUrlRows = (currentRows: WebGroupUrl[], nextRows: WebGroupUrl[], fallbackGroupId = selectedWebsiteGroupId || editingWebGroup?.idx || 0) => {
+    const merged = new Map<string, WebGroupUrl>();
+
+    normalizeWebGroupUrlRows(currentRows, fallbackGroupId).forEach((item) => {
+      merged.set(normalizeWebDomain(item.url), item);
+    });
+
+    normalizeWebGroupUrlRows(nextRows, fallbackGroupId).forEach((item) => {
+      merged.set(normalizeWebDomain(item.url), item);
+    });
+
+    return Array.from(merged.values()).sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0));
+  };
+
+  const makeWebGroupUrlRow = (groupId: number, url: string): WebGroupUrl => ({
+    idx: groupId,
+    seq: Math.max(1, ...normalizeWebGroupUrlRows(webGroupUrls, groupId).map((item) => Number(item.seq || 0))) + 1,
+    url,
+  } as WebGroupUrl);
+
+  const refreshWebGroupUrls = async (groupId: number) => {
+    if (!groupId) {
+      setWebGroupUrls([]);
+      return [] as WebGroupUrl[];
+    }
+
+    const urls = normalizeWebGroupUrlRows(await restrictionService.getWebGroupUrls(groupId), groupId);
+    setWebGroupUrls(urls);
+    return urls;
+  };
+
   const loadWebGroupUrls = useCallback(async () => {
     if (!selectedWebsiteGroupId) {
       setWebGroupUrls([]);
@@ -838,7 +917,7 @@ export default function WebRestriction() {
     }
 
     try {
-      const urls = await restrictionService.getWebGroupUrls(selectedWebsiteGroupId);
+      const urls = normalizeWebGroupUrlRows(await restrictionService.getWebGroupUrls(selectedWebsiteGroupId), selectedWebsiteGroupId);
       setWebGroupUrls(urls);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to load website group URLs.');
@@ -1083,40 +1162,46 @@ export default function WebRestriction() {
   };
 
   const addGroupUrlsToPolicy = () => {
-    if (webGroupUrls.length === 0) {
+    const urls = normalizeWebGroupUrlRows(webGroupUrls)
+      .map((item) => normalizeWebDomain(item.url))
+      .filter(Boolean);
+
+    if (urls.length === 0) {
       setMessage('No URLs found in this website group. Add domains into the group first.');
-      return;
+      return false;
     }
-    const urls = webGroupUrls.map((item) => item.url);
+
     setWebUrls((previous) => [...new Set([...previous, ...urls])]);
     setMessage(`${urls.length} website${urls.length === 1 ? '' : 's'} from this group added to the policy website list.`);
-  };
-
-  const normalizeWebDomain = (value: string) => {
-    return value
-      .trim()
-      .replace(/^https?:\/\//i, '')
-      .replace(/^www\./i, '')
-      .split(/[\s,]+/)[0]
-      .split('/')[0]
-      .toLowerCase();
+    return true;
   };
 
   const openWebGroupManager = async () => {
+    const groupId = selectedWebsiteGroupId || webGroups[0]?.idx || 0;
     setShowWebGroupManager(true);
-    if (selectedWebsiteGroupId) {
-      const group = webGroups.find((item) => item.idx === selectedWebsiteGroupId) || null;
+
+    if (groupId) {
+      const group = webGroups.find((item) => item.idx === groupId) || null;
+      setSelectedWebsiteGroupId(groupId);
       setEditingWebGroup(group);
       setWebGroupName(group?.name || '');
       setWebGroupDescription(group?.description || '');
+      setWebGroupUrls([]);
     } else {
       setEditingWebGroup(null);
       setWebGroupName('');
       setWebGroupDescription('');
+      setWebGroupUrls([]);
     }
+
     setWebGroupDomainInput('');
-    await loadLookups();
-    await loadWebGroupUrls();
+
+    try {
+      await loadLookups();
+      if (groupId) await refreshWebGroupUrls(groupId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Failed to open website group editor.');
+    }
   };
 
   const selectWebGroupForEditing = async (group: WebGroup) => {
@@ -1125,10 +1210,10 @@ export default function WebRestriction() {
     setWebGroupName(group.name || '');
     setWebGroupDescription(group.description || '');
     setWebGroupDomainInput('');
+    setWebGroupUrls([]);
 
     try {
-      const urls = await restrictionService.getWebGroupUrls(group.idx);
-      setWebGroupUrls(urls);
+      await refreshWebGroupUrls(group.idx);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Failed to load website group URLs.');
     }
@@ -1164,8 +1249,7 @@ export default function WebRestriction() {
         setSelectedWebsiteGroupId(saved.idx);
         setWebGroupName(saved.name || name);
         setWebGroupDescription(saved.description || webGroupDescription || '');
-        const urls = await restrictionService.getWebGroupUrls(saved.idx);
-        setWebGroupUrls(urls);
+        await refreshWebGroupUrls(saved.idx);
       }
     } catch (error) {
       const apiMessage = (error as { response?: { data?: { message?: string; error?: string } } })?.response?.data?.message;
@@ -1195,7 +1279,7 @@ export default function WebRestriction() {
   };
 
   const addUrlToWebGroup = async () => {
-    const groupId = editingWebGroup?.idx || selectedWebsiteGroupId;
+    const groupId = Number(editingWebGroup?.idx || selectedWebsiteGroupId || 0);
     const domain = normalizeWebDomain(webGroupDomainInput);
     if (!groupId) {
       setMessage('Create or select a website group first.');
@@ -1206,16 +1290,46 @@ export default function WebRestriction() {
       return;
     }
 
+    const alreadyVisible = normalizeWebGroupUrlRows(webGroupUrls, groupId).some((item) => normalizeWebDomain(item.url) === domain);
+    if (alreadyVisible) {
+      setWebGroupDomainInput('');
+      setMessage(`${domain} already exists in this website group.`);
+      return;
+    }
+
     try {
       setLoading(true);
-      await restrictionService.addWebGroupUrl(groupId, domain);
+      const response = await restrictionService.addWebGroupUrl(groupId, domain);
+      const returnedRows = normalizeWebGroupUrlRows([(response as { data?: unknown })?.data || response], groupId);
+      const nextRow = returnedRows[0] || makeWebGroupUrlRow(groupId, domain);
+
+      setWebGroupUrls((previous) => mergeWebGroupUrlRows(previous, [nextRow], groupId));
       setWebGroupDomainInput('');
-      setMessage('Domain added to website group.');
-      const urls = await restrictionService.getWebGroupUrls(groupId);
-      setWebGroupUrls(urls);
+      setMessage(`${domain} added to website group.`);
+
+      try {
+        await refreshWebGroupUrls(groupId);
+      } catch {
+        // Keep the optimistic row visible if the follow-up refresh is unavailable.
+      }
       await loadLookups();
     } catch (error) {
-      const apiMessage = (error as { response?: { data?: { message?: string; error?: string } } })?.response?.data?.message;
+      const apiMessage = (error as { response?: { data?: { message?: string; error?: string; data?: unknown } } })?.response?.data?.message;
+      const existingRow = (error as { response?: { data?: { data?: unknown } } })?.response?.data?.data;
+
+      if (String(apiMessage || '').toLowerCase().includes('already')) {
+        const existingRows = normalizeWebGroupUrlRows([existingRow], groupId);
+        setWebGroupUrls((previous) => mergeWebGroupUrlRows(previous, existingRows.length ? existingRows : [makeWebGroupUrlRow(groupId, domain)], groupId));
+        setWebGroupDomainInput('');
+        setMessage(`${domain} already exists in this website group.`);
+        try {
+          await refreshWebGroupUrls(groupId);
+        } catch {
+          // Keep the visible row.
+        }
+        return;
+      }
+
       setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to add domain to website group.'));
     } finally {
       setLoading(false);
@@ -1223,14 +1337,22 @@ export default function WebRestriction() {
   };
 
   const deleteUrlFromWebGroup = async (item: WebGroupUrl) => {
+    const groupId = Number(item.idx || editingWebGroup?.idx || selectedWebsiteGroupId || 0);
+    const domain = normalizeWebDomain(item.url);
+
     try {
       setLoading(true);
-      await restrictionService.deleteWebGroupUrl(item.idx, item.seq);
+      setWebGroupUrls((previous) => normalizeWebGroupUrlRows(previous, groupId).filter((row) => normalizeWebDomain(row.url) !== domain));
+      await restrictionService.deleteWebGroupUrl(groupId, item.seq);
       setMessage('Domain removed from website group.');
-      const urls = await restrictionService.getWebGroupUrls(item.idx);
-      setWebGroupUrls(urls);
+      try {
+        await refreshWebGroupUrls(groupId);
+      } catch {
+        // Keep optimistic removal if refresh is unavailable.
+      }
       await loadLookups();
     } catch (error) {
+      setWebGroupUrls((previous) => mergeWebGroupUrlRows(previous, [item], groupId));
       const apiMessage = (error as { response?: { data?: { message?: string; error?: string } } })?.response?.data?.message;
       setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to remove domain from website group.'));
     } finally {
@@ -1616,6 +1738,1084 @@ export default function WebRestriction() {
           min-height: 0 !important;
         }
 
+
+        /* Sidebar search fix: keep only one visible search container. */
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search {
+          width: 100% !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.5rem !important;
+          min-height: 42px !important;
+          padding: 0.55rem 0.65rem !important;
+          border: 1px solid rgba(148, 163, 184, 0.32) !important;
+          border-radius: 14px !important;
+          background: rgba(248, 250, 252, 0.92) !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search svg {
+          flex: 0 0 auto !important;
+          color: #64748b !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input {
+          flex: 1 1 auto !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          height: auto !important;
+          min-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          border-radius: 0 !important;
+          outline: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+          color: #0f172a !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input:focus,
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input:focus-visible {
+          border: 0 !important;
+          outline: none !important;
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-search-clear {
+          flex: 0 0 auto !important;
+          width: 24px !important;
+          height: 24px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 0 !important;
+          border: 0 !important;
+          border-radius: 999px !important;
+          background: transparent !important;
+          color: #64748b !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-search-clear:hover {
+          background: rgba(148, 163, 184, 0.16) !important;
+          color: #0f172a !important;
+        }
+
+
+
+        /* Web Restriction table/list content fix: keep list content compact and clean. */
+        .appwebrestriction-module .appweb-website-selector-grid {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          align-items: start !important;
+          gap: 1rem !important;
+        }
+
+        .appwebrestriction-module .appweb-website-card {
+          height: auto !important;
+          min-height: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
+        .appwebrestriction-module .appweb-website-card .policy-top {
+          flex: 0 0 auto !important;
+          align-items: flex-start !important;
+        }
+
+        .appwebrestriction-module .appweb-url-add-row {
+          align-items: stretch !important;
+        }
+
+        .appwebrestriction-module .appweb-url-add-row .setting-input {
+          min-width: 0 !important;
+          height: 38px !important;
+        }
+
+        .appwebrestriction-module .appweb-url-add-row .primary-btn,
+        .appwebrestriction-module .appweb-url-add-row .soft-btn {
+          height: 38px !important;
+          flex: 0 0 auto !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel {
+          width: 100% !important;
+          min-height: 0 !important;
+          height: auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+          border: 1px solid rgba(203, 213, 225, 0.82) !important;
+          border-radius: 16px !important;
+          background: #ffffff !important;
+          box-shadow: none !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-list-scroll {
+          flex: 0 1 auto !important;
+          min-height: 0 !important;
+          max-height: 432px !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .user-row {
+          width: 100% !important;
+          min-height: 54px !important;
+          display: grid !important;
+          align-items: center !important;
+          gap: 0.75rem !important;
+          margin: 0 !important;
+          padding: 0.62rem 0.75rem !important;
+          border: 0 !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: 0 !important;
+          background: #ffffff !important;
+          box-shadow: none !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .user-row:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .user-cell {
+          min-width: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          background: transparent !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .user-name {
+          display: flex !important;
+          align-items: center !important;
+          gap: 0.65rem !important;
+          min-width: 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .user-name strong {
+          min-width: 0 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          color: #0f2744 !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .user-mini-avatar {
+          flex: 0 0 34px !important;
+          width: 34px !important;
+          height: 34px !important;
+          border-radius: 12px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .icon-delete-btn {
+          width: 32px !important;
+          height: 32px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 0 !important;
+          border-radius: 12px !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-pagination {
+          flex: 0 0 auto !important;
+          margin: 0 !important;
+          padding: 0.7rem 0.8rem !important;
+          border-top: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: 0 !important;
+          background: rgba(248, 250, 252, 0.94) !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 0.5rem !important;
+          flex-wrap: wrap !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-page-status {
+          margin-right: auto !important;
+        }
+
+
+
+        /* Web Restriction final layout guard: KPI must stay one row and never overlap the main card. */
+        .appwebrestriction-module .appweb-settings-content {
+          min-width: 0 !important;
+          align-content: start !important;
+        }
+
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right {
+          display: grid !important;
+          grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1.22fr) !important;
+          align-items: center !important;
+          gap: 1rem !important;
+          min-height: 126px !important;
+          height: auto !important;
+          overflow: visible !important;
+          position: relative !important;
+          z-index: 3 !important;
+        }
+
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right > div:first-child {
+          min-width: 0 !important;
+        }
+
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair {
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          align-items: stretch !important;
+          gap: 0.65rem !important;
+          width: 100% !important;
+          max-width: none !important;
+          min-width: 0 !important;
+          flex-wrap: nowrap !important;
+          overflow: visible !important;
+        }
+
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair .score-box {
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          height: 80px !important;
+          min-height: 80px !important;
+          padding: 0.68rem 0.72rem !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair .score-box span,
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair .score-box strong,
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair .score-box small {
+          display: block !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair .score-box strong {
+          font-size: clamp(1.03rem, 1.45vw, 1.42rem) !important;
+          line-height: 1.1 !important;
+        }
+
+        .appwebrestriction-module .content-shell.appweb-main-card {
+          position: relative !important;
+          z-index: 1 !important;
+          margin-top: 0 !important;
+          clear: both !important;
+        }
+
+        /* Website List pagination guard: use page buttons only, no inner scrollbar. */
+        .appwebrestriction-module .role-grid.appweb-website-selector-grid,
+        .appwebrestriction-module .appweb-website-selector-grid {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          align-items: start !important;
+          gap: 1rem !important;
+        }
+
+        .appwebrestriction-module .appweb-website-card {
+          min-width: 0 !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-list-scroll {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-pagination {
+          min-height: 52px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          flex-wrap: nowrap !important;
+          gap: 0.45rem !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          scrollbar-width: none !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-pagination::-webkit-scrollbar {
+          display: none !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-page-status {
+          flex: 0 0 auto !important;
+          margin-right: 0.75rem !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-pagination > span,
+        .appwebrestriction-module .appweb-url-list-panel .uam-pagination .d-inline-flex,
+        .appwebrestriction-module .appweb-url-list-panel .uam-page-icon {
+          flex: 0 0 auto !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-page-icon {
+          min-width: 34px !important;
+          height: 34px !important;
+          padding: 0 0.68rem !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .uam-page-current {
+          min-width: 34px !important;
+          height: 34px !important;
+          border-radius: 999px !important;
+        }
+
+
+
+
+        /* Final guard: header must stay fixed-height even after Add Group URLs triggers a message. */
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right {
+          display: grid !important;
+          grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1.22fr) !important;
+          align-items: center !important;
+          gap: 1rem !important;
+          min-height: 126px !important;
+          max-height: 126px !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right > div:first-child {
+          min-width: 0 !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right .settings-inline-alert {
+          display: none !important;
+        }
+
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair {
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          align-items: stretch !important;
+          gap: 0.65rem !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair .score-box {
+          min-width: 0 !important;
+          height: 80px !important;
+          min-height: 80px !important;
+          max-height: 80px !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .appweb-main-card {
+          position: relative !important;
+          z-index: 1 !important;
+          margin-top: 0 !important;
+        }
+
+        /* Final guard: URL pagination cannot overlap Previous / page number. */
+        .appwebrestriction-module .appweb-url-list-panel .appweb-compact-pagination {
+          width: 100% !important;
+          display: grid !important;
+          grid-template-columns: max-content minmax(0, 1fr) !important;
+          align-items: center !important;
+          gap: 0.75rem !important;
+          padding: 0.72rem 0.85rem !important;
+          overflow: hidden !important;
+          flex-wrap: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-page-range {
+          margin: 0 !important;
+          white-space: nowrap !important;
+          min-width: max-content !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-page-controls {
+          min-width: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          gap: 0.42rem !important;
+          flex-wrap: nowrap !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-page-item {
+          flex: 0 0 auto !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 0.42rem !important;
+          min-width: 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-page-gap {
+          margin: 0 !important;
+          min-width: 18px !important;
+          text-align: center !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-compact-pagination .uam-page-icon {
+          position: static !important;
+          transform: none !important;
+          flex: 0 0 auto !important;
+          width: auto !important;
+          min-width: 34px !important;
+          height: 34px !important;
+          padding: 0 0.62rem !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .appwebrestriction-module .appweb-url-list-panel .appweb-compact-pagination .uam-page-current {
+          width: 34px !important;
+          min-width: 34px !important;
+          padding: 0 !important;
+          border-radius: 999px !important;
+        }
+
+        /* Policy Status / AppTable pagination fix: keep page range and controls on one clean row. */
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination {
+          width: 100% !important;
+          display: grid !important;
+          grid-template-columns: max-content minmax(0, 1fr) !important;
+          align-items: center !important;
+          gap: 0.75rem !important;
+          margin: 0 !important;
+          padding: 0.85rem 1rem !important;
+          border-top: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: 0 0 18px 18px !important;
+          background: rgba(248, 250, 252, 0.96) !important;
+          overflow: hidden !important;
+          flex-wrap: nowrap !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination .appweb-page-range {
+          margin: 0 !important;
+          white-space: nowrap !important;
+          min-width: max-content !important;
+          font-weight: 800 !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination .appweb-page-controls {
+          min-width: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          gap: 0.45rem !important;
+          flex-wrap: nowrap !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination .appweb-page-item {
+          flex: 0 0 auto !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 0.45rem !important;
+          min-width: 0 !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination .appweb-page-gap {
+          margin: 0 !important;
+          min-width: 18px !important;
+          text-align: center !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination .uam-page-icon {
+          position: static !important;
+          transform: none !important;
+          flex: 0 0 auto !important;
+          width: auto !important;
+          min-width: 34px !important;
+          height: 34px !important;
+          padding: 0 0.62rem !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .appwebrestriction-module .pricing-table-card .appweb-table-pagination .uam-page-current {
+          width: 34px !important;
+          min-width: 34px !important;
+          padding: 0 !important;
+          border-radius: 999px !important;
+        }
+
+        @media (max-width: 720px) {
+          .appwebrestriction-module .pricing-table-card .appweb-table-pagination {
+            grid-template-columns: 1fr !important;
+          }
+
+          .appwebrestriction-module .pricing-table-card .appweb-table-pagination .appweb-page-controls {
+            justify-content: flex-start !important;
+            overflow-x: auto !important;
+            padding-bottom: 0.1rem !important;
+          }
+        }
+
+
+
+        /* Website Group editor modal fix: make Edit Website Group button open a real modal without relying on Tailwind utility classes. */
+        .appwebrestriction-module .appweb-webgroup-modal-backdrop {
+          position: fixed !important;
+          inset: 0 !important;
+          z-index: 2147483000 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          padding: 1rem !important;
+          background: rgba(15, 23, 42, 0.42) !important;
+          backdrop-filter: blur(4px) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal {
+          width: min(1120px, calc(100vw - 32px)) !important;
+          max-height: 92vh !important;
+          display: flex !important;
+          flex-direction: column !important;
+          overflow: hidden !important;
+          border: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: 24px !important;
+          background: #ffffff !important;
+          box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal-head {
+          flex: 0 0 auto !important;
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 1rem !important;
+          padding: 1rem 1.15rem !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.95) !important;
+          background: rgba(248, 250, 252, 0.98) !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-eyebrow {
+          display: block !important;
+          margin-bottom: 0.25rem !important;
+          color: #2563eb !important;
+          font-size: 0.64rem !important;
+          font-weight: 900 !important;
+          letter-spacing: 0.18em !important;
+          text-transform: uppercase !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal-head h3 {
+          margin: 0 !important;
+          color: #0f2744 !important;
+          font-size: 1rem !important;
+          font-weight: 900 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal-head p,
+        .appwebrestriction-module .appweb-webgroup-pane-head p,
+        .appwebrestriction-module .appweb-webgroup-domain-head p {
+          margin: 0.25rem 0 0 !important;
+          color: #64748b !important;
+          font-size: 0.72rem !important;
+          font-weight: 700 !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-close {
+          flex: 0 0 36px !important;
+          width: 36px !important;
+          height: 36px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border: 0 !important;
+          border-radius: 12px !important;
+          background: #ffffff !important;
+          color: #64748b !important;
+          box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.8) !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-close:hover {
+          background: #f1f5f9 !important;
+          color: #0f172a !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal-body {
+          min-height: 0 !important;
+          flex: 1 1 auto !important;
+          display: grid !important;
+          grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.25fr) !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-pane {
+          min-height: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 0.8rem !important;
+          padding: 1rem !important;
+          border-right: 1px solid rgba(226, 232, 240, 0.95) !important;
+          background: #f8fafc !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-pane-head,
+        .appwebrestriction-module .appweb-webgroup-domain-head {
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 0.75rem !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list {
+          min-height: 0 !important;
+          max-height: 66vh !important;
+          overflow: auto !important;
+          border: 1px solid rgba(203, 213, 225, 0.8) !important;
+          border-radius: 16px !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item {
+          width: 100% !important;
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 0.75rem !important;
+          padding: 0.78rem 0.85rem !important;
+          border: 0 !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
+          background: #ffffff !important;
+          text-align: left !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item:hover,
+        .appwebrestriction-module .appweb-webgroup-list-item.is-selected {
+          background: #eff6ff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item span {
+          min-width: 0 !important;
+          display: grid !important;
+          gap: 0.2rem !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item strong,
+        .appwebrestriction-module .appweb-webgroup-list-item small {
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item strong {
+          color: #0f2744 !important;
+          font-size: 0.78rem !important;
+          font-weight: 900 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item small {
+          color: #64748b !important;
+          font-size: 0.68rem !important;
+          font-weight: 700 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item em,
+        .appwebrestriction-module .appweb-webgroup-domain-head em {
+          flex: 0 0 auto !important;
+          border-radius: 999px !important;
+          background: #eef2ff !important;
+          color: #2563eb !important;
+          padding: 0.18rem 0.48rem !important;
+          font-size: 0.62rem !important;
+          font-style: normal !important;
+          font-weight: 900 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-editor-pane {
+          min-height: 0 !important;
+          overflow: auto !important;
+          padding: 1rem !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-form-grid {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 0.85rem !important;
+          margin-bottom: 0.9rem !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-actions,
+        .appwebrestriction-module .appweb-webgroup-domain-add,
+        .appwebrestriction-module .appweb-webgroup-footer-actions {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          align-items: center !important;
+          gap: 0.6rem !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-actions {
+          margin-bottom: 0.9rem !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-primary-btn,
+        .appwebrestriction-module .appweb-modal-danger-btn,
+        .appwebrestriction-module .appweb-modal-dark-btn,
+        .appwebrestriction-module .appweb-modal-light-btn {
+          min-height: 36px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 0.42rem !important;
+          border: 0 !important;
+          border-radius: 12px !important;
+          padding: 0.42rem 0.85rem !important;
+          font-size: 0.68rem !important;
+          font-weight: 900 !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-primary-btn {
+          background: #2563eb !important;
+          color: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-danger-btn {
+          background: #fff1f2 !important;
+          color: #e11d48 !important;
+          box-shadow: inset 0 0 0 1px rgba(251, 113, 133, 0.35) !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-dark-btn {
+          background: #0f172a !important;
+          color: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-light-btn {
+          background: #ffffff !important;
+          color: #475569 !important;
+          box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.85) !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-primary-btn:disabled,
+        .appwebrestriction-module .appweb-modal-danger-btn:disabled,
+        .appwebrestriction-module .appweb-modal-dark-btn:disabled,
+        .appwebrestriction-module .appweb-modal-light-btn:disabled {
+          cursor: not-allowed !important;
+          opacity: 0.55 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-alert {
+          margin-bottom: 0.9rem !important;
+          border: 1px solid rgba(251, 191, 36, 0.5) !important;
+          border-radius: 14px !important;
+          background: #fffbeb !important;
+          color: #92400e !important;
+          padding: 0.7rem 0.85rem !important;
+          font-size: 0.74rem !important;
+          font-weight: 800 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-domain-card {
+          border: 1px solid rgba(203, 213, 225, 0.82) !important;
+          border-radius: 18px !important;
+          padding: 0.95rem !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-domain-add {
+          margin: 0.8rem 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-domain-add input {
+          flex: 1 1 260px !important;
+          min-width: 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-list {
+          max-height: 290px !important;
+          overflow: auto !important;
+          border: 1px solid rgba(203, 213, 225, 0.82) !important;
+          border-radius: 14px !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-row {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 0.75rem !important;
+          padding: 0.58rem 0.7rem !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-row:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-row > div {
+          min-width: 0 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 0.48rem !important;
+          color: #334155 !important;
+          font-size: 0.76rem !important;
+          font-weight: 800 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-row span {
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-icon-danger {
+          flex: 0 0 30px !important;
+          width: 30px !important;
+          height: 30px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border: 0 !important;
+          border-radius: 10px !important;
+          background: #fff1f2 !important;
+          color: #e11d48 !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-empty {
+          padding: 1.35rem !important;
+          color: #94a3b8 !important;
+          font-size: 0.76rem !important;
+          font-weight: 800 !important;
+          text-align: center !important;
+        }
+
+        /* Website Group modal polish: compact, balanced and cleaner editor layout. */
+        .appwebrestriction-module .appweb-webgroup-modal-backdrop {
+          padding: clamp(1rem, 2vw, 1.75rem) !important;
+          background: rgba(15, 23, 42, 0.52) !important;
+          backdrop-filter: blur(7px) saturate(115%) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal {
+          width: min(1040px, calc(100vw - 48px)) !important;
+          max-height: min(88vh, 720px) !important;
+          border-radius: 22px !important;
+          border-color: rgba(203, 213, 225, 0.86) !important;
+          background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+          box-shadow: 0 24px 70px rgba(15, 23, 42, 0.34) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal-head {
+          padding: 1rem 1.1rem !important;
+          background:
+            radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.09), transparent 26rem),
+            linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal-head h3 {
+          font-size: 1.05rem !important;
+          letter-spacing: -0.02em !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-modal-body {
+          grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) !important;
+          min-height: 440px !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-pane {
+          padding: 1rem !important;
+          background: linear-gradient(180deg, #f8fafc 0%, #f1f6fc 100%) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-pane-head {
+          align-items: center !important;
+          padding-bottom: 0.35rem !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list {
+          max-height: none !important;
+          flex: 1 1 auto !important;
+          border: 0 !important;
+          border-radius: 0 !important;
+          background: transparent !important;
+          overflow: auto !important;
+          display: grid !important;
+          align-content: start !important;
+          gap: 0.65rem !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item {
+          border: 1px solid rgba(203, 213, 225, 0.78) !important;
+          border-radius: 15px !important;
+          background: rgba(255, 255, 255, 0.92) !important;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.035) !important;
+          transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item:hover {
+          transform: translateY(-1px) !important;
+          border-color: rgba(37, 99, 235, 0.34) !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-list-item.is-selected {
+          border-color: rgba(37, 99, 235, 0.4) !important;
+          background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%) !important;
+          box-shadow: inset 3px 0 0 #2563eb, 0 10px 24px rgba(37, 99, 235, 0.08) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-editor-pane {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 0.9rem !important;
+          padding: 1rem 1.1rem !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-form-grid {
+          margin-bottom: 0 !important;
+          padding: 0.85rem !important;
+          border: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: 17px !important;
+          background: #f8fafc !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-form-grid .form-field {
+          margin: 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-form-grid .setting-input,
+        .appwebrestriction-module .appweb-webgroup-domain-add .setting-input {
+          height: 40px !important;
+          border-radius: 13px !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-actions {
+          margin: -0.2rem 0 0 !important;
+          justify-content: flex-start !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-domain-card {
+          flex: 1 1 auto !important;
+          display: flex !important;
+          flex-direction: column !important;
+          min-height: 0 !important;
+          border-radius: 18px !important;
+          background:
+            linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+          box-shadow: 0 10px 26px rgba(15, 23, 42, 0.04) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-domain-head {
+          align-items: center !important;
+          padding-bottom: 0.65rem !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-domain-add {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) auto !important;
+          margin: 0.85rem 0 !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-list {
+          flex: 1 1 auto !important;
+          min-height: 92px !important;
+          max-height: 230px !important;
+          border-radius: 15px !important;
+          background: #f8fafc !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-row {
+          min-height: 46px !important;
+          margin: 0 !important;
+          background: #ffffff !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-url-row > div svg {
+          flex: 0 0 auto !important;
+          width: 28px !important;
+          height: 28px !important;
+          padding: 6px !important;
+          border-radius: 10px !important;
+          background: #eff6ff !important;
+          color: #2563eb !important;
+        }
+
+        .appwebrestriction-module .appweb-webgroup-footer-actions {
+          justify-content: flex-end !important;
+          margin-top: 0.85rem !important;
+          padding-top: 0.85rem !important;
+          border-top: 1px solid rgba(226, 232, 240, 0.9) !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-dark-btn {
+          background: #2563eb !important;
+          color: #ffffff !important;
+          box-shadow: 0 10px 20px rgba(37, 99, 235, 0.22) !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-primary-btn:hover,
+        .appwebrestriction-module .appweb-modal-dark-btn:hover {
+          background: #1d4ed8 !important;
+        }
+
+        .appwebrestriction-module .appweb-modal-danger-btn:hover,
+        .appwebrestriction-module .appweb-modal-icon-danger:hover {
+          background: #ffe4e6 !important;
+        }
+
+        @media (max-width: 760px) {
+          .appwebrestriction-module .appweb-webgroup-modal {
+            width: calc(100vw - 24px) !important;
+            max-height: 92vh !important;
+          }
+
+          .appwebrestriction-module .appweb-webgroup-modal-body {
+            min-height: 0 !important;
+          }
+
+          .appwebrestriction-module .appweb-webgroup-domain-add {
+            grid-template-columns: 1fr !important;
+          }
+
+          .appwebrestriction-module .appweb-webgroup-footer-actions .appweb-modal-dark-btn {
+            width: 100% !important;
+          }
+        }
+
+        @media (max-width: 1200px) {
+          .appwebrestriction-module .role-grid.appweb-website-selector-grid,
+          .appwebrestriction-module .appweb-website-selector-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
+        @media (max-width: 1180px) {
+          .appwebrestriction-module .settings-hero.ema-hero-kpi-right {
+            grid-template-columns: 1fr !important;
+            min-height: 0 !important;
+          }
+
+          .appwebrestriction-module .settings-hero .settings-score.ema-kpi-right-pair {
+            grid-template-columns: repeat(4, minmax(118px, 1fr)) !important;
+          }
+        }
+
         @media (max-width: 1100px) {
           .hardware-module-root .settings-layout.hardware-settings-layout {
             grid-template-columns: 1fr !important;
@@ -1623,6 +2823,23 @@ export default function WebRestriction() {
 
           .hardware-module-root .settings-menu.hardware-left-panel {
             min-width: 0 !important;
+          }
+        }
+
+
+
+        @media (max-width: 980px) {
+          .appwebrestriction-module .appweb-webgroup-modal-body {
+            grid-template-columns: 1fr !important;
+          }
+
+          .appwebrestriction-module .appweb-webgroup-list-pane {
+            border-right: 0 !important;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.95) !important;
+          }
+
+          .appwebrestriction-module .appweb-webgroup-form-grid {
+            grid-template-columns: 1fr !important;
           }
         }
 
@@ -1718,11 +2935,7 @@ export default function WebRestriction() {
                 Selected target: {selectedTarget?.label || 'None'}
                 {selectedTarget?.Object_Full_Name ? ` (${selectedTarget.Object_Full_Name})` : ''}
               </p>
-              {message && (
-                <div className="settings-inline-alert d-inline-flex gap-2 align-items-start mt-2">
-                  <Info size={14} className="mt-0.5 shrink-0" /> {message}
-                </div>
-              )}
+              {/* Header stays static; messages continue through the toast layer. */}
             </div>
 
             <div className="settings-score ema-kpi-right-pair">
@@ -2172,7 +3385,7 @@ export default function WebRestriction() {
   function renderWeeklyAndSchedule() {
     return (
       <section className="role-grid">
-        <div className="policy-card h-100">
+        <div className="policy-card">
           <div className="policy-top">
             <div>
               <h4>Weekly Policy</h4>
@@ -2264,8 +3477,8 @@ export default function WebRestriction() {
     const groupUrlPagination = getPaginationState<WebGroupUrl>(webGroupUrls, webGroupUrlPage);
 
     return (
-      <section className="role-grid">
-        <div className="policy-card h-100">
+      <section className="role-grid appweb-website-selector-grid">
+        <div className="policy-card appweb-website-card h-100">
           <div className="policy-top">
             <div>
               <h4>Website List</h4>
@@ -2274,14 +3487,14 @@ export default function WebRestriction() {
             <span className="user-pill info">{webUrls.length} URL{webUrls.length === 1 ? '' : 's'}</span>
           </div>
 
-          <div className="d-flex gap-2 mb-3">
+          <div className="d-flex gap-2 mb-3 appweb-url-add-row">
             <input value={newUrl} onChange={(event) => setNewUrl(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && addPolicyUrl()} placeholder="example.com" disabled={isInherited} className={fieldClass} />
             <AppButton size="sm" variant="primary" onClick={addPolicyUrl} disabled={isInherited} leftIcon={<Plus size={13} />}>
               Add
             </AppButton>
           </div>
 
-          <div className="appweb-list-panel rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="appweb-list-panel appweb-url-list-panel rounded-2xl border border-slate-200 overflow-hidden">
             <div className="appweb-list-scroll p-0">
               {webUrls.length === 0 ? (
                 <div className="p-4 text-center text-muted fw-bold small">No URLs added to this policy.</div>
@@ -2317,7 +3530,7 @@ export default function WebRestriction() {
           </div>
         </div>
 
-        <div className="policy-card h-100">
+        <div className="policy-card appweb-website-card">
           <div className="policy-top">
             <div>
               <h4>Website Group</h4>
@@ -2327,7 +3540,16 @@ export default function WebRestriction() {
           </div>
 
           <div className="content-actions justify-content-start mb-3">
-            <AppButton size="sm" variant="secondary" onClick={openWebGroupManager} leftIcon={<Globe size={13} />}>
+            <AppButton
+              size="sm"
+              variant="secondary"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                void openWebGroupManager();
+              }}
+              leftIcon={<Globe size={13} />}
+            >
               Edit Website Group
             </AppButton>
             <AppButton size="sm" variant="secondary" onClick={addGroupUrlsToPolicy} disabled={isInherited || webGroupUrls.length === 0} leftIcon={<ArrowLeft size={13} />}>
@@ -2345,7 +3567,7 @@ export default function WebRestriction() {
             </select>
           </div>
 
-          <div className="appweb-list-panel rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="appweb-list-panel appweb-url-list-panel rounded-2xl border border-slate-200 overflow-hidden">
             <div className="appweb-list-scroll p-0">
               {webGroupUrls.length === 0 ? (
                 <div className="p-4 text-center text-muted fw-bold small">No URLs found in selected website group.</div>
@@ -2435,125 +3657,155 @@ export default function WebRestriction() {
   }
 
   function renderWebGroupManagerModal() {
-    const activeGroupId = editingWebGroup?.idx || selectedWebsiteGroupId || 0;
+    const activeGroupId = Number(editingWebGroup?.idx || selectedWebsiteGroupId || 0);
+    const modalGroupUrlRows = normalizeWebGroupUrlRows(webGroupUrls, activeGroupId);
     const canEditUrls = Boolean(activeGroupId);
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-        <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <div
+        className="appweb-webgroup-modal-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="webgroup-modal-title"
+        onClick={() => setShowWebGroupManager(false)}
+      >
+        <section className="appweb-webgroup-modal" onClick={(event) => event.stopPropagation()}>
+          <header className="appweb-webgroup-modal-head">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500">Website Restriction</p>
-              <h3 className="text-base font-black text-slate-900">Edit Website Group</h3>
-              <p className="text-[11px] font-bold text-slate-500">Create a website category, enter domain names without http:// or https://, then add the group URLs into the policy list.</p>
+              <span className="appweb-modal-eyebrow">Website Restriction</span>
+              <h3 id="webgroup-modal-title">Edit Website Group</h3>
+              <p>Create or update website groups, then add selected group URLs into the policy list.</p>
             </div>
-            <button type="button" onClick={() => setShowWebGroupManager(false)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <button type="button" onClick={() => setShowWebGroupManager(false)} className="appweb-modal-close" aria-label="Close website group editor">
               <X size={18} />
             </button>
-          </div>
+          </header>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[0.9fr_1.25fr]">
-            <aside className="min-h-0 border-r border-slate-100 bg-slate-50 p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="appweb-webgroup-modal-body">
+            <aside className="appweb-webgroup-list-pane">
+              <div className="appweb-webgroup-pane-head">
                 <div>
-                  <h4 className={sectionTitleClass}>Website Group</h4>
-                  <p className="text-[10px] font-bold text-slate-400">Reusable URL categories stored in TSWB_URL_GROUP.</p>
+                  <span className={sectionTitleClass}>Website Group</span>
+                  <p>Reusable URL categories stored for web restriction policy.</p>
                 </div>
-                <button type="button" onClick={resetWebGroupEditor} className="h-8 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-black text-slate-600">
+                <button type="button" onClick={resetWebGroupEditor} className="appweb-modal-light-btn">
                   New
                 </button>
               </div>
 
-              <div className="max-h-[66vh] overflow-auto rounded-2xl border border-slate-200 bg-white">
+              <div className="appweb-webgroup-list">
                 {webGroups.length === 0 ? (
-                  <div className="p-8 text-center text-[11px] font-bold text-slate-400">No website group yet. Click New, enter a group name, then Save Group.</div>
+                  <div className="appweb-modal-empty">No website group yet. Click New, enter a group name, then save.</div>
                 ) : webGroups.map((group) => {
                   const selected = activeGroupId === group.idx;
                   return (
-                    <button key={group.idx} type="button" onClick={() => selectWebGroupForEditing(group)} className={clsx('block w-full border-b border-slate-100 px-3 py-3 text-left last:border-b-0 hover:bg-blue-50', selected && 'bg-blue-50')}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-[11px] font-black text-slate-800">{group.name}</p>
-                          <p className="truncate text-[10px] font-bold text-slate-400">{group.description || 'Website restriction group'}</p>
-                        </div>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black text-slate-500">{group.url_count || 0} URLs</span>
-                      </div>
+                    <button
+                      key={group.idx}
+                      type="button"
+                      onClick={() => selectWebGroupForEditing(group)}
+                      className={clsx('appweb-webgroup-list-item', selected && 'is-selected')}
+                    >
+                      <span>
+                        <strong>{group.name}</strong>
+                        <small>{group.description || 'Website restriction group'}</small>
+                      </span>
+                      <em>{group.url_count || 0} URLs</em>
                     </button>
                   );
                 })}
               </div>
             </aside>
 
-            <main className="min-h-0 overflow-auto p-5">
-              <div className="mb-4 grid gap-3 md:grid-cols-2">
-                <div>
-                  <label className={labelClass}>Group Name</label>
+            <main className="appweb-webgroup-editor-pane">
+              <div className="appweb-webgroup-form-grid">
+                <label className="form-field">
+                  <span>Group Name</span>
                   <input value={webGroupName} onChange={(event) => setWebGroupName(event.target.value)} className={fieldClass} placeholder="Example: Social Networking" />
-                </div>
-                <div>
-                  <label className={labelClass}>Description</label>
+                </label>
+                <label className="form-field">
+                  <span>Description</span>
                   <input value={webGroupDescription} onChange={(event) => setWebGroupDescription(event.target.value)} className={fieldClass} placeholder="Optional note" />
-                </div>
+                </label>
               </div>
 
-              <div className="mb-4 flex flex-wrap gap-2">
-                <button type="button" onClick={saveWebGroup} disabled={loading} className="inline-flex h-9 items-center gap-2 rounded-xl bg-blue-600 px-4 text-[10px] font-black text-white disabled:bg-slate-300">
+              <div className="appweb-webgroup-actions">
+                <button type="button" onClick={saveWebGroup} disabled={loading} className="appweb-modal-primary-btn">
                   {loading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {editingWebGroup ? 'Save Group' : 'Create Group'}
                 </button>
                 {editingWebGroup && (
-                  <button type="button" onClick={() => deleteWebGroup(editingWebGroup)} disabled={loading} className="inline-flex h-9 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-[10px] font-black text-rose-700 disabled:opacity-50">
+                  <button type="button" onClick={() => deleteWebGroup(editingWebGroup)} disabled={loading} className="appweb-modal-danger-btn">
                     <Trash2 size={14} /> Delete Group
                   </button>
                 )}
               </div>
 
+              {showWebGroupManager && message && (
+                <div className="appweb-webgroup-alert">
+                  {message}
+                </div>
+              )}
+
               {!canEditUrls && (
-                <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[11px] font-bold text-amber-800">
+                <div className="appweb-webgroup-alert">
                   Create or select a website group first. After that, add domain names into the group.
                 </div>
               )}
 
-              <section className={clsx('rounded-2xl border p-4', canEditUrls ? 'border-slate-200' : 'border-slate-200 bg-slate-50/70')}>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <section className="appweb-webgroup-domain-card">
+                <div className="appweb-webgroup-domain-head">
                   <div>
-                    <h4 className={sectionTitleClass}>Domain names in this group</h4>
-                    <p className="text-[10px] font-bold text-slate-400">Enter domain names only. Do not include http:// or https://.</p>
+                    <span className={sectionTitleClass}>Domain names in this group</span>
+                    <p>Enter domain names only. Do not include http:// or https://.</p>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-black text-slate-500">{webGroupUrls.length} URLs</span>
+                  <em>{modalGroupUrlRows.length} URLs</em>
                 </div>
 
-                <div className="mb-3 flex gap-2">
-                  <input value={webGroupDomainInput} onChange={(event) => setWebGroupDomainInput(event.target.value)} onKeyDown={(event) => canEditUrls && event.key === 'Enter' && addUrlToWebGroup()} disabled={!canEditUrls || loading} placeholder={canEditUrls ? 'example.com' : 'Create or select a group first'} className={fieldClass} />
-                  <button type="button" onClick={addUrlToWebGroup} disabled={!canEditUrls || loading} className="inline-flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-3 text-[10px] font-black text-white disabled:bg-slate-300">
+                <div className="appweb-webgroup-domain-add">
+                  <input
+                    value={webGroupDomainInput}
+                    onChange={(event) => setWebGroupDomainInput(event.target.value)}
+                    onKeyDown={(event) => canEditUrls && event.key === 'Enter' && addUrlToWebGroup()}
+                    disabled={!canEditUrls || loading}
+                    placeholder={canEditUrls ? 'example.com' : 'Create or select a group first'}
+                    className={fieldClass}
+                  />
+                  <button type="button" onClick={addUrlToWebGroup} disabled={!canEditUrls || loading} className="appweb-modal-primary-btn">
                     <Plus size={13} /> Add
                   </button>
                 </div>
 
-                <div className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-white">
-                  {webGroupUrls.length === 0 ? (
-                    <div className="p-8 text-center text-[11px] font-bold text-slate-400">No domain names in this group.</div>
-                  ) : webGroupUrls.map((item) => (
-                    <div key={`${item.idx}-${item.seq}`} className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                      <div className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-slate-700">
-                        <Globe size={13} className="shrink-0 text-slate-400" />
-                        <span className="truncate">{item.url}</span>
+                <div className="appweb-webgroup-url-list">
+                  {modalGroupUrlRows.length === 0 ? (
+                    <div className="appweb-modal-empty">No domain names in this group.</div>
+                  ) : modalGroupUrlRows.map((item) => (
+                    <div key={`${item.idx}-${item.seq}`} className="appweb-webgroup-url-row">
+                      <div>
+                        <Globe size={13} />
+                        <span>{item.url}</span>
                       </div>
-                      <button type="button" onClick={() => deleteUrlFromWebGroup(item)} disabled={loading} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40">
+                      <button type="button" onClick={() => deleteUrlFromWebGroup(item)} disabled={loading} className="appweb-modal-icon-danger" aria-label={`Remove ${item.url}`}>
                         <Trash2 size={13} />
                       </button>
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-4 flex justify-end">
-                  <button type="button" onClick={() => { addGroupUrlsToPolicy(); setShowWebGroupManager(false); }} disabled={isInherited || webGroupUrls.length === 0} className="inline-flex h-9 items-center gap-2 rounded-xl bg-slate-900 px-4 text-[10px] font-black text-white disabled:bg-slate-300">
+                <div className="appweb-webgroup-footer-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (addGroupUrlsToPolicy()) setShowWebGroupManager(false);
+                    }}
+                    disabled={isInherited || modalGroupUrlRows.length === 0}
+                    className="appweb-modal-dark-btn"
+                  >
                     <ArrowLeft size={14} /> Add this group to policy website list
                   </button>
                 </div>
               </section>
             </main>
           </div>
-        </div>
+        </section>
       </div>
     );
   }
