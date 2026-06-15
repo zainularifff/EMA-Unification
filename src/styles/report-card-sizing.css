@@ -2,9 +2,15 @@
    Keeps every report card using the same size and layout rhythm. */
 
 .report-board-page .report-card-grid,
-.report-board-page .is-dynamic-panel .report-card-grid,
 .report-board-page .is-standard-panel .report-card-grid {
-  grid-template-columns: repeat(auto-fill, 320px) !important;
+  grid-template-columns: repeat(2, 320px) !important;
+  grid-auto-rows: 214px !important;
+  align-items: stretch !important;
+  justify-content: start !important;
+}
+
+.report-board-page .is-dynamic-panel .report-card-grid {
+  grid-template-columns: repeat(1, 320px) !important;
   grid-auto-rows: 214px !important;
   align-items: stretch !important;
   justify-content: start !important;
@@ -105,11 +111,11 @@
   max-height: 214px !important;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 980px) {
   .report-board-page .report-card-grid,
   .report-board-page .is-dynamic-panel .report-card-grid,
   .report-board-page .is-standard-panel .report-card-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   .report-board-page .report-card,
@@ -118,5 +124,13 @@
     width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .report-board-page .report-card-grid,
+  .report-board-page .is-dynamic-panel .report-card-grid,
+  .report-board-page .is-standard-panel .report-card-grid {
+    grid-template-columns: 1fr !important;
   }
 }
