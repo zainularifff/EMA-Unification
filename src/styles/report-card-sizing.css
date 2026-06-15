@@ -1,12 +1,19 @@
 /* Report board card sizing lock
    Keeps every report card using the same size and layout rhythm. */
 
-.report-board-page .report-card-grid {
+.report-board-page .report-card-grid,
+.report-board-page .is-dynamic-panel .report-card-grid,
+.report-board-page .is-standard-panel .report-card-grid {
+  grid-template-columns: repeat(auto-fill, 320px) !important;
   grid-auto-rows: 214px !important;
   align-items: stretch !important;
+  justify-content: start !important;
 }
 
 .report-board-page .report-card {
+  width: 320px !important;
+  min-width: 320px !important;
+  max-width: 320px !important;
   height: 214px !important;
   min-height: 214px !important;
   max-height: 214px !important;
@@ -90,7 +97,26 @@
 
 .report-board-page .is-dynamic-panel .report-card,
 .report-board-page .is-standard-panel .report-card {
+  width: 320px !important;
+  min-width: 320px !important;
+  max-width: 320px !important;
   height: 214px !important;
   min-height: 214px !important;
   max-height: 214px !important;
+}
+
+@media (max-width: 700px) {
+  .report-board-page .report-card-grid,
+  .report-board-page .is-dynamic-panel .report-card-grid,
+  .report-board-page .is-standard-panel .report-card-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .report-board-page .report-card,
+  .report-board-page .is-dynamic-panel .report-card,
+  .report-board-page .is-standard-panel .report-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
 }
