@@ -2,10 +2,19 @@
 
 const sql = require("mssql");
 
+function readRequiredEnv(...names) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value && String(value).trim()) return String(value).trim();
+  }
+
+  throw new Error(`Missing required environment variable: ${names.join(" or ")}`);
+}
+
 const dbConfig = {
   user: process.env.DB_USER || process.env.SQL_USER,
   password: process.env.DB_PASSWORD || process.env.SQL_PASSWORD,
-  server: process.env.DB_SERVER || process.env.SQL_SERVER || "localhost",
+  server: readRequiredEnv("DB_SERVER", "SQL_SERVER"),
   database:
     process.env.TSMDM_DB_DATABASE ||
     process.env.DB_DATABASE ||
