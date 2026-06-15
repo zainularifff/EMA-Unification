@@ -25,16 +25,19 @@ export type ApiEnvelope<T = unknown> = {
   [key: string]: unknown;
 };
 
-export const SERVER_PORT = "3001";
-
 function readEnv(name: string): string {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env || {};
   return String(env[name] || "").trim();
 }
 
-const configuredApiBaseUrl = readEnv("VITE_API_BASE_URL").replace(/\/$/, "");
+function getRuntimeOrigin() {
+  if (typeof window === "undefined") return "";
+  return String(window.location?.origin || "").replace(/\/+$/, "");
+}
 
-export const API_BASE_URL = configuredApiBaseUrl || `http://localhost:${SERVER_PORT}`;
+const configuredApiBaseUrl = (readEnv("VITE_API_BASE_URL") || readEnv("VITE_API_URL")).replace(/\/+$/, "");
+
+export const API_BASE_URL = configuredApiBaseUrl || getRuntimeOrigin();
 
 function readPositiveNumberEnv(name: string, fallback: number) {
   const parsed = Number(readEnv(name));
@@ -195,7 +198,8 @@ export function buildApiUrl(path: string, params?: QueryParams) {
   }
 
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${API_BASE_URL}${normalizedPath}`);
+  const baseUrl = API_BASE_URL || getRuntimeOrigin();
+  const url = new URL(`${baseUrl}${normalizedPath}`);
   appendParams(url, params);
   return url.toString();
 }
