@@ -7,7 +7,7 @@ import Hardware from "./pages/Hardware";
 import Settings from "./pages/Settings";
 import ServiceDesk from "./pages/ServiceDesk";
 import TaskList from "./pages/TaskList";
-import Report from "./pages/ReportGridWrapper";
+import Report from "./pages/ReportBoard";
 import Software from "./pages/Software";
 import AppMetering from "./pages/AppMetering";
 import AppRestriction from "./pages/AppRestriction";
