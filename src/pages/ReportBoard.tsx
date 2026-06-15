@@ -5,13 +5,16 @@ type ReportCard = {
   id: string;
   title: string;
   subtitle: string;
-  group: "Featured" | "Dynamic";
+  group: "Standard" | "Dynamic";
   tone: string;
   icon: string;
   dynamic?: boolean;
 };
 
+type PeriodKey = "current-month" | "previous-month" | "this-quarter" | "last-7-days" | "custom";
+
 type DateRange = {
+  preset: PeriodKey;
   from: string;
   to: string;
 };
@@ -24,24 +27,57 @@ type PreviewState = {
 } | null;
 
 const REPORTS: ReportCard[] = [
-  { id: "ai-executive-summary", title: "AI Executive Summary", subtitle: "Executive snapshot", group: "Featured", tone: "#2563eb", icon: "▥" },
-  { id: "client-summary-rnr", title: "Client RNR Report", subtitle: "Client risk & resource", group: "Featured", tone: "#0f766e", icon: "◈" },
-  { id: "hardware-asset-lifecycle", title: "Hardware Lifecycle", subtitle: "Asset lifecycle", group: "Featured", tone: "#7c3aed", icon: "▧" },
-  { id: "operations-health-sla", title: "Ops Health & SLA", subtitle: "Ops and SLA health", group: "Featured", tone: "#0284c7", icon: "▤" },
-  { id: "security-compliance-exposure", title: "Security Exposure", subtitle: "Risk exposure", group: "Featured", tone: "#ef4444", icon: "!" },
-  { id: "software-application-governance", title: "Software Governance", subtitle: "BSA and software", group: "Featured", tone: "#f59e0b", icon: "◇" },
+  { id: "ai-executive-summary", title: "AI Executive Summary", subtitle: "Executive snapshot", group: "Standard", tone: "#2563eb", icon: "▥" },
+  { id: "client-summary-rnr", title: "Client RNR Report", subtitle: "Client risk & resource", group: "Standard", tone: "#0f766e", icon: "◈" },
+  { id: "hardware-asset-lifecycle", title: "Hardware Lifecycle", subtitle: "Asset lifecycle", group: "Standard", tone: "#7c3aed", icon: "▧" },
+  { id: "operations-health-sla", title: "Ops Health & SLA", subtitle: "Ops and SLA health", group: "Standard", tone: "#0284c7", icon: "▤" },
+  { id: "security-compliance-exposure", title: "Security Exposure", subtitle: "Risk exposure", group: "Standard", tone: "#ef4444", icon: "!" },
+  { id: "software-application-governance", title: "Software Governance", subtitle: "BSA and software", group: "Standard", tone: "#f59e0b", icon: "◇" },
   { id: "dynamic-compliance-report", title: "Compliance Report", subtitle: "AI compliance", group: "Dynamic", tone: "#f59e0b", icon: "✓", dynamic: true },
   { id: "dynamic-cost-saving-report", title: "Cost Saving Report", subtitle: "AI savings", group: "Dynamic", tone: "#10b981", icon: "↗", dynamic: true },
   { id: "dynamic-risk-management-report", title: "Risk Management Report", subtitle: "AI risk management", group: "Dynamic", tone: "#ef4444", icon: "!", dynamic: true },
 ];
 
-function today() {
-  return new Date().toISOString().slice(0, 10);
+const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
+  { value: "current-month", label: "Current Month" },
+  { value: "previous-month", label: "Previous Month" },
+  { value: "this-quarter", label: "This Quarter" },
+  { value: "last-7-days", label: "Last 7 Days" },
+  { value: "custom", label: "Custom Range" },
+];
+
+function dateIso(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
 
-function firstDayOfMonth() {
+function today() {
+  return dateIso(new Date());
+}
+
+function firstDayOfMonth(date = new Date()) {
+  return dateIso(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
+function lastDayOfMonth(date = new Date()) {
+  return dateIso(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+}
+
+function rangeForPreset(preset: PeriodKey): DateRange {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  if (preset === "previous-month") {
+    const previous = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { preset, from: firstDayOfMonth(previous), to: lastDayOfMonth(previous) };
+  }
+  if (preset === "this-quarter") {
+    const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+    return { preset, from: dateIso(new Date(now.getFullYear(), quarterStartMonth, 1)), to: today() };
+  }
+  if (preset === "last-7-days") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - 6);
+    return { preset, from: dateIso(start), to: today() };
+  }
+  return { preset: "current-month", from: firstDayOfMonth(now), to: today() };
 }
 
 function fileSafeName(value: string) {
@@ -57,7 +93,7 @@ function buildRequestPayload(report: ReportCard, range: DateRange) {
     reportId: report.id,
     dynamicReportType: report.dynamic ? report.id : undefined,
     dynamicReportTitle: report.dynamic ? report.title : undefined,
-    dateRange: "custom",
+    dateRange: range.preset === "custom" ? "custom" : range.preset,
     startDate: range.from,
     endDate: range.to,
     outputFormat: "PDF",
@@ -128,10 +164,9 @@ function downloadHtml(report: ReportCard, payload: any, range: DateRange) {
 
 export default function ReportBoard() {
   const [ranges, setRanges] = useState<Record<string, DateRange>>(() => {
-    const from = firstDayOfMonth();
-    const to = today();
+    const initial = rangeForPreset("current-month");
     return REPORTS.reduce<Record<string, DateRange>>((record, report) => {
-      record[report.id] = { from, to };
+      record[report.id] = initial;
       return record;
     }, {});
   });
@@ -139,8 +174,12 @@ export default function ReportBoard() {
   const [preview, setPreview] = useState<PreviewState>(null);
   const [error, setError] = useState("");
 
-  const updateRange = (reportId: string, key: keyof DateRange, value: string) => {
-    setRanges((current) => ({ ...current, [reportId]: { ...current[reportId], [key]: value } }));
+  const updatePreset = (reportId: string, preset: PeriodKey) => {
+    setRanges((current) => ({ ...current, [reportId]: rangeForPreset(preset) }));
+  };
+
+  const updateRange = (reportId: string, key: "from" | "to", value: string) => {
+    setRanges((current) => ({ ...current, [reportId]: { ...current[reportId], preset: "custom", [key]: value } }));
   };
 
   const runPreview = async (report: ReportCard) => {
@@ -171,6 +210,58 @@ export default function ReportBoard() {
     }
   };
 
+  const standardReports = REPORTS.filter((report) => report.group === "Standard");
+  const dynamicReports = REPORTS.filter((report) => report.group === "Dynamic");
+
+  const renderReportCard = (report: ReportCard) => {
+    const range = ranges[report.id];
+    const state = loading[report.id];
+    return (
+      <article className={`report-card ${report.dynamic ? "is-dynamic" : "is-standard"}`} key={report.id} style={{ "--report-accent": report.tone } as CSSProperties}>
+        <div className="report-card-art" />
+        <div className="report-card-top">
+          <div className="report-card-icon">{report.icon}</div>
+          <div>
+            <span className="report-card-kicker">{report.group === "Dynamic" ? "AI Dynamic" : "Standard Report"}</span>
+            <h3>{report.title}</h3>
+            <p>{report.subtitle}</p>
+          </div>
+          <span className="report-card-badge">{report.dynamic ? "Daily AI" : "Report"}</span>
+        </div>
+
+        <div className="report-card-period">
+          <label>
+            Period
+            <select value={range.preset} onChange={(event) => updatePreset(report.id, event.target.value as PeriodKey)}>
+              {PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </label>
+          <span>{range.from} → {range.to}</span>
+        </div>
+
+        <div className="report-date-grid">
+          <label>
+            From
+            <input type="date" value={range.from} onChange={(event) => updateRange(report.id, "from", event.target.value)} />
+          </label>
+          <label>
+            To
+            <input type="date" value={range.to} onChange={(event) => updateRange(report.id, "to", event.target.value)} />
+          </label>
+        </div>
+
+        <div className="report-card-actions">
+          <button type="button" onClick={() => runPreview(report)} disabled={Boolean(state)}>
+            {state === "preview" ? "Loading..." : "Preview"}
+          </button>
+          <button className="primary" type="button" onClick={() => runDownload(report)} disabled={Boolean(state)}>
+            {state === "download" ? "Preparing..." : "Download"}
+          </button>
+        </div>
+      </article>
+    );
+  };
+
   return (
     <main className="report-board-page">
       <style>{`
@@ -188,11 +279,11 @@ export default function ReportBoard() {
           align-items: center;
           justify-content: space-between;
           gap: 16px;
-          margin-bottom: 12px;
+          margin-bottom: 14px;
           padding: 14px 16px;
           border: 1px solid #d6e3f5;
           border-radius: 22px;
-          background: rgba(255,255,255,.72);
+          background: linear-gradient(135deg, rgba(255,255,255,.90), rgba(238,246,255,.76));
           box-shadow: 0 10px 26px rgba(15,35,71,.045);
         }
         .report-board-head span {
@@ -225,21 +316,43 @@ export default function ReportBoard() {
         }
         .report-board-count strong { display: block; font-size: 22px; line-height: 1; }
         .report-board-count small { color: #72839d; font-size: 11px; font-weight: 850; }
+        .report-category-block + .report-category-block { margin-top: 18px; }
+        .report-category-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin: 0 0 10px;
+        }
+        .report-category-head strong {
+          color: #17325d;
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+        }
+        .report-category-head span {
+          color: #6c7d97;
+          font-size: 12px;
+          font-weight: 900;
+        }
         .report-card-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(210px, 1fr));
+          grid-template-columns: repeat(4, minmax(218px, 1fr));
           gap: 12px;
           align-items: stretch;
         }
         .report-card {
           position: relative;
-          min-height: 184px;
+          min-height: 232px;
           display: grid;
-          grid-template-rows: auto auto auto;
+          grid-template-rows: auto auto auto auto;
           gap: 10px;
           border: 1px solid #d6e3f5;
-          border-radius: 20px;
-          background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(249,252,255,.95));
+          border-radius: 22px;
+          background:
+            radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--report-accent) 14%, transparent), transparent 8.8rem),
+            linear-gradient(180deg, rgba(255,255,255,.98), rgba(249,252,255,.95));
           padding: 14px;
           box-shadow: 0 12px 26px rgba(15,35,71,.055);
           overflow: hidden;
@@ -249,35 +362,55 @@ export default function ReportBoard() {
           position: absolute;
           inset: 0 0 auto;
           height: 4px;
-          background: var(--report-accent);
+          background: linear-gradient(90deg, var(--report-accent), color-mix(in srgb, var(--report-accent) 38%, #ffffff));
+        }
+        .report-card-art {
+          position: absolute;
+          right: -32px;
+          top: -36px;
+          width: 104px;
+          height: 104px;
+          border-radius: 999px;
+          border: 18px solid color-mix(in srgb, var(--report-accent) 12%, transparent);
+          pointer-events: none;
         }
         .report-card-top {
+          position: relative;
           display: grid;
-          grid-template-columns: 40px minmax(0, 1fr) auto;
+          grid-template-columns: 42px minmax(0, 1fr) auto;
           gap: 10px;
           align-items: center;
         }
         .report-card-icon {
-          width: 40px;
-          height: 40px;
+          width: 42px;
+          height: 42px;
           display: grid;
           place-items: center;
-          border-radius: 14px;
+          border-radius: 15px;
           color: var(--report-accent);
           background: color-mix(in srgb, var(--report-accent) 12%, #ffffff);
           font-weight: 950;
         }
+        .report-card-kicker {
+          display: block;
+          color: var(--report-accent);
+          font-size: 9px;
+          font-weight: 950;
+          letter-spacing: .09em;
+          text-transform: uppercase;
+        }
         .report-card-badge {
           align-self: start;
-          padding: 4px 7px;
+          padding: 5px 8px;
           border-radius: 999px;
           color: var(--report-accent);
           background: color-mix(in srgb, var(--report-accent) 10%, #ffffff);
           font-size: 10px;
           font-weight: 950;
+          white-space: nowrap;
         }
         .report-card h3 {
-          margin: 0;
+          margin: 2px 0 0;
           font-size: 14px;
           line-height: 1.12;
           letter-spacing: -0.02em;
@@ -289,11 +422,17 @@ export default function ReportBoard() {
           font-weight: 800;
           line-height: 1.18;
         }
-        .report-date-grid {
+        .report-card-period {
+          position: relative;
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 8px;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 6px;
+          padding: 10px;
+          border: 1px solid color-mix(in srgb, var(--report-accent) 16%, #dce7f6);
+          border-radius: 16px;
+          background: color-mix(in srgb, var(--report-accent) 5%, #ffffff);
         }
+        .report-card-period label,
         .report-date-grid label {
           display: grid;
           gap: 4px;
@@ -303,6 +442,7 @@ export default function ReportBoard() {
           letter-spacing: .08em;
           text-transform: uppercase;
         }
+        .report-card-period select,
         .report-date-grid input {
           width: 100%;
           min-height: 32px;
@@ -314,6 +454,16 @@ export default function ReportBoard() {
           font-size: 11px;
           font-weight: 850;
           outline: none;
+        }
+        .report-card-period span {
+          color: #657994;
+          font-size: 11px;
+          font-weight: 850;
+        }
+        .report-date-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
         }
         .report-card-actions {
           display: grid;
@@ -399,8 +549,8 @@ export default function ReportBoard() {
         }
         .report-preview-section h4 { margin: 0 0 10px; }
         .report-preview-section li { margin: 7px 0; color: #3a5274; }
-        @media (max-width: 1480px) { .report-card-grid { grid-template-columns: repeat(3, minmax(210px, 1fr)); } }
-        @media (max-width: 1080px) { .report-card-grid { grid-template-columns: repeat(2, minmax(210px, 1fr)); } }
+        @media (max-width: 1480px) { .report-card-grid { grid-template-columns: repeat(3, minmax(218px, 1fr)); } }
+        @media (max-width: 1080px) { .report-card-grid { grid-template-columns: repeat(2, minmax(218px, 1fr)); } }
         @media (max-width: 720px) { .report-board-page { padding: 12px; } .report-card-grid { grid-template-columns: 1fr; } .report-board-head { align-items: flex-start; flex-direction: column; } }
       `}</style>
 
@@ -408,7 +558,7 @@ export default function ReportBoard() {
         <div>
           <span>Reporting</span>
           <h2>Report Center</h2>
-          <p>Choose a report, set the date range, then preview or download.</p>
+          <p>Choose a report, select the reporting period or custom date range, then preview or download.</p>
         </div>
         <div className="report-board-count">
           <strong>{REPORTS.length}</strong>
@@ -416,43 +566,24 @@ export default function ReportBoard() {
         </div>
       </section>
 
-      <section className="report-card-grid" aria-label="Report cards">
-        {REPORTS.map((report) => {
-          const range = ranges[report.id];
-          const state = loading[report.id];
-          return (
-            <article className="report-card" key={report.id} style={{ "--report-accent": report.tone } as CSSProperties}>
-              <div className="report-card-top">
-                <div className="report-card-icon">{report.icon}</div>
-                <div>
-                  <h3>{report.title}</h3>
-                  <p>{report.subtitle}</p>
-                </div>
-                <span className="report-card-badge">{report.group}</span>
-              </div>
+      <section className="report-category-block" aria-label="Standard reports">
+        <div className="report-category-head">
+          <strong>Standard Reports</strong>
+          <span>{standardReports.length} reports</span>
+        </div>
+        <div className="report-card-grid">
+          {standardReports.map(renderReportCard)}
+        </div>
+      </section>
 
-              <div className="report-date-grid">
-                <label>
-                  From
-                  <input type="date" value={range.from} onChange={(event) => updateRange(report.id, "from", event.target.value)} />
-                </label>
-                <label>
-                  To
-                  <input type="date" value={range.to} onChange={(event) => updateRange(report.id, "to", event.target.value)} />
-                </label>
-              </div>
-
-              <div className="report-card-actions">
-                <button type="button" onClick={() => runPreview(report)} disabled={Boolean(state)}>
-                  {state === "preview" ? "Loading..." : "Preview"}
-                </button>
-                <button className="primary" type="button" onClick={() => runDownload(report)} disabled={Boolean(state)}>
-                  {state === "download" ? "Preparing..." : "Download"}
-                </button>
-              </div>
-            </article>
-          );
-        })}
+      <section className="report-category-block" aria-label="Dynamic reporting">
+        <div className="report-category-head">
+          <strong>Dynamic Reporting</strong>
+          <span>{dynamicReports.length} AI reports · generated once per day</span>
+        </div>
+        <div className="report-card-grid">
+          {dynamicReports.map(renderReportCard)}
+        </div>
       </section>
 
       {error && <div className="report-board-error">{error}</div>}
