@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   Ticket,
+  Users,
   Wrench,
   X,
   Zap,
@@ -143,7 +144,7 @@ type RiskSummary = {
   osBreakdown: BreakdownItem[];
   biosAgeBreakdown: BreakdownItem[];
   topFindings: RiskFindingRow[];
-  topHardwareRisk: HardwareRiskDeviceRow[];
+  deviceRiskRows: HardwareRiskDeviceRow[];
 };
 
 type PriorityBreakdownItem = {
@@ -415,7 +416,7 @@ const EMPTY_RISK_SUMMARY: RiskSummary = {
   osBreakdown: [],
   biosAgeBreakdown: [],
   topFindings: [],
-  topHardwareRisk: [],
+  deviceRiskRows: [],
 };
 
 const EMPTY_DASHBOARD_DATA: ItOpsDashboardData = {
@@ -449,7 +450,7 @@ const VIEW_TITLES: Record<string, { title: string; subtitle: string }> = {
   network: { title: 'Network', subtitle: 'Known IP, registered device and subnet view.' },
   geolocation: { title: 'Location', subtitle: 'Devices with location and devices that are not mapped yet.' },
   tasks: { title: 'Automation Jobs', subtitle: 'Running, completed, failed jobs and recent task execution.' },
-  risk: { title: 'Risk', subtitle: 'Important device, update, network and location risk.' },
+  risk: { title: 'Device Risk', subtitle: 'EOL/EOS and Management Policy score based device risk.' },
   departments: { title: 'Branch', subtitle: 'Branch device, ticket and update status.' },
   serviceDesk: { title: 'Open Tickets', subtitle: 'Open, overdue and SLA status.' },
   patch: { title: 'Security Updates', subtitle: 'Device update status, missing updates and branch scores.' },
@@ -461,6 +462,15 @@ const VIEW_TITLES: Record<string, { title: string; subtitle: string }> = {
 function resolveApiBaseUrl() {
   const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
   if (envUrl) return envUrl.replace(/\/$/, '');
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname, port } = window.location;
+    const isFrontendDevServer = ['5173', '5174', '5175', '3000'].includes(port);
+
+    if (isFrontendDevServer) {
+      return `${protocol}//${hostname}:3001`;
+    }
+  }
 
   return '';
 }
@@ -791,7 +801,7 @@ function normalizeDashboardData(raw: Partial<ItOpsDashboardData> | null | undefi
       osBreakdown: Array.isArray(data.risk?.osBreakdown) ? data.risk.osBreakdown : [],
       biosAgeBreakdown: Array.isArray(data.risk?.biosAgeBreakdown) ? data.risk.biosAgeBreakdown : [],
       topFindings: Array.isArray(data.risk?.topFindings) ? data.risk.topFindings.map((row) => ({ ...row, severity: normalizeSeverity(row.severity) })) : [],
-      topHardwareRisk: Array.isArray(data.risk?.topHardwareRisk) ? data.risk.topHardwareRisk : [],
+      deviceRiskRows: Array.isArray(data.risk?.deviceRiskRows) ? data.risk.deviceRiskRows : [],
     },
     attentionQueue: Array.isArray(data.attentionQueue) ? data.attentionQueue.map((row) => ({ ...row, severity: normalizeSeverity(row.severity) })) : [],
   };
@@ -807,7 +817,8 @@ async function fetchItOpsDashboardData(forceRefresh = false) {
   const headers = new Headers({ Accept: 'application/json' });
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const response = await fetch(buildApiUrl(ITOPS_DASHBOARD_API_PATH, { refresh: forceRefresh ? 1 : undefined }), {
+  const dashboardUrl = buildApiUrl(ITOPS_DASHBOARD_API_PATH, { refresh: forceRefresh ? 1 : undefined });
+  const response = await fetch(dashboardUrl, {
     headers,
     credentials: 'include',
   });
@@ -820,7 +831,7 @@ async function fetchItOpsDashboardData(forceRefresh = false) {
   } | null;
 
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || payload?.message || `Dashboard data failed: ${response.status}`);
+    throw new Error(payload?.error || payload?.message || `Dashboard data failed: ${response.status} (${dashboardUrl})`);
   }
 
   if (!payload?.data) {
@@ -1510,29 +1521,32 @@ export default function ITOperationsDashboard() {
     { name: 'Ticket SLA', value: serviceDesk.slaAchievement, percent: serviceDesk.slaAchievement },
   ], [endpointFreshnessPercent, locationFreshPercent, networkRegistrationPercent, serviceDesk.slaAchievement, softwareMappingPercent, taskCompletionPercent]);
   const dataConfidenceScore = useMemo(() => averagePercent(dataConfidenceRows), [dataConfidenceRows]);
-  const geoEvidenceRows = useMemo(() => {
-    const hardwareGeoFallback = risk.topHardwareRisk
-      .filter((device) => /geo|location/i.test(`${device.reasons || ''} ${device.department || ''}`))
-      .map((device) => ({
-        deviceName: device.deviceName,
-        platform: device.platform,
-        department: device.department,
-        locationName: device.department || 'Missing / unmatched location identity',
-        lastSeen: device.lastSeen,
-        status: 'Missing Geo Identity',
-        signal: 'Missing Geo Identity',
-        reason: device.reasons || 'Endpoint has geo/location risk signal',
-      } satisfies GeoDeviceRow));
-
-    return uniqueGeoRows([
-      ...geolocation.locationRows,
-      ...geolocation.trackedRows,
-      ...geolocation.staleRows,
-      ...geolocation.unknownRows,
-      ...geolocation.missingGeoRows,
-      ...hardwareGeoFallback,
-    ]);
-  }, [geolocation.locationRows, geolocation.missingGeoRows, geolocation.staleRows, geolocation.trackedRows, geolocation.unknownRows, risk.topHardwareRisk]);
+  const deviceRiskRows = useMemo(() => Array.isArray(risk.deviceRiskRows) ? risk.deviceRiskRows : [], [risk.deviceRiskRows]);
+  const deviceRiskCount = deviceRiskRows.length;
+  const deviceRiskScore = useMemo(() => deviceRiskRows.length
+    ? Math.max(...deviceRiskRows.map((device) => clampPercent(device.riskScore)))
+    : 0, [deviceRiskRows]);
+  const deviceRiskCriticalCount = useMemo(() => deviceRiskRows.filter((device) => {
+    const severity = String(device.osLifecycleSeverity || '').toLowerCase();
+    return severity === 'critical' || numberOrFallback(device.riskScore) >= 70;
+  }).length, [deviceRiskRows]);
+  const deviceRiskHighCount = useMemo(() => deviceRiskRows.filter((device) => {
+    const severity = String(device.osLifecycleSeverity || '').toLowerCase();
+    const score = numberOrFallback(device.riskScore);
+    return severity === 'high' || (score >= 40 && score < 70);
+  }).length, [deviceRiskRows]);
+  const deviceRiskMediumCount = useMemo(() => deviceRiskRows.filter((device) => {
+    const severity = String(device.osLifecycleSeverity || '').toLowerCase();
+    const score = numberOrFallback(device.riskScore);
+    return severity === 'medium' || (score >= 20 && score < 40);
+  }).length, [deviceRiskRows]);
+  const geoEvidenceRows = useMemo(() => uniqueGeoRows([
+    ...geolocation.locationRows,
+    ...geolocation.trackedRows,
+    ...geolocation.staleRows,
+    ...geolocation.unknownRows,
+    ...geolocation.missingGeoRows,
+  ]), [geolocation.locationRows, geolocation.missingGeoRows, geolocation.staleRows, geolocation.trackedRows, geolocation.unknownRows]);
 
   const resolveGeoEvidenceRows = useCallback((item = '') => {
     const key = String(item || '').toLowerCase();
@@ -1613,7 +1627,7 @@ export default function ITOperationsDashboard() {
       value: formatNumber(geolocation.trackedDevices),
       note: `${formatNumber(risk.missingGeoDevices)} not mapped • ${formatPercent(locationFreshPercent, 0)} with location`,
       icon: MapPin,
-      tone: 'green',
+      tone: 'cyan',
       progress: locationFreshPercent,
       status: healthStatus(locationFreshPercent),
       view: 'geolocation',
@@ -1666,16 +1680,16 @@ export default function ITOperationsDashboard() {
     },
     {
       id: 'risk',
-      label: 'Critical Risk',
-      value: `${formatNumber(risk.totalCritical)} / ${formatNumber(risk.totalHigh)}`,
-      note: `Critical / high • ${formatNumber(risk.totalRiskItems)} total risk signal(s)`,
+      label: 'Device Risk',
+      value: formatNumber(deviceRiskCount),
+      note: `${formatNumber(deviceRiskCriticalCount)} critical • ${formatNumber(deviceRiskHighCount)} high`,
       icon: ShieldAlert,
       tone: 'purple',
-      progress: risk.score,
-      status: riskStatus(risk.totalCritical + risk.totalHigh, 1, 6),
+      progress: deviceRiskScore,
+      status: riskStatus(deviceRiskCount, 1, 6),
       view: 'risk',
     },
-  ], [endpointOnlinePercent, geolocation.staleLocations, geolocation.trackedDevices, geolocation.unknownLocations, risk.missingGeoDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, locationFreshPercent, patchComplianceAverage, risk.score, risk.totalCritical, risk.totalHigh, risk.totalRiskItems, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices, security.criticalVulnerabilities, serviceDesk.overdueTickets, serviceDesk.pendingTickets, serviceDesk.slaAchievement, taskCompletionPercent, tasks.failedTasks, tasks.latestTaskTime, tasks.runningTasks]);
+  ], [endpointOnlinePercent, geolocation.staleLocations, geolocation.trackedDevices, geolocation.unknownLocations, risk.missingGeoDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, locationFreshPercent, patchComplianceAverage, deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskScore, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices, security.criticalVulnerabilities, serviceDesk.overdueTickets, serviceDesk.pendingTickets, serviceDesk.slaAchievement, taskCompletionPercent, tasks.failedTasks, tasks.latestTaskTime, tasks.runningTasks]);
 
 
   const overviewHealthRows = useMemo<BreakdownItem[]>(() => [
@@ -1686,6 +1700,25 @@ export default function ITOperationsDashboard() {
     { name: 'Jobs Completed', value: taskCompletionPercent, percent: taskCompletionPercent },
     { name: 'Network Mapped', value: networkRegistrationPercent, percent: networkRegistrationPercent },
   ], [endpointOnlinePercent, hasSecurityUpdateScore, locationFreshPercent, networkRegistrationPercent, onTrackTicketPercent, securityUpdateScore, taskCompletionPercent]);
+
+  const overviewDeviceRows = useMemo<BreakdownItem[]>(() => [
+    { name: 'Online', value: hardware.onlineDevices, percent: endpointOnlinePercent, tone: 'green' },
+    { name: 'Offline', value: hardware.offlineDevices, percent: hardware.totalDevices > 0 ? (hardware.offlineDevices / hardware.totalDevices) * 100 : 0, tone: 'red' },
+    { name: 'Old Data', value: hardware.staleSync, percent: hardware.totalDevices > 0 ? (hardware.staleSync / hardware.totalDevices) * 100 : 0, tone: 'amber' },
+    { name: 'Updated', value: securityUpdatedDevices, percent: hasSecurityUpdateScore ? securityUpdateScore : 0, tone: 'green' },
+    { name: 'Need Update', value: securityNeedUpdateDevices, percent: securityUpdateTotalDevices > 0 ? (securityNeedUpdateDevices / securityUpdateTotalDevices) * 100 : 0, tone: 'amber' },
+  ], [endpointOnlinePercent, hardware.offlineDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices]);
+
+  const overviewBranchRows = useMemo<BreakdownItem[]>(() => {
+    const branchSource = departmentRows.length
+      ? departmentRows.map((row) => ({ name: row.department, value: row.openIncidents, percent: clampPercent(row.healthScore) }))
+      : patchDepartments.map((row) => ({ name: row.name, value: 0, percent: clampPercent(row.percent) }));
+
+    return branchSource
+      .filter((row) => row.name)
+      .sort((a, b) => clampPercent(a.percent) - clampPercent(b.percent))
+      .slice(0, 5);
+  }, [departmentRows, patchDepartments]);
 
   const overviewActionItems = useMemo(() => [
     {
@@ -1710,10 +1743,10 @@ export default function ITOperationsDashboard() {
     },
     {
       id: 'critical-risk',
-      label: 'Critical Risk',
-      value: risk.totalCritical,
-      note: risk.totalCritical > 0 ? 'Review critical device risk' : 'No critical risk found',
-      tone: risk.totalCritical > 0 ? 'red' : 'green',
+      label: 'Device Risk',
+      value: deviceRiskCount,
+      note: deviceRiskCount > 0 ? 'Review EOL/EOS or policy device risk' : 'No device risk found',
+      tone: deviceRiskCriticalCount > 0 ? 'red' : deviceRiskHighCount > 0 ? 'amber' : 'green',
       icon: ShieldAlert,
       view: 'risk',
       item: 'Critical',
@@ -1738,29 +1771,35 @@ export default function ITOperationsDashboard() {
       view: 'tasks',
       item: 'Failed',
     },
-  ], [hasSecurityUpdateScore, overdueTicketCount, risk.missingGeoDevices, risk.totalCritical, securityNeedUpdateDevices, tasks.failedTasks]);
+  ], [deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, hasSecurityUpdateScore, overdueTicketCount, risk.missingGeoDevices, securityNeedUpdateDevices, tasks.failedTasks]);
 
   const riskCategoryRows = useMemo<BreakdownItem[]>(() => {
-    const existing = Array.isArray(risk.categoryBreakdown) ? risk.categoryBreakdown.filter((row) => numberOrFallback(row.value) > 0 || numberOrFallback(row.percent) > 0) : [];
-    if (existing.length) return existing;
+    const lifecycleRows = deviceRiskRows.filter((device) => {
+      const text = [
+        device.osLifecycleStatus,
+        device.osLifecycleSeverity,
+        device.osLifecycleCycle,
+        device.osLifecycleEolDate,
+        device.osName,
+        device.reasons,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      return /eol|eos|end of life|end of support|unsupported|outdated|near/i.test(text);
+    });
+
+    const policyScoreRows = deviceRiskRows.filter((device) => numberOrFallback(device.riskScore) > 0);
 
     return [
-      { name: 'OS issue', value: numberOrFallback(risk.unsupportedOsDevices) + numberOrFallback(risk.outdatedOsDevices) },
-      { name: 'Old BIOS', value: numberOrFallback(risk.oldBiosDevices) },
-      { name: 'Old device data', value: numberOrFallback(risk.staleHardwareDevices) },
-      { name: 'Missing device info', value: numberOrFallback(risk.missingHardwareIdentity) },
-      { name: 'Security update issue', value: numberOrFallback(risk.patchCriticalItems) },
-      { name: 'Failed job', value: numberOrFallback(risk.failedTaskItems) },
-      { name: 'Network issue', value: numberOrFallback(risk.networkRiskItems) },
-      { name: 'Location issue', value: numberOrFallback(risk.geolocationRiskItems) },
+      { name: 'EOL / EOS', value: lifecycleRows.length, tone: 'red' },
+      { name: 'Management Policy Score', value: policyScoreRows.length, tone: 'purple' },
     ].filter((row) => row.value > 0);
-  }, [risk.categoryBreakdown, risk.failedTaskItems, risk.geolocationRiskItems, risk.missingHardwareIdentity, risk.networkRiskItems, risk.oldBiosDevices, risk.outdatedOsDevices, risk.patchCriticalItems, risk.staleHardwareDevices, risk.unsupportedOsDevices]);
+  }, [deviceRiskRows]);
 
   const riskSeverityRows = useMemo<BreakdownItem[]>(() => [
-    { name: 'Critical', value: numberOrFallback(risk.totalCritical), tone: 'red' },
-    { name: 'High', value: numberOrFallback(risk.totalHigh), tone: 'amber' },
-    { name: 'Medium', value: numberOrFallback(risk.totalMedium), tone: 'yellow' },
-  ].filter((row) => row.value > 0), [risk.totalCritical, risk.totalHigh, risk.totalMedium]);
+    { name: 'Critical', value: deviceRiskCriticalCount, tone: 'red' },
+    { name: 'High', value: deviceRiskHighCount, tone: 'amber' },
+    { name: 'Medium', value: deviceRiskMediumCount, tone: 'yellow' },
+  ].filter((row) => row.value > 0), [deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskMediumCount]);
 
 
   const resolveTicketRows = useCallback((item = '') => {
@@ -1882,7 +1921,7 @@ export default function ITOperationsDashboard() {
           </tr>
         </thead>
         <tbody>
-          {risk.topHardwareRisk.slice(0, 8).map((item) => (
+          {deviceRiskRows.slice(0, 8).map((item) => (
             <tr key={`${item.deviceName}-${item.department}`}>
               <td><strong>{item.deviceName || '-'}</strong><span className="itops-pro-muted-block">{item.model || '-'}</span></td>
               <td>{item.platform || '-'}</td>
@@ -1895,7 +1934,7 @@ export default function ITOperationsDashboard() {
           ))}
         </tbody>
       </table>
-      {!risk.topHardwareRisk.length && <EmptyState label="No device risk records returned." />}
+      {!deviceRiskRows.length && <EmptyState label="No device risk records returned." />}
     </div>
   );
 
@@ -2013,47 +2052,94 @@ export default function ITOperationsDashboard() {
           <IncidentTrendChart data={incidentTrend} summary={trendSummary} />
         </Panel>
 
-        <Panel title="Risk" subtitle="Critical and high items to review." icon={ShieldAlert}>
+        <Panel title="Risk" subtitle="EOL/EOS and Management Policy score only." icon={ShieldAlert}>
           <button type="button" className="itops-risk-command-summary" onClick={() => openLevel2('risk')}>
             <div className="itops-risk-command-copy">
-              <span>Risk Status</span>
-              <strong>{formatNumber(risk.score)}<em>/100</em></strong>
-              <small>Based on device, update, network, location and job signals.</small>
+              <span>Device Risk</span>
+              <strong>{formatNumber(deviceRiskCount)}</strong>
+              <small>EOL/EOS and Management Policy score.</small>
             </div>
-            <StatusBadge status={riskStatus(risk.score, 35, 70)} />
-            <div className="itops-risk-command-meter" aria-hidden="true"><i style={{ width: `${clampPercent(risk.score)}%` }} /></div>
+            <StatusBadge status={riskStatus(deviceRiskCount, 1, 6)} />
+            <div className="itops-risk-command-meter" aria-hidden="true"><i style={{ width: `${clampPercent(deviceRiskScore)}%` }} /></div>
           </button>
 
           <div className="itops-risk-severity-grid">
             <button type="button" className="itops-risk-severity itops-risk-severity-critical" onClick={() => openLevel3('risk', 'Critical')}>
               <span>Critical</span>
-              <strong>{formatNumber(risk.totalCritical)}</strong>
-              <small>Check now</small>
+              <strong>{formatNumber(deviceRiskCriticalCount)}</strong>
+              <small>Risk devices</small>
             </button>
             <button type="button" className="itops-risk-severity itops-risk-severity-high" onClick={() => openLevel3('risk', 'High')}>
               <span>High</span>
-              <strong>{formatNumber(risk.totalHigh)}</strong>
-              <small>Check next</small>
+              <strong>{formatNumber(deviceRiskHighCount)}</strong>
+              <small>Risk devices</small>
             </button>
             <button type="button" className="itops-risk-severity itops-risk-severity-medium" onClick={() => openLevel3('risk', 'Medium')}>
               <span>Medium</span>
-              <strong>{formatNumber(risk.totalMedium)}</strong>
-              <small>Monitor</small>
+              <strong>{formatNumber(deviceRiskMediumCount)}</strong>
+              <small>Risk devices</small>
             </button>
           </div>
 
           <div className="itops-risk-driver-mini">
-            <BarList items={riskCategoryRows} limit={4} emptyLabel="No risk cause returned yet." />
+            <BarList items={riskCategoryRows} limit={4} emptyLabel="No device risk cause returned yet." />
           </div>
           <button type="button" className="itops-pro-link-btn itops-pro-link-btn-risk" onClick={() => openLevel2('risk')}>Open risk <ChevronRight size={15} /></button>
         </Panel>
 
-        <Panel title="System Health" subtitle="Simple health by area." icon={BarChart3} className="span-2">
-          <HealthRadar items={domainHealthForMatrix} onOpen={(view) => openLevel2(view)} />
+        <Panel title="Device & Update" subtitle="Device status and update readiness." icon={Laptop} className="span-2 main-device-panel">
+          <div className="itops-main-device-grid">
+            <div className="itops-main-device-stack" aria-label="Device status mix">
+              <div className="itops-main-stack-head">
+                <span>Total Devices</span>
+                <strong>{formatNumber(hardware.totalDevices)}</strong>
+              </div>
+              <div className="itops-main-stack-bar" aria-hidden="true">
+                <i className="online" style={{ width: `${clampPercent(endpointOnlinePercent)}%` }} />
+                <i className="offline" style={{ width: `${hardware.totalDevices > 0 ? clampPercent((hardware.offlineDevices / hardware.totalDevices) * 100) : 0}%` }} />
+                <i className="old" style={{ width: `${hardware.totalDevices > 0 ? clampPercent((hardware.staleSync / hardware.totalDevices) * 100) : 0}%` }} />
+              </div>
+              <div className="itops-main-stack-legend">
+                <span><i className="online" />Online</span>
+                <span><i className="offline" />Offline</span>
+                <span><i className="old" />Old data</span>
+              </div>
+            </div>
+
+            <div className="itops-main-bar-list">
+              {overviewDeviceRows.map((row) => {
+                const percent = clampPercent(row.percent ?? row.value);
+                return (
+                  <button type="button" key={`main-device-${row.name}`} className={`itops-main-bar-row ${row.tone || 'blue'}`} onClick={() => openLevel3(row.name.includes('Update') || row.name === 'Updated' ? 'patch' : 'hardware', row.name)}>
+                    <div>
+                      <span>{row.name}</span>
+                      <strong>{formatNumber(row.value)}</strong>
+                    </div>
+                    <em><i style={{ width: `${percent}%` }} /></em>
+                    <b>{formatPercent(percent, 0)}</b>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </Panel>
 
-        <Panel title="Data Check" subtitle="Shows if the dashboard data is ready to use." icon={Gauge}>
-          <DataConfidenceCard score={dataConfidenceScore} rows={dataConfidenceRows} onOpen={() => openLevel2('dataConfidence')} />
+        <Panel title="Branch Check" subtitle="Branches with the lowest score appear first." icon={Users}>
+          <div className="itops-main-branch-list">
+            {overviewBranchRows.map((row) => {
+              const percent = clampPercent(row.percent ?? row.value);
+              return (
+                <button type="button" key={`main-branch-${row.name}`} className={`itops-main-branch-row ${healthStatus(percent).toLowerCase()}`} onClick={() => openLevel3('departments', row.name)}>
+                  <div>
+                    <strong>{row.name}</strong>
+                    <span>{row.value > 0 ? `${formatNumber(row.value)} open ticket(s)` : 'Branch score'}</span>
+                  </div>
+                  <em>{formatPercent(percent, 0)}</em>
+                </button>
+              );
+            })}
+            {!overviewBranchRows.length && <EmptyState label="No branch score yet." />}
+          </div>
         </Panel>
       </section>
     </>
@@ -2361,23 +2447,32 @@ export default function ITOperationsDashboard() {
 
   const resolveRiskFindingRows = useCallback((item = '') => {
     const selected = String(item || '').trim().toLowerCase();
-    if (!selected || ['critical risk', 'risk', 'all risk', 'all'].includes(selected)) return risk.topFindings;
+    const rows: RiskFindingRow[] = riskCategoryRows.map((row) => ({
+      id: `device-risk-${row.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      module: 'Device Risk',
+      title: row.name,
+      count: numberOrFallback(row.value),
+      severity: row.name.toLowerCase().includes('eol') || row.name.toLowerCase().includes('eos') ? 'Critical' : 'High',
+      recommendation: row.name.toLowerCase().includes('eol') || row.name.toLowerCase().includes('eos')
+        ? 'Check OS lifecycle status and plan upgrade/replacement.'
+        : 'Review Management Policy score and assigned threshold.',
+    }));
 
-    return risk.topFindings.filter((finding) => {
-      const rowText = [finding.title, finding.module, finding.severity, finding.recommendation].filter(Boolean).join(' ').toLowerCase();
-      if (['critical', 'high', 'medium', 'low'].includes(selected)) return String(finding.severity || '').toLowerCase() === selected;
-      if (selected.includes('hardware') || selected.includes('device')) return /hardware|device|endpoint/i.test(`${finding.module} ${finding.title}`);
-      if (selected.includes('network')) return /network|ip|subnet/i.test(`${finding.module} ${finding.title}`);
-      if (selected.includes('security update') || selected.includes('critical update')) return /patch|update|vulnerab/i.test(`${finding.module} ${finding.title}`);
-      if (selected.includes('failed job')) return /task|job|automation/i.test(`${finding.module} ${finding.title}`);
+    if (!selected || ['critical risk', 'device risk', 'risk', 'all risk', 'all'].includes(selected)) return rows;
+
+    return rows.filter((row) => {
+      const rowText = [row.title, row.module, row.severity, row.recommendation].join(' ').toLowerCase();
+      if (['critical', 'high', 'medium', 'low'].includes(selected)) return String(row.severity || '').toLowerCase() === selected;
+      if (selected.includes('eol') || selected.includes('eos') || selected.includes('lifecycle')) return row.title.toLowerCase().includes('eol') || row.title.toLowerCase().includes('eos');
+      if (selected.includes('policy') || selected.includes('score') || selected.includes('management')) return row.title.toLowerCase().includes('policy');
       return rowText.includes(selected);
     });
-  }, [risk.topFindings]);
+  }, [riskCategoryRows]);
 
   const resolveRiskDeviceRows = useCallback((item = '') => {
     const selected = String(item || '').trim().toLowerCase();
-    const baseRows = risk.topHardwareRisk;
-    if (!selected || ['critical risk', 'risk', 'all risk', 'all'].includes(selected)) return baseRows;
+    const baseRows = deviceRiskRows;
+    if (!selected || ['critical risk', 'device risk', 'risk', 'all risk', 'all'].includes(selected)) return baseRows;
 
     return baseRows.filter((device) => {
       const riskLevel = getDeviceRiskLevel(device).toLowerCase();
@@ -2390,21 +2485,18 @@ export default function ITOperationsDashboard() {
         device.osName,
         device.osLifecycleStatus,
         device.osLifecycleSeverity,
+        device.osLifecycleCycle,
+        device.osLifecycleEolDate,
         device.reasons,
+        mainIssue,
       ].filter(Boolean).join(' ').toLowerCase();
 
       if (['critical', 'high', 'medium', 'low'].includes(selected)) return riskLevel === selected;
-      if (selected.includes('hardware risk') || selected.includes('device risk') || selected.includes('endpoint risk')) return true;
-      if (selected.includes('old bios')) return /bios/i.test(rowText);
-      if (selected.includes('os issue') || selected.includes('unsupported') || selected.includes('outdated')) return /os|windows|lifecycle|eol|unsupported|outdated/i.test(`${rowText} ${mainIssue}`);
-      if (selected.includes('old device') || selected.includes('stale')) return /stale|old|not reporting|last seen/i.test(`${rowText} ${mainIssue}`);
-      if (selected.includes('missing')) return /missing|identity|unknown|not mapped/i.test(`${rowText} ${mainIssue}`);
-      if (selected.includes('security update') || selected.includes('critical update')) return /patch|update|vulnerab/i.test(`${rowText} ${mainIssue}`);
-      if (selected.includes('network')) return /network|ip|subnet/i.test(`${rowText} ${mainIssue}`);
-      if (selected.includes('location')) return /geo|location/i.test(`${rowText} ${mainIssue}`);
+      if (selected.includes('eol') || selected.includes('eos') || selected.includes('lifecycle')) return /eol|eos|end of life|end of support|unsupported|outdated|near/i.test(rowText);
+      if (selected.includes('policy') || selected.includes('score') || selected.includes('management')) return numberOrFallback(device.riskScore) > 0;
       return rowText.includes(selected);
     });
-  }, [getDeviceRiskLevel, getDeviceRiskMainIssue, risk.topHardwareRisk]);
+  }, [deviceRiskRows, getDeviceRiskLevel, getDeviceRiskMainIssue]);
 
   const renderRiskDrillTable = (level: 'level2' | 'level3', item = '') => {
     const rows = resolveRiskFindingRows(item);
@@ -2491,7 +2583,7 @@ export default function ITOperationsDashboard() {
             })}
           </tbody>
         </table>
-        {!rows.length && <EmptyState label="No device risk records found for this selection." />}
+        {!rows.length && <EmptyState label="No linked device risk records found for this selection." />}
         <DrilldownTablePagination page={safePage} totalCount={rows.length} pageSize={pageSize} onPageChange={setRiskDetailPage} />
       </div>
     );
@@ -2500,7 +2592,7 @@ export default function ITOperationsDashboard() {
   const resolveHardwareEndpointRows = (item = '') => {
     const baseRows = hardware.endpointRows.length
       ? hardware.endpointRows
-      : risk.topHardwareRisk.map((row) => ({
+      : deviceRiskRows.map((row) => ({
           deviceName: row.deviceName || '-',
           platform: row.platform || row.osName || 'Unknown',
           osName: row.osName || row.platform || 'Unknown',
@@ -3154,7 +3246,7 @@ export default function ITOperationsDashboard() {
             <DrillCard icon={ShieldCheck} label="Security Updates" value={hasSecurityUpdateScore ? formatPercent(securityUpdateScore, 0) : 'Not Checked'} note={`${formatNumber(securityUpdateTotalDevices)} device baseline`} tone="green" onClick={() => openLevel3('patch')} />
             <DrillCard icon={Wrench} label="Automation Jobs" value={formatNumber(tasks.failedTasks)} note="Failed/cancelled jobs and execution trace" tone="red" onClick={() => openLevel3('tasks')} />
             <DrillCard icon={Network} label="Network Coverage" value={formatNumber(network.unregisteredIps)} note="Unregistered IP and workgroup gaps" tone="cyan" onClick={() => openLevel3('network')} />
-            <DrillCard icon={ShieldAlert} label="Critical Risk" value={`${formatNumber(risk.totalCritical)} / ${formatNumber(risk.totalHigh)}`} note="Critical/high findings requiring review" tone="purple" onClick={() => openLevel3('risk')} />
+            <DrillCard icon={ShieldAlert} label="Device Risk" value={formatNumber(deviceRiskCount)} note="EOL/EOS and Management Policy risk" tone="purple" onClick={() => openLevel3('risk')} />
           </div>
           <Panel title="Ticket Movement" subtitle="New, closed and open tickets." icon={Activity}>
             <div className="itops-pro-summary-row">
@@ -3298,13 +3390,14 @@ export default function ITOperationsDashboard() {
       const deviceRiskCount = resolveRiskDeviceRows().length;
       const mainRiskRows = riskCategoryRows.slice(0, 5);
       const maxRiskDriver = Math.max(1, ...mainRiskRows.map((row) => numberOrFallback(row.value)));
+      const hasDeviceRiskRows = deviceRiskCount > 0;
 
       return (
         <div className="itops-pro-drawer-stack">
-          <DrilldownTrace domain="Critical Risk" stage="breakdown" />
+          <DrilldownTrace domain="Device Risk" stage="breakdown" />
           <div className="itops-pro-story-panel">
-            <strong>Critical Risk</strong>
-            <p>Simple view: show what is dangerous, why it is dangerous, and which device needs checking first.</p>
+            <strong>Device Risk</strong>
+            <p>Risk is calculated from device EOL/EOS and the score values set in Management Policy.</p>
           </div>
 
           <div className="itops-critical-risk-layout">
@@ -3313,27 +3406,27 @@ export default function ITOperationsDashboard() {
                 <span><ShieldAlert size={22} /></span>
                 <div>
                   <small>Risk Status</small>
-                  <strong>{formatNumber(risk.score)}<em>/100</em></strong>
-                  <p>{deviceRiskCount ? `${formatNumber(deviceRiskCount)} device risk record(s) need review` : 'No device risk record returned yet'}</p>
+                  <strong>{formatNumber(deviceRiskScore)}<em>/100</em></strong>
+                  <p>{formatNumber(deviceRiskCount)} linked device risk record(s) found • policy based</p>
                 </div>
-                <StatusBadge status={riskStatus(risk.score, 35, 70)} />
+                <StatusBadge status={riskStatus(deviceRiskCount, 1, 6)} />
               </div>
-              <div className="itops-critical-risk-meter" aria-label="Risk score"><i style={{ width: `${clampPercent(risk.score)}%` }} /></div>
+              <div className="itops-critical-risk-meter" aria-label="Risk score"><i style={{ width: `${clampPercent(deviceRiskScore)}%` }} /></div>
               <div className="itops-critical-risk-split">
                 <button type="button" className="critical" onClick={() => openLevel3('risk', 'Critical')}>
-                  <span>Critical</span>
-                  <strong>{formatNumber(risk.totalCritical)}</strong>
-                  <small>{formatNumber(criticalDeviceCount)} device(s)</small>
+                  <span>Critical Devices</span>
+                  <strong>{formatNumber(criticalDeviceCount)}</strong>
+                  <small>Linked device rows</small>
                 </button>
                 <button type="button" className="high" onClick={() => openLevel3('risk', 'High')}>
-                  <span>High</span>
-                  <strong>{formatNumber(risk.totalHigh)}</strong>
-                  <small>{formatNumber(highDeviceCount)} device(s)</small>
+                  <span>High Devices</span>
+                  <strong>{formatNumber(highDeviceCount)}</strong>
+                  <small>Linked device rows</small>
                 </button>
                 <button type="button" className="device" onClick={() => openLevel3('risk', 'Device Risk')}>
-                  <span>Devices At Risk</span>
+                  <span>Total At Risk</span>
                   <strong>{formatNumber(deviceRiskCount)}</strong>
-                  <small>Open device list</small>
+                  <small>{hasDeviceRiskRows ? 'Open device list' : 'No device from policy'}</small>
                 </button>
               </div>
             </section>
@@ -3342,7 +3435,7 @@ export default function ITOperationsDashboard() {
               <div className="itops-critical-risk-driver-head">
                 <div>
                   <small>Main Causes</small>
-                  <strong>Top risk reasons</strong>
+                  <strong>Top risk causes</strong>
                 </div>
                 <button type="button" onClick={() => openLevel3('risk')}>View All</button>
               </div>
@@ -3351,17 +3444,26 @@ export default function ITOperationsDashboard() {
                   const value = numberOrFallback(row.value);
                   return (
                     <button type="button" key={`risk-cause-${row.name}`} onClick={() => openLevel3('risk', row.name)}>
-                      <div><strong>{row.name}</strong><span>{formatNumber(value)} item(s)</span></div>
+                      <div><strong>{row.name}</strong><span>{formatNumber(value)} record(s)</span></div>
                       <em><i style={{ width: `${Math.max(6, (value / maxRiskDriver) * 100)}%` }} /></em>
                     </button>
                   );
-                }) : <EmptyState label="No risk cause breakdown yet." />}
+                }) : <EmptyState label="No EOL/EOS or Management Policy cause returned yet." />}
               </div>
             </section>
           </div>
 
-          <Panel title="Device Risk List" subtitle="Click a device to see the reason behind the risk." icon={Laptop}>{renderEndpointRiskDrillTable('level2')}</Panel>
-          <Panel title="Risk Issues" subtitle="Issue summary. Click an issue to filter details." icon={ShieldAlert}>{renderRiskDrillTable('level2')}</Panel>
+          {hasDeviceRiskRows ? (
+            <Panel title="Device Risk List" subtitle="Devices listed from EOL/EOS and Management Policy scoring." icon={Laptop}>{renderEndpointRiskDrillTable('level2')}</Panel>
+          ) : (
+            <Panel title="Device Risk" subtitle="Device rows appear when EOL/EOS or policy evidence reaches the risk threshold." icon={Laptop}>
+              <div className="itops-risk-empty-note">
+                <strong>No device risk from current policy.</strong>
+                <p>Either no device meets the EOL/EOS criteria, or the Management Policy score values are below the risk threshold.</p>
+              </div>
+            </Panel>
+          )}
+          <Panel title="Device Risk Causes" subtitle="Only EOL/EOS and Management Policy score causes are shown here." icon={ShieldAlert}>{renderRiskDrillTable('level2')}</Panel>
         </div>
       );
     }
@@ -3601,36 +3703,43 @@ export default function ITOperationsDashboard() {
       const selectedRiskFindings = resolveRiskFindingRows(item);
       const selectedCriticalDevices = selectedRiskDevices.filter((device) => getDeviceRiskLevel(device) === 'Critical').length;
       const selectedHighDevices = selectedRiskDevices.filter((device) => getDeviceRiskLevel(device) === 'High').length;
-      const selectedBranchCount = new Set(selectedRiskDevices.map((device) => device.department || 'Unmapped')).size;
+      const selectedBranchCount = selectedRiskDevices.length ? new Set(selectedRiskDevices.map((device) => device.department || 'Unmapped')).size : 0;
+      const hasLinkedDeviceRows = selectedRiskDevices.length > 0;
       const selectedAction = selectedCriticalDevices > 0
-        ? 'Check critical devices first.'
+        ? 'Check critical linked devices first.'
         : selectedHighDevices > 0
-          ? 'Review high risk devices next.'
-          : selectedRiskDevices.length > 0
+          ? 'Review high risk linked devices next.'
+          : hasLinkedDeviceRows
             ? 'Monitor and confirm the reason listed in the table.'
-            : 'No matching device risk record for this selection.';
+            : selectedRiskFindings.length > 0
+              ? 'Review the risk cause summary and validate the Management Policy value.'
+              : 'No matching device risk record for this selection.';
 
       return (
         <div className="itops-pro-drawer-stack itops-risk-detail-stack">
-          <div className="itops-pro-story-panel level3"><strong>Risk Details</strong><p>Selected: {selectedLabel}. This view shows affected devices first, then the issue summary.</p></div>
+          <div className="itops-pro-story-panel level3"><strong>Device Risk Details</strong><p>Selected: {selectedLabel}. Device risk is based on EOL/EOS and Management Policy score values.</p></div>
           <div className="itops-pro-summary-row five">
-            <MiniMetric label="Selected Devices" value={formatNumber(selectedRiskDevices.length)} tone="blue" />
-            <MiniMetric label="Critical" value={formatNumber(selectedCriticalDevices)} tone="red" />
-            <MiniMetric label="High" value={formatNumber(selectedHighDevices)} tone="amber" />
+            <MiniMetric label="Devices" value={formatNumber(selectedRiskDevices.length)} tone="blue" />
+            <MiniMetric label="Critical Devices" value={formatNumber(selectedCriticalDevices)} tone="red" />
+            <MiniMetric label="High Devices" value={formatNumber(selectedHighDevices)} tone="amber" />
             <MiniMetric label="Branches" value={formatNumber(selectedBranchCount)} tone="purple" />
-            <MiniMetric label="Issues" value={formatNumber(selectedRiskFindings.length)} tone="cyan" />
+            <MiniMetric label="Causes" value={formatNumber(selectedRiskFindings.length)} tone="cyan" />
           </div>
-          <Panel title="Device Risk Details" subtitle="Device list for this selected risk item." icon={Laptop}>{renderEndpointRiskDrillTable('level3', item)}</Panel>
+          {hasLinkedDeviceRows ? (
+            <Panel title="Device Risk Details" subtitle="Devices that meet the selected policy/lifecycle risk condition." icon={Laptop}>{renderEndpointRiskDrillTable('level3', item)}</Panel>
+          ) : (
+            <Panel title="Device Risk Cause Details" subtitle="No linked device rows matched this selection; showing device-only policy/lifecycle causes." icon={ShieldAlert}>{renderRiskDrillTable('level3', item)}</Panel>
+          )}
           <div className="itops-risk-detail-lower-grid">
             <section className="itops-risk-detail-card action">
               <div className="itops-risk-detail-card-head">
                 <span>Next Action</span>
-                <strong>{selectedCriticalDevices > 0 || selectedHighDevices > 0 ? 'Check Now' : 'Monitor'}</strong>
+                <strong>{selectedCriticalDevices > 0 || selectedHighDevices > 0 || selectedRiskFindings.length > 0 ? 'Check Now' : 'Monitor'}</strong>
               </div>
               <p>{selectedAction}</p>
               <div className="itops-risk-detail-mini-grid">
-                <div><span>Risk Score</span><strong>{formatNumber(risk.score)}/100</strong></div>
-                <div><span>Total Risk</span><strong>{formatNumber(risk.totalRiskItems)}</strong></div>
+                <div><span>Risk Score</span><strong>{formatNumber(deviceRiskScore)}/100</strong></div>
+                <div><span>Risk Devices</span><strong>{formatNumber(deviceRiskCount)}</strong></div>
               </div>
             </section>
             <section className="itops-risk-detail-card causes">
@@ -3649,7 +3758,7 @@ export default function ITOperationsDashboard() {
               </div>
             </section>
           </div>
-          <Panel title="Risk Issues" subtitle="Issue summary for this selected risk item." icon={ShieldAlert}>{renderRiskDrillTable('level3', item)}</Panel>
+          {hasLinkedDeviceRows && <Panel title="Device Risk Causes" subtitle="Cause summary for this selected device risk item." icon={ShieldAlert}>{renderRiskDrillTable('level3', item)}</Panel>}
         </div>
       );
     }
@@ -8528,6 +8637,30 @@ body.itops-dashboard-page-active .router-content {
   background: linear-gradient(90deg, #be123c, #f97316, #facc15);
 }
 
+.itops-risk-empty-note {
+  padding: 16px 18px;
+  border: 1px dashed rgba(148, 163, 184, 0.62);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 96% 0%, rgba(124, 58, 237, 0.10), transparent 34%),
+    linear-gradient(135deg, #ffffff, #f8fafc);
+}
+
+.itops-risk-empty-note strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.itops-risk-empty-note p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+  font-weight: 760;
+}
+
 .itops-risk-detail-stack { gap: 12px !important; }
 
 .itops-risk-detail-lower-grid {
@@ -9040,6 +9173,201 @@ body.itops-dashboard-page-active .router-content {
   .itops-main-ready-list { grid-template-columns: 1fr; }
   .itops-main-bar-row { grid-template-columns: 1fr; }
   .itops-main-health-card { min-height: 170px; }
+}
+
+
+/* FINAL: Header title and KPI cards use the coloured dashboard-card style from the reference image */
+.itops-pro-hero {
+  padding: 24px 26px !important;
+  border-radius: 26px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  background:
+    radial-gradient(circle at 88% -18%, rgba(255, 255, 255, 0.22) 0 118px, transparent 120px),
+    radial-gradient(circle at -8% 108%, rgba(34, 211, 238, 0.22) 0 82px, transparent 84px),
+    linear-gradient(135deg, #7547ff 0%, #5b3ee4 42%, #111827 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 22px 52px rgba(49, 46, 129, 0.24) !important;
+  overflow: hidden !important;
+}
+
+.itops-pro-hero:before { display: none !important; }
+.itops-pro-hero h1 { color: #ffffff !important; }
+.itops-pro-hero p { color: rgba(255, 255, 255, 0.86) !important; }
+.itops-pro-overline { color: rgba(255, 255, 255, 0.86) !important; }
+.itops-pro-hero-meta span {
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.20) !important;
+  backdrop-filter: blur(12px) !important;
+}
+.itops-pro-hero .itops-pro-outline-btn {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.10) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+.itops-pro-hero .itops-pro-primary-btn {
+  color: #4338ca !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.94) !important;
+}
+
+.itops-main-kpi-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi {
+  position: relative !important;
+  min-height: 148px !important;
+  padding: 16px 17px !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  border-radius: 24px !important;
+  color: #ffffff !important;
+  overflow: hidden !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16) !important;
+  isolation: isolate !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.18), transparent 42%),
+    radial-gradient(circle at 76% 2%, rgba(255, 255, 255, 0.16), transparent 28%);
+  pointer-events: none;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi::after {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -48px;
+  width: 138px;
+  height: 138px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+  filter: blur(0.2px);
+  pointer-events: none;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-blue {
+  background:
+    radial-gradient(circle at 92% -10%, rgba(125, 211, 252, 0.36), transparent 30%),
+    radial-gradient(circle at 0% 105%, rgba(168, 85, 247, 0.32), transparent 34%),
+    linear-gradient(135deg, #0f172a 0%, #1d4ed8 48%, #06b6d4 100%) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-green {
+  background:
+    radial-gradient(circle at 92% -10%, rgba(190, 242, 100, 0.36), transparent 30%),
+    radial-gradient(circle at -8% 110%, rgba(20, 184, 166, 0.34), transparent 34%),
+    linear-gradient(135deg, #042f2e 0%, #0f766e 50%, #84cc16 100%) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-red {
+  background:
+    radial-gradient(circle at 92% -10%, rgba(251, 146, 60, 0.38), transparent 31%),
+    radial-gradient(circle at -6% 105%, rgba(217, 70, 239, 0.30), transparent 34%),
+    linear-gradient(135deg, #3b0764 0%, #be123c 52%, #fb923c 100%) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-amber {
+  background:
+    radial-gradient(circle at 92% -10%, rgba(253, 224, 71, 0.34), transparent 30%),
+    radial-gradient(circle at -8% 110%, rgba(244, 63, 94, 0.26), transparent 36%),
+    linear-gradient(135deg, #1f1306 0%, #92400e 48%, #f59e0b 100%) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-purple {
+  background:
+    radial-gradient(circle at 92% -10%, rgba(244, 114, 182, 0.38), transparent 31%),
+    radial-gradient(circle at -8% 108%, rgba(56, 189, 248, 0.24), transparent 34%),
+    linear-gradient(135deg, #1e1b4b 0%, #6d28d9 50%, #ec4899 100%) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-cyan {
+  background:
+    radial-gradient(circle at 92% -10%, rgba(45, 212, 191, 0.38), transparent 31%),
+    radial-gradient(circle at -8% 110%, rgba(99, 102, 241, 0.30), transparent 34%),
+    linear-gradient(135deg, #082f49 0%, #0e7490 48%, #14b8a6 100%) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-slate {
+  background:
+    radial-gradient(circle at 92% -10%, rgba(148, 163, 184, 0.35), transparent 31%),
+    radial-gradient(circle at -8% 110%, rgba(45, 212, 191, 0.24), transparent 34%),
+    linear-gradient(135deg, #020617 0%, #334155 48%, #0f766e 100%) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 14px !important;
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 1px solid rgba(255, 255, 255, 0.24) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(8px);
+}
+
+.itops-main-kpi-grid .itops-pro-status {
+  min-height: 22px !important;
+  padding: 0 8px !important;
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 1px solid rgba(255, 255, 255, 0.20) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(8px);
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-label,
+.itops-main-kpi-grid .itops-pro-kpi strong,
+.itops-main-kpi-grid .itops-pro-kpi small {
+  color: #ffffff !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-label {
+  opacity: 0.78 !important;
+  letter-spacing: 0.09em !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi strong {
+  margin-top: 5px !important;
+  font-size: 27px !important;
+  text-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+}
+
+.itops-main-kpi-grid .itops-pro-kpi small {
+  min-height: 31px !important;
+  margin-top: 7px !important;
+  opacity: 0.86 !important;
+}
+
+.itops-main-kpi-grid .itops-pro-progress {
+  height: 6px !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-progress i {
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 22px 52px rgba(15, 23, 42, 0.22) !important;
+}
+
+.itops-main-kpi-grid .itops-pro-kpi-top { margin-bottom: 10px !important; }
+
+@media (max-width: 1600px) {
+  .itops-main-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+
+@media (max-width: 760px) {
+  .itops-main-kpi-grid { grid-template-columns: 1fr !important; }
 }
 
 `;

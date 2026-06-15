@@ -1098,7 +1098,9 @@ app.post("/api/auth/login", async (req, res) => {
 
             return res.json({
                 success: true,
-                data: loginPayload
+                data: loginPayload,
+                token: loginPayload.token,
+                user: loginPayload.user
             });
         }
 
@@ -1197,34 +1199,38 @@ app.post("/api/auth/login", async (req, res) => {
         const displayName = user.HdUsername || user.UserID;
         const permissions = buildPermissionsByRole(role);
 
+        const legacyLoginPayload = {
+            token: accessToken,
+            user: {
+                id: user.HdUserId || user.Console_Idn,
+                console_Idn: user.Console_Idn,
+                hdUserId: user.HdUserId || null,
+                authSource: "LEGACY",
+
+                userID: user.UserID,
+                username: user.HdUsername || user.UserID,
+                name: displayName,
+                email: user.HdEmail || "",
+
+                role: role,
+                roles: [role],
+                department: user.HdDepartment || "",
+                status: user.HdStatus || "Active",
+                isActive: user.HdStatus === "Active" || !user.HdStatus,
+
+                menuIndex: user.MenuIndex,
+                permissions: permissions,
+                allowedModules: ["*"],
+                allowedRoutes: ["*"],
+                moduleAccess: { "*": { view: true } }
+            }
+        };
+
         return res.json({
             success: true,
-            data: {
-                token: accessToken,
-                user: {
-                    id: user.HdUserId || user.Console_Idn,
-                    console_Idn: user.Console_Idn,
-                    hdUserId: user.HdUserId || null,
-                    authSource: "LEGACY",
-
-                    userID: user.UserID,
-                    username: user.HdUsername || user.UserID,
-                    name: displayName,
-                    email: user.HdEmail || "",
-
-                    role: role,
-                    roles: [role],
-                    department: user.HdDepartment || "",
-                    status: user.HdStatus || "Active",
-                    isActive: user.HdStatus === "Active" || !user.HdStatus,
-
-                    menuIndex: user.MenuIndex,
-                    permissions: permissions,
-                    allowedModules: ["*"],
-                    allowedRoutes: ["*"],
-                    moduleAccess: { "*": { view: true } }
-                }
-            }
+            data: legacyLoginPayload,
+            token: legacyLoginPayload.token,
+            user: legacyLoginPayload.user
         });
 
     } catch (err) {
@@ -19371,6 +19377,33 @@ const EMA_FEATURED_REPORT_ALIASES = {
     category: "Featured Reports",
     categoryDesc: "Curated management-ready report packs.",
     icon: "software"
+  },
+  "compliance-report": {
+    targetId: "dynamic-compliance-report",
+    canonicalId: "dynamic-compliance-report",
+    title: "Compliance Report",
+    description: "Gemini Flash generated compliance report with posture analysis, exception evidence and governance action plan.",
+    category: "Dynamic Reporting",
+    categoryDesc: "Gemini Flash generated compliance, cost saving and risk management reports.",
+    icon: "shield"
+  },
+  "cost-saving-report": {
+    targetId: "dynamic-cost-saving-report",
+    canonicalId: "dynamic-cost-saving-report",
+    title: "Cost Saving Report",
+    description: "Gemini Flash generated cost saving report for refresh planning, software rationalisation and operational optimisation.",
+    category: "Dynamic Reporting",
+    categoryDesc: "Gemini Flash generated compliance, cost saving and risk management reports.",
+    icon: "chart"
+  },
+  "risk-management-report": {
+    targetId: "dynamic-risk-management-report",
+    canonicalId: "dynamic-risk-management-report",
+    title: "Risk Management Report",
+    description: "Gemini Flash generated risk management report with severity view, business impact and remediation priorities.",
+    category: "Dynamic Reporting",
+    categoryDesc: "Gemini Flash generated compliance, cost saving and risk management reports.",
+    icon: "shield"
   }
 };
 
@@ -19385,7 +19418,8 @@ function erResolveReport(reportId) {
   const target = alias.targetId ? erReportById.get(alias.targetId) : null;
   return {
     ...(target || {}),
-    id: rawId,
+    id: alias.canonicalId || rawId,
+    requestedId: rawId,
     title: alias.title || target?.title || rawId,
     description: alias.description || target?.description || "Report generated from EMA operational data.",
     type: alias.type || target?.type || "Summary",
@@ -19394,8 +19428,69 @@ function erResolveReport(reportId) {
     category: alias.category || target?.category || "Featured Reports",
     categoryDesc: alias.categoryDesc || target?.categoryDesc || "Curated management-ready report packs.",
     icon: alias.icon || target?.icon || "chart",
-    sourceReportId: alias.targetId || null
+    sourceReportId: alias.targetId || target?.id || null
   };
+}
+
+
+const ER_FEATURED_REPORT_IDS = [
+  "ai-executive-summary",
+  "client-summary-rnr",
+  "hardware-asset-lifecycle",
+  "operations-health-sla",
+  "security-compliance-exposure",
+  "software-application-governance"
+];
+
+const ER_DYNAMIC_REPORT_IDS = [
+  "dynamic-compliance-report",
+  "dynamic-cost-saving-report",
+  "dynamic-risk-management-report"
+];
+
+function erBuildSidebarReportItem(reportId) {
+  const report = erResolveReport(reportId);
+  const isDynamic = erIsDynamicAiReport(report);
+  return {
+    id: report.id,
+    requestedId: report.requestedId || report.id,
+    title: report.title,
+    description: report.description,
+    type: report.type,
+    source: report.source,
+    outputs: report.outputs || ["PDF"],
+    category: report.category,
+    categoryDesc: report.categoryDesc,
+    icon: report.icon || "chart",
+    aiGenerated: isDynamic,
+    aiEngine: isDynamic ? "Gemini Flash" : null
+  };
+}
+
+function erBuildReportSidebarGroups() {
+  const featuredItems = ER_FEATURED_REPORT_IDS.map(erBuildSidebarReportItem);
+  const dynamicItems = ER_DYNAMIC_REPORT_IDS.map(erBuildSidebarReportItem);
+
+  return [
+    {
+      id: "featured-reports",
+      name: "Featured Reports",
+      desc: "Curated management-ready report packs.",
+      icon: "chart",
+      count: featuredItems.length,
+      items: featuredItems
+    },
+    {
+      id: "dynamic-reporting",
+      name: "Dynamic Reporting",
+      desc: "Gemini Flash generated compliance, cost saving and risk management reports.",
+      icon: "chart",
+      count: dynamicItems.length,
+      aiGenerated: true,
+      aiEngine: "Gemini Flash",
+      items: dynamicItems
+    }
+  ];
 }
 
 function erText(value, fallback = "") {
@@ -20865,6 +20960,88 @@ function erFindingsForReport(report, data, filters = {}) {
     case "hardware-asset-lifecycle":
       return erBuildHardwareReportSections(data, filters);
 
+    case "dynamic-compliance-report": {
+      const complianceEndpointRows = d.topEndpointRows.filter((row) => row.riskScore > 0);
+      const complianceIssues = complianceEndpointRows.length + d.unauthorizedSoftwareRows.length + d.unsupportedOsRows.length + d.slaRows.length;
+      return [
+        erKpiSection("Gemini Flash Compliance Snapshot", [
+          { label: "Compliance Evidence", value: complianceIssues, note: "Endpoint, software, OS, SLA and data-quality evidence rows." },
+          { label: "Endpoint Risk Rows", value: complianceEndpointRows.length, note: "Endpoint records with measurable compliance risk indicators." },
+          { label: "Software Review", value: d.unauthorizedSoftwareRows.length, note: "Software rows requiring governance or compliance review." },
+          { label: "SLA Exposure", value: d.slaRows.length, note: "Open SLA breach candidate tickets." }
+        ]),
+        erBarSection("Compliance Evidence Mix", [
+          { label: "Endpoint risk", value: complianceEndpointRows.length },
+          { label: "Unsupported OS", value: d.unsupportedOsRows.length },
+          { label: "Software review", value: d.unauthorizedSoftwareRows.length },
+          { label: "SLA exposure", value: d.slaRows.length },
+          { label: "Data quality", value: d.dataQualityRows.length }
+        ]),
+        erBarSection("Software Governance Category", d.softwareByCategory),
+        erRiskSection("Compliance Risk Register", erRiskRows(metrics)),
+        erTableSection("Endpoint Compliance Evidence", complianceEndpointRows.slice(0, 120), endpointRiskCols),
+        erTableSection("Unsupported OS / Platform Evidence", d.unsupportedOsRows.slice(0, 120), endpointCols),
+        erTableSection("Software Governance Evidence", d.unauthorizedSoftwareRows.slice(0, 150), softwareCols),
+        erTableSection("SLA Compliance Evidence", d.slaRows.slice(0, 120), ticketCols),
+        erTableSection("Data Quality Evidence", d.dataQualityRows.slice(0, 120), ["deviceName", "source", "site", "platform", "model", "ipAddress", "status", "lastSeen"])
+      ];
+    }
+
+    case "dynamic-cost-saving-report": {
+      const rnr = erBuildRnrDerivedRows(data, d);
+      const rationalisationRows = [
+        ...d.outdatedSoftwareRows.slice(0, 150),
+        ...d.unauthorizedSoftwareRows.slice(0, 150)
+      ];
+      return [
+        erKpiSection("Gemini Flash Cost Saving Snapshot", [
+          { label: "Endpoint Baseline", value: metrics.totalEndpoints, note: "Unified endpoint estate for optimisation review." },
+          { label: "Refresh Candidates", value: d.replacementRows.length, note: "Stale, offline, unmapped or incomplete hardware evidence." },
+          { label: "Software Names", value: metrics.distinctSoftware, note: "Distinct software names for rationalisation review." },
+          { label: "Cleanup Candidates", value: d.staleRows.length + d.outdatedSoftwareRows.length, note: "Stale endpoints plus outdated software evidence." }
+        ]),
+        erBarSection("Cost Saving Opportunity Mix", [
+          { label: "Stale endpoints", value: d.staleRows.length },
+          { label: "Refresh candidates", value: d.replacementRows.length },
+          { label: "Outdated software", value: d.outdatedSoftwareRows.length },
+          { label: "Duplicate IP groups", value: d.duplicateIpRows.length },
+          { label: "Missing model", value: metrics.missingModel }
+        ]),
+        erBarSection("Resource Planning by Brand", rnr.byBrand),
+        erBarSection("Endpoint Type Baseline", rnr.byEndpointType),
+        erTableSection("Replacement Candidate Evidence", d.replacementRows.slice(0, 150), ["deviceName", "source", "site", "platform", "model", "status", "reason", "priorityScore"]),
+        erTableSection("Software Rationalisation Evidence", rationalisationRows.slice(0, 150), softwareCols),
+        erTableSection("Resource Planning Brand Detail", rnr.resourcePlanningBrandRows, ["brand", "totalEndpoint", "laptop", "desktop", "agingCandidate", "recommendedAction"]),
+        erTableSection("Data Cleanup Evidence", d.dataQualityRows.slice(0, 120), ["deviceName", "source", "site", "platform", "model", "ipAddress", "status", "lastSeen"])
+      ];
+    }
+
+    case "dynamic-risk-management-report": {
+      const highRiskRows = d.topEndpointRows.filter((row) => row.riskScore >= 60);
+      const mediumRiskRows = d.topEndpointRows.filter((row) => row.riskScore > 0 && row.riskScore < 60);
+      return [
+        erKpiSection("Gemini Flash Risk Management Snapshot", [
+          { label: "High Risk Endpoints", value: highRiskRows.length, note: "Endpoint evidence with risk score 60 and above." },
+          { label: "SLA Breach", value: d.slaRows.length, note: "Open tickets past SLA due date." },
+          { label: "Duplicate IP Groups", value: d.duplicateIpRows.length, note: `${metrics.duplicateIpImpacted} impacted endpoint record(s).` },
+          { label: "Data Quality Issues", value: metrics.missingIp + metrics.missingModel + metrics.missingMapping, note: "Missing IP, model or site mapping evidence." }
+        ]),
+        erBarSection("Risk Exposure Mix", [
+          { label: "High risk endpoints", value: highRiskRows.length },
+          { label: "Medium risk endpoints", value: mediumRiskRows.length },
+          { label: "SLA breach", value: d.slaRows.length },
+          { label: "Duplicate IP", value: d.duplicateIpRows.length },
+          { label: "Unsupported OS", value: d.unsupportedOsRows.length }
+        ]),
+        erRiskSection("Management Risk Register", erRiskRows(metrics).filter((row) => row.severity !== "Low")),
+        erTableSection("High Risk Endpoint Evidence", d.topEndpointRows.filter((row) => row.riskScore > 0).slice(0, 150), endpointRiskCols),
+        erTableSection("SLA Risk Evidence", d.slaRows.slice(0, 150), ticketCols),
+        erTableSection("Duplicate IP Evidence", d.duplicateIpRows.slice(0, 120), ["label", "value"]),
+        erTableSection("Unsupported OS / Platform Evidence", d.unsupportedOsRows.slice(0, 120), endpointCols),
+        erTableSection("Data Quality Risk Evidence", d.dataQualityRows.slice(0, 120), ["deviceName", "source", "site", "platform", "model", "ipAddress", "status", "lastSeen"])
+      ];
+    }
+
     case "client-summary-rnr": {
       const rnr = erBuildRnrDerivedRows(data, d);
       return [
@@ -21923,7 +22100,40 @@ function erReadFilters(req) {
 }
 
 app.get("/api/reports/catalog", authenticateToken, async (req, res) => {
-  return res.json({ success: true, data: EMA_REPORT_CATALOG, reports: erFlattenCatalog() });
+  const sidebarGroups = erBuildReportSidebarGroups();
+  const featuredReports = sidebarGroups.find((group) => group.id === "featured-reports")?.items || [];
+  const dynamicReports = sidebarGroups.find((group) => group.id === "dynamic-reporting")?.items || [];
+
+  return res.json({
+    success: true,
+    data: EMA_REPORT_CATALOG,
+    reports: erFlattenCatalog(),
+    sidebarGroups,
+    featuredReports,
+    dynamicReports,
+    summary: {
+      featuredModules: featuredReports.length,
+      dynamicModules: dynamicReports.length,
+      totalSidebarModules: featuredReports.length + dynamicReports.length,
+      aiEngine: "Gemini Flash",
+      hasGeminiKey: Boolean(process.env.GEMINI_API_KEY)
+    }
+  });
+});
+
+app.get("/api/reports/sidebar", authenticateToken, async (req, res) => {
+  const sidebarGroups = erBuildReportSidebarGroups();
+  return res.json({
+    success: true,
+    data: sidebarGroups,
+    groups: sidebarGroups,
+    summary: {
+      featuredModules: sidebarGroups[0]?.items?.length || 0,
+      dynamicModules: sidebarGroups[1]?.items?.length || 0,
+      aiEngine: "Gemini Flash",
+      hasGeminiKey: Boolean(process.env.GEMINI_API_KEY)
+    }
+  });
 });
 
 app.get("/api/reports/options", authenticateToken, async (req, res) => {
@@ -25805,467 +26015,6 @@ async function getItOpsDepartmentRows(pool) {
     });
 }
 
-async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geolocation, tasks }) {
-    const totalDevices = itopsToNumber(hardware.totalDevices);
-    const defaultAgeLimit = 7;
-
-    let oldBiosDevices = 0;
-    let unsupportedOsDevices = 0;
-    let outdatedOsDevices = 0;
-    let missingHardwareIdentity = 0;
-    let topHardwareRisk = [];
-    let osBreakdown = [];
-    let biosAgeBreakdown = [];
-
-    const hasAssets = await itopsTableExists(pool, "Assets");
-    const hasOsSupport = await itopsTableExists(pool, "OSSupportCache");
-    const hasAssetSettings = await itopsTableExists(pool, "AssetSettings");
-
-    let effectiveAgeLimit = defaultAgeLimit;
-    if (hasAssetSettings) {
-        try {
-            const settingsRes = await pool.request().query("SELECT TOP 1 SettingValue FROM AssetSettings WITH (NOLOCK) WHERE SettingKey = 'PCAgeLimit'");
-            effectiveAgeLimit = parseInt(settingsRes.recordset?.[0]?.SettingValue, 10) || defaultAgeLimit;
-        } catch (err) {
-            console.warn("ITOps risk AssetSettings lookup failed:", err.message || err);
-        }
-    }
-
-    if (hasAssets) {
-        const supportJoin = hasOsSupport
-            ? `
-                LEFT JOIN OSSupportCache osc WITH (NOLOCK)
-                  ON osc.OSKey = CASE
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 7%' THEN '7-sp1'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 8.1%' THEN '8.1'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 8%' THEN '8'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows xp%' THEN '5-sp3'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%vista%' THEN '6-sp2'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 11%24h2%' THEN '11-24h2-w'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 11%23h2%' THEN '11-23h2-w'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 11%22h2%' THEN '11-22h2-w'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 11%' THEN '11-24h2-w'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%22h2%' THEN '10-22h2'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%21h2%' THEN '10-21h2-w'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%21h1%' THEN '10-21h1'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%20h2%' THEN '10-20h2-w'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%' THEN '10-22h2'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%server 2025%' THEN 'server-2025'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%server 2022%' THEN 'server-2022'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%server 2019%' THEN 'server-2019'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%server 2016%' THEN 'server-2016'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%server 2012 r2%' THEN 'server-2012-r2'
-                    WHEN LOWER(ISNULL(a.OS, '')) LIKE '%server 2012%' THEN 'server-2012'
-                    ELSE NULL
-                  END
-            `
-            : "";
-
-        const riskCte = `
-            ;WITH AssetRisk AS (
-                SELECT
-                    a.AssetID,
-                    ISNULL(NULLIF(a.ComputerName, ''), ISNULL(NULLIF(a.AssetTag, ''), a.AssetID)) AS DeviceName,
-                    ISNULL(NULLIF(a.CustomerName, ''), ISNULL(NULLIF(a.Department, ''), 'Unmapped')) AS Department,
-                    ISNULL(NULLIF(a.Model, ''), '-') AS Model,
-                    ISNULL(NULLIF(a.OS, ''), 'Unknown') AS OSName,
-                    ISNULL(NULLIF(a.BiosDate, ''), '-') AS BiosDate,
-                    TRY_CONVERT(int, a.PCAge) AS PCAge,
-                    a.ConnectionTime,
-                    ISNULL(NULLIF(a.AgentStatus, ''), '-') AS AgentStatus,
-                    CASE
-                        WHEN ${hasOsSupport ? "ISNULL(osc.IsEol, 0) = 1 OR " : ""}
-                             LOWER(ISNULL(a.OS, '')) LIKE '%windows 7%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%windows 8%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%windows xp%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%vista%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%server 2003%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%server 2008%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%server 2012%'
-                        THEN 1 ELSE 0
-                    END AS IsUnsupportedOs,
-                    CASE
-                        WHEN ${hasOsSupport ? "osc.EolDate IS NOT NULL AND TRY_CONVERT(date, osc.EolDate) > GETDATE() AND DATEDIFF(month, GETDATE(), TRY_CONVERT(date, osc.EolDate)) <= 24 OR " : ""}
-                             LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%20h2%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%21h1%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%windows 10%21h2%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%windows 11%21h2%'
-                          OR LOWER(ISNULL(a.OS, '')) LIKE '%windows 11%22h2%'
-                        THEN 1 ELSE 0
-                    END AS IsOutdatedOs,
-                    CASE
-                        WHEN TRY_CONVERT(int, a.PCAge) >= @PCAgeLimit
-                          OR (TRY_CONVERT(date, a.BiosDate) IS NOT NULL AND TRY_CONVERT(date, a.BiosDate) < DATEADD(year, -@PCAgeLimit, GETDATE()))
-                        THEN 1 ELSE 0
-                    END AS IsOldBios,
-                    CASE
-                        WHEN NULLIF(LTRIM(RTRIM(ISNULL(a.Model, ''))), '') IS NULL
-                          OR NULLIF(LTRIM(RTRIM(ISNULL(a.ComputerName, ''))), '') IS NULL
-                          OR NULLIF(LTRIM(RTRIM(ISNULL(a.IP, ''))), '') IS NULL
-                        THEN 1 ELSE 0
-                    END AS HasMissingIdentity,
-                    CASE WHEN a.ConnectionTime IS NULL OR a.ConnectionTime < DATEADD(day, -7, GETDATE()) THEN 1 ELSE 0 END AS IsStale
-                FROM Assets a WITH (NOLOCK)
-                ${supportJoin}
-            )
-        `;
-
-        const summaryResult = await pool.request()
-            .input("PCAgeLimit", sql.Int, effectiveAgeLimit)
-            .query(`${riskCte}
-                SELECT
-                    COUNT(1) AS TotalAssets,
-                    SUM(IsOldBios) AS OldBiosDevices,
-                    SUM(IsUnsupportedOs) AS UnsupportedOsDevices,
-                    SUM(IsOutdatedOs) AS OutdatedOsDevices,
-                    SUM(HasMissingIdentity) AS MissingHardwareIdentity,
-                    SUM(IsStale) AS StaleHardwareDevices
-                FROM AssetRisk;
-            `);
-
-        const summary = summaryResult.recordset?.[0] || {};
-        const totalAssetRows = itopsToNumber(summary.TotalAssets) || totalDevices || 1;
-        oldBiosDevices = itopsToNumber(summary.OldBiosDevices);
-        unsupportedOsDevices = itopsToNumber(summary.UnsupportedOsDevices);
-        outdatedOsDevices = itopsToNumber(summary.OutdatedOsDevices);
-        missingHardwareIdentity = itopsToNumber(summary.MissingHardwareIdentity);
-
-        const osResult = await pool.request()
-            .input("PCAgeLimit", sql.Int, effectiveAgeLimit)
-            .query(`${riskCte}
-                SELECT
-                    CASE
-                        WHEN IsUnsupportedOs = 1 THEN 'Critical / Unsupported'
-                        WHEN IsOutdatedOs = 1 THEN 'Watch / Outdated'
-                        WHEN OSName = 'Unknown' THEN 'Unknown OS'
-                        ELSE 'Supported Windows'
-                    END AS Name,
-                    COUNT(1) AS Value
-                FROM AssetRisk
-                GROUP BY CASE
-                    WHEN IsUnsupportedOs = 1 THEN 'Critical / Unsupported'
-                    WHEN IsOutdatedOs = 1 THEN 'Watch / Outdated'
-                    WHEN OSName = 'Unknown' THEN 'Unknown OS'
-                    ELSE 'Supported Windows'
-                END
-                ORDER BY COUNT(1) DESC;
-            `);
-
-        const biosResult = await pool.request()
-            .input("PCAgeLimit", sql.Int, effectiveAgeLimit)
-            .query(`
-                SELECT
-                    CASE
-                        WHEN TRY_CONVERT(int, PCAge) >= @PCAgeLimit
-                          OR (TRY_CONVERT(date, BiosDate) IS NOT NULL AND TRY_CONVERT(date, BiosDate) < DATEADD(year, -@PCAgeLimit, GETDATE()))
-                        THEN 'Old BIOS / lifecycle risk'
-                        WHEN TRY_CONVERT(int, PCAge) BETWEEN 4 AND @PCAgeLimit - 1
-                        THEN 'Watch BIOS age'
-                        WHEN TRY_CONVERT(int, PCAge) IS NULL AND TRY_CONVERT(date, BiosDate) IS NULL
-                        THEN 'Missing BIOS date'
-                        ELSE 'BIOS age OK'
-                    END AS Name,
-                    COUNT(1) AS Value
-                FROM Assets WITH (NOLOCK)
-                GROUP BY CASE
-                    WHEN TRY_CONVERT(int, PCAge) >= @PCAgeLimit
-                      OR (TRY_CONVERT(date, BiosDate) IS NOT NULL AND TRY_CONVERT(date, BiosDate) < DATEADD(year, -@PCAgeLimit, GETDATE()))
-                    THEN 'Old BIOS / lifecycle risk'
-                    WHEN TRY_CONVERT(int, PCAge) BETWEEN 4 AND @PCAgeLimit - 1
-                    THEN 'Watch BIOS age'
-                    WHEN TRY_CONVERT(int, PCAge) IS NULL AND TRY_CONVERT(date, BiosDate) IS NULL
-                    THEN 'Missing BIOS date'
-                    ELSE 'BIOS age OK'
-                END
-                ORDER BY COUNT(1) DESC;
-            `);
-
-        const topResult = await pool.request()
-            .input("PCAgeLimit", sql.Int, effectiveAgeLimit)
-            .query(`${riskCte}
-                SELECT TOP 25
-                    DeviceName,
-                    OSName,
-                    Model,
-                    Department,
-                    BiosDate,
-                    ConnectionTime AS LastSeen,
-                    (
-                        CASE WHEN IsUnsupportedOs = 1 THEN 45 ELSE 0 END
-                        + CASE WHEN IsOldBios = 1 THEN 30 ELSE 0 END
-                        + CASE WHEN IsStale = 1 THEN 18 ELSE 0 END
-                        + CASE WHEN HasMissingIdentity = 1 THEN 12 ELSE 0 END
-                    ) AS RiskScore,
-                    CONCAT(
-                        CASE WHEN IsUnsupportedOs = 1 THEN 'Unsupported OS; ' ELSE '' END,
-                        CASE WHEN IsOldBios = 1 THEN 'Old BIOS; ' ELSE '' END,
-                        CASE WHEN IsStale = 1 THEN 'Stale connection; ' ELSE '' END,
-                        CASE WHEN HasMissingIdentity = 1 THEN 'Missing identity; ' ELSE '' END
-                    ) AS Reasons
-                FROM AssetRisk
-                WHERE IsUnsupportedOs = 1 OR IsOldBios = 1 OR IsStale = 1 OR HasMissingIdentity = 1
-                ORDER BY RiskScore DESC, DeviceName ASC;
-            `);
-
-        osBreakdown = (osResult.recordset || []).map(row => ({
-            name: row.Name,
-            value: itopsToNumber(row.Value),
-            percent: itopsRiskPercent(row.Value, totalAssetRows),
-            tone: row.Name.includes("Critical") ? "critical" : row.Name.includes("Watch") ? "warning" : row.Name.includes("Supported") ? "good" : "neutral"
-        }));
-
-        biosAgeBreakdown = (biosResult.recordset || []).map(row => ({
-            name: row.Name,
-            value: itopsToNumber(row.Value),
-            percent: itopsRiskPercent(row.Value, totalAssetRows),
-            tone: row.Name.includes("Old") ? "critical" : row.Name.includes("Watch") ? "warning" : row.Name.includes("OK") ? "good" : "neutral"
-        }));
-
-        topHardwareRisk = (topResult.recordset || []).map(row => ({
-            deviceName: row.DeviceName || "-",
-            platform: "Windows",
-            model: row.Model || "-",
-            department: row.Department || "Unmapped",
-            lastSeen: itopsDateLabel(row.LastSeen),
-            biosDate: row.BiosDate || "-",
-            osName: row.OSName || "-",
-            riskScore: itopsToNumber(row.RiskScore),
-            reasons: String(row.Reasons || "").replace(/;\\s*$/, "")
-        }));
-    } else if (await itopsTableExists(pool, "TS_OBJECT_ROOT")) {
-        const hasTshiCurrent = await itopsTableExists(pool, "TSHI_OBJECT_CURRENT");
-        const hasTshiValue = await itopsTableExists(pool, "TSHI_OBJECT_VALUE");
-        const hasClientInfo = await itopsTableExists(pool, "TS_CLIENT_INFO");
-        const hasOs = await itopsColumnExists(pool, "TS_OBJECT_ROOT", "OS");
-        const hasOsLower = await itopsColumnExists(pool, "TS_OBJECT_ROOT", "os");
-        const hasOsVersion = await itopsColumnExists(pool, "TS_OBJECT_ROOT", "OS_Version");
-        const hasOsVersionLower = await itopsColumnExists(pool, "TS_OBJECT_ROOT", "os_version");
-
-        const osExpr = hasOs ? "r.OS" : hasOsLower ? "r.os" : hasClientInfo ? "ci.OS_FullName" : "'Windows'";
-        const osVersionExpr = hasOsVersion ? "r.OS_Version" : hasOsVersionLower ? "r.os_version" : "NULL";
-        const biosJoin = hasTshiCurrent && hasTshiValue
-            ? "LEFT JOIN TSHI_OBJECT_CURRENT cur WITH (NOLOCK) ON r.Object_Root_Idn = cur.Object_Root_Idn AND cur.Object_Field_Idn = 14 LEFT JOIN TSHI_OBJECT_VALUE val WITH (NOLOCK) ON val.Object_Value_Idn = cur.Object_Value_Idn"
-            : "";
-        const clientJoin = hasClientInfo
-            ? "LEFT JOIN TS_CLIENT_INFO ci WITH (NOLOCK) ON r.Object_Root_Idn = ci.Object_Root_Idn"
-            : "";
-        const biosExpr = hasTshiCurrent && hasTshiValue ? "val.Object_Value_Str" : "NULL";
-        const serialExpr = hasClientInfo ? "ci.BiosSerialkey" : "NULL";
-
-        const rootResult = await pool.request()
-            .input("PCAgeLimit", sql.Int, effectiveAgeLimit)
-            .query(`
-                ;WITH RootRisk AS (
-                    SELECT
-                        ISNULL(NULLIF(r.ComputerName, ''), r.Object_DeviceID) AS DeviceName,
-                        ISNULL(rel.Object_Full_Name, 'Unmapped') AS Department,
-                        ISNULL(NULLIF(r.Model, ''), '-') AS Model,
-                        ISNULL(NULLIF(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), ''), 'Windows') AS OSName,
-                        ISNULL(NULLIF(${biosExpr}, ''), '-') AS BiosDate,
-                        r.ConnectionTime AS LastSeen,
-                        CASE WHEN r.ConnectionTime IS NULL OR r.ConnectionTime < DATEADD(day, -7, GETDATE()) THEN 1 ELSE 0 END AS IsStale,
-                        CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(r.Model, ''))), '') IS NULL OR NULLIF(LTRIM(RTRIM(ISNULL(r.IP, ''))), '') IS NULL OR NULLIF(LTRIM(RTRIM(ISNULL(${serialExpr}, ''))), '') IS NULL THEN 1 ELSE 0 END AS HasMissingIdentity,
-                        CASE WHEN TRY_CONVERT(date, ${biosExpr}) IS NOT NULL AND TRY_CONVERT(date, ${biosExpr}) < DATEADD(year, -@PCAgeLimit, GETDATE()) THEN 1 ELSE 0 END AS IsOldBios,
-                        CASE
-                            WHEN LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%windows 7%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%windows 8%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%windows xp%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%server 2012%'
-                            THEN 1 ELSE 0
-                        END AS IsUnsupportedOs,
-                        CASE
-                            WHEN LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%20h2%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%21h1%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%21h2%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%22h2%'
-                            THEN 1 ELSE 0
-                        END AS IsOutdatedOs
-                    FROM TS_OBJECT_ROOT r WITH (NOLOCK)
-                    LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON r.Object_Rel_Idn = rel.Object_Rel_Idn
-                    ${biosJoin}
-                    ${clientJoin}
-                )
-                SELECT
-                    COUNT(1) AS TotalAssets,
-                    SUM(IsOldBios) AS OldBiosDevices,
-                    SUM(IsUnsupportedOs) AS UnsupportedOsDevices,
-                    SUM(IsOutdatedOs) AS OutdatedOsDevices,
-                    SUM(HasMissingIdentity) AS MissingHardwareIdentity,
-                    SUM(IsStale) AS StaleHardwareDevices
-                FROM RootRisk;
-            `);
-
-        const summary = rootResult.recordset?.[0] || {};
-        const totalRootRows = itopsToNumber(summary.TotalAssets) || totalDevices || 1;
-        oldBiosDevices = itopsToNumber(summary.OldBiosDevices);
-        unsupportedOsDevices = itopsToNumber(summary.UnsupportedOsDevices);
-        outdatedOsDevices = itopsToNumber(summary.OutdatedOsDevices);
-        missingHardwareIdentity = itopsToNumber(summary.MissingHardwareIdentity);
-
-        osBreakdown = [
-            { name: "Critical / Unsupported", value: unsupportedOsDevices, percent: itopsRiskPercent(unsupportedOsDevices, totalRootRows), tone: "critical" },
-            { name: "Watch / Outdated", value: outdatedOsDevices, percent: itopsRiskPercent(outdatedOsDevices, totalRootRows), tone: "warning" },
-            { name: "Supported / Unknown Windows", value: Math.max(totalRootRows - unsupportedOsDevices - outdatedOsDevices, 0), percent: itopsRiskPercent(Math.max(totalRootRows - unsupportedOsDevices - outdatedOsDevices, 0), totalRootRows), tone: "good" }
-        ];
-
-        biosAgeBreakdown = [
-            { name: "Old BIOS / lifecycle risk", value: oldBiosDevices, percent: itopsRiskPercent(oldBiosDevices, totalRootRows), tone: "critical" },
-            { name: "Missing identity / BIOS", value: missingHardwareIdentity, percent: itopsRiskPercent(missingHardwareIdentity, totalRootRows), tone: "warning" },
-            { name: "BIOS age OK / not flagged", value: Math.max(totalRootRows - oldBiosDevices - missingHardwareIdentity, 0), percent: itopsRiskPercent(Math.max(totalRootRows - oldBiosDevices - missingHardwareIdentity, 0), totalRootRows), tone: "good" }
-        ];
-
-        const rootTopResult = await pool.request()
-            .input("PCAgeLimit", sql.Int, effectiveAgeLimit)
-            .query(`
-                ;WITH RootRisk AS (
-                    SELECT
-                        ISNULL(NULLIF(r.ComputerName, ''), r.Object_DeviceID) AS DeviceName,
-                        ISNULL(rel.Object_Full_Name, 'Unmapped') AS Department,
-                        ISNULL(NULLIF(r.Model, ''), '-') AS Model,
-                        ISNULL(NULLIF(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), ''), 'Windows') AS OSName,
-                        ISNULL(NULLIF(${biosExpr}, ''), '-') AS BiosDate,
-                        r.ConnectionTime AS LastSeen,
-                        CASE WHEN r.ConnectionTime IS NULL OR r.ConnectionTime < DATEADD(day, -7, GETDATE()) THEN 1 ELSE 0 END AS IsStale,
-                        CASE WHEN NULLIF(LTRIM(RTRIM(ISNULL(r.Model, ''))), '') IS NULL OR NULLIF(LTRIM(RTRIM(ISNULL(r.IP, ''))), '') IS NULL OR NULLIF(LTRIM(RTRIM(ISNULL(${serialExpr}, ''))), '') IS NULL THEN 1 ELSE 0 END AS HasMissingIdentity,
-                        CASE WHEN TRY_CONVERT(date, ${biosExpr}) IS NOT NULL AND TRY_CONVERT(date, ${biosExpr}) < DATEADD(year, -@PCAgeLimit, GETDATE()) THEN 1 ELSE 0 END AS IsOldBios,
-                        CASE
-                            WHEN LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%windows 7%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%windows 8%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%windows xp%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%server 2012%'
-                            THEN 1 ELSE 0
-                        END AS IsUnsupportedOs,
-                        CASE
-                            WHEN LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%20h2%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%21h1%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%21h2%'
-                              OR LOWER(ISNULL(CONCAT(${osExpr}, ' ', ISNULL(${osVersionExpr}, '')), '')) LIKE '%22h2%'
-                            THEN 1 ELSE 0
-                        END AS IsOutdatedOs
-                    FROM TS_OBJECT_ROOT r WITH (NOLOCK)
-                    LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON r.Object_Rel_Idn = rel.Object_Rel_Idn
-                    ${biosJoin}
-                    ${clientJoin}
-                )
-                SELECT TOP 25
-                    DeviceName,
-                    OSName,
-                    Model,
-                    Department,
-                    BiosDate,
-                    LastSeen,
-                    (
-                        CASE WHEN IsUnsupportedOs = 1 THEN 45 ELSE 0 END
-                        + CASE WHEN IsOldBios = 1 THEN 30 ELSE 0 END
-                        + CASE WHEN IsStale = 1 THEN 18 ELSE 0 END
-                        + CASE WHEN HasMissingIdentity = 1 THEN 12 ELSE 0 END
-                    ) AS RiskScore,
-                    CONCAT(
-                        CASE WHEN IsUnsupportedOs = 1 THEN 'Unsupported OS; ' ELSE '' END,
-                        CASE WHEN IsOldBios = 1 THEN 'Old BIOS; ' ELSE '' END,
-                        CASE WHEN IsStale = 1 THEN 'Stale connection; ' ELSE '' END,
-                        CASE WHEN HasMissingIdentity = 1 THEN 'Missing identity; ' ELSE '' END
-                    ) AS Reasons
-                FROM RootRisk
-                WHERE IsUnsupportedOs = 1 OR IsOldBios = 1 OR IsStale = 1 OR HasMissingIdentity = 1
-                ORDER BY RiskScore DESC, DeviceName ASC;
-            `);
-
-        topHardwareRisk = (rootTopResult.recordset || []).map(row => ({
-            deviceName: row.DeviceName || "-",
-            platform: "Windows",
-            model: row.Model || "-",
-            department: row.Department || "Unmapped",
-            lastSeen: itopsDateLabel(row.LastSeen),
-            biosDate: row.BiosDate || "-",
-            osName: row.OSName || "-",
-            riskScore: itopsToNumber(row.RiskScore),
-            reasons: String(row.Reasons || "").replace(/;\s*$/, "")
-        }));
-    }
-
-    const staleHardwareDevices = itopsToNumber(hardware.staleSync);
-    const missingGeoDevices = Math.max(totalDevices - itopsToNumber(geolocation.trackedDevices), 0);
-    const staleGeoDevices = itopsToNumber(geolocation.staleLocations);
-    const unknownGeoDevices = itopsToNumber(geolocation.unknownLocations);
-    const patchCriticalItems = itopsToNumber(patchSummary.criticalVulnerabilities);
-    const failedTaskItems = itopsToNumber(tasks.failedTasks);
-    const networkRiskItems = itopsToNumber(network.unregisteredIps);
-    const geolocationRiskItems = missingGeoDevices + staleGeoDevices + unknownGeoDevices;
-    const hardwareRiskItems = oldBiosDevices + unsupportedOsDevices + outdatedOsDevices + staleHardwareDevices + missingHardwareIdentity;
-
-    const totalCritical = patchCriticalItems + unsupportedOsDevices + Math.floor(oldBiosDevices * 0.5) + Math.floor(failedTaskItems * 0.25);
-    const totalHigh = staleHardwareDevices + oldBiosDevices + failedTaskItems + Math.floor(geolocationRiskItems * 0.35) + Math.floor(networkRiskItems * 0.25);
-    const totalMedium = outdatedOsDevices + missingHardwareIdentity + Math.floor(geolocationRiskItems * 0.65) + Math.floor(networkRiskItems * 0.75);
-    const totalRiskItems = hardwareRiskItems + geolocationRiskItems + patchCriticalItems + failedTaskItems + networkRiskItems;
-
-    // Exposure index, not a raw percentage. The old score divided thousands of rows
-    // by total devices and easily forced the gauge to 100/100. This weights each
-    // domain by its own denominator so patch rows, geo rows and task rows do not
-    // overwhelm endpoint count.
-    const endpointExposure = itopsExposureRatio(hardwareRiskItems, totalDevices || hardware.totalDevices || 1);
-    const patchExposure = itopsExposureRatio(patchCriticalItems, patchSummary.missingPatches || patchCriticalItems || 1);
-    const geoExposure = itopsExposureRatio(geolocationRiskItems, Math.max(totalDevices + itopsToNumber(geolocation.trackedDevices), totalDevices, itopsToNumber(geolocation.trackedDevices), 1));
-    const networkExposure = itopsExposureRatio(networkRiskItems, itopsToNumber(network.knownIps) || networkRiskItems || 1);
-    const taskExposure = itopsExposureRatio(failedTaskItems, itopsToNumber(tasks.totalTasks) || failedTaskItems || 1);
-    const score = Math.max(0, Math.min(100, Math.round(
-        endpointExposure * 0.30 +
-        patchExposure * 0.20 +
-        geoExposure * 0.15 +
-        networkExposure * 0.20 +
-        taskExposure * 0.15
-    )));
-
-    const severityTotal = Math.max(totalCritical + totalHigh + totalMedium, 1);
-    const categoryTotal = Math.max(totalRiskItems, 1);
-
-    const topFindings = [
-        { id: "risk-unsupported-os", module: "Hardware / Windows", title: "Unsupported or legacy Windows devices", count: unsupportedOsDevices, severity: itopsRiskSeverityCount(unsupportedOsDevices, 1, 10), recommendation: "Review OS support baseline and plan upgrade or isolation." },
-        { id: "risk-old-bios", module: "Hardware / BIOS", title: "Old BIOS or lifecycle risk devices", count: oldBiosDevices, severity: itopsRiskSeverityCount(oldBiosDevices, 10, 25), recommendation: "Schedule BIOS update or hardware refresh by model." },
-        { id: "risk-location-coverage", module: "Geolocation", title: "Location coverage and freshness risk", count: geolocationRiskItems, severity: itopsRiskSeverityCount(geolocationRiskItems, 50, 250), recommendation: "Refresh MDM location collection and check devices with missing coordinates." },
-        { id: "risk-patch-critical", module: "Patch", title: "Critical missing patch exposure", count: patchCriticalItems, severity: patchCriticalItems > 0 ? "Critical" : "Low", recommendation: "Prioritize critical patch deployment before normal updates." },
-        { id: "risk-failed-tasks", module: "Task List", title: "Stopped or cancelled automation jobs", count: failedTaskItems, severity: itopsRiskSeverityCount(failedTaskItems, 50, 150), recommendation: "Review failed jobs and rerun inventory or remote tasks." },
-        { id: "risk-network-registration", module: "Network", title: "Unregistered network IP records", count: networkRiskItems, severity: itopsRiskSeverityCount(networkRiskItems, 100, 250), recommendation: "Validate unmanaged or unmapped IP records against hardware inventory." }
-    ].filter(item => item.count > 0).sort((a, b) => b.count - a.count);
-
-    return {
-        score,
-        totalRiskItems,
-        totalCritical,
-        totalHigh,
-        totalMedium,
-        hardwareRiskItems,
-        oldBiosDevices,
-        unsupportedOsDevices,
-        outdatedOsDevices,
-        staleHardwareDevices,
-        missingHardwareIdentity,
-        geolocationRiskItems,
-        missingGeoDevices,
-        staleGeoDevices,
-        unknownGeoDevices,
-        patchCriticalItems,
-        failedTaskItems,
-        networkRiskItems,
-        severityBreakdown: [
-            { name: "Critical", value: totalCritical, percent: itopsRiskPercent(totalCritical, severityTotal), tone: "critical" },
-            { name: "High", value: totalHigh, percent: itopsRiskPercent(totalHigh, severityTotal), tone: "warning" },
-            { name: "Medium", value: totalMedium, percent: itopsRiskPercent(totalMedium, severityTotal), tone: "neutral" }
-        ],
-        categoryBreakdown: [
-            { name: "Hardware / Windows / BIOS", value: hardwareRiskItems, percent: itopsRiskPercent(hardwareRiskItems, categoryTotal), tone: hardwareRiskItems ? "critical" : "good" },
-            { name: "Location Coverage / Geolocation", value: geolocationRiskItems, percent: itopsRiskPercent(geolocationRiskItems, categoryTotal), tone: geolocationRiskItems ? "warning" : "good" },
-            { name: "Critical Patch", value: patchCriticalItems, percent: itopsRiskPercent(patchCriticalItems, categoryTotal), tone: patchCriticalItems ? "critical" : "good" },
-            { name: "Task Failures", value: failedTaskItems, percent: itopsRiskPercent(failedTaskItems, categoryTotal), tone: failedTaskItems ? "warning" : "good" },
-            { name: "Network Registration", value: networkRiskItems, percent: itopsRiskPercent(networkRiskItems, categoryTotal), tone: networkRiskItems ? "neutral" : "good" }
-        ],
-        osBreakdown,
-        biosAgeBreakdown,
-        topFindings,
-        topHardwareRisk
-    };
-}
-
 // ============================================================
 // ITOPS DASHBOARD SOURCE-MAPPING OVERRIDES
 // These overrides keep dashboard domains separated by the correct API/source:
@@ -26914,27 +26663,19 @@ async function getItOpsPatchSummary(pool) {
 }
 
 async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geolocation, tasks }) {
-    const [pcAgingRule, managementPolicy] = await Promise.all([
-        itopsReadPcAgingRule(pool),
-        mdLoadManagementPolicy(pool)
-    ]);
+    const managementPolicy = await mdLoadManagementPolicy(pool);
 
     const totalDevices = itopsToNumber(hardware.totalDevices);
-    const endpointStaleDays = Math.max(1, Math.round(mdPolicyNumber(managementPolicy, "telemetry.endpoint.staleDays", 7)));
     const endpointRiskThreshold = Math.max(1, Math.round(mdPolicyNumber(managementPolicy, "score.risk.endpointThreshold", 35)));
     const mediumRiskThreshold = Math.max(endpointRiskThreshold, Math.round(mdPolicyNumber(managementPolicy, "score.risk.mediumThreshold", 40)));
     const highRiskThreshold = Math.max(mediumRiskThreshold, Math.round(mdPolicyNumber(managementPolicy, "score.risk.highThreshold", 70)));
 
-    const agingPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.aging", 0));
-    const monitorPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.monitor", 0));
-    const offlinePenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.offline", 0));
-    const stalePenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.stale", 0));
-    const missingIdentityPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.missingIdentity", 0));
-    const unpricedPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.unpriced", 0));
-    const geoUnknownPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.geo.unknown", 0));
-    const geoStalePenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.geo.stale", 0));
-    const geoMissingPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.geo.missingCoordinate", 0));
-    const networkUnregisteredPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.network.unregistered", 0));
+    // Risk for IT Operations Dashboard is intentionally limited to:
+    // 1) Windows EOL/EOS / Near EOS lifecycle evidence
+    // 2) Score values configured in Settings > Management Policy
+    // Do not mix task, network, geolocation, patch or other operational signals here.
+    const eolEosPolicyScore = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.aging", 0));
+    const nearEosPolicyScore = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.monitor", 0));
 
     const inventoryRows = await itopsGetHardwareInventoryRows(pool).catch((err) => {
         console.warn("ITOps risk hardware inventory lookup failed:", err.message || err);
@@ -26951,76 +26692,30 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
         lifecycleRows = inventoryRows;
     }
 
-    const now = new Date();
-    const staleCutoff = new Date(now.getTime() - endpointStaleDays * 24 * 60 * 60 * 1000);
-    const riskRows = [];
     const osBucket = new Map();
-    const ageBucket = new Map();
-
+    const riskRows = [];
     let unsupportedOsDevices = 0;
     let outdatedOsDevices = 0;
-    let lifecycleUnknownDevices = 0;
-    let oldBiosDevices = 0;
-    let missingHardwareIdentity = 0;
-    let staleHardwareDevices = 0;
 
     for (const asset of lifecycleRows) {
         const lifecycleStatus = itopsText(asset.osLifecycleStatus, "Lifecycle Not Checked");
         const lifecycleSeverity = itopsText(asset.osLifecycleSeverity, "Low");
         const lifecycleLower = itopsLower(lifecycleStatus);
-        const pcAge = itopsPcAgingStatus(asset, pcAgingRule);
-        const lastSeen = itopsDateValue(asset.lastSeen);
-        const statusText = itopsLower(asset.status || asset.connectionStatus || asset.agentStatus);
-        const isOffline = statusText.includes("offline") || statusText.includes("disconnected");
-        const isStaleTelemetry = !lastSeen || lastSeen < staleCutoff;
-        const isStale = isStaleTelemetry || isOffline;
-        const hasMissingIdentity = !itopsText(asset.deviceName) || !itopsText(asset.model) || asset.model === "-" || !itopsText(asset.ipAddress);
-        const pricingText = itopsLower(asset.pricingStatus || asset.priceStatus || asset.priceEvidence || asset.pricingEvidence);
-        const hasUnpricedEvidence = pricingText.includes("missing") || pricingText.includes("unpriced") || pricingText.includes("not found");
-        const isUnsupported = lifecycleLower.includes("eol") || lifecycleLower.includes("eos") || lifecycleSeverity === "High";
+        const isEolEos = lifecycleLower.includes("eol") || lifecycleLower.includes("eos") || lifecycleLower.includes("end of life") || lifecycleLower.includes("end of support") || lifecycleSeverity === "High";
         const isNearEos = lifecycleLower.includes("near");
-        const isLifecycleUnknown = lifecycleLower.includes("not mapped") || lifecycleLower.includes("not found") || lifecycleLower.includes("missing") || lifecycleLower.includes("unknown");
-        const isPcAgingHigh = pcAge.severity === "High";
-        const isPcAgingMedium = pcAge.severity === "Medium";
 
-        if (isUnsupported) unsupportedOsDevices += 1;
-        if (isNearEos) outdatedOsDevices += 1;
-        if (isLifecycleUnknown) lifecycleUnknownDevices += 1;
-        if (isPcAgingHigh) oldBiosDevices += 1;
-        if (hasMissingIdentity) missingHardwareIdentity += 1;
-        if (isStale) staleHardwareDevices += 1;
-
-        const osKey = isUnsupported ? "EOL / EOS Windows" : isNearEos ? "Near EOS Windows" : isLifecycleUnknown ? "Lifecycle mapping review" : "Supported OS";
+        const osKey = isEolEos ? "EOL / EOS" : isNearEos ? "Near EOS" : "Supported / not mapped";
         osBucket.set(osKey, (osBucket.get(osKey) || 0) + 1);
-        ageBucket.set(pcAge.label, (ageBucket.get(pcAge.label) || 0) + 1);
 
-        // Endpoint risk score must follow Settings > Management Policy.
-        // No hardcoded 50/30/15/35/20/18/12 values here. If policy penalties are 0,
-        // the device risk score stays 0 and the device will not be listed as a risk row.
+        if (isEolEos) unsupportedOsDevices += 1;
+        if (isNearEos) outdatedOsDevices += 1;
+
         const score = Math.min(100, Math.round(
-            (isUnsupported ? agingPenalty : 0) +
-            (isNearEos ? monitorPenalty : 0) +
-            (isLifecycleUnknown ? monitorPenalty : 0) +
-            (isPcAgingHigh ? agingPenalty : 0) +
-            (isPcAgingMedium ? monitorPenalty : 0) +
-            (isOffline ? offlinePenalty : 0) +
-            (isStaleTelemetry ? stalePenalty : 0) +
-            (hasMissingIdentity ? missingIdentityPenalty : 0) +
-            (hasUnpricedEvidence ? unpricedPenalty : 0)
+            (isEolEos ? eolEosPolicyScore : 0) +
+            (isNearEos ? nearEosPolicyScore : 0)
         ));
 
-        if (score >= endpointRiskThreshold) {
-            const reasons = [
-                isUnsupported && agingPenalty > 0 ? `OS lifecycle: ${lifecycleStatus}` : "",
-                isNearEos && monitorPenalty > 0 ? `OS lifecycle: ${lifecycleStatus}` : "",
-                isLifecycleUnknown && monitorPenalty > 0 ? `OS lifecycle requires review: ${lifecycleStatus}` : "",
-                pcAge.severity !== "Low" && (isPcAgingHigh ? agingPenalty : monitorPenalty) > 0 ? pcAge.reason : "",
-                isOffline && offlinePenalty > 0 ? "Offline endpoint evidence" : "",
-                isStaleTelemetry && stalePenalty > 0 ? `Endpoint telemetry older than ${endpointStaleDays} day(s)` : "",
-                hasMissingIdentity && missingIdentityPenalty > 0 ? "Missing hardware identity/IP/model evidence" : "",
-                hasUnpricedEvidence && unpricedPenalty > 0 ? "Missing device pricing evidence" : ""
-            ].filter(Boolean).join("; ");
-
+        if ((isEolEos || isNearEos) && score >= endpointRiskThreshold) {
             riskRows.push({
                 deviceName: itopsText(asset.deviceName, "-"),
                 platform: itopsText(asset.platform || asset.osName, "Windows"),
@@ -27030,78 +26725,68 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
                 biosDate: asset.biosDate ? itopsDateLabel(asset.biosDate) : "-",
                 osName: itopsText(asset.osName || asset.platform, "-"),
                 riskScore: score,
-                reasons: reasons || "Hardware risk signal from Management Policy",
+                reasons: isEolEos
+                    ? `EOL/EOS lifecycle matched. Management Policy score: ${eolEosPolicyScore}.`
+                    : `Near EOS lifecycle matched. Management Policy score: ${nearEosPolicyScore}.`,
                 osLifecycleStatus: lifecycleStatus,
-                osLifecycleSeverity: lifecycleSeverity,
+                osLifecycleSeverity: isEolEos ? "Critical" : lifecycleSeverity,
                 osLifecycleCycle: asset.osLifecycleCycle || "",
                 osLifecycleEolDate: asset.osLifecycleEolDate || "",
                 osLifecycleSource: asset.osLifecycleSource || "endoflife.date",
-                osLifecycleBasis: asset.osLifecycleBasis || "Lifecycle evidence from endoflife.date where available.",
-                pcAgeYears: pcAge.ageYears,
-                pcAgingStatus: pcAge.label,
-                pcAgingRule: {
-                    enabled: pcAgingRule.enabled,
-                    ageSource: pcAgingRule.ageSource,
-                    healthyMaxYears: pcAgingRule.healthyMaxYears,
-                    monitorMaxYears: pcAgingRule.monitorMaxYears,
-                    agingMinYears: pcAgingRule.agingMinYears,
-                    includeUnknownAge: pcAgingRule.includeUnknownAge
-                }
+                osLifecycleBasis: asset.osLifecycleBasis || "Lifecycle evidence from endoflife.date where available."
             });
         }
     }
 
+    const deviceRiskRows = riskRows.sort((a, b) => b.riskScore - a.riskScore || a.deviceName.localeCompare(b.deviceName));
+    const hardwareRiskItems = deviceRiskRows.length;
+    const criticalHardwareRows = deviceRiskRows.filter((row) => row.riskScore >= highRiskThreshold || String(row.osLifecycleSeverity || "").toLowerCase() === "critical").length;
+    const highHardwareRows = deviceRiskRows.filter((row) => row.riskScore >= mediumRiskThreshold && row.riskScore < highRiskThreshold && String(row.osLifecycleSeverity || "").toLowerCase() !== "critical").length;
+    const mediumHardwareRows = deviceRiskRows.filter((row) => row.riskScore >= endpointRiskThreshold && row.riskScore < mediumRiskThreshold).length;
+
+    const totalCritical = criticalHardwareRows;
+    const totalHigh = highHardwareRows;
+    const totalMedium = mediumHardwareRows;
+    const totalRiskItems = hardwareRiskItems;
+    const score = deviceRiskRows.length ? Math.max(...deviceRiskRows.map((row) => itopsToNumber(row.riskScore))) : 0;
+
+    const eolRiskRows = deviceRiskRows.filter((row) => /eol|eos|end of life|end of support/i.test(`${row.osLifecycleStatus || ""} ${row.reasons || ""}`));
+    const nearEosRiskRows = deviceRiskRows.filter((row) => /near/i.test(`${row.osLifecycleStatus || ""} ${row.reasons || ""}`));
+    const policyScoreRows = deviceRiskRows.filter((row) => itopsToNumber(row.riskScore) > 0);
+    const severityTotal = Math.max(totalCritical + totalHigh + totalMedium, 1);
+    const categoryTotal = Math.max(totalRiskItems, 1);
+    const riskAssetTotal = Math.max(lifecycleRows.length, totalDevices, 1);
+
+    const topFindings = [
+        {
+            id: "risk-eol-eos",
+            module: "Device Risk",
+            title: "EOL / EOS",
+            count: eolRiskRows.length,
+            severity: itopsRiskSeverityCount(eolRiskRows.length, 1, 10),
+            recommendation: `Review affected devices. Score comes from Management Policy (${eolEosPolicyScore} pts).`
+        },
+        {
+            id: "risk-near-eos",
+            module: "Device Risk",
+            title: "Near EOS",
+            count: nearEosRiskRows.length,
+            severity: itopsRiskSeverityCount(nearEosRiskRows.length, 10, 25),
+            recommendation: `Plan lifecycle action. Score comes from Management Policy (${nearEosPolicyScore} pts).`
+        },
+        {
+            id: "risk-management-policy-score",
+            module: "Management Policy",
+            title: "Management Policy Score",
+            count: policyScoreRows.length,
+            severity: itopsRiskSeverityCount(policyScoreRows.length, 1, 10),
+            recommendation: `Threshold: endpoint ${endpointRiskThreshold}, medium ${mediumRiskThreshold}, high ${highRiskThreshold}.`
+        }
+    ].filter((item) => item.count > 0);
+
     const rawMissingGeoDevices = Array.isArray(geolocation.missingGeoRows)
         ? geolocation.missingGeoRows.length
         : Math.max(totalDevices - itopsToNumber(geolocation.trackedDevices), 0);
-    const rawStaleGeoDevices = itopsToNumber(geolocation.staleLocations);
-    const rawUnknownGeoDevices = itopsToNumber(geolocation.unknownLocations);
-    const missingGeoDevices = geoMissingPenalty > 0 ? rawMissingGeoDevices : 0;
-    const staleGeoDevices = geoStalePenalty > 0 ? rawStaleGeoDevices : 0;
-    const unknownGeoDevices = geoUnknownPenalty > 0 ? rawUnknownGeoDevices : 0;
-    const geolocationRiskItems = missingGeoDevices + staleGeoDevices + unknownGeoDevices;
-    const patchCriticalItems = itopsToNumber(patchSummary.criticalVulnerabilities);
-    const failedTaskItems = itopsToNumber(tasks.failedTasks);
-    const networkRiskItems = networkUnregisteredPenalty > 0 ? itopsToNumber(network.unregisteredIps) : 0;
-    const hardwareRiskItems = riskRows.length;
-
-    const criticalHardwareRows = riskRows.filter((row) => row.riskScore >= highRiskThreshold).length;
-    const highHardwareRows = riskRows.filter((row) => row.riskScore >= mediumRiskThreshold && row.riskScore < highRiskThreshold).length;
-    const mediumHardwareRows = riskRows.filter((row) => row.riskScore >= endpointRiskThreshold && row.riskScore < mediumRiskThreshold).length;
-
-    const totalCritical = patchCriticalItems + criticalHardwareRows + Math.floor(failedTaskItems * 0.25);
-    const totalHigh = highHardwareRows + staleGeoDevices + Math.floor(networkRiskItems * 0.25) + failedTaskItems;
-    const totalMedium = mediumHardwareRows + unknownGeoDevices + missingGeoDevices + Math.floor(networkRiskItems * 0.75);
-    const totalRiskItems = hardwareRiskItems + geolocationRiskItems + patchCriticalItems + failedTaskItems + networkRiskItems;
-
-    const endpointExposure = itopsExposureRatio(hardwareRiskItems, Math.max(inventoryRows.length, totalDevices, 1));
-    const patchExposure = itopsExposureRatio(patchCriticalItems, patchSummary.missingPatches || patchCriticalItems || 1);
-    const geoExposure = itopsExposureRatio(geolocationRiskItems, Math.max(totalDevices + itopsToNumber(geolocation.trackedDevices), totalDevices, itopsToNumber(geolocation.trackedDevices), 1));
-    const networkExposure = itopsExposureRatio(networkRiskItems, itopsToNumber(network.knownIps) || networkRiskItems || 1);
-    const taskExposure = itopsExposureRatio(failedTaskItems, itopsToNumber(tasks.totalTasks) || failedTaskItems || 1);
-    const score = Math.max(0, Math.min(100, Math.round(
-        endpointExposure * 0.40 +
-        patchExposure * 0.20 +
-        geoExposure * 0.15 +
-        networkExposure * 0.15 +
-        taskExposure * 0.10
-    )));
-
-    const severityTotal = Math.max(totalCritical + totalHigh + totalMedium, 1);
-    const categoryTotal = Math.max(totalRiskItems, 1);
-    const riskAssetTotal = Math.max(inventoryRows.length, totalDevices, 1);
-
-    const topFindings = [
-        { id: "risk-pc-aging", module: "Hardware / Settings", title: "PC aging rule risk from Settings", count: agingPenalty > 0 ? oldBiosDevices : 0, severity: itopsRiskSeverityCount(oldBiosDevices, 1, 10), recommendation: `Use Settings PC Aging Rule and Management Policy score.penalty.aging (${agingPenalty} pts).` },
-        { id: "risk-eol-os", module: "Hardware / endoflife.date", title: "Windows EOL/EOS lifecycle exposure", count: agingPenalty > 0 ? unsupportedOsDevices : 0, severity: itopsRiskSeverityCount(unsupportedOsDevices, 1, 10), recommendation: `EOL/EOS lifecycle risk uses Management Policy aging penalty (${agingPenalty} pts).` },
-        { id: "risk-near-eos", module: "Hardware / endoflife.date", title: "Windows near-EOS lifecycle watch", count: monitorPenalty > 0 ? outdatedOsDevices : 0, severity: itopsRiskSeverityCount(outdatedOsDevices, 10, 25), recommendation: `Near-EOS lifecycle risk uses Management Policy monitor penalty (${monitorPenalty} pts).` },
-        { id: "risk-location-coverage", module: "Geolocation + Hardware", title: "Location coverage and freshness risk", count: geolocationRiskItems, severity: itopsRiskSeverityCount(geolocationRiskItems, 50, 250), recommendation: "Counted only when geolocation penalties are greater than 0 in Management Policy." },
-        { id: "risk-patch-critical", module: "Security Updates", title: "Critical missing update exposure", count: patchCriticalItems, severity: patchCriticalItems > 0 ? "Critical" : "Low", recommendation: "Prioritize critical update deployment from online update status/master API." },
-        { id: "risk-failed-tasks", module: "Task List", title: "Stopped or cancelled automation jobs", count: failedTaskItems, severity: itopsRiskSeverityCount(failedTaskItems, 50, 150), recommendation: "Review failed jobs and rerun inventory or remote tasks." },
-        { id: "risk-network-registration", module: "Network", title: "Unregistered network IP records", count: networkRiskItems, severity: itopsRiskSeverityCount(networkRiskItems, 100, 250), recommendation: "Counted only when network unregistered penalty is greater than 0 in Management Policy." }
-    ].filter(item => item.count > 0).sort((a, b) => b.count - a.count);
-
-    const topHardwareRisk = riskRows.sort((a, b) => b.riskScore - a.riskScore || a.deviceName.localeCompare(b.deviceName)).slice(0, 25);
 
     return {
         score,
@@ -27110,52 +26795,45 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
         totalHigh,
         totalMedium,
         hardwareRiskItems,
-        oldBiosDevices,
+        oldBiosDevices: 0,
         unsupportedOsDevices,
         outdatedOsDevices,
-        staleHardwareDevices,
-        missingHardwareIdentity,
-        geolocationRiskItems,
-        missingGeoDevices,
-        staleGeoDevices,
-        unknownGeoDevices,
-        patchCriticalItems,
-        failedTaskItems,
-        networkRiskItems,
+        staleHardwareDevices: 0,
+        missingHardwareIdentity: 0,
+        geolocationRiskItems: 0,
+        missingGeoDevices: rawMissingGeoDevices,
+        staleGeoDevices: itopsToNumber(geolocation.staleLocations),
+        unknownGeoDevices: itopsToNumber(geolocation.unknownLocations),
+        patchCriticalItems: 0,
+        failedTaskItems: 0,
+        networkRiskItems: 0,
         severityBreakdown: [
             { name: "Critical", value: totalCritical, percent: itopsRiskPercent(totalCritical, severityTotal), tone: "critical" },
             { name: "High", value: totalHigh, percent: itopsRiskPercent(totalHigh, severityTotal), tone: "warning" },
             { name: "Medium", value: totalMedium, percent: itopsRiskPercent(totalMedium, severityTotal), tone: "neutral" }
         ],
         categoryBreakdown: [
-            { name: "Hardware + PC Aging + EOL", value: hardwareRiskItems, percent: itopsRiskPercent(hardwareRiskItems, categoryTotal), tone: hardwareRiskItems ? "critical" : "good" },
-            { name: "Geolocation + Hardware", value: geolocationRiskItems, percent: itopsRiskPercent(geolocationRiskItems, categoryTotal), tone: geolocationRiskItems ? "warning" : "good" },
-            { name: "Critical Update", value: patchCriticalItems, percent: itopsRiskPercent(patchCriticalItems, categoryTotal), tone: patchCriticalItems ? "critical" : "good" },
-            { name: "Task Failures", value: failedTaskItems, percent: itopsRiskPercent(failedTaskItems, categoryTotal), tone: failedTaskItems ? "warning" : "good" },
-            { name: "Network Registration", value: networkRiskItems, percent: itopsRiskPercent(networkRiskItems, categoryTotal), tone: networkRiskItems ? "neutral" : "good" }
-        ],
+            { name: "EOL / EOS", value: eolRiskRows.length, percent: itopsRiskPercent(eolRiskRows.length, categoryTotal), tone: eolRiskRows.length ? "critical" : "good" },
+            { name: "Near EOS", value: nearEosRiskRows.length, percent: itopsRiskPercent(nearEosRiskRows.length, categoryTotal), tone: nearEosRiskRows.length ? "warning" : "good" },
+            { name: "Management Policy Score", value: policyScoreRows.length, percent: itopsRiskPercent(policyScoreRows.length, categoryTotal), tone: policyScoreRows.length ? "critical" : "good" }
+        ].filter((row) => row.value > 0),
         osBreakdown: [...osBucket.entries()].map(([name, value]) => ({
             name,
             value,
             percent: itopsRiskPercent(value, riskAssetTotal),
-            tone: name.includes("EOL") ? "critical" : name.includes("Near") || name.includes("review") ? "warning" : "good"
+            tone: name.includes("EOL") ? "critical" : name.includes("Near") ? "warning" : "good"
         })).sort((a, b) => b.value - a.value),
-        biosAgeBreakdown: [...ageBucket.entries()].map(([name, value]) => ({
-            name,
-            value,
-            percent: itopsRiskPercent(value, riskAssetTotal),
-            tone: name.includes("High") ? "critical" : name.includes("Monitor") || name.includes("Unknown") ? "warning" : "good"
-        })).sort((a, b) => b.value - a.value),
+        biosAgeBreakdown: [],
         topFindings,
-        topHardwareRisk,
-        pcAgingRule,
+        deviceRiskRows,
         managementPolicy: {
             profile: managementPolicy.profile || null,
             values: managementPolicy.values || {},
-            endpointStaleDays,
             endpointRiskThreshold,
             mediumRiskThreshold,
-            highRiskThreshold
+            highRiskThreshold,
+            eolEosPolicyScore,
+            nearEosPolicyScore
         }
     };
 }
@@ -30899,7 +30577,7 @@ async function buildEmaAiContext(req, query) {
                 severityBreakdown: risk.severityBreakdown,
                 categoryBreakdown: risk.categoryBreakdown,
                 topFindings: aiLimitRows(risk.topFindings, 8),
-                topHardwareRisk: aiLimitRows(risk.topHardwareRisk, 8),
+                deviceRiskRows: aiLimitRows(risk.deviceRiskRows, 8),
                 attentionQueue: aiLimitRows(attentionQueue, 8)
             };
         } catch (riskErr) {

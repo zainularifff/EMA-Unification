@@ -835,14 +835,110 @@ function addAccessForRole(defaultAccess: string) {
 const VITE_ENV = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env || {};
 const API_BASE = (VITE_ENV.VITE_API_BASE_URL || VITE_ENV.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
 
+const TOKEN_STORAGE_KEYS = [
+  "token",
+  "accessToken",
+  "authToken",
+  "emaToken",
+  "emaAccessToken",
+  "ema_access_token",
+  "access_token",
+  "jwt",
+];
+
+const AUTH_OBJECT_STORAGE_KEYS = [
+  "auth",
+  "authData",
+  "authUser",
+  "currentUser",
+  "emaAuth",
+  "emaUser",
+  "loginData",
+  "session",
+  "user",
+  "userData",
+  "userSession",
+];
+
+function cleanTokenValue(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.replace(/^Bearer\s+/i, "").trim();
+}
+
+function findTokenInValue(value: unknown, depth = 0): string {
+  if (depth > 4 || value === undefined || value === null) return "";
+
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return "";
+
+    if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
+      try {
+        return findTokenInValue(JSON.parse(text), depth + 1);
+      } catch {
+        return "";
+      }
+    }
+
+    return cleanTokenValue(text);
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const token = findTokenInValue(item, depth + 1);
+      if (token) return token;
+    }
+    return "";
+  }
+
+  if (typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+
+    for (const key of TOKEN_STORAGE_KEYS) {
+      const token = cleanTokenValue(objectValue[key]);
+      if (token) return token;
+    }
+
+    for (const key of ["data", "auth", "session", "payload", "user", "currentUser"]) {
+      const token = findTokenInValue(objectValue[key], depth + 1);
+      if (token) return token;
+    }
+  }
+
+  return "";
+}
+
+function readTokenFromStorage(storage: Storage | null | undefined) {
+  if (!storage) return "";
+
+  try {
+    for (const key of TOKEN_STORAGE_KEYS) {
+      const token = cleanTokenValue(storage.getItem(key));
+      if (token) return token;
+    }
+
+    for (const key of AUTH_OBJECT_STORAGE_KEYS) {
+      const token = findTokenInValue(storage.getItem(key));
+      if (token) return token;
+    }
+
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key) continue;
+      const token = findTokenInValue(storage.getItem(key));
+      if (token) return token;
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
 function getStoredToken() {
-  return (
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken") ||
-    localStorage.getItem("authToken") ||
-    localStorage.getItem("emaToken") ||
-    ""
-  );
+  if (typeof window === "undefined") return "";
+  return readTokenFromStorage(window.localStorage) || readTokenFromStorage(window.sessionStorage);
 }
 
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
