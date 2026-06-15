@@ -113,6 +113,10 @@ type UsageRow = {
   device: string;
   user: string;
   site: string;
+  ip: string;
+  filePath: string;
+  appStartTime: string;
+  appEndTime: string;
   usedTimeHours: number;
   usedTimeSeconds: number;
   launchCount: number;
@@ -186,6 +190,10 @@ const emptyUsageRow: UsageRow = {
   device: "-",
   user: "-",
   site: "-",
+  ip: "-",
+  filePath: "-",
+  appStartTime: "-",
+  appEndTime: "-",
   usedTimeHours: 0,
   usedTimeSeconds: 0,
   launchCount: 0,
@@ -209,8 +217,52 @@ function getDataArray<T>(payload: unknown): T[] {
   if (Array.isArray(payload)) return payload as T[];
   const envelope = asRecord(payload);
   if (!envelope) return [];
+
+  const dataObject = asRecord(envelope.data);
+  if (Array.isArray(envelope.rows)) return envelope.rows as T[];
   if (Array.isArray(envelope.data)) return envelope.data as T[];
+  if (Array.isArray(dataObject?.rows)) return dataObject.rows as T[];
   if (Array.isArray(envelope.raw)) return envelope.raw as T[];
+  if (Array.isArray(dataObject?.raw)) return dataObject.raw as T[];
+
+  return [];
+}
+
+function getTransportPayload(payload: unknown): Record<string, unknown> | unknown {
+  const envelope = asRecord(payload);
+  const data = asRecord(envelope?.data);
+
+  // axios-style response shape: { data: { success, data, raw, ... }, status, headers, ... }
+  if (data && (
+    Object.prototype.hasOwnProperty.call(data, "success") ||
+    Object.prototype.hasOwnProperty.call(data, "raw") ||
+    Object.prototype.hasOwnProperty.call(data, "rows") ||
+    Object.prototype.hasOwnProperty.call(data, "procedure") ||
+    Object.prototype.hasOwnProperty.call(data, "totalRecords")
+  )) {
+    return data;
+  }
+
+  return payload;
+}
+
+function getUsageDataArray<T>(payload: unknown): T[] {
+  const unwrapped = getTransportPayload(payload);
+  if (Array.isArray(unwrapped)) return unwrapped as T[];
+
+  const envelope = asRecord(unwrapped);
+  if (!envelope) return [];
+
+  const dataObject = asRecord(envelope.data);
+
+  // For Application Metering, the backend-normalized `data` can lose SW_FileName,
+  // ActiveTime, CCount, App_StartTime and App_EndTime. Prefer raw SP rows.
+  if (Array.isArray(envelope.raw)) return envelope.raw as T[];
+  if (Array.isArray(dataObject?.raw)) return dataObject.raw as T[];
+  if (Array.isArray(dataObject?.rows)) return dataObject.rows as T[];
+  if (Array.isArray(envelope.rows)) return envelope.rows as T[];
+  if (Array.isArray(envelope.data)) return envelope.data as T[];
+
   return [];
 }
 
@@ -223,7 +275,7 @@ function getDataObject(payload: unknown): Record<string, unknown> {
 function getEnvelopeData<T>(payload: unknown, fallback: T): T {
   const envelope = asRecord(payload);
   if (!envelope) return fallback;
-  return (envelope.data as T) ?? fallback;
+  return (envelope.data as T) ?? (envelope as T) ?? fallback;
 }
 
 function pickValue(record: Record<string, unknown> | null | undefined, keys: string[], fallback = "") {
@@ -343,13 +395,34 @@ function flattenTree(nodes: TreeNode[]): TreeNode[] {
 }
 
 function secondsToHours(seconds: number) {
-  return Math.round((seconds / 3600) * 10) / 10;
+  return seconds / 3600;
 }
 
-function getStatus(application: string, launchCount: number, usedTimeHours: number): UsageStatus {
+function formatUsageDuration(seconds: number) {
+  const safeSeconds = Math.max(0, Math.round(Number.isFinite(seconds) ? seconds : 0));
+  if (safeSeconds <= 0) return "0s";
+
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    const decimalHours = safeSeconds / 3600;
+    return `${decimalHours.toFixed(decimalHours >= 10 ? 0 : 1)}h`;
+  }
+
+  if (minutes > 0) {
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  }
+
+  return `${remainingSeconds}s`;
+}
+
+function getStatus(application: string, launchCount: number, usedTimeHours: number, usedTimeSeconds = 0): UsageStatus {
   const app = application.toLowerCase();
   if (restrictedKeywords.some((keyword) => app.includes(keyword))) return "Restricted";
-  if (launchCount <= 0 || usedTimeHours <= 0) return "Unused";
+  if (launchCount <= 0 && usedTimeSeconds <= 0) return "Unused";
+  if (usedTimeSeconds <= 0) return "Unused";
   if (usedTimeHours < 2 || launchCount < 5) return "Review";
   return "Productive";
 }
@@ -559,28 +632,110 @@ function findTreeNodeById(nodes: TreeNode[], nodeId: string): TreeNode | null {
 
 function normalizeUsageRow(row: unknown, index = 0): UsageRow {
   const record = asRecord(row) || {};
-  const application = pickValue(record, ["applicationPackage", "ApplicationPackage", "Application Package", "SW_Pkg_Name", "SWPkgName", "PackageName", "Pkg_Name"], "-");
-  const rawSeconds = parseNumber(pickValue(record, ["usedTime", "UsedTime", "Used_Time", "DurationSeconds", "Seconds", "TotalSeconds"], "0"), 0);
-  const launchCount = parseNumber(pickValue(record, ["counts", "Counts", "Count", "UseCount", "UsedCount", "RunCount"], "0"), 0);
+
+  const application = pickValue(record, [
+    "application",
+    "Application",
+    "SW_FileName",
+    "SW_File_Name",
+    "FileName",
+    "fileName",
+    "ProcessName",
+    "SW_OrgFileName",
+    "applicationPackage",
+    "ApplicationPackage",
+    "Application Package",
+    "SW_Pkg_Name",
+    "SWPkgName",
+    "PackageName",
+    "Pkg_Name",
+  ], "-");
+
+  const fileName = pickValue(record, [
+    "SW_FileName",
+    "SW_File_Name",
+    "fileName",
+    "FileName",
+    "File_Name",
+    "ProcessName",
+    "EXE_Name",
+    "Executable",
+  ], application);
+
+  const originalFileName = pickValue(record, [
+    "SW_OrgFileName",
+    "originalFileName",
+    "OriginalFileName",
+    "Original_File_Name",
+    "OriginalName",
+    "OrgFileName",
+  ], fileName);
+
+  const rawSeconds = parseNumber(pickValue(record, [
+    "ActiveTime",
+    "activeTime",
+    "usedTime",
+    "UsedTime",
+    "Used_Time",
+    "DurationSeconds",
+    "Seconds",
+    "TotalSeconds",
+    "UsageSeconds",
+  ], "0"), 0);
+
+  const launchCount = parseNumber(pickValue(record, [
+    "CCount",
+    "cCount",
+    "LaunchCount",
+    "launchCount",
+    "counts",
+    "Counts",
+    "Count",
+    "UseCount",
+    "UsedCount",
+    "RunCount",
+  ], "0"), 0);
+
   const usedTimeHours = secondsToHours(rawSeconds);
-  const status = getStatus(application, launchCount, usedTimeHours);
+  const status = getStatus(application, launchCount, usedTimeHours, rawSeconds);
   const risk = getRisk(status);
-  const licenseType = getLicenseType(application);
+  const licenseType = getLicenseType(`${application} ${fileName}`);
+  const lastUsedRaw = pickValue(record, [
+    "App_EndTime",
+    "AppEndTime",
+    "EndTime",
+    "LastUsed",
+    "Last_Used",
+    "date",
+    "MeterDate",
+    "Meter_Date",
+    "Date",
+    "SearchDate",
+    "UseDate",
+    "App_StartTime",
+    "ConnectionTime",
+  ], "-");
+  const appStartTime = formatApiDate(pickValue(record, ["App_StartTime", "AppStartTime", "StartTime"], ""));
+  const appEndTime = formatApiDate(pickValue(record, ["App_EndTime", "AppEndTime", "EndTime"], ""));
 
   return {
-    id: String(pickValue(record, ["id", "ID", "RowNumber", "No"], String(index + 1))),
+    id: String(pickValue(record, ["IDN", "idn", "id", "ID", "RowNumber", "No"], String(index + 1))),
     application,
-    publisher: pickValue(record, ["publisher", "Publisher", "Manufacturer", "CompanyName", "Vendor"], "-"),
-    version: pickValue(record, ["version", "Version", "FileVersion", "SW_Version"], "-"),
-    fileName: pickValue(record, ["fileName", "FileName", "File_Name", "SW_File_Name", "ProcessName"], "-"),
-    originalFileName: pickValue(record, ["originalFileName", "OriginalFileName", "Original_File_Name", "OriginalName"], "-"),
-    device: pickValue(record, ["device", "ComputerName", "Object_Client_Name", "DeviceName", "MachineName"], "-"),
-    user: pickValue(record, ["user", "UserName", "User", "LoginUser", "Owner"], "-"),
-    site: pickValue(record, ["site", "Object_Full_Name", "Department", "GroupName", "Location"], "-"),
+    publisher: pickValue(record, ["publisher", "Publisher", "Manufacturer", "CompanyName", "Vendor", "SW_Pkg_Name"], "-"),
+    version: pickValue(record, ["SW_VerInfo", "version", "Version", "FileVersion", "SW_Version", "VerInfo"], "-"),
+    fileName,
+    originalFileName,
+    device: pickValue(record, ["ComputerName", "computerName", "device", "DeviceName", "MachineName", "Object_DeviceID", "MDM_DeviceName"], "-"),
+    user: pickValue(record, ["Object_Client_Name", "ClientName", "UserName", "user", "User", "LoginUser", "Owner", "OwnerName", "Email"], "-"),
+    site: pickValue(record, ["Object_Full_Name", "Object_Rel_Name", "site", "Department", "GroupName", "Location", "Workgroup"], "-"),
+    ip: pickValue(record, ["IP", "IPAddress", "DeviceIPAddress", "DeviceLocalIPAddress"], "-"),
+    filePath: pickValue(record, ["SW_Path", "Path", "FilePath", "File_Path", "InstallPath"], "-"),
+    appStartTime,
+    appEndTime,
     usedTimeHours,
     usedTimeSeconds: rawSeconds,
     launchCount,
-    lastUsed: pickValue(record, ["date", "MeterDate", "Meter_Date", "Date", "SearchDate", "UseDate", "LastUsed"], "-").slice(0, 19) || "-",
+    lastUsed: formatApiDate(lastUsedRaw),
     status,
     risk,
     licenseType,
@@ -695,7 +850,7 @@ function formatMeteringStartedAt(value = "") {
 }
 
 function exportCsv(rows: UsageRow[]) {
-  const header = ["Application", "Publisher", "Version", "File", "Original File", "Device", "User", "Site", "Used Hours", "Launch Count", "Last Used", "Status", "Risk", "License", "Recommendation"];
+  const header = ["Application", "Publisher", "Version", "File", "Original File", "Device", "User", "Site", "IP", "Path", "Start Time", "End Time", "Used Hours", "Used Seconds", "Launch Count", "Last Used", "Status", "Risk", "License", "Recommendation"];
   const csv = [
     header.join(","),
     ...rows.map((row) => [
@@ -707,7 +862,12 @@ function exportCsv(rows: UsageRow[]) {
       row.device,
       row.user,
       row.site,
-      row.usedTimeHours,
+      row.ip,
+      row.filePath,
+      row.appStartTime,
+      row.appEndTime,
+      row.usedTimeHours.toFixed(4),
+      row.usedTimeSeconds,
       row.launchCount,
       row.lastUsed,
       row.status,
@@ -890,32 +1050,14 @@ export default function AppMetering() {
     try {
       const departments = await appMeteringService.getDepartments() as ApiDepartment[];
       const baseTree = buildDepartmentTree(departments);
-      const departmentPaths = collectDepartmentPaths(baseTree);
-      const cacheEntries: Record<string, TreeNode[]> = {};
 
-      const assetResults = await Promise.allSettled(
-        departmentPaths.map(async (department) => {
-          const response = await appMeteringService.getAssetsByRelationID(department.relationID);
-          const rows = getDataArray<ApiAsset>(response)
-            .map((asset, index) => normalizeAssetNode(asset, department, index))
-            .filter((item): item is TreeNode => Boolean(item))
-            .sort((a, b) => a.label.localeCompare(b.label));
-
-          cacheEntries[String(department.relationID)] = rows;
-          return rows;
-        })
-      );
-
-      const allDeviceNodes = assetResults
-        .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
-        .sort((a, b) => a.label.localeCompare(b.label));
-      const treeWithCounts = attachDeviceInventoryToTree(baseTree, allDeviceNodes);
-
-      setDepartmentTree(treeWithCounts);
-      setSelectedNode((prev) => findTreeNodeById(treeWithCounts, prev.id) || treeWithCounts[0] || emptyNode);
-      setAppMeteringDevices(allDeviceNodes);
+      // Do not load every /api/assets/:relationID record during initial render.
+      // Device targets are loaded on demand when a folder is selected so the page stays fast.
+      setDepartmentTree(baseTree);
+      setSelectedNode((prev) => findTreeNodeById(baseTree, prev.id) || baseTree[0] || emptyNode);
+      setAppMeteringDevices([]);
       setScopeDeviceRows([]);
-      setAssetCache(cacheEntries);
+      setAssetCache({});
     } catch (err) {
       setError("Branch view is not available right now.");
       setAppMeteringDevices([]);
@@ -1009,7 +1151,8 @@ export default function AppMetering() {
       params.set("relationID", String(selectedNode.relationID ?? -1));
     }
 
-    if (packageId) params.set("swPkgId", String(packageId));
+    // spGetMeterList4Console treats SW_Idn < 0 as "all software"; 0 filters for SW_Idn = 0 and returns empty.
+    params.set("swPkgId", String(packageId > 0 ? packageId : -1));
     params.set("startDate", startDate);
     params.set("endDate", endDate);
     params.set("page", "1");
@@ -1026,7 +1169,7 @@ export default function AppMetering() {
 
     try {
       const usagePayload = await appMeteringService.getUsage(Object.fromEntries(activeFilters.entries()));
-      const normalizedUsage = getDataArray<unknown>(usagePayload).map(normalizeUsageRow);
+      const normalizedUsage = getUsageDataArray<unknown>(usagePayload).map(normalizeUsageRow);
       setUsageRows(normalizedUsage);
       setSelectedRowId((prev) => (normalizedUsage.some((row) => row.id === prev) ? prev : normalizedUsage[0]?.id || ""));
 
@@ -1081,7 +1224,7 @@ export default function AppMetering() {
     const text = searchTerm.trim().toLowerCase();
 
     return usageRows.filter((row) => {
-      const matchesText = !text || [row.application, row.publisher, row.fileName, row.device, row.user, row.site]
+      const matchesText = !text || [row.application, row.publisher, row.version, row.fileName, row.originalFileName, row.device, row.user, row.site, row.ip, row.filePath]
         .some((value) => value.toLowerCase().includes(text));
       const matchesStatus = filters.status === "all" || row.status === filters.status;
       const matchesLicense = filters.license === "all" || row.licenseType === filters.license;
@@ -1126,8 +1269,11 @@ export default function AppMetering() {
   }, [pageCount]);
 
   const summary = useMemo(() => {
-    const totalSeconds = typeof stats.totalUsageSeconds === "number" ? stats.totalUsageSeconds : usageRows.reduce((sum, row) => sum + row.usedTimeSeconds, 0);
-    const uniqueApplications = typeof stats.uniqueApplications === "number" ? stats.uniqueApplications : new Set(usageRows.map((row) => row.application).filter(Boolean)).size;
+    const rowTotalSeconds = usageRows.reduce((sum, row) => sum + row.usedTimeSeconds, 0);
+    const totalSeconds = typeof stats.totalUsageSeconds === "number" && stats.totalUsageSeconds > 0 ? stats.totalUsageSeconds : rowTotalSeconds;
+    const rowUniqueApplications = new Set(usageRows.map((row) => row.application).filter((value) => value && value !== "-")).size;
+    const statsUniqueApplications = typeof stats.uniqueApplications === "number" && stats.uniqueApplications > 0 ? stats.uniqueApplications : 0;
+    const uniqueApplications = Math.max(statsUniqueApplications, rowUniqueApplications);
     const launchCount = usageRows.reduce((sum, row) => sum + row.launchCount, 0);
     const restricted = usageRows.filter((row) => row.status === "Restricted").length;
     const unused = usageRows.filter((row) => row.status === "Unused").length;
@@ -1135,6 +1281,7 @@ export default function AppMetering() {
 
     return {
       uniqueApplications,
+      totalSeconds,
       totalHours: secondsToHours(totalSeconds),
       launchCount,
       restricted,
