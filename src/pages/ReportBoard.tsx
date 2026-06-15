@@ -122,38 +122,25 @@ function fileSafeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "report";
 }
 
-function primaryReportId(packs: ReportPack[]) {
-  if (packs.length === 1) return packs[0].id;
-  if (packs.some((pack) => pack.id === "dynamic-risk-management-report" || pack.id === "security-compliance-exposure")) return "dynamic-risk-management-report";
-  if (packs.some((pack) => pack.id === "dynamic-cost-saving-report")) return "dynamic-cost-saving-report";
-  if (packs.some((pack) => pack.id === "dynamic-compliance-report")) return "dynamic-compliance-report";
-  if (packs.some((pack) => pack.id === "software-application-governance")) return "software-application-governance";
-  if (packs.some((pack) => pack.id === "operations-health-sla")) return "operations-health-sla";
-  if (packs.some((pack) => pack.id === "hardware-asset-lifecycle")) return "hardware-asset-lifecycle";
-  return "ai-executive-summary";
+function getReportSummary(payload: any, fallback: string) {
+  const data = unwrapPayload(payload) || {};
+  const narrative = data.narrative || {};
+  return textValue(narrative.executiveSummary || narrative.summary || narrative.title || data.summary || fallback, fallback);
 }
 
-function buildRequestPayload(title: string, customer: string, range: DateRange, packs: ReportPack[]) {
-  const selectedReportId = primaryReportId(packs);
+function buildPackRequestPayload(title: string, customer: string, range: DateRange, pack: ReportPack) {
   return {
-    reportId: selectedReportId,
-    dynamicReportType: selectedReportId.startsWith("dynamic-") ? selectedReportId : undefined,
-    dynamicReportTitle: title,
-    customReportTitle: title,
+    reportId: pack.id,
+    dynamicReportType: pack.dynamic ? pack.id : undefined,
+    dynamicReportTitle: pack.dynamic ? pack.title : undefined,
+    customReportTitle: pack.title,
+    parentReportTitle: title,
     dateRange: range.preset === "custom" ? "custom" : range.preset,
     startDate: range.from,
     endDate: range.to,
     outputFormat: "PDF",
     relationID: 0,
     customer,
-    builderMode: true,
-    builderPacks: packs.map((pack, index) => ({
-      order: index + 1,
-      id: pack.id,
-      title: pack.title,
-      category: pack.category,
-      dynamic: Boolean(pack.dynamic),
-    })),
     includeSummary: true,
     includeChart: true,
     includeTable: true,
@@ -161,6 +148,63 @@ function buildRequestPayload(title: string, customer: string, range: DateRange, 
     deviceGroup: "all",
     status: "all",
   };
+}
+
+function mergeReportPayloads(title: string, range: DateRange, packs: ReportPack[], payloads: any[]) {
+  const unwrapped = payloads.map((payload) => unwrapPayload(payload) || {});
+  const summaries = packs.map((pack, index) => ({ pack, summary: getReportSummary(unwrapped[index], pack.subtitle) }));
+  const sections = unwrapped.flatMap((payload, index) => {
+    const pack = packs[index];
+    const reportSections = Array.isArray(payload.sections) ? payload.sections : [];
+    if (!reportSections.length) {
+      return [{
+        title: pack.title,
+        type: pack.id,
+        packId: pack.id,
+        packTitle: pack.title,
+        rows: [{ Summary: summaries[index]?.summary || pack.subtitle }],
+      }];
+    }
+    return reportSections.map((section: any) => ({
+      ...section,
+      title: `${pack.title} · ${textValue(section?.title || section?.type, "Report Details")}`,
+      packId: pack.id,
+      packTitle: pack.title,
+    }));
+  });
+
+  return {
+    report: { id: "report-pack-builder", title },
+    generatedAt: new Date().toISOString(),
+    dateRange: { from: range.from, to: range.to, preset: range.preset },
+    narrative: {
+      title,
+      executiveSummary: summaries.map((item, index) => `${index + 1}. ${item.pack.title}: ${item.summary}`).join("\n\n"),
+      summary: `${packs.length} report pack${packs.length === 1 ? "" : "s"} combined into one report canvas output.`,
+    },
+    builderPacks: packs.map((pack, index) => ({
+      order: index + 1,
+      id: pack.id,
+      title: pack.title,
+      subtitle: pack.subtitle,
+      category: pack.category,
+      dynamic: Boolean(pack.dynamic),
+    })),
+    dataSources: unwrapped.flatMap((payload, index) => {
+      const sources = Array.isArray(payload.dataSources) ? payload.dataSources : [];
+      return sources.map((source: any) => ({ ...source, packTitle: packs[index].title }));
+    }),
+    sections,
+  };
+}
+
+async function requestComposedReport(mode: "preview" | "generate", title: string, customer: string, range: DateRange, packs: ReportPack[]) {
+  const service = mode === "generate" ? generateReport : previewReport;
+  const payloads = [];
+  for (const pack of packs) {
+    payloads.push(await service(buildPackRequestPayload(title, customer, range, pack)));
+  }
+  return mergeReportPayloads(title, range, packs, payloads);
 }
 
 function downloadHtml(title: string, payload: any, range: DateRange, packs: ReportPack[]) {
@@ -171,7 +215,7 @@ function downloadHtml(title: string, payload: any, range: DateRange, packs: Repo
   const rowsHtml = sections
     .map((section: any) => {
       const rows = Array.isArray(section.rows) ? section.rows : [];
-      const body = rows.slice(0, 12).map((row: any) => {
+      const body = rows.slice(0, 14).map((row: any) => {
         if (!row || typeof row !== "object") return `<li>${textValue(row)}</li>`;
         return `<li>${Object.entries(row).map(([key, value]) => `<strong>${key}:</strong> ${textValue(value)}`).join(" · ")}</li>`;
       }).join("");
@@ -188,7 +232,7 @@ function downloadHtml(title: string, payload: any, range: DateRange, packs: Repo
     body{font-family:Arial,Helvetica,sans-serif;margin:36px;color:#12233f;background:#f8fbff;line-height:1.45}
     main{max-width:980px;margin:auto;background:white;border:1px solid #d8e5f6;border-radius:24px;padding:34px;box-shadow:0 18px 45px rgba(15,35,71,.10)}
     h1{margin:0 0 6px;font-size:30px}.meta{color:#64748b;font-weight:700;margin-bottom:22px}
-    .summary{background:#eef6ff;border:1px solid #d3e4fb;border-radius:16px;padding:18px;margin:18px 0}.packs{background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:18px;margin:18px 0}.packs li{display:grid;margin:8px 0}.packs span{color:#64748b;font-size:13px}
+    .summary{background:#eef6ff;border:1px solid #d3e4fb;border-radius:16px;padding:18px;margin:18px 0;white-space:pre-line}.packs{background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:18px;margin:18px 0}.packs li{display:grid;margin:8px 0}.packs span{color:#64748b;font-size:13px}
     h2{font-size:18px;margin:24px 0 10px;color:#17325d}li{margin:8px 0}strong{color:#17325d}
   </style>
 </head>
@@ -229,8 +273,8 @@ export default function ReportBoard() {
   useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
-    root.classList.remove("ema-settings-page-active", "ema-report-page-active");
-    body.classList.remove("ema-settings-page-active", "ema-report-page-active");
+    root.classList.remove("ema-settings-page-active", "ema-report-page-active", "ema-report-board-active");
+    body.classList.remove("ema-settings-page-active", "ema-report-page-active", "ema-report-board-active");
     root.classList.add("ema-report-builder-active");
     body.classList.add("ema-report-builder-active");
     return () => {
@@ -309,8 +353,8 @@ export default function ReportBoard() {
     setLoading("preview");
     setError("");
     try {
-      const payload = await previewReport(buildRequestPayload(title, customer, range, selectedPacks));
-      setPreview({ title, payload: unwrapPayload(payload), from: range.from, to: range.to, packs: selectedPacks });
+      const payload = await requestComposedReport("preview", title, customer, range, selectedPacks);
+      setPreview({ title, payload, from: range.from, to: range.to, packs: selectedPacks });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to preview report.");
     } finally {
@@ -326,7 +370,7 @@ export default function ReportBoard() {
     setLoading("generate");
     setError("");
     try {
-      const payload = await generateReport(buildRequestPayload(title, customer, range, selectedPacks));
+      const payload = await requestComposedReport("generate", title, customer, range, selectedPacks);
       downloadHtml(title, payload, range, selectedPacks);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to generate report.");
@@ -450,7 +494,7 @@ export default function ReportBoard() {
         .builder-btn:disabled { opacity: .62; cursor: wait; }
         .builder-shell {
           display: grid;
-          grid-template-columns: 320px minmax(0, 1fr) 280px;
+          grid-template-columns: 300px minmax(0, 1fr) 280px;
           min-height: calc(100vh - 146px);
         }
         .builder-sidebar,
@@ -585,7 +629,7 @@ export default function ReportBoard() {
           padding: 22px 26px 40px;
         }
         .canvas-head {
-          max-width: 780px;
+          max-width: 820px;
           margin: 0 auto 14px;
           display: flex;
           align-items: flex-start;
@@ -594,7 +638,7 @@ export default function ReportBoard() {
         }
         .canvas-head h2 {
           margin: 0;
-          font-size: 21px;
+          font-size: 22px;
           font-weight: 950;
           letter-spacing: -0.04em;
         }
@@ -612,7 +656,7 @@ export default function ReportBoard() {
           font-weight: 950;
         }
         .canvas-grid {
-          max-width: 780px;
+          max-width: 820px;
           margin: 0 auto;
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -620,10 +664,10 @@ export default function ReportBoard() {
         }
         .canvas-slot {
           position: relative;
-          height: 146px;
+          height: 156px;
           border: 1.5px dashed #d2dfef;
           border-radius: 20px;
-          background: rgba(255,255,255,.48);
+          background: rgba(255,255,255,.56);
           display: grid;
           place-items: center;
           color: #b8c8dc;
@@ -782,7 +826,7 @@ export default function ReportBoard() {
           font-weight: 800;
         }
         .builder-error {
-          max-width: 780px;
+          max-width: 820px;
           margin: 14px auto 0;
           border: 1px solid rgba(239, 68, 68, .24);
           border-radius: 16px;
@@ -802,8 +846,8 @@ export default function ReportBoard() {
           backdrop-filter: blur(8px);
         }
         .report-preview-modal {
-          width: min(880px, 100%);
-          max-height: min(760px, calc(100vh - 52px));
+          width: min(920px, 100%);
+          max-height: min(780px, calc(100vh - 52px));
           overflow: auto;
           border-radius: 26px;
           border: 1px solid #d8e5f6;
@@ -840,12 +884,13 @@ export default function ReportBoard() {
           font-weight: 760;
           margin-top: 14px;
         }
+        .report-preview-summary { white-space: pre-line; }
         .report-preview-section h4,
         .report-preview-packs h4 { margin: 0 0 10px; }
         .report-preview-section li,
         .report-preview-packs li { margin: 7px 0; color: #3a5274; }
         @media (max-width: 1280px) {
-          .builder-shell { grid-template-columns: 300px minmax(0, 1fr); }
+          .builder-shell { grid-template-columns: 290px minmax(0, 1fr); }
           .builder-summary { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #d8e3f1; }
         }
         @media (max-width: 980px) {
@@ -952,8 +997,8 @@ export default function ReportBoard() {
         <section className="builder-canvas-wrap">
           <div className="canvas-head">
             <div>
-              <h2>Report Composition Canvas</h2>
-              <p>Build one report by combining selected report packs. Selected: {selectedPacks.length}/{CANVAS_SIZE}</p>
+              <h2>Report Canvas</h2>
+              <p>Drag report packs here. Preview and generate will preserve the original content from every selected report. Selected: {selectedPacks.length}/{CANVAS_SIZE}</p>
             </div>
             <button type="button" onClick={clearCanvas}>Clear Canvas</button>
           </div>
@@ -1033,7 +1078,7 @@ export default function ReportBoard() {
             <div className="report-preview-summary">
               {textValue(preview.payload?.narrative?.executiveSummary || preview.payload?.narrative?.summary || preview.payload?.narrative?.title || "Preview loaded.")}
             </div>
-            {(Array.isArray(preview.payload?.sections) ? preview.payload.sections : []).slice(0, 5).map((section: any, index: number) => (
+            {(Array.isArray(preview.payload?.sections) ? preview.payload.sections : []).slice(0, 10).map((section: any, index: number) => (
               <section className="report-preview-section" key={`${section?.title || section?.type || "section"}-${index}`}>
                 <h4>{textValue(section?.title || section?.type, `Section ${index + 1}`)}</h4>
                 <ul>
