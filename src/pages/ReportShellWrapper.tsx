@@ -26,6 +26,7 @@ const REPORT_SHELL_FIX_CSS = `
   }
 
   body.ema-report-page-active .ema-topbar {
+    flex: 0 0 76px !important;
     background: #3f4955 !important;
     border-bottom: 1px solid rgba(203, 213, 225, 0.42) !important;
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.14) !important;
@@ -63,52 +64,75 @@ const REPORT_SHELL_FIX_CSS = `
     height: 100% !important;
     min-height: 0 !important;
     max-height: 100% !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
+    overflow: hidden !important;
     padding: 14px !important;
     box-sizing: border-box !important;
     color: #173154 !important;
-    scrollbar-gutter: stable !important;
-    -webkit-overflow-scrolling: touch !important;
     background:
       radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.075), transparent 24rem),
       radial-gradient(circle at 100% 6%, rgba(8, 126, 164, 0.055), transparent 24rem),
       linear-gradient(135deg, #f6f8fb 0%, #edf2f7 54%, #e5ecf4 100%) !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root::-webkit-scrollbar {
+  body.ema-report-page-active .ema-report-module-root .settings-layout.report-settings-layout {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .settings-sidebar,
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    align-self: stretch !important;
+    position: relative !important;
+    top: auto !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-list,
+  body.ema-report-page-active .ema-report-module-root .settings-menu-list {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-gutter: stable !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar {
     width: 10px !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root::-webkit-scrollbar-track {
+  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar-track {
     background: #eef4fb !important;
     border-radius: 999px !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root::-webkit-scrollbar-thumb {
+  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar-thumb {
     background: #c9d7ea !important;
     border: 2px solid #eef4fb !important;
     border-radius: 999px !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root .settings-layout.report-settings-layout {
-    height: auto !important;
-    min-height: min-content !important;
-    max-height: none !important;
-    align-items: start !important;
-    overflow: visible !important;
-  }
-
-  body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel {
-    position: sticky !important;
-    top: 0 !important;
-    align-self: start !important;
-    max-height: calc(100vh - 106px) !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-  }
-
-  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content,
   body.ema-report-page-active .ema-report-module-root .report-workspace-shell,
   body.ema-report-page-active .ema-report-module-root .report-workspace-body,
   body.ema-report-page-active .ema-report-module-root .featured-report-layout,
@@ -123,11 +147,6 @@ const REPORT_SHELL_FIX_CSS = `
 
   body.ema-report-page-active .ema-report-module-root .report-workspace-body {
     padding-bottom: 56px !important;
-  }
-
-  body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel,
-  body.ema-report-page-active .ema-report-module-root .settings-sidebar {
-    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   }
 `;
 
