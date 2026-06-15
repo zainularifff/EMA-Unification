@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import ReportDynamicWrapper from "./ReportDynamicWrapper";
 
 const REPORT_SHELL_FIX_STYLE_ID = "ema-report-shell-consistency-fix";
+const REPORT_SIDEBAR_STORAGE_KEY = "ema-report-sidebar-collapsed";
 
 const REPORT_SHELL_FIX_CSS = `
   html.ema-report-page-active,
@@ -80,6 +81,7 @@ const REPORT_SHELL_FIX_CSS = `
     max-height: 100% !important;
     align-items: stretch !important;
     overflow: hidden !important;
+    transition: grid-template-columns .22s ease, gap .22s ease !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .settings-sidebar,
@@ -91,6 +93,7 @@ const REPORT_SHELL_FIX_CSS = `
     align-self: stretch !important;
     position: relative !important;
     top: auto !important;
+    transition: opacity .2s ease, transform .22s ease, width .22s ease, margin .22s ease !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .settings-sidebar,
@@ -101,6 +104,68 @@ const REPORT_SHELL_FIX_CSS = `
     border-radius: var(--ema-control-radius-lg, 1.28rem) !important;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 255, 0.96)) !important;
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.052), inset 0 1px 0 rgba(255, 255, 255, 0.84) !important;
+  }
+
+  body.ema-report-sidebar-collapsed .ema-report-module-root .settings-layout.report-settings-layout {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+    gap: 0 !important;
+  }
+
+  body.ema-report-sidebar-collapsed .ema-report-module-root .settings-sidebar,
+  body.ema-report-sidebar-collapsed .ema-report-module-root .featured-report-nav-panel {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    flex: 0 0 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    transform: translateX(-18px) !important;
+    pointer-events: none !important;
+  }
+
+  body.ema-report-page-active .ema-report-sidebar-toggle {
+    position: fixed !important;
+    z-index: 1100 !important;
+    left: 28px !important;
+    top: 96px !important;
+    min-width: 92px !important;
+    height: 38px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    border: 1px solid rgba(37, 99, 235, .22) !important;
+    border-radius: 999px !important;
+    color: #173154 !important;
+    background: rgba(255, 255, 255, .92) !important;
+    box-shadow: 0 12px 28px rgba(15, 35, 71, .12) !important;
+    font-size: .72rem !important;
+    font-weight: 900 !important;
+    letter-spacing: .02em !important;
+    transition: left .22s ease, transform .18s ease, background .18s ease !important;
+  }
+
+  body.ema-report-page-active:not(.ema-report-sidebar-collapsed) .ema-report-sidebar-toggle {
+    left: 258px !important;
+  }
+
+  body.ema-report-page-active .ema-report-sidebar-toggle:hover {
+    transform: translateY(-1px) !important;
+    background: #ffffff !important;
+  }
+
+  body.ema-report-page-active .ema-report-sidebar-toggle span:first-child {
+    width: 20px !important;
+    height: 20px !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    border-radius: 999px !important;
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #2558e8 0%, #087ea4 100%) !important;
+    font-size: .68rem !important;
+    line-height: 1 !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel .panel-head {
@@ -339,10 +404,18 @@ function removeReportShellFixes() {
 
   document.documentElement.classList.remove("ema-report-page-active");
   document.body.classList.remove("ema-report-page-active");
+  document.body.classList.remove("ema-report-sidebar-collapsed");
   document.getElementById(REPORT_SHELL_FIX_STYLE_ID)?.remove();
 }
 
+function readInitialSidebarState() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(REPORT_SIDEBAR_STORAGE_KEY) === "true";
+}
+
 export default function ReportShellWrapper() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readInitialSidebarState);
+
   useEffect(() => {
     installReportShellFixes();
     window.requestAnimationFrame(installReportShellFixes);
@@ -354,5 +427,25 @@ export default function ReportShellWrapper() {
     };
   }, []);
 
-  return <ReportDynamicWrapper />;
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("ema-report-sidebar-collapsed", sidebarCollapsed);
+    window.localStorage.setItem(REPORT_SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  return (
+    <>
+      <button
+        type="button"
+        className="ema-report-sidebar-toggle"
+        aria-label={sidebarCollapsed ? "Open report sidebar" : "Close report sidebar"}
+        aria-expanded={!sidebarCollapsed}
+        onClick={() => setSidebarCollapsed((current) => !current)}
+      >
+        <span>{sidebarCollapsed ? "›" : "‹"}</span>
+        <span>{sidebarCollapsed ? "Open" : "Close"}</span>
+      </button>
+      <ReportDynamicWrapper />
+    </>
+  );
 }
