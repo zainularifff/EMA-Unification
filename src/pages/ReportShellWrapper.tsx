@@ -360,16 +360,19 @@ const REPORT_SHELL_FIX_CSS = `
     overscroll-behavior: contain !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar {
+  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar,
+  body.ema-report-page-active .ema-report-module-root .report-config-panel .config-card::-webkit-scrollbar {
     width: 10px !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar-track {
+  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar-track,
+  body.ema-report-page-active .ema-report-module-root .report-config-panel .config-card::-webkit-scrollbar-track {
     background: #eef4fb !important;
     border-radius: 999px !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar-thumb {
+  body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar-thumb,
+  body.ema-report-page-active .ema-report-module-root .report-config-panel .config-card::-webkit-scrollbar-thumb {
     background: #c9d7ea !important;
     border: 2px solid #eef4fb !important;
     border-radius: 999px !important;
@@ -377,35 +380,51 @@ const REPORT_SHELL_FIX_CSS = `
 
   body.ema-report-page-active .ema-report-module-root .report-workspace-shell,
   body.ema-report-page-active .ema-report-module-root .report-workspace-body {
-    height: auto !important;
+    height: 100% !important;
     min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-layout {
-    height: auto !important;
-    min-height: max-content !important;
-    max-height: none !important;
-    align-items: start !important;
-    overflow: visible !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
   }
 
-  body.ema-report-page-active .ema-report-module-root .featured-report-main-panel,
-  body.ema-report-page-active .ema-report-module-root .report-config-panel {
-    height: auto !important;
+  body.ema-report-page-active .ema-report-module-root .featured-report-main-panel {
+    height: 100% !important;
     min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    align-self: start !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    align-self: stretch !important;
+    padding-right: 4px !important;
+    padding-bottom: 70px !important;
+    overscroll-behavior: contain !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .report-config-panel {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    align-self: stretch !important;
+    position: relative !important;
+    top: auto !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .report-config-panel .config-card {
-    height: auto !important;
+    height: 100% !important;
     min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    padding-bottom: 28px !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-bottom: 92px !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .client-rnr-fields,
@@ -416,7 +435,7 @@ const REPORT_SHELL_FIX_CSS = `
 
   body.ema-report-page-active .ema-report-module-root .report-workspace-body {
     padding-top: 0 !important;
-    padding-bottom: 80px !important;
+    padding-bottom: 0 !important;
   }
 `;
 
