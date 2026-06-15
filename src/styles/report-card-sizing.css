@@ -1,0 +1,96 @@
+/* Report board card sizing lock
+   Keeps every report card using the same size and layout rhythm. */
+
+.report-board-page .report-card-grid {
+  grid-auto-rows: 214px !important;
+  align-items: stretch !important;
+}
+
+.report-board-page .report-card {
+  height: 214px !important;
+  min-height: 214px !important;
+  max-height: 214px !important;
+  display: grid !important;
+  grid-template-rows: 44px 48px 42px 30px !important;
+  gap: 7px !important;
+  padding: 11px !important;
+}
+
+.report-board-page .report-card-top {
+  min-height: 44px !important;
+  grid-template-columns: 36px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+}
+
+.report-board-page .report-card-icon {
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+}
+
+.report-board-page .report-card-kicker,
+.report-board-page .report-card-badge {
+  line-height: 1 !important;
+}
+
+.report-board-page .report-card h3 {
+  min-height: 28px !important;
+  max-height: 28px !important;
+  margin: 1px 0 0 !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+.report-board-page .report-card p {
+  min-height: 12px !important;
+  max-height: 12px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.report-board-page .report-card-period {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  padding: 6px 7px !important;
+  align-content: center !important;
+}
+
+.report-board-page .report-card-period select,
+.report-board-page .report-date-grid input {
+  min-height: 26px !important;
+  height: 26px !important;
+  max-height: 26px !important;
+  padding: 3px 7px !important;
+}
+
+.report-board-page .report-date-grid {
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  align-items: end !important;
+}
+
+.report-board-page .report-card-actions {
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  align-self: end !important;
+}
+
+.report-board-page .report-card-actions button {
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  padding: 0 10px !important;
+}
+
+.report-board-page .is-dynamic-panel .report-card,
+.report-board-page .is-standard-panel .report-card {
+  height: 214px !important;
+  min-height: 214px !important;
+  max-height: 214px !important;
+}
