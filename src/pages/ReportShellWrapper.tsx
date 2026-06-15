@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import ReportDynamicWrapper from "./ReportDynamicWrapper";
 
 const REPORT_SHELL_FIX_STYLE_ID = "ema-report-shell-consistency-fix";
-const REPORT_SIDEBAR_STORAGE_KEY = "ema-report-sidebar-collapsed";
 
 const REPORT_SHELL_FIX_CSS = `
   html.ema-report-page-active,
@@ -81,7 +80,8 @@ const REPORT_SHELL_FIX_CSS = `
     max-height: 100% !important;
     align-items: stretch !important;
     overflow: hidden !important;
-    transition: grid-template-columns .22s ease, gap .22s ease !important;
+    grid-template-columns: 292px minmax(0, 1fr) !important;
+    gap: 14px !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .settings-sidebar,
@@ -93,93 +93,28 @@ const REPORT_SHELL_FIX_CSS = `
     align-self: stretch !important;
     position: relative !important;
     top: auto !important;
-    transition: opacity .2s ease, transform .22s ease, width .22s ease, margin .22s ease !important;
-  }
-
-  body.ema-report-page-active .ema-report-module-root .settings-sidebar,
-  body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel {
     display: flex !important;
     flex-direction: column !important;
-    border: 1px solid var(--ema-control-border, rgba(124, 139, 161, 0.26)) !important;
-    border-radius: var(--ema-control-radius-lg, 1.28rem) !important;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 255, 0.96)) !important;
+    border: 1px solid rgba(124, 139, 161, 0.22) !important;
+    border-radius: 22px !important;
+    background:
+      radial-gradient(circle at 6% 0%, rgba(37, 99, 235, 0.08), transparent 13rem),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 252, 255, 0.96)) !important;
     box-shadow: 0 10px 28px rgba(15, 23, 42, 0.052), inset 0 1px 0 rgba(255, 255, 255, 0.84) !important;
-  }
-
-  body.ema-report-sidebar-collapsed .ema-report-module-root .settings-layout.report-settings-layout {
-    grid-template-columns: 0 minmax(0, 1fr) !important;
-    gap: 0 !important;
-  }
-
-  body.ema-report-sidebar-collapsed .ema-report-module-root .settings-sidebar,
-  body.ema-report-sidebar-collapsed .ema-report-module-root .featured-report-nav-panel {
-    width: 0 !important;
-    min-width: 0 !important;
-    max-width: 0 !important;
-    flex: 0 0 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border: 0 !important;
-    opacity: 0 !important;
-    transform: translateX(-18px) !important;
-    pointer-events: none !important;
-  }
-
-  body.ema-report-page-active .ema-report-sidebar-toggle {
-    position: fixed !important;
-    z-index: 1100 !important;
-    left: 28px !important;
-    top: 96px !important;
-    min-width: 92px !important;
-    height: 38px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 8px !important;
-    border: 1px solid rgba(37, 99, 235, .22) !important;
-    border-radius: 999px !important;
-    color: #173154 !important;
-    background: rgba(255, 255, 255, .92) !important;
-    box-shadow: 0 12px 28px rgba(15, 35, 71, .12) !important;
-    font-size: .72rem !important;
-    font-weight: 900 !important;
-    letter-spacing: .02em !important;
-    transition: left .22s ease, transform .18s ease, background .18s ease !important;
-  }
-
-  body.ema-report-page-active:not(.ema-report-sidebar-collapsed) .ema-report-sidebar-toggle {
-    left: 258px !important;
-  }
-
-  body.ema-report-page-active .ema-report-sidebar-toggle:hover {
-    transform: translateY(-1px) !important;
-    background: #ffffff !important;
-  }
-
-  body.ema-report-page-active .ema-report-sidebar-toggle span:first-child {
-    width: 20px !important;
-    height: 20px !important;
-    display: inline-grid !important;
-    place-items: center !important;
-    border-radius: 999px !important;
-    color: #ffffff !important;
-    background: linear-gradient(135deg, #2558e8 0%, #087ea4 100%) !important;
-    font-size: .68rem !important;
-    line-height: 1 !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel .panel-head {
     flex: 0 0 auto !important;
-    min-height: 104px !important;
+    min-height: 102px !important;
     padding: 1rem 1rem 0.82rem !important;
-    border-bottom: 1px solid var(--ema-control-line-soft, rgba(156, 171, 190, 0.34)) !important;
-    background: radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--ema-control-primary, #2558e8) 10%, transparent), transparent 14rem), transparent !important;
+    border-bottom: 1px solid rgba(156, 171, 190, 0.30) !important;
+    background: transparent !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel .panel-head span {
     display: block !important;
-    color: var(--ema-control-primary, #2558e8) !important;
-    font-size: var(--ema-fs-xxs, 0.64rem) !important;
+    color: #2558e8 !important;
+    font-size: 0.64rem !important;
     font-weight: 900 !important;
     letter-spacing: 0.12em !important;
     text-transform: uppercase !important;
@@ -188,7 +123,7 @@ const REPORT_SHELL_FIX_CSS = `
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel .panel-head strong {
     display: block !important;
     margin-top: 0.4rem !important;
-    color: var(--ema-control-text-strong, #0f2746) !important;
+    color: #0f2746 !important;
     font-size: 1rem !important;
     font-weight: 850 !important;
     line-height: 1.12 !important;
@@ -198,8 +133,8 @@ const REPORT_SHELL_FIX_CSS = `
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel .panel-head small {
     display: block !important;
     margin-top: 0.24rem !important;
-    color: var(--ema-control-muted, #64748b) !important;
-    font-size: var(--ema-fs-xs, 0.72rem) !important;
+    color: #64748b !important;
+    font-size: 0.72rem !important;
     font-weight: 680 !important;
   }
 
@@ -211,43 +146,84 @@ const REPORT_SHELL_FIX_CSS = `
     overflow-x: hidden !important;
     display: grid !important;
     align-content: start !important;
-    gap: 0.42rem !important;
-    padding: 0.65rem !important;
+    gap: 12px !important;
+    padding: 0.75rem 0.72rem 1rem !important;
     overscroll-behavior: contain !important;
   }
 
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-list::-webkit-scrollbar {
+    width: 8px !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-list::-webkit-scrollbar-thumb {
+    border-radius: 999px !important;
+    background: #c9d7ea !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-group {
+    position: relative !important;
+    display: grid !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-group + .featured-report-nav-group {
-    margin-top: 0.55rem !important;
-    padding-top: 0.55rem !important;
-    border-top: 1px solid var(--ema-control-line-soft, rgba(156, 171, 190, 0.34)) !important;
+    margin-top: 6px !important;
+    padding-top: 12px !important;
+    border-top: 1px solid rgba(156, 171, 190, 0.24) !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-group-title.report-nav-section-title,
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-group-title.dynamic-reporting-section-title,
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-group-title.featured-reporting-section-title {
     width: 100% !important;
-    min-height: 2.78rem !important;
+    min-height: 40px !important;
     display: flex !important;
     align-items: center !important;
-    gap: 0.58rem !important;
-    margin: 0 0 0.35rem !important;
-    padding: 0.62rem 0.68rem !important;
-    border: 1px solid transparent !important;
-    border-radius: 0.96rem !important;
-    color: var(--ema-control-primary, #2558e8) !important;
-    background: color-mix(in srgb, var(--ema-control-primary, #2558e8) 7%, transparent) !important;
-    box-shadow: none !important;
-    font-size: 0.68rem !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    padding: 8px 10px !important;
+    border: 1px solid rgba(37, 99, 235, 0.18) !important;
+    border-radius: 14px !important;
+    color: #2558e8 !important;
+    background: linear-gradient(180deg, #f3f7ff 0%, #edf4ff 100%) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.78) !important;
+    font-size: 0.69rem !important;
     font-weight: 900 !important;
-    letter-spacing: 0.12em !important;
+    letter-spacing: 0.09em !important;
     text-transform: uppercase !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-group-title.report-nav-section-title::before,
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-group-title.dynamic-reporting-section-title::before,
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-group-title.featured-reporting-section-title::before {
+    content: "⌄" !important;
+    width: 20px !important;
+    height: 20px !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    flex: 0 0 20px !important;
+    color: #2558e8 !important;
+    border-radius: 999px !important;
+    font-size: 0.72rem !important;
+    font-weight: 900 !important;
+    background: rgba(255,255,255,.64) !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-group-title small {
     margin-left: auto !important;
-    color: var(--ema-control-muted, #64748b) !important;
-    font-size: 0.64rem !important;
-    font-weight: 850 !important;
+    min-width: 22px !important;
+    height: 22px !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    padding: 0 7px !important;
+    color: #2558e8 !important;
+    background: rgba(37, 99, 235, 0.10) !important;
+    border-radius: 999px !important;
+    font-size: 0.62rem !important;
+    font-weight: 900 !important;
     letter-spacing: 0 !important;
     text-transform: none !important;
   }
@@ -255,38 +231,53 @@ const REPORT_SHELL_FIX_CSS = `
   body.ema-report-page-active .ema-report-module-root .report-nav-children,
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-children,
   body.ema-report-page-active .ema-report-module-root .dynamic-report-nav-children {
+    position: relative !important;
     display: grid !important;
-    gap: 0.42rem !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border-left: 0 !important;
+    gap: 8px !important;
+    margin: 0 0 0 12px !important;
+    padding: 2px 0 2px 16px !important;
+    border-left: 2px solid rgba(37, 99, 235, 0.14) !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-item,
   body.ema-report-page-active .ema-report-module-root .report-nav-child-item,
   body.ema-report-page-active .ema-report-module-root .dynamic-report-child-item,
   body.ema-report-page-active .ema-report-module-root .featured-report-child-item {
+    position: relative !important;
     width: 100% !important;
-    min-height: 3.36rem !important;
+    min-height: 44px !important;
     display: grid !important;
-    grid-template-columns: 38px minmax(0, 1fr) auto !important;
+    grid-template-columns: 32px minmax(0, 1fr) 18px !important;
     align-items: center !important;
-    gap: 0.6rem !important;
-    padding: 0.55rem !important;
+    gap: 8px !important;
+    padding: 6px 8px !important;
     border: 1px solid transparent !important;
-    border-radius: 0.96rem !important;
-    color: var(--ema-control-text, #173154) !important;
+    border-radius: 13px !important;
+    color: #173154 !important;
     background: transparent !important;
     box-shadow: none !important;
     text-align: left !important;
     transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease !important;
   }
 
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-item::after,
+  body.ema-report-page-active .ema-report-module-root .report-nav-child-item::after,
+  body.ema-report-page-active .ema-report-module-root .dynamic-report-child-item::after,
+  body.ema-report-page-active .ema-report-module-root .featured-report-child-item::after {
+    content: "⋮" !important;
+    justify-self: end !important;
+    color: #64748b !important;
+    font-size: 1rem !important;
+    line-height: 1 !important;
+    font-weight: 900 !important;
+    opacity: 0.92 !important;
+  }
+
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-item:hover,
   body.ema-report-page-active .ema-report-module-root .report-nav-child-item:hover,
   body.ema-report-page-active .ema-report-module-root .dynamic-report-child-item:hover {
-    border-color: var(--ema-control-border, rgba(124, 139, 161, 0.26)) !important;
-    background: color-mix(in srgb, var(--ema-control-primary, #2558e8) 6%, transparent) !important;
+    border-color: rgba(37, 99, 235, 0.14) !important;
+    background: rgba(37, 99, 235, 0.055) !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-item.active,
@@ -294,31 +285,42 @@ const REPORT_SHELL_FIX_CSS = `
   body.ema-report-page-active .ema-report-module-root .dynamic-report-child-item.active {
     color: #ffffff !important;
     border-color: transparent !important;
-    background: radial-gradient(circle at 20% 0%, rgba(255, 255, 255, 0.22), transparent 9rem), linear-gradient(135deg, #2558e8 0%, #087ea4 100%) !important;
-    box-shadow: 0 14px 28px rgba(37, 99, 235, 0.18) !important;
+    background: linear-gradient(135deg, #3b82f6 0%, #2558e8 100%) !important;
+    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.20) !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-item.active::after,
+  body.ema-report-page-active .ema-report-module-root .dynamic-report-child-item.active::after {
+    color: rgba(255,255,255,.82) !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-icon {
-    width: 38px !important;
-    height: 38px !important;
+    width: 30px !important;
+    height: 30px !important;
     display: grid !important;
     place-items: center !important;
-    border-radius: 0.84rem !important;
-    color: var(--pack-accent, var(--ema-control-primary, #2558e8)) !important;
-    background: color-mix(in srgb, var(--pack-accent, var(--ema-control-primary, #2558e8)) 10%, transparent) !important;
+    border-radius: 9px !important;
+    color: var(--pack-accent, #2558e8) !important;
+    background: color-mix(in srgb, var(--pack-accent, #2558e8) 12%, #ffffff) !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-icon svg,
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-icon svg * {
+    width: 16px !important;
+    height: 16px !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-item.active .featured-report-nav-icon,
   body.ema-report-page-active .ema-report-module-root .dynamic-report-child-item.active .featured-report-nav-icon {
     color: #ffffff !important;
-    background: rgba(255, 255, 255, 0.20) !important;
+    background: rgba(255, 255, 255, 0.18) !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-copy strong {
     display: block !important;
     color: inherit !important;
-    font-size: 0.77rem !important;
-    font-weight: 820 !important;
+    font-size: 0.78rem !important;
+    font-weight: 850 !important;
     line-height: 1.12 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -327,11 +329,11 @@ const REPORT_SHELL_FIX_CSS = `
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-copy small {
     display: block !important;
-    margin-top: 0.18rem !important;
-    color: var(--ema-control-muted, #64748b) !important;
+    margin-top: 0.12rem !important;
+    color: #64748b !important;
     font-size: 0.64rem !important;
-    font-weight: 650 !important;
-    line-height: 1.22 !important;
+    font-weight: 720 !important;
+    line-height: 1.18 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
@@ -339,7 +341,7 @@ const REPORT_SHELL_FIX_CSS = `
 
   body.ema-report-page-active .ema-report-module-root .featured-report-nav-item.active .featured-report-nav-copy small,
   body.ema-report-page-active .ema-report-module-root .dynamic-report-child-item.active .featured-report-nav-copy small {
-    color: rgba(255, 255, 255, 0.80) !important;
+    color: rgba(255, 255, 255, 0.82) !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content {
@@ -389,6 +391,7 @@ function installReportShellFixes() {
 
   document.documentElement.classList.add("ema-report-page-active");
   document.body.classList.add("ema-report-page-active");
+  document.body.classList.remove("ema-report-sidebar-collapsed");
 
   let style = document.getElementById(REPORT_SHELL_FIX_STYLE_ID) as HTMLStyleElement | null;
   if (!style) {
@@ -408,14 +411,7 @@ function removeReportShellFixes() {
   document.getElementById(REPORT_SHELL_FIX_STYLE_ID)?.remove();
 }
 
-function readInitialSidebarState() {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(REPORT_SIDEBAR_STORAGE_KEY) === "true";
-}
-
 export default function ReportShellWrapper() {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(readInitialSidebarState);
-
   useEffect(() => {
     installReportShellFixes();
     window.requestAnimationFrame(installReportShellFixes);
@@ -427,25 +423,5 @@ export default function ReportShellWrapper() {
     };
   }, []);
 
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.body.classList.toggle("ema-report-sidebar-collapsed", sidebarCollapsed);
-    window.localStorage.setItem(REPORT_SIDEBAR_STORAGE_KEY, String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
-
-  return (
-    <>
-      <button
-        type="button"
-        className="ema-report-sidebar-toggle"
-        aria-label={sidebarCollapsed ? "Open report sidebar" : "Close report sidebar"}
-        aria-expanded={!sidebarCollapsed}
-        onClick={() => setSidebarCollapsed((current) => !current)}
-      >
-        <span>{sidebarCollapsed ? "›" : "‹"}</span>
-        <span>{sidebarCollapsed ? "Open" : "Close"}</span>
-      </button>
-      <ReportDynamicWrapper />
-    </>
-  );
+  return <ReportDynamicWrapper />;
 }
