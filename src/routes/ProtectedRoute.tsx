@@ -17,7 +17,11 @@ type ProtectedRouteProps = {
 };
 
 const VITE_ENV = ((import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env || {});
-const API_BASE = (VITE_ENV.VITE_API_BASE_URL || VITE_ENV.VITE_API_URL || "http://localhost:3001").replace(/\/$/, "");
+const runtimeOrigin =
+  typeof window !== "undefined" && window.location?.origin
+    ? window.location.origin
+    : "";
+const API_BASE = (VITE_ENV.VITE_API_BASE_URL || VITE_ENV.VITE_API_URL || runtimeOrigin).replace(/\/+$/, "");
 
 const TOKEN_KEYS = [
   "token",
