@@ -83,9 +83,9 @@ const pageMeta: Record<string, PageMeta> = {
     searchPlaceholder: "Search settings, roles, users or clients...",
   },
     "/report": {
-    title: "Report",
-    subtitle: "Generate and review EMA operational reports.",
-    searchPlaceholder: "Search reports, modules, users or assets...",
+    title: "Report Center",
+    subtitle: "Build management-ready report packs and AI dynamic reports.",
+    searchPlaceholder: "Search report packs, AI modules or outputs...",
   },
 };
 
@@ -219,114 +219,82 @@ function getDisplayName(user: AccessUser | null) {
 export function TopNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const accessUser = mergeAccessUser(user);
-  const { isDark, toggleTheme } = useTheme();
-  const [searchTerm, setSearchTerm] = useState(() => getUrlSearchValue(location.search));
+  const { theme, toggleTheme } = useTheme();
+  const { user: contextUser, logout } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const current = useMemo(() => resolvePageMeta(location.pathname), [location.pathname]);
-  const searchDestination = useMemo(() => resolveSearchDestination(location.pathname), [location.pathname]);
+  const meta = useMemo(() => resolvePageMeta(location.pathname), [location.pathname]);
+  const accessUser = useMemo(() => mergeAccessUser(contextUser), [contextUser]);
+  const displayName = getDisplayName(accessUser);
+  const primaryRole = getPrimaryRoleLabel(accessUser);
+  const fullRole = getFullRoleLabel(accessUser);
 
   useEffect(() => {
-    setSearchTerm(getUrlSearchValue(location.search));
+    setSearchQuery(getUrlSearchValue(location.search));
   }, [location.pathname, location.search]);
 
-  const submitSearch = (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault();
-    const query = searchTerm.trim();
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+    const destination = resolveSearchDestination(location.pathname);
+    emitGlobalSearch(query, destination);
+    navigate(`${destination}?q=${encodeURIComponent(query)}`);
+  }
 
-    if (!query) {
-      emitGlobalSearch("", searchDestination);
-      return;
-    }
-
-    if (location.pathname !== searchDestination) {
-      navigate(`${searchDestination}?q=${encodeURIComponent(query)}`);
-      window.setTimeout(() => emitGlobalSearch(query, searchDestination), 0);
-      return;
-    }
-
-    const params = new URLSearchParams(location.search);
-    params.set("q", query);
-    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
-    emitGlobalSearch(query, location.pathname);
-  };
-
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-
-    if (resolveSearchDestination(location.pathname) === normalizePathname(location.pathname)) {
-      emitGlobalSearch(value, location.pathname);
-    }
-  };
-
-  const clearSearch = () => {
-    setSearchTerm("");
-    emitGlobalSearch("", location.pathname);
-
-    if (resolveSearchDestination(location.pathname) === normalizePathname(location.pathname) && location.search) {
-      navigate(location.pathname, { replace: true });
-    }
-  };
-
-  const roleLabel = getPrimaryRoleLabel(accessUser);
-  const roleTitle = `${getDisplayName(accessUser)} • ${getFullRoleLabel(accessUser)}`;
+  function clearSearch() {
+    setSearchQuery("");
+    emitGlobalSearch("", normalizePathname(location.pathname));
+    navigate(normalizePathname(location.pathname));
+  }
 
   return (
     <>
-      <header className="ema-topbar">
-        <div className="ema-topbar-title">
-          <h1>{current.title}</h1>
-          <p>{current.subtitle}</p>
+      <header className="topbar">
+        <div className="topbar__heading">
+          <h1>{meta.title}</h1>
+          <p>{meta.subtitle}</p>
         </div>
 
-        <form className="ema-global-search ema-global-search-form" role="search" onSubmit={submitSearch}>
-          <button type="submit" className="ema-global-search-submit" aria-label="Search">
-            <Search size={17} />
-          </button>
+        <form className="topbar__search" onSubmit={handleSearchSubmit}>
+          <Search size={18} />
           <input
-            value={searchTerm}
-            onChange={(event) => handleSearchChange(event.target.value)}
-            placeholder={current.searchPlaceholder}
-            aria-label="Global search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={meta.searchPlaceholder}
           />
-          {searchTerm ? (
-            <button type="button" className="ema-global-search-clear" onClick={clearSearch} aria-label="Clear search">
-              <X size={15} />
+          {searchQuery ? (
+            <button type="button" aria-label="Clear search" onClick={clearSearch}>
+              <X size={16} />
             </button>
           ) : null}
         </form>
 
-        <button type="button" className="ema-icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
-          {isDark ? <Sun size={17} /> : <Moon size={17} />}
-        </button>
+        <div className="topbar__actions">
+          <button type="button" className="icon-btn ai-btn" aria-label="Open EMA Assist" onClick={openEmaAssistant}>
+            <Sparkles size={18} />
+          </button>
+          <button type="button" className="icon-btn" aria-label="Notifications">
+            <Bell size={18} />
+          </button>
+          <button type="button" className="icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
 
-        <button type="button" className="ema-icon-btn" aria-label="Notifications">
-          <Bell size={17} />
-        </button>
+          <div className="topbar__user" title={fullRole}>
+            <UserCircle size={28} />
+            <div>
+              <strong>{displayName}</strong>
+              <span>{primaryRole}</span>
+            </div>
+          </div>
 
-        <button
-          type="button"
-          className="btn btn-primary d-flex align-items-center gap-2 ema-ai-topbar-btn"
-          onClick={openEmaAssistant}
-        >
-          <Sparkles size={17} />
-          AI Assistant
-        </button>
-
-        <button
-          type="button"
-          className="btn btn-light d-flex align-items-center gap-2 ema-admin-topbar-btn"
-          title={roleTitle}
-        >
-          <UserCircle size={18} />
-          <span className="ema-topbar-role-label">{roleLabel}</span>
-        </button>
+          <button type="button" className="logout-btn" onClick={logout}>
+            Logout
+          </button>
+        </div>
       </header>
-
-      <EmaAssistWidget showFloatingLauncher={false} />
+      <EmaAssistWidget />
     </>
   );
 }
-
-export default TopNavbar;
