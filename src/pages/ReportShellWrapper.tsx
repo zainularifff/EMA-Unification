@@ -354,8 +354,10 @@ const REPORT_SHELL_FIX_CSS = `
     max-height: 100% !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
+    padding-right: 8px !important;
     scrollbar-gutter: stable !important;
     -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
   }
 
   body.ema-report-page-active .ema-report-module-root .settings-content.report-main-content::-webkit-scrollbar {
@@ -374,20 +376,47 @@ const REPORT_SHELL_FIX_CSS = `
   }
 
   body.ema-report-page-active .ema-report-module-root .report-workspace-shell,
-  body.ema-report-page-active .ema-report-module-root .report-workspace-body,
-  body.ema-report-page-active .ema-report-module-root .featured-report-layout,
-  body.ema-report-page-active .ema-report-module-root .featured-report-main-panel,
-  body.ema-report-page-active .ema-report-module-root .report-config-panel,
-  body.ema-report-page-active .ema-report-module-root .report-config-panel .config-card {
+  body.ema-report-page-active .ema-report-module-root .report-workspace-body {
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
     overflow: visible !important;
   }
 
+  body.ema-report-page-active .ema-report-module-root .featured-report-layout {
+    height: auto !important;
+    min-height: max-content !important;
+    max-height: none !important;
+    align-items: start !important;
+    overflow: visible !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-main-panel,
+  body.ema-report-page-active .ema-report-module-root .report-config-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    align-self: start !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .report-config-panel .config-card {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: 28px !important;
+  }
+
+  body.ema-report-page-active .ema-report-module-root .client-rnr-fields,
+  body.ema-report-page-active .ema-report-module-root .config-form,
+  body.ema-report-page-active .ema-report-module-root .config-actions {
+    overflow: visible !important;
+  }
+
   body.ema-report-page-active .ema-report-module-root .report-workspace-body {
     padding-top: 0 !important;
-    padding-bottom: 56px !important;
+    padding-bottom: 80px !important;
   }
 `;
 
