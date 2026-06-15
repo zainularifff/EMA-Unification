@@ -1965,6 +1965,86 @@ export default function AppWebRestriction() {
 
 
 
+        /* App Restriction hero KPI fix: keep header KPI cards above the main card after save/toast messages. */
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right {
+          position: relative !important;
+          z-index: 5 !important;
+          display: grid !important;
+          grid-template-columns: minmax(260px, 1fr) minmax(560px, 58%) !important;
+          align-items: center !important;
+          gap: 1rem !important;
+          min-height: 124px !important;
+          overflow: hidden !important;
+          isolation: isolate !important;
+        }
+
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right > div:first-child {
+          min-width: 0 !important;
+          position: relative !important;
+          z-index: 2 !important;
+        }
+
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right h2,
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right p {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .settings-hero.ema-hero-kpi-right .settings-inline-alert {
+          display: none !important;
+        }
+
+        .appwebrestriction-module .settings-score.ema-kpi-right-pair {
+          position: relative !important;
+          z-index: 6 !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          gap: 0.75rem !important;
+          align-items: stretch !important;
+          justify-content: stretch !important;
+        }
+
+        .appwebrestriction-module .settings-score.ema-kpi-right-pair .score-box {
+          width: 100% !important;
+          min-width: 0 !important;
+          min-height: 76px !important;
+          height: 76px !important;
+          margin: 0 !important;
+          overflow: hidden !important;
+        }
+
+        .appwebrestriction-module .settings-score.ema-kpi-right-pair .score-box span,
+        .appwebrestriction-module .settings-score.ema-kpi-right-pair .score-box strong,
+        .appwebrestriction-module .settings-score.ema-kpi-right-pair .score-box small {
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .appwebrestriction-module .appweb-main-card {
+          position: relative !important;
+          z-index: 1 !important;
+        }
+
+        @media (max-width: 1280px) {
+          .appwebrestriction-module .settings-hero.ema-hero-kpi-right {
+            grid-template-columns: 1fr !important;
+            min-height: auto !important;
+            overflow: visible !important;
+          }
+
+          .appwebrestriction-module .settings-score.ema-kpi-right-pair {
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          }
+        }
+
+
+
         /* App Restriction pagination fix: keep every pagination control in one clean row. */
         .appwebrestriction-module .appweb-compact-pagination {
           width: 100% !important;
@@ -2186,11 +2266,6 @@ export default function AppWebRestriction() {
                 Selected target: {selectedTarget?.label || 'None'}
                 {selectedTarget?.Object_Full_Name ? ` (${selectedTarget.Object_Full_Name})` : ''}
               </p>
-              {message && (
-                <div className="settings-inline-alert d-inline-flex gap-2 align-items-start mt-2">
-                  <Info size={14} className="mt-0.5 shrink-0" /> {message}
-                </div>
-              )}
             </div>
 
             <div className="settings-score ema-kpi-right-pair">

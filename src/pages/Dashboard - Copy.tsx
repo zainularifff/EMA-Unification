@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   Ticket,
+  Users,
   Wrench,
   X,
   Zap,
@@ -443,19 +444,19 @@ const TOKEN_STORAGE_KEYS = ['ema-access-token', 'ema-token', 'accessToken', 'tok
 const AUTH_PAYLOAD_KEYS = ['ema-auth', 'auth', 'user', 'ema-user', 'currentUser', 'authUser', 'ema-current-user'];
 
 const VIEW_TITLES: Record<string, { title: string; subtitle: string }> = {
-  overview: { title: 'Dashboard Summary', subtitle: 'Current IT summary.' },
+  overview: { title: 'Operations Command Snapshot', subtitle: 'Current IT operations summary.' },
   hardware: { title: 'Devices', subtitle: 'Device list, online status, old sync and OS details.' },
-  software: { title: 'Software', subtitle: 'Installed software, category and scan status.' },
-  network: { title: 'Network', subtitle: 'Known IP, registered device and subnet view.' },
+  software: { title: 'Software Estate', subtitle: 'Installations, classification quality and scan freshness.' },
+  network: { title: 'Network Coverage', subtitle: 'Known IPs, registered devices, active IPs, subnet and workgroup view.' },
   geolocation: { title: 'Location', subtitle: 'Devices with location and devices that are not mapped yet.' },
   tasks: { title: 'Automation Jobs', subtitle: 'Running, completed, failed jobs and recent task execution.' },
-  risk: { title: 'Risk', subtitle: 'Important device, update, network and location risk.' },
-  departments: { title: 'Branch', subtitle: 'Branch device, ticket and update status.' },
+  risk: { title: 'Risk List', subtitle: 'Important risk items across devices, OS, patch, network and location.' },
+  departments: { title: 'Branch Health', subtitle: 'Branch asset coverage, ticket load, update score and health score.' },
   serviceDesk: { title: 'Open Tickets', subtitle: 'Open, overdue and SLA status.' },
   patch: { title: 'Security Updates', subtitle: 'Device update status, missing updates and branch scores.' },
   alerts: { title: 'Ticket Alerts', subtitle: 'Ticket records that need follow-up.' },
   attention: { title: 'Exception Details', subtitle: 'Detailed records for follow-up signals.' },
-  dataConfidence: { title: 'Data Check', subtitle: 'Freshness and mapping status.' },
+  dataConfidence: { title: 'Data Confidence', subtitle: 'Freshness and mapping reliability across operational areas.' },
 };
 
 function resolveApiBaseUrl() {
@@ -1121,12 +1122,12 @@ function resolveDomainIcon(name: string): LucideIcon {
 function domainActionLabel(name: string, status: 'Healthy' | 'Watch' | 'Action') {
   const view = resolveDomainView(name);
   if (status === 'Healthy') return 'Monitor and maintain baseline';
-  if (view === 'hardware') return 'Check old device data and missing device info';
-  if (view === 'software') return 'Check software category and inventory data';
-  if (view === 'network') return 'Check unmanaged IP records';
-  if (view === 'geolocation') return 'Update missing or old location data';
-  if (view === 'tasks') return 'Check failed or delayed jobs';
-  if (view === 'dataConfidence') return 'Check data before using this dashboard';
+  if (view === 'hardware') return 'Validate stale endpoints and device identity';
+  if (view === 'software') return 'Review classification and inventory coverage';
+  if (view === 'network') return 'Investigate unmanaged IP exposure';
+  if (view === 'geolocation') return 'Refresh missing or stale location data';
+  if (view === 'tasks') return 'Review failed or delayed execution jobs';
+  if (view === 'dataConfidence') return 'Validate data freshness before using the dashboard for decisions';
   return 'Review details and assign assignee';
 }
 
@@ -1502,11 +1503,11 @@ export default function ITOperationsDashboard() {
   const securityNeedUpdateDevices = hasSecurityUpdateScore ? Math.max(0, securityUpdateTotalDevices - securityUpdatedDevices) : 0;
   const criticalUpdateIssueCount = Math.max(numberOrFallback(security.criticalVulnerabilities), numberOrFallback(risk.patchCriticalItems));
   const dataConfidenceRows = useMemo<BreakdownItem[]>(() => [
-    { name: 'Device Data', value: endpointFreshnessPercent, percent: endpointFreshnessPercent },
-    { name: 'Software Data', value: softwareMappingPercent, percent: softwareMappingPercent },
-    { name: 'Network Data', value: networkRegistrationPercent, percent: networkRegistrationPercent },
-    { name: 'Location Data', value: locationFreshPercent, percent: locationFreshPercent },
-    { name: 'Job Status', value: taskCompletionPercent, percent: taskCompletionPercent },
+    { name: 'Device freshness', value: endpointFreshnessPercent, percent: endpointFreshnessPercent },
+    { name: 'Software mapping', value: softwareMappingPercent, percent: softwareMappingPercent },
+    { name: 'Network mapping', value: networkRegistrationPercent, percent: networkRegistrationPercent },
+    { name: 'Location data', value: locationFreshPercent, percent: locationFreshPercent },
+    { name: 'Task execution', value: taskCompletionPercent, percent: taskCompletionPercent },
     { name: 'Ticket SLA', value: serviceDesk.slaAchievement, percent: serviceDesk.slaAchievement },
   ], [endpointFreshnessPercent, locationFreshPercent, networkRegistrationPercent, serviceDesk.slaAchievement, softwareMappingPercent, taskCompletionPercent]);
   const dataConfidenceScore = useMemo(() => averagePercent(dataConfidenceRows), [dataConfidenceRows]);
@@ -1676,69 +1677,6 @@ export default function ITOperationsDashboard() {
       view: 'risk',
     },
   ], [endpointOnlinePercent, geolocation.staleLocations, geolocation.trackedDevices, geolocation.unknownLocations, risk.missingGeoDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, locationFreshPercent, patchComplianceAverage, risk.score, risk.totalCritical, risk.totalHigh, risk.totalRiskItems, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices, security.criticalVulnerabilities, serviceDesk.overdueTickets, serviceDesk.pendingTickets, serviceDesk.slaAchievement, taskCompletionPercent, tasks.failedTasks, tasks.latestTaskTime, tasks.runningTasks]);
-
-
-  const overviewHealthRows = useMemo<BreakdownItem[]>(() => [
-    { name: 'Devices Online', value: endpointOnlinePercent, percent: endpointOnlinePercent },
-    { name: 'Updates Done', value: hasSecurityUpdateScore ? securityUpdateScore : 0, percent: hasSecurityUpdateScore ? securityUpdateScore : 0 },
-    { name: 'Tickets On Track', value: onTrackTicketPercent, percent: onTrackTicketPercent },
-    { name: 'Location Ready', value: locationFreshPercent, percent: locationFreshPercent },
-    { name: 'Jobs Completed', value: taskCompletionPercent, percent: taskCompletionPercent },
-    { name: 'Network Mapped', value: networkRegistrationPercent, percent: networkRegistrationPercent },
-  ], [endpointOnlinePercent, hasSecurityUpdateScore, locationFreshPercent, networkRegistrationPercent, onTrackTicketPercent, securityUpdateScore, taskCompletionPercent]);
-
-  const overviewActionItems = useMemo(() => [
-    {
-      id: 'overdue-tickets',
-      label: 'Overdue Tickets',
-      value: overdueTicketCount,
-      note: overdueTicketCount > 0 ? 'Check ticket assignee first' : 'No overdue ticket found',
-      tone: overdueTicketCount > 0 ? 'red' : 'green',
-      icon: Ticket,
-      view: 'serviceDesk',
-      item: 'Overdue',
-    },
-    {
-      id: 'need-update',
-      label: 'Need Update',
-      value: securityNeedUpdateDevices,
-      note: hasSecurityUpdateScore ? 'Devices that still need update' : 'Update data not checked yet',
-      tone: securityNeedUpdateDevices > 0 ? 'amber' : 'green',
-      icon: ShieldCheck,
-      view: 'patch',
-      item: 'Need Update',
-    },
-    {
-      id: 'critical-risk',
-      label: 'Critical Risk',
-      value: risk.totalCritical,
-      note: risk.totalCritical > 0 ? 'Review critical device risk' : 'No critical risk found',
-      tone: risk.totalCritical > 0 ? 'red' : 'green',
-      icon: ShieldAlert,
-      view: 'risk',
-      item: 'Critical',
-    },
-    {
-      id: 'location-map',
-      label: 'Location Mapping',
-      value: risk.missingGeoDevices,
-      note: risk.missingGeoDevices > 0 ? 'Devices without location mapping' : 'Location mapping looks good',
-      tone: risk.missingGeoDevices > 0 ? 'purple' : 'green',
-      icon: MapPin,
-      view: 'geolocation',
-      item: 'Not Mapped',
-    },
-    {
-      id: 'failed-jobs',
-      label: 'Failed Jobs',
-      value: tasks.failedTasks,
-      note: tasks.failedTasks > 0 ? 'Check automation job result' : 'No failed job found',
-      tone: tasks.failedTasks > 0 ? 'amber' : 'green',
-      icon: Wrench,
-      view: 'tasks',
-      item: 'Failed',
-    },
-  ], [hasSecurityUpdateScore, overdueTicketCount, risk.missingGeoDevices, risk.totalCritical, securityNeedUpdateDevices, tasks.failedTasks]);
 
   const riskCategoryRows = useMemo<BreakdownItem[]>(() => {
     const existing = Array.isArray(risk.categoryBreakdown) ? risk.categoryBreakdown.filter((row) => numberOrFallback(row.value) > 0 || numberOrFallback(row.percent) > 0) : [];
@@ -1956,69 +1894,21 @@ export default function ITOperationsDashboard() {
 
   const renderCommandMode = () => (
     <>
-      <section className="itops-pro-kpi-grid itops-main-kpi-grid">
+      <section className="itops-pro-kpi-grid">
         {focusCards.map((card) => <KpiCard key={card.id} card={card} onOpen={openLevel2} />)}
       </section>
 
-      <section className="itops-main-overview-grid">
-        <Panel title="Today" subtitle="Simple view of what is okay and what needs attention." icon={Gauge} className="span-2 main-today-panel">
-          <div className="itops-main-today-layout">
-            <button type="button" className="itops-main-health-card" onClick={() => openLevel2('overview')}>
-              <span>Overall Status</span>
-              <strong>{formatPercent(overallHealth, 0)}</strong>
-              <small>{healthStatus(overallHealth) === 'Healthy' ? 'Looks good' : healthStatus(overallHealth) === 'Watch' ? 'Needs monitoring' : 'Needs action'}</small>
-              <em><i style={{ width: `${clampPercent(overallHealth)}%` }} /></em>
-            </button>
-
-            <div className="itops-main-ready-list">
-              {overviewHealthRows.map((row) => {
-                const percent = clampPercent(row.percent ?? row.value);
-                const status = healthStatus(percent).toLowerCase();
-                const targetView = row.name.includes('Update') ? 'patch' : row.name.includes('Ticket') ? 'serviceDesk' : resolveDomainView(row.name);
-                return (
-                  <button type="button" key={`overview-health-${row.name}`} className={`itops-main-ready-row ${status}`} onClick={() => openLevel2(targetView)}>
-                    <div>
-                      <span>{row.name}</span>
-                      <strong>{formatPercent(percent, 0)}</strong>
-                    </div>
-                    <em><i style={{ width: `${percent}%` }} /></em>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </Panel>
-
-        <Panel title="Need Action" subtitle="Main items to check first." icon={AlertTriangle} className="main-action-panel">
-          <div className="itops-main-action-list">
-            {overviewActionItems.map((action) => {
-              const Icon = action.icon;
-              return (
-                <button type="button" key={action.id} className={`itops-main-action-row ${action.tone}`} onClick={() => openLevel3(action.view, action.item)}>
-                  <span><Icon size={17} /></span>
-                  <div>
-                    <strong>{action.label}</strong>
-                    <small>{action.note}</small>
-                  </div>
-                  <b>{formatNumber(action.value)}</b>
-                </button>
-              );
-            })}
-          </div>
-        </Panel>
-      </section>
-
-      <section className="itops-pro-command-grid itops-main-command-grid">
-        <Panel title="Ticket Movement" subtitle="New, closed and open tickets." icon={Activity} className="span-2" action={<div className="itops-pro-legend"><span className="new" /> New <span className="resolved" /> Closed <span className="open" /> Open</div>}>
+      <section className="itops-pro-command-grid">
+        <Panel title="Live Operations Pulse" subtitle="New, resolved and open backlog movement from Service Desk data." icon={Activity} className="span-2" action={<div className="itops-pro-legend"><span className="new" /> New <span className="resolved" /> Resolved <span className="open" /> Open</div>}>
           <IncidentTrendChart data={incidentTrend} summary={trendSummary} />
         </Panel>
 
-        <Panel title="Risk" subtitle="Critical and high items to review." icon={ShieldAlert}>
+        <Panel title="Risk Command" subtitle="Severity, category and endpoint lifecycle exposure." icon={ShieldAlert}>
           <button type="button" className="itops-risk-command-summary" onClick={() => openLevel2('risk')}>
             <div className="itops-risk-command-copy">
-              <span>Risk Status</span>
+              <span>Exposure Index</span>
               <strong>{formatNumber(risk.score)}<em>/100</em></strong>
-              <small>Based on device, update, network, location and job signals.</small>
+              <small>Weighted from device, update, network, location and task signals. Use the drilldown to review category and lifecycle details.</small>
             </div>
             <StatusBadge status={riskStatus(risk.score, 35, 70)} />
             <div className="itops-risk-command-meter" aria-hidden="true"><i style={{ width: `${clampPercent(risk.score)}%` }} /></div>
@@ -2028,36 +1918,37 @@ export default function ITOperationsDashboard() {
             <button type="button" className="itops-risk-severity itops-risk-severity-critical" onClick={() => openLevel3('risk', 'Critical')}>
               <span>Critical</span>
               <strong>{formatNumber(risk.totalCritical)}</strong>
-              <small>Check now</small>
+              <small>Immediate review</small>
             </button>
             <button type="button" className="itops-risk-severity itops-risk-severity-high" onClick={() => openLevel3('risk', 'High')}>
               <span>High</span>
               <strong>{formatNumber(risk.totalHigh)}</strong>
-              <small>Check next</small>
+              <small>Prioritise this cycle</small>
             </button>
             <button type="button" className="itops-risk-severity itops-risk-severity-medium" onClick={() => openLevel3('risk', 'Medium')}>
               <span>Medium</span>
               <strong>{formatNumber(risk.totalMedium)}</strong>
-              <small>Monitor</small>
+              <small>Monitor and schedule</small>
             </button>
           </div>
 
           <div className="itops-risk-driver-mini">
-            <BarList items={riskCategoryRows} limit={4} emptyLabel="No risk cause returned yet." />
+            <BarList items={risk.categoryBreakdown} limit={4} emptyLabel="No risk driver breakdown returned yet." />
           </div>
-          <button type="button" className="itops-pro-link-btn itops-pro-link-btn-risk" onClick={() => openLevel2('risk')}>Open risk <ChevronRight size={15} /></button>
+          <button type="button" className="itops-pro-link-btn itops-pro-link-btn-risk" onClick={() => openLevel2('risk')}>Review risk details <ChevronRight size={15} /></button>
         </Panel>
 
-        <Panel title="System Health" subtitle="Simple health by area." icon={BarChart3} className="span-2">
+        <Panel title="Coverage & Data Quality" subtitle="Readiness by endpoint, software, network, location and automation area." icon={BarChart3} className="span-2">
           <HealthRadar items={domainHealthForMatrix} onOpen={(view) => openLevel2(view)} />
         </Panel>
 
-        <Panel title="Data Check" subtitle="Shows if the dashboard data is ready to use." icon={Gauge}>
+        <Panel title="Dashboard Readiness" subtitle="Shows whether the dashboard is reliable before managers act on it." icon={Gauge}>
           <DataConfidenceCard score={dataConfidenceScore} rows={dataConfidenceRows} onOpen={() => openLevel2('dataConfidence')} />
         </Panel>
       </section>
     </>
   );
+
   const renderBreakdownDrillCards = (items: BreakdownItem[], view: string, emptyLabel = 'No breakdown data yet.') => {
     if (!items.length) return <EmptyState label={emptyLabel} />;
 
@@ -3145,8 +3036,8 @@ export default function ITOperationsDashboard() {
       return (
         <div className="itops-pro-drawer-stack">
           <div className="itops-pro-story-panel">
-            <strong>Dashboard Summary</strong>
-            <p>This view shows the main dashboard numbers in a simple action list. Click any item below to open the details.</p>
+            <strong>Operational Breakdown from Command Center</strong>
+            <p>This view translates the executive health score into actionable queues. Click any item below to open supporting details.</p>
           </div>
           <div className="itops-pro-drill-grid">
             <DrillCard icon={Laptop} label="Devices" value={formatNumber(hardware.totalDevices)} note="Online, old sync, OS and model summary" tone="blue" onClick={() => openLevel3('hardware')} />
@@ -3156,7 +3047,7 @@ export default function ITOperationsDashboard() {
             <DrillCard icon={Network} label="Network Coverage" value={formatNumber(network.unregisteredIps)} note="Unregistered IP and workgroup gaps" tone="cyan" onClick={() => openLevel3('network')} />
             <DrillCard icon={ShieldAlert} label="Critical Risk" value={`${formatNumber(risk.totalCritical)} / ${formatNumber(risk.totalHigh)}`} note="Critical/high findings requiring review" tone="purple" onClick={() => openLevel3('risk')} />
           </div>
-          <Panel title="Ticket Movement" subtitle="New, closed and open tickets." icon={Activity}>
+          <Panel title="Live Operations Pulse" subtitle="Backlog movement and incident flow for operational decision-making." icon={Activity}>
             <div className="itops-pro-summary-row">
               <MiniMetric label="New" value={formatNumber(trendSummary.newIncidents)} tone="blue" />
               <MiniMetric label="Resolved" value={formatNumber(trendSummary.resolved)} tone="green" />
@@ -3409,7 +3300,7 @@ export default function ITOperationsDashboard() {
       return (
         <div className="itops-pro-drawer-stack">
           <DrilldownTrace domain="Data Confidence" stage="breakdown" />
-          <div className="itops-pro-story-panel"><strong>Data Check</strong><p>This view shows whether the dashboard data is ready to use. Low score means the data needs refresh, mapping or review.</p></div>
+          <div className="itops-pro-story-panel"><strong>Dashboard Readiness Breakdown</strong><p>Use this view to validate whether managers can trust the dashboard before acting on the KPI cards. Each score translates coverage, mapping and freshness into an operational confidence signal.</p></div>
           <div className="itops-pro-drill-grid">
             {dataConfidenceRows.map((row) => (
               <DrillCard key={row.name} icon={Gauge} label={row.name} value={formatPercent(row.percent ?? row.value, 0)} note="Open details" tone={healthStatus(row.percent ?? row.value) === 'Healthy' ? 'green' : healthStatus(row.percent ?? row.value) === 'Watch' ? 'amber' : 'red'} onClick={() => openLevel3('dataConfidence', row.name)} />
@@ -3448,8 +3339,8 @@ export default function ITOperationsDashboard() {
       return (
         <div className="itops-pro-drawer-stack">
           <div className="itops-pro-story-panel level3">
-            <strong>Dashboard Details</strong>
-            <p>Selected: {selectedLabel}. This view shows the details behind the dashboard score.</p>
+            <strong>Command Center Details</strong>
+            <p>Selected: {selectedLabel}. This view shows the supporting signals behind the Command Center health score.</p>
           </div>
           <HealthRadar items={domainHealth} onOpen={(view, item) => openLevel3(view, item)} />
           <IncidentTrendChart data={incidentTrend} summary={trendSummary} />
@@ -3708,10 +3599,10 @@ export default function ITOperationsDashboard() {
       return (
         <div className="itops-pro-drawer-stack">
           <DrilldownTrace domain="Data Confidence" stage="evidence" selected={selectedLabel} />
-          <div className="itops-pro-story-panel level3"><strong>Data Check Details</strong><p>Selected: {selectedLabel}. This view explains whether the dashboard data is ready to use.</p></div>
+          <div className="itops-pro-story-panel level3"><strong>Data Confidence Details</strong><p>Selected: {selectedLabel}. This view explains how the dashboard confidence index is translated into manager-ready decision signals.</p></div>
           <div className="itops-pro-summary-row four">
             <MiniMetric label="Overall Confidence" value={formatPercent(dataConfidenceScore, 0)} tone="blue" />
-            <MiniMetric label="Device Data" value={formatPercent(endpointFreshnessPercent, 0)} tone="blue" />
+            <MiniMetric label="Device Freshness" value={formatPercent(endpointFreshnessPercent, 0)} tone="blue" />
             <MiniMetric label="Location Data" value={formatPercent(locationFreshPercent, 0)} tone="green" />
             <MiniMetric label="Network Mapping" value={formatPercent(networkRegistrationPercent, 0)} tone="cyan" />
           </div>
@@ -3761,13 +3652,13 @@ export default function ITOperationsDashboard() {
 
       <header className="itops-pro-hero">
         <div>
-          <span className="itops-pro-overline"><Sparkles size={15} /> Dashboard</span>
-          <h1>IT Overview</h1>
-          <p>Simple view for devices, tickets, updates, jobs, location and risk.</p>
+          <span className="itops-pro-overline"><Sparkles size={15} /> IT Operations Dashboard</span>
+          <h1>Operations Command Center</h1>
+          <p>Professional operations dashboard for unified IT operations monitoring.</p>
           <div className="itops-pro-hero-meta">
             <span><CalendarDays size={14} /> Range: {rangeLabel || '-'}</span>
             <span><Activity size={14} /> Generated: {formatDateLabel(generatedAt)}</span>
-            <span><Gauge size={14} /> Overall: {formatPercent(overallHealth, 0)}</span>
+            <span><Gauge size={14} /> Health: {formatPercent(overallHealth, 0)}</span>
           </div>
         </div>
 
@@ -8640,406 +8531,6 @@ body.itops-dashboard-page-active .router-content {
 
 @media (max-width: 760px) {
   .itops-security-update-split { grid-template-columns: 1fr; }
-}
-
-
-/* Main dashboard simple wording + space usage */
-.itops-main-kpi-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 14px;
-  margin: 18px 0 14px;
-}
-
-.itops-main-kpi-grid .itops-pro-kpi {
-  min-height: 154px;
-  padding: 16px;
-  border-radius: 22px;
-}
-
-.itops-main-kpi-grid .itops-pro-kpi-top {
-  margin-bottom: 12px;
-}
-
-.itops-main-kpi-grid .itops-pro-kpi-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 14px;
-}
-
-.itops-main-kpi-grid .itops-pro-kpi strong {
-  font-size: 27px;
-}
-
-.itops-main-kpi-grid .itops-pro-kpi small {
-  min-height: 34px;
-  margin-top: 8px;
-}
-
-.itops-main-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.itops-main-overview-grid .itops-pro-panel,
-.itops-main-command-grid .itops-pro-panel {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(147, 197, 253, 0.38);
-}
-
-.itops-main-today-layout {
-  display: grid;
-  grid-template-columns: minmax(210px, 0.68fr) minmax(0, 1.32fr);
-  gap: 14px;
-  align-items: stretch;
-}
-
-.itops-main-health-card {
-  width: 100%;
-  min-height: 220px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 18px;
-  border: 1px solid rgba(191, 219, 254, 0.94);
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 85% 12%, rgba(56, 189, 248, 0.18), transparent 32%),
-    linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
-  color: #0f172a;
-  text-align: left;
-  cursor: pointer;
-  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.10);
-}
-
-.itops-main-health-card span,
-.itops-main-stack-head span,
-.itops-main-ready-row span,
-.itops-main-bar-row span,
-.itops-main-branch-row span,
-.itops-main-action-row small {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.itops-main-health-card strong {
-  color: #0f172a;
-  font-size: 52px;
-  line-height: 1;
-  letter-spacing: -0.07em;
-  font-weight: 950;
-}
-
-.itops-main-health-card small {
-  color: #1d4ed8;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.itops-main-health-card em,
-.itops-main-ready-row em,
-.itops-main-bar-row em {
-  display: block;
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e2e8f0;
-}
-
-.itops-main-health-card em i,
-.itops-main-ready-row em i,
-.itops-main-bar-row em i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22c55e);
-}
-
-.itops-main-ready-list,
-.itops-main-action-list,
-.itops-main-bar-list,
-.itops-main-branch-list {
-  display: grid;
-  gap: 10px;
-}
-
-.itops-main-ready-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.itops-main-ready-row,
-.itops-main-bar-row,
-.itops-main-action-row,
-.itops-main-branch-row {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  color: #0f172a;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.itops-main-ready-row:hover,
-.itops-main-bar-row:hover,
-.itops-main-action-row:hover,
-.itops-main-branch-row:hover {
-  transform: translateY(-1px);
-  border-color: #bfdbfe;
-  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.10);
-}
-
-.itops-main-ready-row {
-  min-height: 82px;
-  padding: 12px;
-}
-
-.itops-main-ready-row div,
-.itops-main-bar-row div,
-.itops-main-stack-head,
-.itops-main-branch-row,
-.itops-main-action-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.itops-main-ready-row div {
-  margin-bottom: 10px;
-}
-
-.itops-main-ready-row strong,
-.itops-main-bar-row strong,
-.itops-main-branch-row strong,
-.itops-main-action-row b,
-.itops-main-stack-head strong {
-  color: #0f172a;
-  font-weight: 950;
-  letter-spacing: -0.03em;
-}
-
-.itops-main-ready-row strong { font-size: 20px; }
-
-.itops-main-ready-row.action em i { background: linear-gradient(90deg, #ef4444, #f97316); }
-.itops-main-ready-row.watch em i { background: linear-gradient(90deg, #f59e0b, #facc15); }
-.itops-main-ready-row.healthy em i { background: linear-gradient(90deg, #10b981, #22c55e); }
-
-.itops-main-action-panel .itops-pro-panel-head {
-  margin-bottom: 10px;
-}
-
-.itops-main-action-row {
-  min-height: 67px;
-  padding: 11px 12px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  display: grid;
-}
-
-.itops-main-action-row > span {
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  color: #2563eb;
-  background: #eff6ff;
-}
-
-.itops-main-action-row.red > span { color: #dc2626; background: #fef2f2; }
-.itops-main-action-row.amber > span { color: #d97706; background: #fffbeb; }
-.itops-main-action-row.purple > span { color: #7c3aed; background: #f5f3ff; }
-.itops-main-action-row.green > span { color: #059669; background: #ecfdf5; }
-
-.itops-main-action-row div {
-  min-width: 0;
-}
-
-.itops-main-action-row strong {
-  display: block;
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 950;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.itops-main-action-row small {
-  display: block;
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.itops-main-action-row b {
-  font-size: 21px;
-}
-
-.itops-main-device-grid {
-  display: grid;
-  grid-template-columns: minmax(230px, 0.72fr) minmax(0, 1.28fr);
-  gap: 14px;
-  align-items: stretch;
-}
-
-.itops-main-device-stack {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 14px;
-  min-height: 250px;
-  padding: 16px;
-  border: 1px solid rgba(191, 219, 254, 0.9);
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at 85% 5%, rgba(59, 130, 246, 0.16), transparent 34%),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-}
-
-.itops-main-stack-head strong {
-  font-size: 40px;
-}
-
-.itops-main-stack-bar {
-  display: flex;
-  height: 18px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: #e2e8f0;
-}
-
-.itops-main-stack-bar i {
-  display: block;
-  min-width: 4px;
-  height: 100%;
-}
-
-.itops-main-stack-bar .online,
-.itops-main-stack-legend .online { background: #10b981; }
-.itops-main-stack-bar .offline,
-.itops-main-stack-legend .offline { background: #ef4444; }
-.itops-main-stack-bar .old,
-.itops-main-stack-legend .old { background: #f59e0b; }
-
-.itops-main-stack-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-}
-
-.itops-main-stack-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.itops-main-stack-legend i {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-}
-
-.itops-main-bar-row {
-  display: grid;
-  grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 46px;
-  padding: 9px 11px;
-}
-
-.itops-main-bar-row div {
-  justify-content: flex-start;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.itops-main-bar-row strong {
-  font-size: 16px;
-}
-
-.itops-main-bar-row b {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.itops-main-bar-row.green em i { background: linear-gradient(90deg, #10b981, #22c55e); }
-.itops-main-bar-row.red em i { background: linear-gradient(90deg, #ef4444, #fb7185); }
-.itops-main-bar-row.amber em i { background: linear-gradient(90deg, #f59e0b, #facc15); }
-
-.itops-main-branch-row {
-  min-height: 50px;
-  padding: 10px 12px;
-}
-
-.itops-main-branch-row div {
-  min-width: 0;
-}
-
-.itops-main-branch-row strong {
-  display: block;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.itops-main-branch-row em {
-  flex: 0 0 auto;
-  min-width: 62px;
-  text-align: center;
-  padding: 7px 9px;
-  border-radius: 999px;
-  font-style: normal;
-  color: #1d4ed8;
-  background: #eff6ff;
-  font-size: 12px;
-  font-weight: 950;
-}
-
-.itops-main-branch-row.action em { color: #b91c1c; background: #fee2e2; }
-.itops-main-branch-row.watch em { color: #92400e; background: #fef3c7; }
-.itops-main-branch-row.healthy em { color: #047857; background: #dcfce7; }
-
-.itops-main-command-grid {
-  align-items: stretch;
-}
-
-.itops-main-command-grid .itops-pro-panel {
-  min-height: 100%;
-}
-
-@media (max-width: 1600px) {
-  .itops-main-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-@media (max-width: 1180px) {
-  .itops-main-overview-grid,
-  .itops-main-command-grid,
-  .itops-main-today-layout,
-  .itops-main-device-grid { grid-template-columns: 1fr; }
-  .itops-main-overview-grid .span-2,
-  .itops-main-command-grid .span-2 { grid-column: auto; }
-}
-
-@media (max-width: 760px) {
-  .itops-main-kpi-grid,
-  .itops-main-ready-list { grid-template-columns: 1fr; }
-  .itops-main-bar-row { grid-template-columns: 1fr; }
-  .itops-main-health-card { min-height: 170px; }
 }
 
 `;

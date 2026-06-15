@@ -26914,28 +26914,8 @@ async function getItOpsPatchSummary(pool) {
 }
 
 async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geolocation, tasks }) {
-    const [pcAgingRule, managementPolicy] = await Promise.all([
-        itopsReadPcAgingRule(pool),
-        mdLoadManagementPolicy(pool)
-    ]);
-
+    const pcAgingRule = await itopsReadPcAgingRule(pool);
     const totalDevices = itopsToNumber(hardware.totalDevices);
-    const endpointStaleDays = Math.max(1, Math.round(mdPolicyNumber(managementPolicy, "telemetry.endpoint.staleDays", 7)));
-    const endpointRiskThreshold = Math.max(1, Math.round(mdPolicyNumber(managementPolicy, "score.risk.endpointThreshold", 35)));
-    const mediumRiskThreshold = Math.max(endpointRiskThreshold, Math.round(mdPolicyNumber(managementPolicy, "score.risk.mediumThreshold", 40)));
-    const highRiskThreshold = Math.max(mediumRiskThreshold, Math.round(mdPolicyNumber(managementPolicy, "score.risk.highThreshold", 70)));
-
-    const agingPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.aging", 0));
-    const monitorPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.monitor", 0));
-    const offlinePenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.offline", 0));
-    const stalePenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.stale", 0));
-    const missingIdentityPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.missingIdentity", 0));
-    const unpricedPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.penalty.unpriced", 0));
-    const geoUnknownPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.geo.unknown", 0));
-    const geoStalePenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.geo.stale", 0));
-    const geoMissingPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.geo.missingCoordinate", 0));
-    const networkUnregisteredPenalty = Math.max(0, mdPolicyNumber(managementPolicy, "score.network.unregistered", 0));
-
     const inventoryRows = await itopsGetHardwareInventoryRows(pool).catch((err) => {
         console.warn("ITOps risk hardware inventory lookup failed:", err.message || err);
         return Array.isArray(hardware.endpointRows) ? hardware.endpointRows : [];
@@ -26952,7 +26932,7 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
     }
 
     const now = new Date();
-    const staleCutoff = new Date(now.getTime() - endpointStaleDays * 24 * 60 * 60 * 1000);
+    const staleCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const riskRows = [];
     const osBucket = new Map();
     const ageBucket = new Map();
@@ -26970,13 +26950,8 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
         const lifecycleLower = itopsLower(lifecycleStatus);
         const pcAge = itopsPcAgingStatus(asset, pcAgingRule);
         const lastSeen = itopsDateValue(asset.lastSeen);
-        const statusText = itopsLower(asset.status || asset.connectionStatus || asset.agentStatus);
-        const isOffline = statusText.includes("offline") || statusText.includes("disconnected");
-        const isStaleTelemetry = !lastSeen || lastSeen < staleCutoff;
-        const isStale = isStaleTelemetry || isOffline;
+        const isStale = !lastSeen || lastSeen < staleCutoff || itopsLower(asset.status).includes("offline");
         const hasMissingIdentity = !itopsText(asset.deviceName) || !itopsText(asset.model) || asset.model === "-" || !itopsText(asset.ipAddress);
-        const pricingText = itopsLower(asset.pricingStatus || asset.priceStatus || asset.priceEvidence || asset.pricingEvidence);
-        const hasUnpricedEvidence = pricingText.includes("missing") || pricingText.includes("unpriced") || pricingText.includes("not found");
         const isUnsupported = lifecycleLower.includes("eol") || lifecycleLower.includes("eos") || lifecycleSeverity === "High";
         const isNearEos = lifecycleLower.includes("near");
         const isLifecycleUnknown = lifecycleLower.includes("not mapped") || lifecycleLower.includes("not found") || lifecycleLower.includes("missing") || lifecycleLower.includes("unknown");
@@ -26994,31 +26969,24 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
         osBucket.set(osKey, (osBucket.get(osKey) || 0) + 1);
         ageBucket.set(pcAge.label, (ageBucket.get(pcAge.label) || 0) + 1);
 
-        // Endpoint risk score must follow Settings > Management Policy.
-        // No hardcoded 50/30/15/35/20/18/12 values here. If policy penalties are 0,
-        // the device risk score stays 0 and the device will not be listed as a risk row.
-        const score = Math.min(100, Math.round(
-            (isUnsupported ? agingPenalty : 0) +
-            (isNearEos ? monitorPenalty : 0) +
-            (isLifecycleUnknown ? monitorPenalty : 0) +
-            (isPcAgingHigh ? agingPenalty : 0) +
-            (isPcAgingMedium ? monitorPenalty : 0) +
-            (isOffline ? offlinePenalty : 0) +
-            (isStaleTelemetry ? stalePenalty : 0) +
-            (hasMissingIdentity ? missingIdentityPenalty : 0) +
-            (hasUnpricedEvidence ? unpricedPenalty : 0)
-        ));
+        const score = Math.min(100,
+            (isUnsupported ? 50 : 0) +
+            (isNearEos ? 30 : 0) +
+            (isLifecycleUnknown ? 15 : 0) +
+            (isPcAgingHigh ? 35 : 0) +
+            (isPcAgingMedium ? 20 : 0) +
+            (isStale ? 18 : 0) +
+            (hasMissingIdentity ? 12 : 0)
+        );
 
-        if (score >= endpointRiskThreshold) {
+        if (score > 0) {
             const reasons = [
-                isUnsupported && agingPenalty > 0 ? `OS lifecycle: ${lifecycleStatus}` : "",
-                isNearEos && monitorPenalty > 0 ? `OS lifecycle: ${lifecycleStatus}` : "",
-                isLifecycleUnknown && monitorPenalty > 0 ? `OS lifecycle requires review: ${lifecycleStatus}` : "",
-                pcAge.severity !== "Low" && (isPcAgingHigh ? agingPenalty : monitorPenalty) > 0 ? pcAge.reason : "",
-                isOffline && offlinePenalty > 0 ? "Offline endpoint evidence" : "",
-                isStaleTelemetry && stalePenalty > 0 ? `Endpoint telemetry older than ${endpointStaleDays} day(s)` : "",
-                hasMissingIdentity && missingIdentityPenalty > 0 ? "Missing hardware identity/IP/model evidence" : "",
-                hasUnpricedEvidence && unpricedPenalty > 0 ? "Missing device pricing evidence" : ""
+                isUnsupported ? `OS lifecycle: ${lifecycleStatus}` : "",
+                isNearEos ? `OS lifecycle: ${lifecycleStatus}` : "",
+                isLifecycleUnknown ? `OS lifecycle requires review: ${lifecycleStatus}` : "",
+                pcAge.severity !== "Low" ? pcAge.reason : "",
+                isStale ? "Stale/offline hardware telemetry" : "",
+                hasMissingIdentity ? "Missing hardware identity/IP/model evidence" : ""
             ].filter(Boolean).join("; ");
 
             riskRows.push({
@@ -27030,7 +26998,7 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
                 biosDate: asset.biosDate ? itopsDateLabel(asset.biosDate) : "-",
                 osName: itopsText(asset.osName || asset.platform, "-"),
                 riskScore: score,
-                reasons: reasons || "Hardware risk signal from Management Policy",
+                reasons: reasons || "Hardware risk signal",
                 osLifecycleStatus: lifecycleStatus,
                 osLifecycleSeverity: lifecycleSeverity,
                 osLifecycleCycle: asset.osLifecycleCycle || "",
@@ -27051,27 +27019,24 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
         }
     }
 
-    const rawMissingGeoDevices = Array.isArray(geolocation.missingGeoRows)
+    const missingGeoDevices = Array.isArray(geolocation.missingGeoRows)
         ? geolocation.missingGeoRows.length
         : Math.max(totalDevices - itopsToNumber(geolocation.trackedDevices), 0);
-    const rawStaleGeoDevices = itopsToNumber(geolocation.staleLocations);
-    const rawUnknownGeoDevices = itopsToNumber(geolocation.unknownLocations);
-    const missingGeoDevices = geoMissingPenalty > 0 ? rawMissingGeoDevices : 0;
-    const staleGeoDevices = geoStalePenalty > 0 ? rawStaleGeoDevices : 0;
-    const unknownGeoDevices = geoUnknownPenalty > 0 ? rawUnknownGeoDevices : 0;
+    const staleGeoDevices = itopsToNumber(geolocation.staleLocations);
+    const unknownGeoDevices = itopsToNumber(geolocation.unknownLocations);
     const geolocationRiskItems = missingGeoDevices + staleGeoDevices + unknownGeoDevices;
     const patchCriticalItems = itopsToNumber(patchSummary.criticalVulnerabilities);
     const failedTaskItems = itopsToNumber(tasks.failedTasks);
-    const networkRiskItems = networkUnregisteredPenalty > 0 ? itopsToNumber(network.unregisteredIps) : 0;
+    const networkRiskItems = itopsToNumber(network.unregisteredIps);
     const hardwareRiskItems = riskRows.length;
 
-    const criticalHardwareRows = riskRows.filter((row) => row.riskScore >= highRiskThreshold).length;
-    const highHardwareRows = riskRows.filter((row) => row.riskScore >= mediumRiskThreshold && row.riskScore < highRiskThreshold).length;
-    const mediumHardwareRows = riskRows.filter((row) => row.riskScore >= endpointRiskThreshold && row.riskScore < mediumRiskThreshold).length;
+    const criticalHardwareRows = riskRows.filter((row) => row.riskScore >= 70).length;
+    const highHardwareRows = riskRows.filter((row) => row.riskScore >= 45 && row.riskScore < 70).length;
+    const mediumHardwareRows = riskRows.filter((row) => row.riskScore >= 25 && row.riskScore < 45).length;
 
     const totalCritical = patchCriticalItems + criticalHardwareRows + Math.floor(failedTaskItems * 0.25);
     const totalHigh = highHardwareRows + staleGeoDevices + Math.floor(networkRiskItems * 0.25) + failedTaskItems;
-    const totalMedium = mediumHardwareRows + unknownGeoDevices + missingGeoDevices + Math.floor(networkRiskItems * 0.75);
+    const totalMedium = mediumHardwareRows + missingHardwareIdentity + unknownGeoDevices + missingGeoDevices + Math.floor(networkRiskItems * 0.75) + lifecycleUnknownDevices;
     const totalRiskItems = hardwareRiskItems + geolocationRiskItems + patchCriticalItems + failedTaskItems + networkRiskItems;
 
     const endpointExposure = itopsExposureRatio(hardwareRiskItems, Math.max(inventoryRows.length, totalDevices, 1));
@@ -27092,13 +27057,13 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
     const riskAssetTotal = Math.max(inventoryRows.length, totalDevices, 1);
 
     const topFindings = [
-        { id: "risk-pc-aging", module: "Hardware / Settings", title: "PC aging rule risk from Settings", count: agingPenalty > 0 ? oldBiosDevices : 0, severity: itopsRiskSeverityCount(oldBiosDevices, 1, 10), recommendation: `Use Settings PC Aging Rule and Management Policy score.penalty.aging (${agingPenalty} pts).` },
-        { id: "risk-eol-os", module: "Hardware / endoflife.date", title: "Windows EOL/EOS lifecycle exposure", count: agingPenalty > 0 ? unsupportedOsDevices : 0, severity: itopsRiskSeverityCount(unsupportedOsDevices, 1, 10), recommendation: `EOL/EOS lifecycle risk uses Management Policy aging penalty (${agingPenalty} pts).` },
-        { id: "risk-near-eos", module: "Hardware / endoflife.date", title: "Windows near-EOS lifecycle watch", count: monitorPenalty > 0 ? outdatedOsDevices : 0, severity: itopsRiskSeverityCount(outdatedOsDevices, 10, 25), recommendation: `Near-EOS lifecycle risk uses Management Policy monitor penalty (${monitorPenalty} pts).` },
-        { id: "risk-location-coverage", module: "Geolocation + Hardware", title: "Location coverage and freshness risk", count: geolocationRiskItems, severity: itopsRiskSeverityCount(geolocationRiskItems, 50, 250), recommendation: "Counted only when geolocation penalties are greater than 0 in Management Policy." },
-        { id: "risk-patch-critical", module: "Security Updates", title: "Critical missing update exposure", count: patchCriticalItems, severity: patchCriticalItems > 0 ? "Critical" : "Low", recommendation: "Prioritize critical update deployment from online update status/master API." },
+        { id: "risk-pc-aging", module: "Hardware / Settings", title: "PC aging rule risk from Settings", count: oldBiosDevices, severity: itopsRiskSeverityCount(oldBiosDevices, 1, 10), recommendation: `Use Settings PC Aging Rule: healthy <= ${pcAgingRule.healthyMaxYears}, monitor <= ${pcAgingRule.monitorMaxYears}, aging >= ${pcAgingRule.agingMinYears}.` },
+        { id: "risk-eol-os", module: "Hardware / endoflife.date", title: "Windows EOL/EOS lifecycle exposure", count: unsupportedOsDevices, severity: itopsRiskSeverityCount(unsupportedOsDevices, 1, 10), recommendation: "Plan OS upgrade/isolation based on endoflife.date lifecycle evidence." },
+        { id: "risk-near-eos", module: "Hardware / endoflife.date", title: "Windows near-EOS lifecycle watch", count: outdatedOsDevices, severity: itopsRiskSeverityCount(outdatedOsDevices, 10, 25), recommendation: "Schedule upgrade before EOS window becomes critical." },
+        { id: "risk-location-coverage", module: "Geolocation + Hardware", title: "Location coverage and freshness risk", count: geolocationRiskItems, severity: itopsRiskSeverityCount(geolocationRiskItems, 50, 250), recommendation: "Compare hardware inventory against geolocation rows and refresh MDM location collection." },
+        { id: "risk-patch-critical", module: "Patch Compliance", title: "Critical missing patch exposure", count: patchCriticalItems, severity: patchCriticalItems > 0 ? "Critical" : "Low", recommendation: "Prioritize critical patch deployment from online patch status/master API." },
         { id: "risk-failed-tasks", module: "Task List", title: "Stopped or cancelled automation jobs", count: failedTaskItems, severity: itopsRiskSeverityCount(failedTaskItems, 50, 150), recommendation: "Review failed jobs and rerun inventory or remote tasks." },
-        { id: "risk-network-registration", module: "Network", title: "Unregistered network IP records", count: networkRiskItems, severity: itopsRiskSeverityCount(networkRiskItems, 100, 250), recommendation: "Counted only when network unregistered penalty is greater than 0 in Management Policy." }
+        { id: "risk-network-registration", module: "Network", title: "Unregistered network IP records", count: networkRiskItems, severity: itopsRiskSeverityCount(networkRiskItems, 100, 250), recommendation: "Validate unmanaged or unmapped IP records against hardware inventory." }
     ].filter(item => item.count > 0).sort((a, b) => b.count - a.count);
 
     const topHardwareRisk = riskRows.sort((a, b) => b.riskScore - a.riskScore || a.deviceName.localeCompare(b.deviceName)).slice(0, 25);
@@ -27130,7 +27095,7 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
         categoryBreakdown: [
             { name: "Hardware + PC Aging + EOL", value: hardwareRiskItems, percent: itopsRiskPercent(hardwareRiskItems, categoryTotal), tone: hardwareRiskItems ? "critical" : "good" },
             { name: "Geolocation + Hardware", value: geolocationRiskItems, percent: itopsRiskPercent(geolocationRiskItems, categoryTotal), tone: geolocationRiskItems ? "warning" : "good" },
-            { name: "Critical Update", value: patchCriticalItems, percent: itopsRiskPercent(patchCriticalItems, categoryTotal), tone: patchCriticalItems ? "critical" : "good" },
+            { name: "Critical Patch", value: patchCriticalItems, percent: itopsRiskPercent(patchCriticalItems, categoryTotal), tone: patchCriticalItems ? "critical" : "good" },
             { name: "Task Failures", value: failedTaskItems, percent: itopsRiskPercent(failedTaskItems, categoryTotal), tone: failedTaskItems ? "warning" : "good" },
             { name: "Network Registration", value: networkRiskItems, percent: itopsRiskPercent(networkRiskItems, categoryTotal), tone: networkRiskItems ? "neutral" : "good" }
         ],
@@ -27148,15 +27113,7 @@ async function getItOpsRiskSummary(pool, { hardware, patchSummary, network, geol
         })).sort((a, b) => b.value - a.value),
         topFindings,
         topHardwareRisk,
-        pcAgingRule,
-        managementPolicy: {
-            profile: managementPolicy.profile || null,
-            values: managementPolicy.values || {},
-            endpointStaleDays,
-            endpointRiskThreshold,
-            mediumRiskThreshold,
-            highRiskThreshold
-        }
+        pcAgingRule
     };
 }
 
