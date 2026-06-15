@@ -236,7 +236,6 @@ export default function ReportBoard() {
               {PERIOD_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <span>{range.from} → {range.to}</span>
         </div>
 
         <div className="report-date-grid">
@@ -267,6 +266,8 @@ export default function ReportBoard() {
       <style>{`
         .report-board-page {
           min-height: 100%;
+          height: auto;
+          overflow: visible;
           padding: 16px;
           color: #13294b;
           background:
@@ -274,7 +275,7 @@ export default function ReportBoard() {
             linear-gradient(135deg, #f6f8fb 0%, #edf2f7 54%, #e5ecf4 100%);
         }
         .report-board-head {
-          min-height: 82px;
+          min-height: 72px;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -283,7 +284,9 @@ export default function ReportBoard() {
           padding: 14px 16px;
           border: 1px solid #d6e3f5;
           border-radius: 22px;
-          background: linear-gradient(135deg, rgba(255,255,255,.90), rgba(238,246,255,.76));
+          background:
+            radial-gradient(circle at 90% 0%, rgba(37,99,235,.10), transparent 14rem),
+            linear-gradient(135deg, rgba(255,255,255,.94), rgba(238,246,255,.78));
           box-shadow: 0 10px 26px rgba(15,35,71,.045);
         }
         .report-board-head span {
@@ -296,7 +299,7 @@ export default function ReportBoard() {
         }
         .report-board-head h2 {
           margin: 4px 0 2px;
-          font-size: clamp(22px, 2.2vw, 32px);
+          font-size: clamp(22px, 2.1vw, 32px);
           line-height: 1;
           letter-spacing: -0.055em;
         }
@@ -316,46 +319,88 @@ export default function ReportBoard() {
         }
         .report-board-count strong { display: block; font-size: 22px; line-height: 1; }
         .report-board-count small { color: #72839d; font-size: 11px; font-weight: 850; }
-        .report-category-block + .report-category-block { margin-top: 18px; }
+
+        .report-board-columns {
+          display: grid;
+          grid-template-columns: minmax(0, 1.65fr) minmax(340px, .92fr);
+          gap: 14px;
+          align-items: start;
+        }
+        .report-category-panel {
+          position: relative;
+          border: 1px solid #d6e3f5;
+          border-radius: 24px;
+          background:
+            radial-gradient(circle at 96% 0%, color-mix(in srgb, var(--category-accent, #2563eb) 9%, transparent), transparent 17rem),
+            rgba(255,255,255,.68);
+          padding: 14px;
+          box-shadow: 0 12px 30px rgba(15,35,71,.052);
+        }
+        .report-category-panel.is-dynamic-panel {
+          background:
+            radial-gradient(circle at 96% 0%, rgba(139,92,246,.12), transparent 17rem),
+            linear-gradient(180deg, rgba(255,255,255,.78), rgba(250,246,255,.72));
+        }
         .report-category-head {
           display: flex;
-          align-items: center;
+          align-items: flex-end;
           justify-content: space-between;
           gap: 12px;
-          margin: 0 0 10px;
+          margin: 0 0 12px;
+          padding-bottom: 10px;
+          border-bottom: 1px solid #dfe9f7;
         }
         .report-category-head strong {
+          display: block;
           color: #17325d;
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 950;
           letter-spacing: .12em;
           text-transform: uppercase;
         }
-        .report-category-head span {
+        .report-category-head small {
+          display: block;
+          margin-top: 3px;
           color: #6c7d97;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0;
+          text-transform: none;
+        }
+        .report-category-head span {
+          color: var(--category-accent, #2563eb);
           font-size: 12px;
-          font-weight: 900;
+          font-weight: 950;
         }
         .report-card-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(218px, 1fr));
+          grid-template-columns: repeat(2, minmax(245px, 1fr));
           gap: 12px;
           align-items: stretch;
         }
+        .is-dynamic-panel .report-card-grid {
+          grid-template-columns: 1fr;
+        }
         .report-card {
           position: relative;
-          min-height: 232px;
+          min-height: 214px;
           display: grid;
           grid-template-rows: auto auto auto auto;
-          gap: 10px;
+          gap: 9px;
           border: 1px solid #d6e3f5;
           border-radius: 22px;
           background:
-            radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--report-accent) 14%, transparent), transparent 8.8rem),
-            linear-gradient(180deg, rgba(255,255,255,.98), rgba(249,252,255,.95));
-          padding: 14px;
+            radial-gradient(circle at 98% 0%, color-mix(in srgb, var(--report-accent) 15%, transparent), transparent 8.8rem),
+            linear-gradient(180deg, rgba(255,255,255,.99), rgba(249,252,255,.96));
+          padding: 13px;
           box-shadow: 0 12px 26px rgba(15,35,71,.055);
           overflow: hidden;
+          transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+        }
+        .report-card:hover {
+          transform: translateY(-2px);
+          border-color: color-mix(in srgb, var(--report-accent) 34%, #d6e3f5);
+          box-shadow: 0 18px 34px rgba(15,35,71,.085);
         }
         .report-card::before {
           content: "";
@@ -366,10 +411,10 @@ export default function ReportBoard() {
         }
         .report-card-art {
           position: absolute;
-          right: -32px;
-          top: -36px;
-          width: 104px;
-          height: 104px;
+          right: -34px;
+          top: -38px;
+          width: 112px;
+          height: 112px;
           border-radius: 999px;
           border: 18px solid color-mix(in srgb, var(--report-accent) 12%, transparent);
           pointer-events: none;
@@ -427,9 +472,9 @@ export default function ReportBoard() {
           display: grid;
           grid-template-columns: minmax(0, 1fr);
           gap: 6px;
-          padding: 10px;
+          padding: 9px;
           border: 1px solid color-mix(in srgb, var(--report-accent) 16%, #dce7f6);
-          border-radius: 16px;
+          border-radius: 15px;
           background: color-mix(in srgb, var(--report-accent) 5%, #ffffff);
         }
         .report-card-period label,
@@ -454,11 +499,6 @@ export default function ReportBoard() {
           font-size: 11px;
           font-weight: 850;
           outline: none;
-        }
-        .report-card-period span {
-          color: #657994;
-          font-size: 11px;
-          font-weight: 850;
         }
         .report-date-grid {
           display: grid;
@@ -549,9 +589,24 @@ export default function ReportBoard() {
         }
         .report-preview-section h4 { margin: 0 0 10px; }
         .report-preview-section li { margin: 7px 0; color: #3a5274; }
-        @media (max-width: 1480px) { .report-card-grid { grid-template-columns: repeat(3, minmax(218px, 1fr)); } }
-        @media (max-width: 1080px) { .report-card-grid { grid-template-columns: repeat(2, minmax(218px, 1fr)); } }
-        @media (max-width: 720px) { .report-board-page { padding: 12px; } .report-card-grid { grid-template-columns: 1fr; } .report-board-head { align-items: flex-start; flex-direction: column; } }
+        @media (max-width: 1500px) {
+          .report-board-columns { grid-template-columns: minmax(0, 1.35fr) minmax(320px, .95fr); }
+          .report-card-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+        }
+        @media (max-width: 1180px) {
+          .report-board-columns { grid-template-columns: 1fr; }
+          .is-dynamic-panel .report-card-grid { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+        }
+        @media (max-width: 840px) {
+          .report-card-grid,
+          .is-dynamic-panel .report-card-grid { grid-template-columns: repeat(2, minmax(210px, 1fr)); }
+        }
+        @media (max-width: 620px) {
+          .report-board-page { padding: 12px; }
+          .report-card-grid,
+          .is-dynamic-panel .report-card-grid { grid-template-columns: 1fr; }
+          .report-board-head { align-items: flex-start; flex-direction: column; }
+        }
       `}</style>
 
       <section className="report-board-head">
@@ -566,25 +621,33 @@ export default function ReportBoard() {
         </div>
       </section>
 
-      <section className="report-category-block" aria-label="Standard reports">
-        <div className="report-category-head">
-          <strong>Standard Reports</strong>
-          <span>{standardReports.length} reports</span>
-        </div>
-        <div className="report-card-grid">
-          {standardReports.map(renderReportCard)}
-        </div>
-      </section>
+      <div className="report-board-columns">
+        <section className="report-category-panel is-standard-panel" aria-label="Standard reports" style={{ "--category-accent": "#2563eb" } as CSSProperties}>
+          <div className="report-category-head">
+            <div>
+              <strong>Standard Reports</strong>
+              <small>Regular reporting packs for operations, risk, asset and software governance.</small>
+            </div>
+            <span>{standardReports.length} reports</span>
+          </div>
+          <div className="report-card-grid">
+            {standardReports.map(renderReportCard)}
+          </div>
+        </section>
 
-      <section className="report-category-block" aria-label="Dynamic reporting">
-        <div className="report-category-head">
-          <strong>Dynamic Reporting</strong>
-          <span>{dynamicReports.length} AI reports · generated once per day</span>
-        </div>
-        <div className="report-card-grid">
-          {dynamicReports.map(renderReportCard)}
-        </div>
-      </section>
+        <section className="report-category-panel is-dynamic-panel" aria-label="Dynamic reporting" style={{ "--category-accent": "#8b5cf6" } as CSSProperties}>
+          <div className="report-category-head">
+            <div>
+              <strong>Dynamic Reporting</strong>
+              <small>AI generated once per day per selected report title.</small>
+            </div>
+            <span>{dynamicReports.length} reports</span>
+          </div>
+          <div className="report-card-grid">
+            {dynamicReports.map(renderReportCard)}
+          </div>
+        </section>
+      </div>
 
       {error && <div className="report-board-error">{error}</div>}
 
