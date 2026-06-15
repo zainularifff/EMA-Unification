@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { generateReport, getReportCatalog, getReportOptions, previewReport } from "../services/reportService";
 
 type ReportTemplate = {
@@ -441,7 +441,7 @@ export default function ReportModern() {
   ].filter(Boolean);
 
   return (
-    <main className="report-modern-page" style={{ "--report-accent": selectedAccent } as React.CSSProperties}>
+    <main className="report-modern-page" style={{ "--report-accent": selectedAccent } as CSSProperties}>
       <style>{modernReportStyles}</style>
 
       <aside className="report-modern-sidebar">
@@ -466,7 +466,7 @@ export default function ReportModern() {
                   key={report.id}
                   className={`report-nav-item ${report.id === selectedReport.id ? "active" : ""}`}
                   onClick={() => setSelectedReportId(report.id)}
-                  style={{ "--item-accent": reportAccent(report) } as React.CSSProperties}
+                  style={{ "--item-accent": reportAccent(report) } as CSSProperties}
                 >
                   <span className="report-nav-icon">{reportIcon(report)}</span>
                   <span className="report-nav-copy">
