@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 
 import { installDisplayCopyStandardizer } from "../../utils/displayCopy";
+import "../../styles/report-card-sizing.css";
 import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
 
