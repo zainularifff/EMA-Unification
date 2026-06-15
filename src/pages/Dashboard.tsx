@@ -1722,7 +1722,7 @@ export default function ITOperationsDashboard() {
 
   const domainHealthForMatrix = useMemo<DomainHealthItem[]>(() => {
     const existing = domainHealth.filter((item) => resolveDomainView(item.name) !== 'dataConfidence').slice(0, 5);
-    return [...existing, { name: 'Data Confidence', percent: dataConfidenceScore, color: '#2563eb' }];
+    return [...existing, { name: 'Data Confidence', percent: dataConfidenceScore, color: '#0ea5e9' }];
   }, [dataConfidenceScore, domainHealth]);
   const overallHealth = useMemo(() => {
     const values = [endpointOnlinePercent, patchComplianceAverage, serviceDesk.slaAchievement, taskCompletionPercent, networkRegistrationPercent, locationFreshPercent, dataConfidenceScore].filter((item) => Number.isFinite(item));
@@ -2226,24 +2226,91 @@ export default function ITOperationsDashboard() {
                 <span className="offline">{formatNumber(hardware.offlineDevices)} offline</span>
                 <span className="stale">{formatNumber(hardware.staleSync)} old data</span>
               </div>
-              <div className="itops-modern-column-chart" aria-label="Device availability chart">
-                {endpointTrendRows.map((row) => {
-                  const onlineHeight = endpointTrendMaxTotal > 0 ? (row.online / endpointTrendMaxTotal) * 100 : 0;
-                  const offlineHeight = endpointTrendMaxTotal > 0 ? (row.offline / endpointTrendMaxTotal) * 100 : 0;
-                  const staleHeight = endpointTrendMaxTotal > 0 ? (row.stale / endpointTrendMaxTotal) * 100 : 0;
+              <div className="itops-availability-donut-layout">
+                {(() => {
+                  const totalDevices = Math.max(0, numberOrFallback(hardware.totalDevices) || numberOrFallback(hardware.onlineDevices) + numberOrFallback(hardware.offlineDevices));
+                  const onlineDevices = Math.max(0, numberOrFallback(hardware.onlineDevices));
+                  const offlineDevices = Math.max(0, numberOrFallback(hardware.offlineDevices));
+                  const safeTotal = Math.max(1, totalDevices || onlineDevices + offlineDevices);
+                  const onlinePercentValue = (onlineDevices / safeTotal) * 100;
+                  const offlinePercentValue = (offlineDevices / safeTotal) * 100;
+                  const donutCircumference = 339.292;
+                  const onlineDash = (clampPercent(onlinePercentValue) / 100) * donutCircumference;
+                  const offlineDash = (clampPercent(offlinePercentValue) / 100) * donutCircumference;
+
                   return (
-                    <div key={`device-chart-${row.label}`} className="itops-modern-column">
-                      <div className="itops-modern-column-stack">
-                        {row.online > 0 && <i className="online" style={{ height: `${Math.max(8, clampPercent(onlineHeight))}%` }} />}
-                        {row.offline > 0 && <i className="offline" style={{ height: `${Math.max(8, clampPercent(offlineHeight))}%` }} />}
-                        {row.stale > 0 && <i className="stale" style={{ height: `${Math.max(8, clampPercent(staleHeight))}%` }} />}
-                        {row.total <= 0 && <i className="empty" style={{ height: '8%' }} />}
+                    <div className="itops-availability-donut-card" title={`${formatNumber(onlineDevices)} online • ${formatNumber(offlineDevices)} offline • ${formatNumber(hardware.staleSync)} old data`}>
+                      <svg viewBox="0 0 160 160" role="img" aria-label="Online and offline devices donut chart">
+                        <circle className="base" cx="80" cy="80" r="54" />
+                        <circle
+                          className="online"
+                          cx="80"
+                          cy="80"
+                          r="54"
+                          strokeDasharray={`${onlineDash} ${donutCircumference}`}
+                          strokeDashoffset="0"
+                        >
+                          <title>{`${formatNumber(onlineDevices)} online device(s) • ${formatPercent(onlinePercentValue, 0)}`}</title>
+                        </circle>
+                        <circle
+                          className="offline"
+                          cx="80"
+                          cy="80"
+                          r="54"
+                          strokeDasharray={`${offlineDash} ${donutCircumference}`}
+                          strokeDashoffset={`-${onlineDash}`}
+                        >
+                          <title>{`${formatNumber(offlineDevices)} offline device(s) • ${formatPercent(offlinePercentValue, 0)}`}</title>
+                        </circle>
+                      </svg>
+                      <div className="itops-availability-donut-center">
+                        <strong>{formatPercent(onlinePercentValue, 0)}</strong>
+                        <span>online</span>
                       </div>
-                      <span>{row.label}</span>
-                      <strong>{formatNumber(row.total)}</strong>
+                      <div className="itops-availability-donut-hover">
+                        <b>Current device status</b>
+                        <span>{formatNumber(onlineDevices)} online</span>
+                        <span>{formatNumber(offlineDevices)} offline</span>
+                        <span>{formatNumber(hardware.staleSync)} old data</span>
+                      </div>
                     </div>
                   );
-                })}
+                })()}
+
+                <div className="itops-availability-donut-side">
+                  <div className="itops-availability-donut-legend">
+                    <span className="online"><i /> Online</span>
+                    <span className="offline"><i /> Offline</span>
+                    <span className="stale"><i /> Old data</span>
+                  </div>
+
+                  <div className="itops-availability-trend-list">
+                    {endpointTrendRows.map((row) => {
+                      const safeRowTotal = Math.max(1, row.total);
+                      const onlineWidth = (row.online / safeRowTotal) * 100;
+                      const offlineWidth = (row.offline / safeRowTotal) * 100;
+                      const staleWidth = (row.stale / safeRowTotal) * 100;
+
+                      return (
+                        <div key={`device-donut-trend-${row.label}`} className="itops-availability-trend-row">
+                          <div>
+                            <strong>{row.label}</strong>
+                            <span>{formatNumber(row.total)} device{row.total === 1 ? '' : 's'}</span>
+                          </div>
+                          <em>
+                            <i className="online" style={{ width: `${clampPercent(onlineWidth)}%` }} />
+                            <i className="offline" style={{ width: `${clampPercent(offlineWidth)}%` }} />
+                            <i className="stale" style={{ width: `${clampPercent(staleWidth)}%` }} />
+                          </em>
+                          <b>{formatNumber(row.online)}/{formatNumber(row.total)}</b>
+                          <span className="itops-availability-row-hover">
+                            {row.label}: {formatNumber(row.online)} online, {formatNumber(row.offline)} offline, {formatNumber(row.stale)} old data
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </button>
 
@@ -4434,7 +4501,7 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-soft-btn {
   min-height: 34px;
   padding: 0 13px;
-  color: #1d4ed8;
+  color: #0369a1;
   background: #eff6ff;
 }
 
@@ -4442,7 +4509,7 @@ body.itops-dashboard-page-active .router-content {
   width: 100%;
   min-height: 42px;
   margin-top: 14px;
-  color: #1d4ed8;
+  color: #0369a1;
   background: #eff6ff;
 }
 
@@ -4508,7 +4575,7 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-tabs button svg {
   display: inline-block;
   margin-right: 8px;
-  color: #2563eb;
+  color: #0ea5e9;
   vertical-align: middle;
 }
 
@@ -4527,7 +4594,7 @@ body.itops-dashboard-page-active .router-content {
 
 .itops-pro-tabs button.active {
   color: #ffffff;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  background: linear-gradient(135deg, #0ea5e9, #7c3aed);
   border-color: transparent;
   box-shadow: 0 18px 40px rgba(37, 99, 235, 0.28);
 }
@@ -4573,14 +4640,14 @@ body.itops-dashboard-page-active .router-content {
   height: 42px;
   border-radius: 16px;
   color: #ffffff;
-  background: #2563eb;
+  background: #0ea5e9;
   box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22);
 }
 
-.itops-pro-kpi-blue .itops-pro-kpi-icon { background: linear-gradient(135deg, #2563eb, #38bdf8); }
-.itops-pro-kpi-green .itops-pro-kpi-icon { background: linear-gradient(135deg, #059669, #34d399); }
+.itops-pro-kpi-blue .itops-pro-kpi-icon { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
+.itops-pro-kpi-green .itops-pro-kpi-icon { background: linear-gradient(135deg, #059669, #38bdf8); }
 .itops-pro-kpi-amber .itops-pro-kpi-icon { background: linear-gradient(135deg, #d97706, #fbbf24); }
-.itops-pro-kpi-red .itops-pro-kpi-icon { background: linear-gradient(135deg, #dc2626, #fb7185); }
+.itops-pro-kpi-red .itops-pro-kpi-icon { background: linear-gradient(135deg, #dc2626, #f59e0b); }
 .itops-pro-kpi-purple .itops-pro-kpi-icon { background: linear-gradient(135deg, #7c3aed, #c084fc); }
 .itops-pro-kpi-cyan .itops-pro-kpi-icon { background: linear-gradient(135deg, #0891b2, #22d3ee); }
 
@@ -4625,7 +4692,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22c55e);
+  background: linear-gradient(90deg, #0ea5e9, #22c55e);
 }
 
 .itops-pro-status {
@@ -4638,7 +4705,7 @@ body.itops-dashboard-page-active .router-content {
   font-weight: 900;
 }
 
-.itops-pro-status-healthy { color: #047857; background: #dcfce7; }
+.itops-pro-status-healthy { color: #0369a1; background: #e0f2fe; }
 .itops-pro-status-watch { color: #92400e; background: #fef3c7; }
 .itops-pro-status-action { color: #b91c1c; background: #fee2e2; }
 
@@ -4692,13 +4759,13 @@ body.itops-dashboard-page-active .router-content {
   justify-content: center;
   flex: 0 0 auto;
   border-radius: 11px;
-  color: #1d4ed8;
+  color: #0369a1;
   background: #eff6ff;
 }
 
 .itops-pro-health-action .itops-pro-health-icon { color: #b91c1c; background: #fef2f2; }
 .itops-pro-health-watch .itops-pro-health-icon { color: #92400e; background: #fffbeb; }
-.itops-pro-health-healthy .itops-pro-health-icon { color: #047857; background: #ecfdf5; }
+.itops-pro-health-healthy .itops-pro-health-icon { color: #0369a1; background: #ecfdf5; }
 
 .itops-pro-health-main span {
   min-width: 0;
@@ -4740,7 +4807,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22c55e);
+  background: linear-gradient(90deg, #0ea5e9, #22c55e);
 }
 
 .itops-pro-health-footer small {
@@ -4750,7 +4817,7 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-pro-health-footer svg {
-  color: #2563eb;
+  color: #0ea5e9;
   flex: 0 0 auto;
 }
 
@@ -4811,7 +4878,7 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-pro-queue-row svg {
-  color: #2563eb;
+  color: #0ea5e9;
   flex: 0 0 auto;
 }
 
@@ -4870,7 +4937,7 @@ body.itops-dashboard-page-active .router-content {
   height: 38px;
   flex: 0 0 auto;
   border-radius: 14px;
-  color: #1d4ed8;
+  color: #0369a1;
   background: #eff6ff;
 }
 
@@ -5081,7 +5148,7 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-pulse-fill .new,
-.itops-pro-legend .new { background: #2563eb; }
+.itops-pro-legend .new { background: #0ea5e9; }
 .itops-pulse-fill .resolved,
 .itops-pro-legend .resolved { background: #16a34a; }
 .itops-pulse-fill .open,
@@ -5094,7 +5161,7 @@ body.itops-dashboard-page-active .router-content {
   text-align: right;
 }
 
-.itops-pulse-data strong.new { color: #1d4ed8; }
+.itops-pulse-data strong.new { color: #0369a1; }
 .itops-pulse-data strong.resolved { color: #15803d; }
 .itops-pulse-data strong.open { color: #c2410c; }
 
@@ -5203,12 +5270,12 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-table-page-controls button:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: #93c5fd;
-  color: #1d4ed8;
+  color: #0369a1;
 }
 
 .itops-pro-table-page-controls button.active {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: #0ea5e9;
+  background: #0ea5e9;
   color: #ffffff;
   box-shadow: 0 12px 24px rgba(37, 99, 235, 0.22);
 }
@@ -5291,7 +5358,7 @@ body.itops-dashboard-page-active .router-content {
   height: 42px;
   border-radius: 16px;
   color: #ffffff;
-  background: #2563eb;
+  background: #0ea5e9;
 }
 
 .itops-pro-insight p,
@@ -5300,10 +5367,10 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-insight p { color: #64748b; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.07em; }
 .itops-pro-insight strong { margin-top: 3px; color: #0f172a; font-size: 24px; font-weight: 950; letter-spacing: -0.04em; }
 .itops-pro-insight small { margin-top: 2px; color: #64748b; font-size: 12px; font-weight: 700; }
-.itops-pro-insight-blue .itops-pro-insight-icon { background: linear-gradient(135deg, #2563eb, #38bdf8); }
+.itops-pro-insight-blue .itops-pro-insight-icon { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
 .itops-pro-insight-purple .itops-pro-insight-icon { background: linear-gradient(135deg, #7c3aed, #c084fc); }
 .itops-pro-insight-cyan .itops-pro-insight-icon { background: linear-gradient(135deg, #0891b2, #22d3ee); }
-.itops-pro-insight-green .itops-pro-insight-icon { background: linear-gradient(135deg, #059669, #34d399); }
+.itops-pro-insight-green .itops-pro-insight-icon { background: linear-gradient(135deg, #059669, #38bdf8); }
 
 
 .itops-pro-error,
@@ -5329,7 +5396,7 @@ body.itops-dashboard-page-active .router-content {
 
 .itops-pro-loading {
   justify-content: center;
-  color: #1d4ed8;
+  color: #0369a1;
   background: rgba(239, 246, 255, 0.9);
   border: 1px solid #bfdbfe;
 }
@@ -5361,7 +5428,7 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-sparkline i {
   width: 7px;
   border-radius: 999px 999px 2px 2px;
-  background: linear-gradient(180deg, #2563eb, #22c55e);
+  background: linear-gradient(180deg, #0ea5e9, #22c55e);
 }
 
 .itops-pro-sparkline-empty { color: #94a3b8; }
@@ -5408,7 +5475,7 @@ body.itops-dashboard-page-active .router-content {
   border-bottom: 1px solid #e2e8f0;
 }
 
-.itops-pro-modal-head .itops-pro-overline { color: #2563eb; margin-bottom: 8px; }
+.itops-pro-modal-head .itops-pro-overline { color: #0ea5e9; margin-bottom: 8px; }
 .itops-pro-modal-head h2 { margin: 0; color: #0f172a; font-size: 28px; font-weight: 950; letter-spacing: -0.05em; }
 .itops-pro-modal-head p { max-width: 760px; margin: 7px 0 0; color: #64748b; font-size: 13px; font-weight: 700; line-height: 1.45; }
 
@@ -5423,7 +5490,7 @@ body.itops-dashboard-page-active .router-content {
   border: 1px solid #bfdbfe;
   border-radius: 16px;
   background: linear-gradient(135deg, #eff6ff, #ffffff);
-  color: #1d4ed8;
+  color: #0369a1;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -5530,7 +5597,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #38bdf8);
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
 }
 
 .itops-endpoint-graph-row b {
@@ -5588,7 +5655,7 @@ body.itops-dashboard-page-active .router-content {
   height: 42px;
   border-radius: 16px;
   color: #ffffff;
-  background: linear-gradient(135deg, #2563eb, #38bdf8);
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
 }
 
 .itops-pro-drill-card span:not(.itops-pro-drill-icon) {
@@ -5618,9 +5685,9 @@ body.itops-dashboard-page-active .router-content {
   line-height: 1.35;
 }
 
-.itops-pro-drill-card-green .itops-pro-drill-icon { background: linear-gradient(135deg, #059669, #34d399); }
+.itops-pro-drill-card-green .itops-pro-drill-icon { background: linear-gradient(135deg, #059669, #38bdf8); }
 .itops-pro-drill-card-amber .itops-pro-drill-icon { background: linear-gradient(135deg, #d97706, #fbbf24); }
-.itops-pro-drill-card-red .itops-pro-drill-icon { background: linear-gradient(135deg, #dc2626, #fb7185); }
+.itops-pro-drill-card-red .itops-pro-drill-icon { background: linear-gradient(135deg, #dc2626, #f59e0b); }
 .itops-pro-drill-card-purple .itops-pro-drill-icon { background: linear-gradient(135deg, #7c3aed, #c084fc); }
 .itops-pro-drill-card-cyan .itops-pro-drill-icon { background: linear-gradient(135deg, #0891b2, #22d3ee); }
 .itops-pro-drill-card-slate .itops-pro-drill-icon { background: linear-gradient(135deg, #475569, #94a3b8); }
@@ -5736,7 +5803,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #7c3aed, #ef4444);
+  background: linear-gradient(90deg, #0ea5e9, #7c3aed, #ef4444);
 }
 
 .itops-risk-severity-grid {
@@ -6083,7 +6150,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #7c3aed, #ef4444);
+  background: linear-gradient(90deg, #0ea5e9, #7c3aed, #ef4444);
 }
 
 .itops-risk-severity-grid {
@@ -6200,12 +6267,12 @@ body.itops-dashboard-page-active .router-content {
   box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
 }
 .itops-data-confidence-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
-.itops-data-confidence-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 16px; color: #fff; background: linear-gradient(135deg, #2563eb, #06b6d4); }
+.itops-data-confidence-icon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 16px; color: #fff; background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
 .itops-data-confidence-head span { display: block; color: #64748b; font-size: 11px; font-weight: 950; letter-spacing: .07em; text-transform: uppercase; }
 .itops-data-confidence-head strong { display: block; margin-top: 2px; color: #0f172a; font-size: 28px; line-height: 1; font-weight: 950; letter-spacing: -0.05em; }
 .itops-data-confidence-head small { display: block; margin-top: 5px; color: #64748b; font-size: 11px; font-weight: 750; }
 .itops-data-confidence-meter { height: 8px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
-.itops-data-confidence-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #14b8a6, #22c55e); }
+.itops-data-confidence-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0ea5e9, #14b8a6, #22c55e); }
 .itops-data-confidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .itops-data-confidence-grid div { min-width: 0; border: 1px solid rgba(226, 232, 240, .9); border-radius: 14px; padding: 9px 10px; background: rgba(248, 250, 252, .85); }
 .itops-data-confidence-grid span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #64748b; font-size: 10px; font-weight: 900; }
@@ -6213,8 +6280,8 @@ body.itops-dashboard-page-active .router-content {
 .itops-risk-driver-mini { margin-top: 12px; padding: 12px; border: 1px solid rgba(226, 232, 240, .9); border-radius: 18px; background: rgba(248, 250, 252, .78); }
 .itops-drill-trace { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 9px 12px; border: 1px solid rgba(147, 197, 253, .65); border-radius: 999px; background: rgba(239, 246, 255, .88); color: #475569; font-size: 11px; font-weight: 900; }
 .itops-drill-trace span { padding: 4px 9px; border-radius: 999px; background: #e2e8f0; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
-.itops-drill-trace span.done { background: #dcfce7; color: #166534; }
-.itops-drill-trace span.active { background: #2563eb; color: #fff; }
+.itops-drill-trace span.done { background: #e0f2fe; color: #166534; }
+.itops-drill-trace span.active { background: #0ea5e9; color: #fff; }
 .itops-drill-trace small { color: #334155; font-weight: 850; }
 .itops-location-list { display: grid; gap: 10px; }
 .itops-location-list button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; width: 100%; border: 1px solid rgba(226, 232, 240, .96); border-radius: 16px; padding: 12px 14px; background: #fff; text-align: left; cursor: pointer; }
@@ -6223,7 +6290,7 @@ body.itops-dashboard-page-active .router-content {
 .itops-location-list span { display: block; margin-top: 4px; color: #64748b; font-size: 11px; font-weight: 750; }
 .itops-location-list em { font-style: normal; color: #0f172a; font-size: 13px; font-weight: 950; }
 .itops-evidence-note { display: flex; gap: 8px; align-items: flex-start; padding: 13px 14px; border: 1px solid rgba(147, 197, 253, .65); border-radius: 18px; background: #eff6ff; color: #334155; }
-.itops-evidence-note strong { color: #1d4ed8; font-size: 12px; font-weight: 950; white-space: nowrap; }
+.itops-evidence-note strong { color: #0369a1; font-size: 12px; font-weight: 950; white-space: nowrap; }
 .itops-evidence-note span { color: #475569; font-size: 12px; font-weight: 760; line-height: 1.45; }
 
 @media (max-width: 900px) {
@@ -6301,7 +6368,7 @@ body.itops-dashboard-page-active .router-content {
   border-radius: 999px;
   padding: 7px 10px;
   background: rgba(239, 246, 255, .9);
-  color: #1d4ed8;
+  color: #0369a1;
   font-size: 11px;
   font-weight: 900;
   cursor: pointer;
@@ -6349,13 +6416,13 @@ body.itops-dashboard-page-active .router-content {
   cursor: pointer;
 }
 .itops-location-status-row:hover { border-color: rgba(20, 184, 166, .35); box-shadow: 0 12px 24px rgba(15, 23, 42, .07); }
-.itops-location-status-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 13px; color: #fff; background: linear-gradient(135deg, #14b8a6, #2563eb); }
+.itops-location-status-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 13px; color: #fff; background: linear-gradient(135deg, #14b8a6, #0ea5e9); }
 .itops-location-status-row-amber .itops-location-status-icon { background: linear-gradient(135deg, #f59e0b, #f97316); }
-.itops-location-status-row-green .itops-location-status-icon { background: linear-gradient(135deg, #10b981, #14b8a6); }
+.itops-location-status-row-green .itops-location-status-icon { background: linear-gradient(135deg, #0ea5e9, #14b8a6); }
 .itops-location-status-row strong { display: block; color: #0f172a; font-size: 13px; font-weight: 950; }
 .itops-location-status-row small { display: block; margin-top: 3px; color: #64748b; font-size: 10px; font-weight: 780; }
 .itops-location-status-row em { display: block; height: 7px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
-.itops-location-status-row em i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #14b8a6, #2563eb); }
+.itops-location-status-row em i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #14b8a6, #0ea5e9); }
 .itops-location-status-row-amber em i { background: linear-gradient(90deg, #f59e0b, #f97316); }
 .itops-location-status-row b { color: #0f172a; font-size: 18px; font-weight: 950; }
 .itops-location-mini-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -6381,7 +6448,7 @@ body.itops-dashboard-page-active .router-content {
   padding: 12px;
   background: linear-gradient(135deg, #eff6ff, #f0fdfa);
 }
-.itops-location-action-box span { display: block; color: #2563eb; font-size: 10px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+.itops-location-action-box span { display: block; color: #0ea5e9; font-size: 10px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
 .itops-location-action-box strong { display: block; margin-top: 5px; color: #0f172a; font-size: 14px; font-weight: 950; }
 .itops-location-action-box p { margin: 5px 0 0; color: #475569; font-size: 12px; line-height: 1.45; font-weight: 740; }
 .itops-location-list-card { grid-column: 1 / 2; }
@@ -6391,7 +6458,7 @@ body.itops-dashboard-page-active .router-content {
 .itops-location-insight-grid span { display: block; color: #64748b; font-size: 10px; font-weight: 930; text-transform: uppercase; letter-spacing: .05em; }
 .itops-location-insight-grid strong { display: block; margin-top: 5px; color: #0f172a; font-size: 18px; font-weight: 950; }
 .itops-location-wide-meter { height: 10px; margin-top: 13px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
-.itops-location-wide-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #14b8a6, #2563eb); }
+.itops-location-wide-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #14b8a6, #0ea5e9); }
 @media (max-width: 1100px) {
   .itops-location-level2 { grid-template-columns: 1fr; }
   .itops-location-list-card,
@@ -6705,7 +6772,7 @@ body.itops-dashboard-page-active .router-content {
   width: 168px;
   height: 168px;
   border-radius: 50%;
-  background: conic-gradient(#10b981 0 var(--online), #ef4444 var(--online) var(--offline), #e2e8f0 var(--offline) 100%);
+  background: conic-gradient(#0ea5e9 0 var(--online), #ef4444 var(--online) var(--offline), #e2e8f0 var(--offline) 100%);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04), 0 16px 36px rgba(15, 23, 42, 0.08);
 }
 
@@ -6778,10 +6845,10 @@ body.itops-dashboard-page-active .router-content {
   font-weight: 950;
 }
 
-.itops-endpoint-legend-grid .online i { background: #10b981; }
+.itops-endpoint-legend-grid .online i { background: #0ea5e9; }
 .itops-endpoint-legend-grid .offline i { background: #ef4444; }
 .itops-endpoint-legend-grid .stale i { background: #f59e0b; }
-.itops-endpoint-legend-grid .fresh i { background: #2563eb; }
+.itops-endpoint-legend-grid .fresh i { background: #0ea5e9; }
 
 .itops-pro-drill-modal .itops-endpoint-level2-cards {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -7013,7 +7080,7 @@ body.itops-dashboard-page-active .router-content {
   width: 132px;
   height: 132px;
   border-radius: 50%;
-  background: conic-gradient(#10b981 0 var(--online), #ef4444 var(--online) var(--offline), #e2e8f0 var(--offline) 100%);
+  background: conic-gradient(#0ea5e9 0 var(--online), #ef4444 var(--online) var(--offline), #e2e8f0 var(--offline) 100%);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04), 0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
@@ -7086,10 +7153,10 @@ body.itops-dashboard-page-active .router-content {
   font-weight: 950;
 }
 
-.itops-endpoint-status-legend .online i { background: #10b981; }
+.itops-endpoint-status-legend .online i { background: #0ea5e9; }
 .itops-endpoint-status-legend .offline i { background: #ef4444; }
 .itops-endpoint-status-legend .stale i { background: #f59e0b; }
-.itops-endpoint-status-legend .fresh i { background: #2563eb; }
+.itops-endpoint-status-legend .fresh i { background: #0ea5e9; }
 
 .itops-endpoint-side-panel {
   display: grid;
@@ -7147,11 +7214,11 @@ body.itops-dashboard-page-active .router-content {
   height: 32px;
   border-radius: 11px;
   color: #ffffff;
-  background: linear-gradient(135deg, #2563eb, #38bdf8);
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
 }
 
-.itops-endpoint-mini-tile-green .itops-endpoint-mini-icon { background: linear-gradient(135deg, #059669, #34d399); }
-.itops-endpoint-mini-tile-red .itops-endpoint-mini-icon { background: linear-gradient(135deg, #dc2626, #fb7185); }
+.itops-endpoint-mini-tile-green .itops-endpoint-mini-icon { background: linear-gradient(135deg, #059669, #38bdf8); }
+.itops-endpoint-mini-tile-red .itops-endpoint-mini-icon { background: linear-gradient(135deg, #dc2626, #f59e0b); }
 .itops-endpoint-mini-tile-amber .itops-endpoint-mini-icon { background: linear-gradient(135deg, #d97706, #fbbf24); }
 .itops-endpoint-mini-tile-slate .itops-endpoint-mini-icon { background: linear-gradient(135deg, #475569, #94a3b8); }
 .itops-endpoint-mini-tile-purple .itops-endpoint-mini-icon { background: linear-gradient(135deg, #7c3aed, #c084fc); }
@@ -7260,7 +7327,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #38bdf8);
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
 }
 
 @media (max-width: 1160px) {
@@ -7367,7 +7434,7 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-device-availability-track .online { background: linear-gradient(90deg, #14b8a6, #67e8f9); }
-.itops-device-availability-track .offline { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+.itops-device-availability-track .offline { background: linear-gradient(90deg, #f43f5e, #f59e0b); }
 
 .itops-device-status-bars {
   display: grid;
@@ -7403,9 +7470,9 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-device-status-bar-online i { background: linear-gradient(180deg, #2dd4bf, #0891b2); }
-.itops-device-status-bar-offline i { background: linear-gradient(180deg, #fb7185, #be123c); }
+.itops-device-status-bar-offline i { background: linear-gradient(180deg, #f59e0b, #92400e); }
 .itops-device-status-bar-stale i { background: linear-gradient(180deg, #fbbf24, #d97706); }
-.itops-device-status-bar-fresh i { background: linear-gradient(180deg, #818cf8, #2563eb); }
+.itops-device-status-bar-fresh i { background: linear-gradient(180deg, #818cf8, #0ea5e9); }
 
 .itops-device-status-bar em {
   overflow: hidden;
@@ -7446,7 +7513,7 @@ body.itops-dashboard-page-active .router-content {
   height: 9px;
   overflow: hidden;
   border-radius: 999px;
-  background: #dbeafe;
+  background: #e0f2fe;
 }
 
 .itops-device-freshness-strip em i {
@@ -7673,8 +7740,8 @@ body.itops-dashboard-page-active .router-content {
   box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
 }
 
-.itops-ticket-bar-open i { background: linear-gradient(180deg, #60a5fa, #2563eb); }
-.itops-ticket-bar-overdue i { background: linear-gradient(180deg, #fb7185, #be123c); }
+.itops-ticket-bar-open i { background: linear-gradient(180deg, #38bdf8, #0ea5e9); }
+.itops-ticket-bar-overdue i { background: linear-gradient(180deg, #f59e0b, #92400e); }
 .itops-ticket-bar-track i { background: linear-gradient(180deg, #2dd4bf, #059669); }
 .itops-ticket-bar-priority i { background: linear-gradient(180deg, #fbbf24, #f97316); }
 
@@ -7723,14 +7790,14 @@ body.itops-dashboard-page-active .router-content {
   height: 12px;
   overflow: hidden;
   border-radius: 999px;
-  background: #dbeafe;
+  background: #e0f2fe;
 }
 
 .itops-ticket-sla-card em i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22d3ee);
+  background: linear-gradient(90deg, #0ea5e9, #22d3ee);
 }
 
 .itops-ticket-detail-panel {
@@ -8018,9 +8085,9 @@ body.itops-dashboard-page-active .router-content {
   background: rgba(255, 255, 255, 0.18);
 }
 
-.itops-ticket-focus-danger { background: linear-gradient(135deg, #be123c 0%, #f97316 100%); }
+.itops-ticket-focus-danger { background: linear-gradient(135deg, #92400e 0%, #f97316 100%); }
 .itops-ticket-focus-warning { background: linear-gradient(135deg, #c2410c 0%, #f59e0b 100%); }
-.itops-ticket-focus-success { background: linear-gradient(135deg, #047857 0%, #14b8a6 100%); }
+.itops-ticket-focus-success { background: linear-gradient(135deg, #0369a1 0%, #14b8a6 100%); }
 
 .itops-ticket-focus-card span,
 .itops-ticket-focus-card small,
@@ -8116,14 +8183,14 @@ body.itops-dashboard-page-active .router-content {
   height: 13px;
   overflow: hidden;
   border-radius: 999px;
-  background: #dbeafe;
+  background: #e0f2fe;
 }
 
 .itops-ticket-sla-strip-card em i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22d3ee);
+  background: linear-gradient(90deg, #0ea5e9, #22d3ee);
 }
 
 .itops-ticket-time-grid {
@@ -8207,7 +8274,7 @@ body.itops-dashboard-page-active .router-content {
 
 .itops-ticket-movement-row em i { display: block; min-width: 3px; }
 .itops-ticket-movement-row .new,
-.itops-ticket-movement-legend .new { background: #2563eb; }
+.itops-ticket-movement-legend .new { background: #0ea5e9; }
 .itops-ticket-movement-row .resolved,
 .itops-ticket-movement-legend .resolved { background: #14b8a6; }
 .itops-ticket-movement-row .open,
@@ -8275,9 +8342,9 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-ticket-priority-row em i { display: block; height: 100%; border-radius: inherit; }
-.itops-ticket-priority-row.critical em i { background: linear-gradient(90deg, #be123c, #f43f5e); }
+.itops-ticket-priority-row.critical em i { background: linear-gradient(90deg, #92400e, #f43f5e); }
 .itops-ticket-priority-row.high em i { background: linear-gradient(90deg, #ea580c, #f59e0b); }
-.itops-ticket-priority-row.medium em i { background: linear-gradient(90deg, #2563eb, #22d3ee); }
+.itops-ticket-priority-row.medium em i { background: linear-gradient(90deg, #0ea5e9, #22d3ee); }
 .itops-ticket-priority-row.low em i { background: linear-gradient(90deg, #059669, #22c55e); }
 .itops-ticket-priority-row b { color: #0f172a; font-size: 13px; font-weight: 950; }
 
@@ -8421,9 +8488,9 @@ body.itops-dashboard-page-active .router-content {
   border-radius: inherit;
 }
 
-.itops-ticket-detail-priority.critical em i { background: linear-gradient(90deg, #be123c, #f43f5e); }
+.itops-ticket-detail-priority.critical em i { background: linear-gradient(90deg, #92400e, #f43f5e); }
 .itops-ticket-detail-priority.high em i { background: linear-gradient(90deg, #ea580c, #f59e0b); }
-.itops-ticket-detail-priority.medium em i { background: linear-gradient(90deg, #2563eb, #22d3ee); }
+.itops-ticket-detail-priority.medium em i { background: linear-gradient(90deg, #0ea5e9, #22d3ee); }
 .itops-ticket-detail-priority.low em i { background: linear-gradient(90deg, #059669, #22c55e); }
 
 .itops-ticket-detail-priority strong {
@@ -8628,10 +8695,10 @@ body.itops-dashboard-page-active .router-content {
 .itops-security-branch-head button {
   flex: 0 0 auto;
   padding: 9px 12px;
-  border: 1px solid rgba(37, 99, 235, 0.24);
+  border: 1px solid rgba(14, 165, 233, 0.30);
   border-radius: 999px;
   background: #eff6ff;
-  color: #1d4ed8;
+  color: #0369a1;
   font-size: 11px;
   font-weight: 950;
   cursor: pointer;
@@ -8687,7 +8754,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22d3ee);
+  background: linear-gradient(90deg, #0ea5e9, #22d3ee);
 }
 
 
@@ -8731,7 +8798,7 @@ body.itops-dashboard-page-active .router-content {
   place-items: center;
   flex: 0 0 auto;
   border-radius: 18px;
-  background: linear-gradient(135deg, #be123c, #f43f5e);
+  background: linear-gradient(135deg, #92400e, #f43f5e);
   color: #ffffff;
   box-shadow: 0 18px 34px rgba(244, 63, 94, 0.22);
 }
@@ -8785,7 +8852,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #fb7185, #f97316, #f59e0b);
+  background: linear-gradient(90deg, #f59e0b, #f97316, #f59e0b);
 }
 
 .itops-critical-risk-split {
@@ -8866,7 +8933,7 @@ body.itops-dashboard-page-active .router-content {
   border: 1px solid rgba(124, 58, 237, 0.22);
   border-radius: 999px;
   background: #f5f3ff;
-  color: #6d28d9;
+  color: #92400e;
   font-size: 11px;
   font-weight: 950;
   cursor: pointer;
@@ -8918,7 +8985,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #be123c, #f97316, #facc15);
+  background: linear-gradient(90deg, #92400e, #f97316, #facc15);
 }
 
 .itops-risk-empty-note {
@@ -9162,7 +9229,7 @@ body.itops-dashboard-page-active .router-content {
 .itops-main-ticket-trend,
 .itops-main-trend-mini {
   width: 100%;
-  border: 1px solid #dbeafe;
+  border: 1px solid #e0f2fe;
   border-radius: 24px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   color: #0f172a;
@@ -9271,8 +9338,8 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-main-trend-track i { display: block; height: 100%; }
-.itops-main-trend-track .online { background: linear-gradient(90deg, #10b981, #22c55e); }
-.itops-main-trend-track .offline { background: linear-gradient(90deg, #ef4444, #fb7185); }
+.itops-main-trend-track .online { background: linear-gradient(90deg, #0ea5e9, #22c55e); }
+.itops-main-trend-track .offline { background: linear-gradient(90deg, #ef4444, #f59e0b); }
 .itops-main-trend-track .stale { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
 
 .itops-main-trend-values {
@@ -9292,7 +9359,7 @@ body.itops-dashboard-page-active .router-content {
   font-weight: 800;
 }
 
-.itops-main-trend-values .online { color: #047857; background: #dcfce7; }
+.itops-main-trend-values .online { color: #0369a1; background: #e0f2fe; }
 .itops-main-trend-values .offline { color: #b91c1c; background: #fee2e2; }
 .itops-main-trend-values .stale { color: #92400e; background: #fef3c7; }
 
@@ -9330,7 +9397,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22c55e);
+  background: linear-gradient(90deg, #0ea5e9, #22c55e);
 }
 
 .itops-main-ticket-trend {
@@ -9369,8 +9436,8 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-main-ticket-trend-track i { display: block; height: 100%; }
-.itops-main-ticket-trend-track .new { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-.itops-main-ticket-trend-track .resolved { background: linear-gradient(90deg, #10b981, #34d399); }
+.itops-main-ticket-trend-track .new { background: linear-gradient(90deg, #3b82f6, #38bdf8); }
+.itops-main-ticket-trend-track .resolved { background: linear-gradient(90deg, #0ea5e9, #38bdf8); }
 .itops-main-ticket-trend-track .open { background: linear-gradient(90deg, #f97316, #fb923c); }
 
 .itops-main-trend-mini-grid {
@@ -9438,7 +9505,7 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-main-health-card small {
-  color: #1d4ed8;
+  color: #0369a1;
   font-size: 13px;
   font-weight: 900;
 }
@@ -9459,7 +9526,7 @@ body.itops-dashboard-page-active .router-content {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #2563eb, #22c55e);
+  background: linear-gradient(90deg, #0ea5e9, #22c55e);
 }
 
 .itops-main-ready-list,
@@ -9532,7 +9599,7 @@ body.itops-dashboard-page-active .router-content {
 
 .itops-main-ready-row.action em i { background: linear-gradient(90deg, #ef4444, #f97316); }
 .itops-main-ready-row.watch em i { background: linear-gradient(90deg, #f59e0b, #facc15); }
-.itops-main-ready-row.healthy em i { background: linear-gradient(90deg, #10b981, #22c55e); }
+.itops-main-ready-row.healthy em i { background: linear-gradient(90deg, #0ea5e9, #22c55e); }
 
 .itops-main-action-panel .itops-pro-panel-head {
   margin-bottom: 10px;
@@ -9552,7 +9619,7 @@ body.itops-dashboard-page-active .router-content {
   align-items: center;
   justify-content: center;
   border-radius: 14px;
-  color: #2563eb;
+  color: #0ea5e9;
   background: #eff6ff;
 }
 
@@ -9627,7 +9694,7 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-main-stack-bar .online,
-.itops-main-stack-legend .online { background: #10b981; }
+.itops-main-stack-legend .online { background: #0ea5e9; }
 .itops-main-stack-bar .offline,
 .itops-main-stack-legend .offline { background: #ef4444; }
 .itops-main-stack-bar .old,
@@ -9680,8 +9747,8 @@ body.itops-dashboard-page-active .router-content {
   font-weight: 950;
 }
 
-.itops-main-bar-row.green em i { background: linear-gradient(90deg, #10b981, #22c55e); }
-.itops-main-bar-row.red em i { background: linear-gradient(90deg, #ef4444, #fb7185); }
+.itops-main-bar-row.green em i { background: linear-gradient(90deg, #0ea5e9, #22c55e); }
+.itops-main-bar-row.red em i { background: linear-gradient(90deg, #ef4444, #f59e0b); }
 .itops-main-bar-row.amber em i { background: linear-gradient(90deg, #f59e0b, #facc15); }
 
 .itops-main-branch-row {
@@ -9708,7 +9775,7 @@ body.itops-dashboard-page-active .router-content {
   padding: 7px 9px;
   border-radius: 999px;
   font-style: normal;
-  color: #1d4ed8;
+  color: #0369a1;
   background: #eff6ff;
   font-size: 12px;
   font-weight: 950;
@@ -9716,7 +9783,7 @@ body.itops-dashboard-page-active .router-content {
 
 .itops-main-branch-row.action em { color: #b91c1c; background: #fee2e2; }
 .itops-main-branch-row.watch em { color: #92400e; background: #fef3c7; }
-.itops-main-branch-row.healthy em { color: #047857; background: #dcfce7; }
+.itops-main-branch-row.healthy em { color: #0369a1; background: #e0f2fe; }
 
 .itops-main-command-grid {
   align-items: stretch;
@@ -9829,7 +9896,7 @@ body.itops-dashboard-page-active .router-content {
   background:
     radial-gradient(circle at 92% -10%, rgba(125, 211, 252, 0.36), transparent 30%),
     radial-gradient(circle at 0% 105%, rgba(168, 85, 247, 0.32), transparent 34%),
-    linear-gradient(135deg, #0f172a 0%, #1d4ed8 48%, #06b6d4 100%) !important;
+    linear-gradient(135deg, #0f172a 0%, #0369a1 48%, #06b6d4 100%) !important;
 }
 
 .itops-main-kpi-grid .itops-pro-kpi-green {
@@ -9843,7 +9910,7 @@ body.itops-dashboard-page-active .router-content {
   background:
     radial-gradient(circle at 92% -10%, rgba(251, 146, 60, 0.38), transparent 31%),
     radial-gradient(circle at -6% 105%, rgba(217, 70, 239, 0.30), transparent 34%),
-    linear-gradient(135deg, #3b0764 0%, #be123c 52%, #fb923c 100%) !important;
+    linear-gradient(135deg, #3b0764 0%, #92400e 52%, #fb923c 100%) !important;
 }
 
 .itops-main-kpi-grid .itops-pro-kpi-amber {
@@ -9857,7 +9924,7 @@ body.itops-dashboard-page-active .router-content {
   background:
     radial-gradient(circle at 92% -10%, rgba(244, 114, 182, 0.38), transparent 31%),
     radial-gradient(circle at -8% 108%, rgba(56, 189, 248, 0.24), transparent 34%),
-    linear-gradient(135deg, #1e1b4b 0%, #6d28d9 50%, #ec4899 100%) !important;
+    linear-gradient(135deg, #1e1b4b 0%, #92400e 50%, #ec4899 100%) !important;
 }
 
 .itops-main-kpi-grid .itops-pro-kpi-cyan {
@@ -10063,8 +10130,8 @@ body.itops-dashboard-page-active .router-content {
   height: 100%;
 }
 
-.itops-endpoint-trend-track .online { background: linear-gradient(90deg, #10b981, #22c55e); }
-.itops-endpoint-trend-track .offline { background: linear-gradient(90deg, #ef4444, #fb7185); }
+.itops-endpoint-trend-track .online { background: linear-gradient(90deg, #0ea5e9, #22c55e); }
+.itops-endpoint-trend-track .offline { background: linear-gradient(90deg, #ef4444, #f59e0b); }
 
 .itops-endpoint-trend-values {
   display: flex;
@@ -10083,7 +10150,7 @@ body.itops-dashboard-page-active .router-content {
   font-weight: 900;
 }
 
-.itops-endpoint-trend-values .online { color: #047857; background: #dcfce7; }
+.itops-endpoint-trend-values .online { color: #0369a1; background: #e0f2fe; }
 .itops-endpoint-trend-values .offline { color: #b91c1c; background: #fee2e2; }
 .itops-endpoint-trend-values .stale { color: #92400e; background: #fef3c7; }
 
@@ -10110,7 +10177,7 @@ body.itops-dashboard-page-active .router-content {
   grid-template-rows: auto auto 1fr;
   gap: 12px;
   padding: 16px;
-  border: 1px solid #dbeafe;
+  border: 1px solid #e0f2fe;
   border-radius: 24px;
   background: radial-gradient(circle at 82% 10%, rgba(56, 189, 248, 0.14), transparent 34%), linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   color: #0f172a;
@@ -10170,7 +10237,7 @@ body.itops-dashboard-page-active .router-content {
   padding: 7px 10px;
   border-radius: 999px;
   background: #eff6ff;
-  color: #1d4ed8;
+  color: #0369a1;
   font-size: 12px;
   font-weight: 950;
 }
@@ -10192,11 +10259,11 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-analytics-stat-row .online,
-.itops-analytics-stat-row .resolved { color: #047857; background: #dcfce7; }
+.itops-analytics-stat-row .resolved { color: #0369a1; background: #e0f2fe; }
 .itops-analytics-stat-row .offline,
 .itops-analytics-stat-row .open { color: #b91c1c; background: #fee2e2; }
 .itops-analytics-stat-row .stale { color: #92400e; background: #fef3c7; }
-.itops-analytics-stat-row .new { color: #1d4ed8; background: #dbeafe; }
+.itops-analytics-stat-row .new { color: #0369a1; background: #e0f2fe; }
 
 .itops-modern-column-chart {
   min-height: 148px;
@@ -10240,11 +10307,11 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-modern-column-stack .online,
-.itops-modern-column-stack .resolved { background: linear-gradient(180deg, #34d399, #10b981); }
+.itops-modern-column-stack .resolved { background: linear-gradient(180deg, #38bdf8, #0ea5e9); }
 .itops-modern-column-stack .offline,
-.itops-modern-column-stack .open { background: linear-gradient(180deg, #fb7185, #ef4444); }
+.itops-modern-column-stack .open { background: linear-gradient(180deg, #f59e0b, #ef4444); }
 .itops-modern-column-stack .stale { background: linear-gradient(180deg, #fbbf24, #f59e0b); }
-.itops-modern-column-stack .new { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+.itops-modern-column-stack .new { background: linear-gradient(180deg, #38bdf8, #0ea5e9); }
 .itops-modern-column-stack .empty { background: #cbd5e1; }
 
 .itops-modern-column span {
@@ -10284,7 +10351,7 @@ body.itops-dashboard-page-active .router-content {
   align-content: center;
   gap: 5px;
   padding: 12px;
-  border: 1px solid #dbeafe;
+  border: 1px solid #e0f2fe;
   border-radius: 18px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   color: #0f172a;
@@ -10339,6 +10406,356 @@ body.itops-dashboard-page-active .router-content {
   .itops-analytics-mini-grid,
   .itops-main-decision-grid { grid-template-columns: 1fr; }
   .itops-modern-column-chart { gap: 8px; }
+}
+
+
+/* Donut availability chart with hover */
+.itops-availability-donut-layout {
+  min-height: 182px;
+  display: grid;
+  grid-template-columns: minmax(190px, 0.82fr) minmax(0, 1.18fr);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 88% 8%, rgba(34, 197, 94, 0.10), transparent 30%),
+    linear-gradient(180deg, rgba(255,255,255,0.78), rgba(248,250,252,0.94));
+}
+
+.itops-availability-donut-card {
+  position: relative;
+  width: 178px;
+  height: 178px;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: radial-gradient(circle, #ffffff 0%, #ffffff 52%, #eff6ff 53%, #f8fbff 100%);
+}
+
+.itops-availability-donut-card svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.itops-availability-donut-card circle {
+  fill: none;
+  stroke-width: 17;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+.itops-availability-donut-card .base {
+  stroke: #e2e8f0;
+}
+
+.itops-availability-donut-card .online {
+  stroke: url(#unused);
+  stroke: #0ea5e9;
+  filter: drop-shadow(0 5px 10px rgba(14, 165, 233, 0.30));
+}
+
+.itops-availability-donut-card .offline {
+  stroke: #f59e0b;
+  filter: drop-shadow(0 5px 10px rgba(245, 158, 11, 0.30));
+}
+
+.itops-availability-donut-center {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.itops-availability-donut-center strong {
+  color: #0f172a;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.06em;
+}
+
+.itops-availability-donut-center span {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.itops-availability-donut-hover {
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  z-index: 5;
+  min-width: 185px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e0f2fe;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.16);
+  color: #334155;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.itops-availability-donut-hover b {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.itops-availability-donut-card:hover .itops-availability-donut-hover {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.itops-availability-donut-side {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.itops-availability-donut-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.itops-availability-donut-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.itops-availability-donut-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.itops-availability-donut-legend .online { color: #0369a1; background: #e0f2fe; }
+.itops-availability-donut-legend .offline { color: #92400e; background: #fef3c7; }
+.itops-availability-donut-legend .stale { color: #92400e; background: #fef3c7; }
+.itops-availability-donut-legend .online i { background: #0ea5e9; }
+.itops-availability-donut-legend .offline i { background: #f59e0b; }
+.itops-availability-donut-legend .stale i { background: #f59e0b; }
+
+.itops-availability-trend-list {
+  display: grid;
+  gap: 8px;
+}
+
+.itops-availability-trend-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 52px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.76);
+}
+
+.itops-availability-trend-row > div {
+  display: grid;
+  gap: 2px;
+}
+
+.itops-availability-trend-row strong {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.itops-availability-trend-row span {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.itops-availability-trend-row em {
+  height: 10px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.itops-availability-trend-row em i {
+  display: block;
+  height: 100%;
+}
+
+.itops-availability-trend-row em .online { background: #0ea5e9; }
+.itops-availability-trend-row em .offline { background: #f59e0b; }
+.itops-availability-trend-row em .stale { background: #f59e0b; }
+
+.itops-availability-trend-row b {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 950;
+  text-align: right;
+}
+
+.itops-availability-row-hover {
+  position: absolute;
+  right: 10px;
+  top: -34px;
+  z-index: 4;
+  width: max-content;
+  max-width: 280px;
+  padding: 7px 9px;
+  border: 1px solid #e0f2fe;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.98);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.13);
+  color: #334155 !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(5px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.itops-availability-trend-row:hover .itops-availability-row-hover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 1180px) {
+  .itops-availability-donut-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .itops-availability-donut-card {
+    width: 160px;
+    height: 160px;
+  }
+}
+
+
+/* Availability donut custom color override: blue + purple, no red/green */
+.itops-availability-donut-card .online {
+  stroke: #0ea5e9;
+  filter: drop-shadow(0 5px 10px rgba(14, 165, 233, 0.30));
+}
+
+.itops-availability-donut-card .offline {
+  stroke: #f59e0b;
+  filter: drop-shadow(0 5px 10px rgba(245, 158, 11, 0.30));
+}
+
+.itops-availability-donut-legend .online {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.itops-availability-donut-legend .offline {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.itops-availability-donut-legend .online i,
+.itops-availability-trend-row em .online {
+  background: #0ea5e9;
+}
+
+.itops-availability-donut-legend .offline i,
+.itops-availability-trend-row em .offline {
+  background: #f59e0b;
+}
+
+.itops-analytics-stat-row .online {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.itops-analytics-stat-row .offline {
+  color: #92400e;
+  background: #fef3c7;
+}
+
+
+/* Availability donut stronger contrast override */
+.itops-availability-donut-card .online {
+  stroke: #0ea5e9 !important;
+  filter: drop-shadow(0 6px 12px rgba(14, 165, 233, 0.30)) !important;
+}
+
+.itops-availability-donut-card .offline {
+  stroke: #f59e0b !important;
+  filter: drop-shadow(0 6px 12px rgba(245, 158, 11, 0.30)) !important;
+}
+
+.itops-availability-donut-card .base {
+  stroke: #e2e8f0 !important;
+}
+
+.itops-availability-donut-legend .online {
+  color: #0369a1 !important;
+  background: #e0f2fe !important;
+}
+
+.itops-availability-donut-legend .offline {
+  color: #92400e !important;
+  background: #fef3c7 !important;
+}
+
+.itops-availability-donut-legend .stale {
+  color: #475569 !important;
+  background: #f1f5f9 !important;
+}
+
+.itops-availability-donut-legend .online i,
+.itops-availability-trend-row em .online {
+  background: #0ea5e9 !important;
+}
+
+.itops-availability-donut-legend .offline i,
+.itops-availability-trend-row em .offline {
+  background: #f59e0b !important;
+}
+
+.itops-availability-donut-legend .stale i,
+.itops-availability-trend-row em .stale {
+  background: #64748b !important;
+}
+
+.itops-analytics-stat-row .online {
+  color: #0369a1 !important;
+  background: #e0f2fe !important;
+}
+
+.itops-analytics-stat-row .offline {
+  color: #92400e !important;
+  background: #fef3c7 !important;
+}
+
+.itops-analytics-stat-row .stale {
+  color: #475569 !important;
+  background: #f1f5f9 !important;
 }
 
 `;
