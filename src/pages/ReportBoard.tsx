@@ -1,5 +1,6 @@
 import { CSSProperties, DragEvent, useEffect, useMemo, useState } from "react";
 import { generateReport, previewReport } from "../services/reportService";
+import { buildRegeneratedReportHtml } from "../utils/reportPdfCanvas";
 
 type ReportCategory = "Standard" | "Dynamic";
 
@@ -25,10 +26,12 @@ type CanvasSlot = ReportPack | null;
 
 type PreviewState = {
   payload: any;
+  html: string;
   title: string;
   from: string;
   to: string;
   packs: ReportPack[];
+  filters: any;
 } | null;
 
 const CANVAS_SIZE = 6;
@@ -46,18 +49,8 @@ const REPORT_PACKS: ReportPack[] = [
 ];
 
 const TEMPLATES = [
-  {
-    id: "ops-risk-template",
-    title: "Ops + Risk Pack",
-    subtitle: "Health, SLA and risk exposure",
-    packs: ["operations-health-sla", "security-compliance-exposure", "hardware-asset-lifecycle"],
-  },
-  {
-    id: "governance-template",
-    title: "Governance Pack",
-    subtitle: "Compliance, software and cost saving",
-    packs: ["software-application-governance", "dynamic-compliance-report", "dynamic-cost-saving-report"],
-  },
+  { id: "ops-risk-template", title: "Ops + Risk Pack", subtitle: "Health, SLA and risk exposure", packs: ["operations-health-sla", "security-compliance-exposure", "hardware-asset-lifecycle"] },
+  { id: "governance-template", title: "Governance Pack", subtitle: "Compliance, software and cost saving", packs: ["software-application-governance", "dynamic-compliance-report", "dynamic-cost-saving-report"] },
 ];
 
 const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
@@ -125,16 +118,11 @@ function fileSafeName(value: string) {
 function getReportSummary(payload: any, fallback: string) {
   const data = unwrapPayload(payload) || {};
   const narrative = data.narrative || {};
-  return textValue(narrative.executiveSummary || narrative.summary || narrative.title || data.summary || fallback, fallback);
+  return textValue(narrative.executiveSummary || narrative.summary || narrative.managementConclusion || narrative.title || data.summary || fallback, fallback);
 }
 
-function buildPackRequestPayload(title: string, customer: string, range: DateRange, pack: ReportPack) {
+function buildCanvasFilters(range: DateRange, customer: string) {
   return {
-    reportId: pack.id,
-    dynamicReportType: pack.dynamic ? pack.id : undefined,
-    dynamicReportTitle: pack.dynamic ? pack.title : undefined,
-    customReportTitle: pack.title,
-    parentReportTitle: title,
     dateRange: range.preset === "custom" ? "custom" : range.preset,
     startDate: range.from,
     endDate: range.to,
@@ -150,16 +138,43 @@ function buildPackRequestPayload(title: string, customer: string, range: DateRan
   };
 }
 
+function buildPackRequestPayload(title: string, customer: string, range: DateRange, pack: ReportPack) {
+  return {
+    ...buildCanvasFilters(range, customer),
+    reportId: pack.id,
+    dynamicReportType: pack.dynamic ? pack.id : undefined,
+    dynamicReportTitle: pack.dynamic ? pack.title : undefined,
+    customReportTitle: pack.title,
+    parentReportTitle: title,
+  };
+}
+
+function uniqueRows(rows: any[]) {
+  return rows.filter(Boolean);
+}
+
 function mergeReportPayloads(title: string, range: DateRange, packs: ReportPack[], payloads: any[]) {
   const unwrapped = payloads.map((payload) => unwrapPayload(payload) || {});
   const summaries = packs.map((pack, index) => ({ pack, summary: getReportSummary(unwrapped[index], pack.subtitle) }));
+  const keyFindings = uniqueRows(unwrapped.flatMap((payload, index) => {
+    const pack = packs[index];
+    const findings = Array.isArray(payload?.narrative?.keyFindings) ? payload.narrative.keyFindings : [];
+    if (findings.length) return findings.map((item: any) => `${pack.title}: ${textValue(item, pack.subtitle)}`);
+    return [`${pack.title}: ${summaries[index]?.summary || pack.subtitle}`];
+  })).slice(0, 18);
+  const recommendations = uniqueRows(unwrapped.flatMap((payload, index) => {
+    const pack = packs[index];
+    const rows = Array.isArray(payload?.recommendations) ? payload.recommendations : [];
+    if (rows.length) return rows.map((row: any) => ({ ...row, area: row.area || pack.title, sourceReport: pack.title }));
+    return [{ priority: pack.dynamic ? "AI Review" : "Review", action: `Review ${pack.title} findings and assign follow-up owner.`, owner: "Management Team", sourceReport: pack.title }];
+  }));
   const sections = unwrapped.flatMap((payload, index) => {
     const pack = packs[index];
     const reportSections = Array.isArray(payload.sections) ? payload.sections : [];
     if (!reportSections.length) {
       return [{
         title: pack.title,
-        type: pack.id,
+        type: pack.dynamic ? "risk" : "table",
         packId: pack.id,
         packTitle: pack.title,
         rows: [{ Summary: summaries[index]?.summary || pack.subtitle }],
@@ -170,18 +185,30 @@ function mergeReportPayloads(title: string, range: DateRange, packs: ReportPack[
       title: `${pack.title} · ${textValue(section?.title || section?.type, "Report Details")}`,
       packId: pack.id,
       packTitle: pack.title,
+      rows: Array.isArray(section?.rows) ? section.rows : [],
     }));
   });
 
   return {
-    report: { id: "report-pack-builder", title },
+    report: {
+      id: "report-pack-builder",
+      title,
+      category: "Management Report Pack",
+      type: "Dynamic Report Builder",
+      description: "Combined report pack generated from selected report canvas modules.",
+    },
     generatedAt: new Date().toISOString(),
     dateRange: { from: range.from, to: range.to, preset: range.preset },
     narrative: {
       title,
+      period: `${range.from} to ${range.to}`,
+      scope: "All Sites",
       executiveSummary: summaries.map((item, index) => `${index + 1}. ${item.pack.title}: ${item.summary}`).join("\n\n"),
-      summary: `${packs.length} report pack${packs.length === 1 ? "" : "s"} combined into one report canvas output.`,
+      managementConclusion: `${packs.length} selected report pack${packs.length === 1 ? "" : "s"} combined into one management-ready PDF canvas output.",
+      summary: `${packs.length} report pack${packs.length === 1 ? "" : "s"} combined into one report canvas output.",
+      keyFindings,
     },
+    metrics: unwrapped.reduce((record, payload) => ({ ...record, ...(payload.metrics || {}) }), {}),
     builderPacks: packs.map((pack, index) => ({
       order: index + 1,
       id: pack.id,
@@ -195,6 +222,7 @@ function mergeReportPayloads(title: string, range: DateRange, packs: ReportPack[
       return sources.map((source: any) => ({ ...source, packTitle: packs[index].title }));
     }),
     sections,
+    recommendations,
   };
 }
 
@@ -207,46 +235,8 @@ async function requestComposedReport(mode: "preview" | "generate", title: string
   return mergeReportPayloads(title, range, packs, payloads);
 }
 
-function downloadHtml(title: string, payload: any, range: DateRange, packs: ReportPack[]) {
-  const data = unwrapPayload(payload) || {};
-  const narrative = data.narrative || {};
-  const sections = Array.isArray(data.sections) ? data.sections : [];
-  const packList = packs.map((pack, index) => `<li><strong>${index + 1}. ${pack.title}</strong><span>${pack.subtitle}</span></li>`).join("");
-  const rowsHtml = sections
-    .map((section: any) => {
-      const rows = Array.isArray(section.rows) ? section.rows : [];
-      const body = rows.slice(0, 14).map((row: any) => {
-        if (!row || typeof row !== "object") return `<li>${textValue(row)}</li>`;
-        return `<li>${Object.entries(row).map(([key, value]) => `<strong>${key}:</strong> ${textValue(value)}`).join(" · ")}</li>`;
-      }).join("");
-      return `<section><h2>${textValue(section.title || section.type, "Section")}</h2><ul>${body || "<li>No rows available.</li>"}</ul></section>`;
-    })
-    .join("");
-
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${title}</title>
-  <style>
-    body{font-family:Arial,Helvetica,sans-serif;margin:36px;color:#12233f;background:#f8fbff;line-height:1.45}
-    main{max-width:980px;margin:auto;background:white;border:1px solid #d8e5f6;border-radius:24px;padding:34px;box-shadow:0 18px 45px rgba(15,35,71,.10)}
-    h1{margin:0 0 6px;font-size:30px}.meta{color:#64748b;font-weight:700;margin-bottom:22px}
-    .summary{background:#eef6ff;border:1px solid #d3e4fb;border-radius:16px;padding:18px;margin:18px 0;white-space:pre-line}.packs{background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:18px;margin:18px 0}.packs li{display:grid;margin:8px 0}.packs span{color:#64748b;font-size:13px}
-    h2{font-size:18px;margin:24px 0 10px;color:#17325d}li{margin:8px 0}strong{color:#17325d}
-  </style>
-</head>
-<body>
-<main>
-  <h1>${title}</h1>
-  <div class="meta">${range.from} to ${range.to}</div>
-  <div class="summary">${textValue(narrative.executiveSummary || narrative.summary || narrative.title || "Report generated successfully.").replace(/\n/g, "<br />")}</div>
-  <section class="packs"><h2>Selected Report Packs</h2><ol>${packList || "<li>No report pack selected.</li>"}</ol></section>
-  ${rowsHtml || "<section><h2>Report Data</h2><p>No section data returned.</p></section>"}
-</main>
-</body>
-</html>`;
-
+function downloadPdfDesignHtml(title: string, payload: any, range: DateRange, customer: string) {
+  const html = buildRegeneratedReportHtml(payload, buildCanvasFilters(range, customer));
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -284,65 +274,54 @@ export default function ReportBoard() {
   }, []);
 
   const selectedPacks = useMemo(() => slots.filter(Boolean) as ReportPack[], [slots]);
-
   const filteredPacks = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return REPORT_PACKS.filter((pack) => {
-      if (filter !== "all" && pack.category !== filter) return false;
-      if (!keyword) return true;
-      return `${pack.title} ${pack.subtitle} ${pack.category}`.toLowerCase().includes(keyword);
+      const matchesFilter = filter === "all" || pack.category === filter;
+      const matchesSearch = !keyword || `${pack.title} ${pack.subtitle} ${pack.category}`.toLowerCase().includes(keyword);
+      return matchesFilter && matchesSearch;
     });
   }, [filter, search]);
 
   const updatePreset = (preset: PeriodKey) => setRange(rangeForPreset(preset));
   const updateRange = (key: "from" | "to", value: string) => setRange((current) => ({ ...current, preset: "custom", [key]: value }));
 
-  const placePack = (packId: string, slotIndex?: number) => {
+  const placePack = (packId: string, targetIndex?: number) => {
     const pack = REPORT_PACKS.find((item) => item.id === packId);
     if (!pack) return;
     setSlots((current) => {
       const next = [...current];
       const existingIndex = next.findIndex((slot) => slot?.id === pack.id);
       if (existingIndex >= 0) next[existingIndex] = null;
-      const targetIndex = typeof slotIndex === "number" ? slotIndex : next.findIndex((slot) => !slot);
-      if (targetIndex < 0) return current;
-      next[targetIndex] = pack;
+      const index = typeof targetIndex === "number" ? targetIndex : next.findIndex((slot) => !slot);
+      if (index < 0) return current;
+      next[index] = pack;
       return next;
     });
   };
+
+  const handleDragStart = (event: DragEvent<HTMLElement>, packId: string) => {
+    event.dataTransfer.setData("text/plain", packId);
+    event.dataTransfer.effectAllowed = "copy";
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>, index: number) => {
+    event.preventDefault();
+    const packId = event.dataTransfer.getData("text/plain");
+    placePack(packId, index);
+  };
+
+  const removePack = (index: number) => setSlots((current) => current.map((slot, slotIndex) => (slotIndex === index ? null : slot)));
+  const clearCanvas = () => setSlots(Array.from({ length: CANVAS_SIZE }, () => null));
 
   const applyTemplate = (templateId: string) => {
     const template = TEMPLATES.find((item) => item.id === templateId);
     if (!template) return;
     const next = Array.from({ length: CANVAS_SIZE }, () => null) as CanvasSlot[];
-    template.packs.forEach((packId, index) => {
+    template.packs.slice(0, CANVAS_SIZE).forEach((packId, index) => {
       next[index] = REPORT_PACKS.find((pack) => pack.id === packId) || null;
     });
     setSlots(next);
-    setTitle(template.title);
-    setPreview(null);
-    setError("");
-  };
-
-  const removePack = (slotIndex: number) => {
-    setSlots((current) => current.map((slot, index) => (index === slotIndex ? null : slot)));
-  };
-
-  const clearCanvas = () => {
-    setSlots(Array.from({ length: CANVAS_SIZE }, () => null));
-    setPreview(null);
-    setError("");
-  };
-
-  const handleDragStart = (event: DragEvent, packId: string) => {
-    event.dataTransfer.setData("text/plain", packId);
-    event.dataTransfer.effectAllowed = "copyMove";
-  };
-
-  const handleDrop = (event: DragEvent, slotIndex: number) => {
-    event.preventDefault();
-    const packId = event.dataTransfer.getData("text/plain");
-    placePack(packId, slotIndex);
   };
 
   const runPreview = async () => {
@@ -354,7 +333,9 @@ export default function ReportBoard() {
     setError("");
     try {
       const payload = await requestComposedReport("preview", title, customer, range, selectedPacks);
-      setPreview({ title, payload, from: range.from, to: range.to, packs: selectedPacks });
+      const filters = buildCanvasFilters(range, customer);
+      const html = buildRegeneratedReportHtml(payload, filters);
+      setPreview({ payload, html, filters, title, from: range.from, to: range.to, packs: selectedPacks });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to preview report.");
     } finally {
@@ -371,7 +352,7 @@ export default function ReportBoard() {
     setError("");
     try {
       const payload = await requestComposedReport("generate", title, customer, range, selectedPacks);
-      downloadHtml(title, payload, range, selectedPacks);
+      downloadPdfDesignHtml(title, payload, range, customer);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to generate report.");
     } finally {
@@ -381,530 +362,95 @@ export default function ReportBoard() {
 
   const saveTemplate = () => {
     setLoading("save");
-    const template = {
-      title,
-      customer,
-      range,
-      packs: selectedPacks.map((pack) => pack.id),
-      savedAt: new Date().toISOString(),
-    };
+    const template = { title, customer, range, packs: selectedPacks.map((pack) => pack.id), savedAt: new Date().toISOString() };
     localStorage.setItem("ema-report-pack-template", JSON.stringify(template));
     window.setTimeout(() => setLoading(null), 300);
+  };
+
+  const downloadPreview = () => {
+    if (!preview) return;
+    downloadPdfDesignHtml(preview.title, preview.payload, range, customer);
   };
 
   return (
     <main className="report-builder-page">
       <style>{`
         html.ema-report-builder-active,
-        body.ema-report-builder-active {
-          height: auto !important;
-          min-height: 100% !important;
-          overflow: auto !important;
-        }
+        body.ema-report-builder-active { height: auto !important; min-height: 100% !important; overflow: auto !important; }
         body.ema-report-builder-active .ema-shell,
-        body.ema-report-builder-active .ema-main {
-          height: auto !important;
-          min-height: 100vh !important;
-          max-height: none !important;
-          overflow: visible !important;
-        }
-        body.ema-report-builder-active .ema-page {
-          height: auto !important;
-          min-height: calc(100vh - 76px) !important;
-          max-height: none !important;
-          overflow: visible !important;
-          padding: 0 !important;
-        }
-        .report-builder-page {
-          min-height: calc(100vh - 76px);
-          color: #071d3b;
-          background:
-            radial-gradient(circle at 18% -8%, rgba(37,99,235,.10), transparent 30rem),
-            radial-gradient(circle at 94% 8%, rgba(139,92,246,.12), transparent 26rem),
-            #f7f9fc;
-        }
-        .builder-topbar {
-          position: sticky;
-          top: 0;
-          z-index: 20;
-          min-height: 70px;
-          display: grid;
-          grid-template-columns: minmax(220px, 1fr) 150px 150px auto;
-          align-items: center;
-          gap: 14px;
-          padding: 12px 16px;
-          border-bottom: 1px solid #d9e3f0;
-          background: rgba(255,255,255,.94);
-          backdrop-filter: blur(12px);
-        }
+        body.ema-report-builder-active .ema-main { height: auto !important; min-height: 100vh !important; max-height: none !important; overflow: visible !important; }
+        body.ema-report-builder-active .ema-page { height: auto !important; min-height: calc(100vh - 76px) !important; max-height: none !important; overflow: visible !important; padding: 0 !important; }
+        .report-builder-page { min-height: calc(100vh - 76px); color: #071d3b; background: radial-gradient(circle at 18% -8%, rgba(37,99,235,.10), transparent 30rem), radial-gradient(circle at 94% 8%, rgba(139,92,246,.12), transparent 26rem), #f7f9fc; }
+        .builder-topbar { position: sticky; top: 0; z-index: 20; min-height: 70px; display: grid; grid-template-columns: minmax(220px, 1fr) 150px 150px auto; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid #d9e3f0; background: rgba(255,255,255,.94); backdrop-filter: blur(12px); }
         .builder-field { display: grid; gap: 5px; }
-        .builder-field span {
-          color: #7b8ca7;
-          font-size: 10px;
-          font-weight: 950;
-          letter-spacing: .13em;
-          text-transform: uppercase;
-        }
-        .builder-title-input,
-        .builder-select,
-        .builder-date-input {
-          width: 100%;
-          height: 34px;
-          border: 1px solid #d4e0ee;
-          border-radius: 10px;
-          background: #f8fbff;
-          color: #071d3b;
-          padding: 0 12px;
-          font-weight: 850;
-          outline: none;
-        }
-        .builder-title-input {
-          border: 0;
-          background: transparent;
-          padding: 0;
-          font-size: 16px;
-          font-weight: 950;
-        }
+        .builder-field span { color: #7b8ca7; font-size: 10px; font-weight: 950; letter-spacing: .13em; text-transform: uppercase; }
+        .builder-title-input, .builder-select, .builder-date-input { width: 100%; height: 34px; border: 1px solid #d4e0ee; border-radius: 10px; background: #f8fbff; color: #071d3b; padding: 0 12px; font-weight: 850; outline: none; }
+        .builder-title-input { border: 0; background: transparent; padding: 0; font-size: 16px; font-weight: 950; }
         .builder-date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .builder-actions {
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-        .builder-btn {
-          height: 34px;
-          border: 1px solid #d2dfef;
-          border-radius: 10px;
-          background: #ffffff;
-          color: #17325d;
-          padding: 0 13px;
-          font-size: 12px;
-          font-weight: 950;
-          cursor: pointer;
-        }
+        .builder-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+        .builder-btn { height: 34px; border: 1px solid #d2dfef; border-radius: 10px; background: #ffffff; color: #17325d; padding: 0 13px; font-size: 12px; font-weight: 950; cursor: pointer; }
         .builder-btn.save { color: #047857; border-color: #b7ead2; background: #f1fff8; }
-        .builder-btn.primary {
-          color: #ffffff;
-          border-color: transparent;
-          background: linear-gradient(135deg, #2563eb, #6d28d9);
-          box-shadow: 0 12px 22px rgba(37,99,235,.18);
-        }
+        .builder-btn.primary { color: #ffffff; border-color: transparent; background: linear-gradient(135deg, #2563eb, #6d28d9); box-shadow: 0 12px 22px rgba(37,99,235,.18); }
         .builder-btn:disabled { opacity: .62; cursor: wait; }
-        .builder-shell {
-          display: grid;
-          grid-template-columns: 300px minmax(0, 1fr) 280px;
-          min-height: calc(100vh - 146px);
-        }
-        .builder-sidebar,
-        .builder-summary {
-          background: rgba(255,255,255,.76);
-          backdrop-filter: blur(10px);
-        }
-        .builder-sidebar {
-          border-right: 1px solid #d8e3f1;
-          padding: 14px;
-        }
-        .builder-summary {
-          border-left: 1px solid #d8e3f1;
-          padding: 16px;
-        }
-        .section-title {
-          margin: 0 0 10px;
-          color: #17325d;
-          font-size: 12px;
-          font-weight: 950;
-          letter-spacing: .11em;
-          text-transform: uppercase;
-        }
-        .library-tabs,
-        .filter-tabs {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 8px;
-          margin-bottom: 12px;
-        }
+        .builder-shell { display: grid; grid-template-columns: 300px minmax(0, 1fr) 280px; min-height: calc(100vh - 146px); }
+        .builder-sidebar, .builder-summary { background: rgba(255,255,255,.76); backdrop-filter: blur(10px); }
+        .builder-sidebar { border-right: 1px solid #d8e3f1; padding: 14px; }
+        .builder-summary { border-left: 1px solid #d8e3f1; padding: 16px; }
+        .section-title { margin: 0 0 10px; color: #17325d; font-size: 12px; font-weight: 950; letter-spacing: .11em; text-transform: uppercase; }
+        .library-tabs, .filter-tabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
         .filter-tabs { grid-template-columns: repeat(3, 1fr); }
-        .library-tabs button,
-        .filter-tabs button {
-          height: 32px;
-          border: 1px solid #d5e1f0;
-          border-radius: 9px;
-          background: #ffffff;
-          color: #7b8ca7;
-          font-size: 10px;
-          font-weight: 950;
-          letter-spacing: .08em;
-          text-transform: uppercase;
-        }
-        .library-tabs button.active,
-        .filter-tabs button.active {
-          color: #2563eb;
-          border-color: #2563eb;
-          background: #f3f7ff;
-        }
-        .pack-search {
-          width: 100%;
-          height: 34px;
-          border: 1px solid #d5e1f0;
-          border-radius: 10px;
-          background: #f8fbff;
-          padding: 0 12px;
-          color: #17325d;
-          font-weight: 800;
-          margin-bottom: 12px;
-          outline: none;
-        }
-        .pack-list {
-          display: grid;
-          gap: 9px;
-        }
-        .builder-pack-card {
-          min-height: 72px;
-          display: grid;
-          grid-template-columns: 40px minmax(0, 1fr) auto;
-          align-items: center;
-          gap: 10px;
-          border: 1px solid #d9e4f2;
-          border-radius: 15px;
-          background:
-            radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--pack-accent) 10%, transparent), transparent 8rem),
-            #ffffff;
-          color: #071d3b;
-          padding: 10px;
-          text-align: left;
-          cursor: grab;
-          transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
-        }
-        .builder-pack-card:hover {
-          transform: translateY(-1px);
-          border-color: var(--pack-accent);
-          box-shadow: 0 10px 22px rgba(15,35,71,.08);
-        }
-        .pack-icon {
-          width: 38px;
-          height: 38px;
-          display: grid;
-          place-items: center;
-          border-radius: 13px;
-          color: var(--pack-accent);
-          background: color-mix(in srgb, var(--pack-accent) 12%, #ffffff);
-          font-weight: 950;
-        }
-        .builder-pack-card strong,
-        .template-card strong {
-          display: block;
-          color: #071d3b;
-          font-size: 12px;
-          line-height: 1.12;
-          font-weight: 950;
-        }
-        .builder-pack-card small,
-        .template-card small {
-          display: block;
-          margin-top: 4px;
-          color: #72839d;
-          font-size: 10px;
-          font-weight: 800;
-          line-height: 1.2;
-        }
-        .pack-type {
-          padding: 4px 7px;
-          border-radius: 999px;
-          color: var(--pack-accent);
-          background: color-mix(in srgb, var(--pack-accent) 10%, #ffffff);
-          font-size: 9px;
-          font-weight: 950;
-        }
-        .template-card {
-          min-height: 86px;
-          border: 1px solid #d9e4f2;
-          border-radius: 15px;
-          background: #ffffff;
-          padding: 12px;
-          text-align: left;
-        }
-        .builder-canvas-wrap {
-          padding: 22px 26px 40px;
-        }
-        .canvas-head {
-          max-width: 820px;
-          margin: 0 auto 14px;
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 16px;
-        }
-        .canvas-head h2 {
-          margin: 0;
-          font-size: 22px;
-          font-weight: 950;
-          letter-spacing: -0.04em;
-        }
-        .canvas-head p {
-          margin: 4px 0 0;
-          color: #7b8ca7;
-          font-size: 12px;
-          font-weight: 800;
-        }
-        .canvas-head button {
-          border: 0;
-          background: transparent;
-          color: #7b8ca7;
-          font-size: 11px;
-          font-weight: 950;
-        }
-        .canvas-grid {
-          max-width: 820px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 14px;
-        }
-        .canvas-slot {
-          position: relative;
-          height: 156px;
-          border: 1.5px dashed #d2dfef;
-          border-radius: 20px;
-          background: rgba(255,255,255,.56);
-          display: grid;
-          place-items: center;
-          color: #b8c8dc;
-          overflow: hidden;
-        }
-        .canvas-slot.is-filled {
-          place-items: stretch;
-          border-style: solid;
-          border-color: #d5e1f0;
-          background: #ffffff;
-          box-shadow: 0 12px 28px rgba(15,35,71,.07);
-        }
-        .drop-empty {
-          display: grid;
-          place-items: center;
-          gap: 8px;
-          color: #bfd0e4;
-          font-size: 10px;
-          font-weight: 950;
-          letter-spacing: .1em;
-          text-transform: uppercase;
-        }
+        .library-tabs button, .filter-tabs button { height: 32px; border: 1px solid #d5e1f0; border-radius: 9px; background: #ffffff; color: #7b8ca7; font-size: 10px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+        .library-tabs button.active, .filter-tabs button.active { color: #2563eb; border-color: #2563eb; background: #f3f7ff; }
+        .pack-search { width: 100%; height: 34px; border: 1px solid #d5e1f0; border-radius: 10px; background: #f8fbff; padding: 0 12px; color: #17325d; font-weight: 800; margin-bottom: 12px; outline: none; }
+        .pack-list { display: grid; gap: 9px; }
+        .builder-pack-card { min-height: 72px; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid #d9e4f2; border-radius: 15px; background: radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--pack-accent) 10%, transparent), transparent 8rem), #ffffff; color: #071d3b; padding: 10px; text-align: left; cursor: grab; transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease; }
+        .builder-pack-card:hover { transform: translateY(-1px); border-color: var(--pack-accent); box-shadow: 0 10px 22px rgba(15,35,71,.08); }
+        .pack-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 13px; color: var(--pack-accent); background: color-mix(in srgb, var(--pack-accent) 12%, #ffffff); font-weight: 950; }
+        .builder-pack-card strong, .template-card strong { display: block; color: #071d3b; font-size: 12px; line-height: 1.12; font-weight: 950; }
+        .builder-pack-card small, .template-card small { display: block; margin-top: 4px; color: #72839d; font-size: 10px; font-weight: 800; line-height: 1.2; }
+        .pack-type { padding: 4px 7px; border-radius: 999px; color: var(--pack-accent); background: color-mix(in srgb, var(--pack-accent) 10%, #ffffff); font-size: 9px; font-weight: 950; }
+        .template-card { min-height: 86px; border: 1px solid #d9e4f2; border-radius: 15px; background: #ffffff; padding: 12px; text-align: left; }
+        .builder-canvas-wrap { padding: 22px 26px 40px; }
+        .canvas-head { max-width: 820px; margin: 0 auto 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+        .canvas-head h2 { margin: 0; font-size: 22px; font-weight: 950; letter-spacing: -0.04em; }
+        .canvas-head p { margin: 4px 0 0; color: #7b8ca7; font-size: 12px; font-weight: 800; }
+        .canvas-head button { border: 0; background: transparent; color: #7b8ca7; font-size: 11px; font-weight: 950; }
+        .canvas-grid { max-width: 820px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+        .canvas-slot { position: relative; height: 156px; border: 1.5px dashed #d2dfef; border-radius: 20px; background: rgba(255,255,255,.56); display: grid; place-items: center; color: #b8c8dc; overflow: hidden; }
+        .canvas-slot.is-filled { place-items: stretch; border-style: solid; border-color: #d5e1f0; background: #ffffff; box-shadow: 0 12px 28px rgba(15,35,71,.07); }
+        .drop-empty { display: grid; place-items: center; gap: 8px; color: #bfd0e4; font-size: 10px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; }
         .drop-empty i { font-style: normal; font-size: 24px; line-height: 1; }
-        .canvas-card {
-          position: relative;
-          height: 100%;
-          display: grid;
-          grid-template-rows: auto 1fr auto;
-          gap: 7px;
-          padding: 14px;
-          border-top: 4px solid var(--pack-accent);
-          background:
-            radial-gradient(circle at 96% 0%, color-mix(in srgb, var(--pack-accent) 13%, transparent), transparent 8rem),
-            #ffffff;
-        }
-        .canvas-card-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-        .canvas-remove {
-          width: 24px;
-          height: 24px;
-          border: 0;
-          border-radius: 999px;
-          background: #f1f5fb;
-          color: #9aabc2;
-          font-weight: 950;
-        }
-        .canvas-card strong {
-          display: block;
-          color: #071d3b;
-          font-size: 13px;
-          font-weight: 950;
-        }
-        .canvas-card p {
-          margin: 4px 0 0;
-          color: #72839d;
-          font-size: 11px;
-          font-weight: 800;
-          line-height: 1.25;
-        }
-        .canvas-card em {
-          width: fit-content;
-          padding: 4px 8px;
-          border-radius: 999px;
-          color: var(--pack-accent);
-          background: color-mix(in srgb, var(--pack-accent) 10%, #ffffff);
-          font-size: 9px;
-          font-style: normal;
-          font-weight: 950;
-          text-transform: uppercase;
-        }
-        .summary-card {
-          border: 1px solid #d8e4f2;
-          border-radius: 18px;
-          background: #ffffff;
-          padding: 14px;
-          box-shadow: 0 10px 24px rgba(15,35,71,.052);
-          margin-bottom: 12px;
-        }
-        .summary-card h3 {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 950;
-        }
-        .summary-card p {
-          margin: 6px 0 0;
-          color: #72839d;
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1.35;
-        }
-        .summary-metric-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 8px;
-          margin-top: 12px;
-        }
-        .summary-metric {
-          border: 1px solid #e0e9f5;
-          border-radius: 14px;
-          background: #f8fbff;
-          padding: 10px;
-        }
-        .summary-metric span {
-          display: block;
-          color: #7b8ca7;
-          font-size: 9px;
-          font-weight: 950;
-          letter-spacing: .08em;
-          text-transform: uppercase;
-        }
-        .summary-metric strong {
-          display: block;
-          margin-top: 4px;
-          color: #071d3b;
-          font-size: 18px;
-          font-weight: 950;
-        }
-        .selected-pack-list {
-          display: grid;
-          gap: 8px;
-          margin-top: 12px;
-        }
-        .selected-pack-pill {
-          display: grid;
-          grid-template-columns: 28px minmax(0, 1fr);
-          gap: 8px;
-          align-items: center;
-          border: 1px solid #e0e9f5;
-          border-radius: 13px;
-          background: #f8fbff;
-          padding: 8px;
-        }
-        .selected-pack-pill i {
-          width: 28px;
-          height: 28px;
-          display: grid;
-          place-items: center;
-          border-radius: 10px;
-          color: var(--pack-accent);
-          background: color-mix(in srgb, var(--pack-accent) 12%, #ffffff);
-          font-style: normal;
-          font-weight: 950;
-        }
-        .selected-pack-pill strong {
-          display: block;
-          font-size: 11px;
-          line-height: 1.1;
-        }
-        .selected-pack-pill small {
-          color: #72839d;
-          font-size: 10px;
-          font-weight: 800;
-        }
-        .builder-error {
-          max-width: 820px;
-          margin: 14px auto 0;
-          border: 1px solid rgba(239, 68, 68, .24);
-          border-radius: 16px;
-          background: rgba(239, 68, 68, .08);
-          color: #b91c1c;
-          padding: 12px 14px;
-          font-weight: 850;
-        }
-        .report-preview-backdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 1000;
-          display: grid;
-          place-items: center;
-          padding: 26px;
-          background: rgba(15, 23, 42, .46);
-          backdrop-filter: blur(8px);
-        }
-        .report-preview-modal {
-          width: min(920px, 100%);
-          max-height: min(780px, calc(100vh - 52px));
-          overflow: auto;
-          border-radius: 26px;
-          border: 1px solid #d8e5f6;
-          background: #ffffff;
-          padding: 24px;
-          box-shadow: 0 28px 80px rgba(15, 23, 42, .26);
-        }
-        .report-preview-modal header {
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          align-items: flex-start;
-          border-bottom: 1px solid #e2eaf6;
-          padding-bottom: 14px;
-          margin-bottom: 14px;
-        }
-        .report-preview-modal h3 { margin: 0; font-size: 24px; }
+        .canvas-card { position: relative; height: 100%; display: grid; grid-template-rows: auto 1fr auto; gap: 7px; padding: 14px; border-top: 4px solid var(--pack-accent); background: radial-gradient(circle at 96% 0%, color-mix(in srgb, var(--pack-accent) 13%, transparent), transparent 8rem), #ffffff; }
+        .canvas-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .canvas-remove { width: 24px; height: 24px; border: 0; border-radius: 999px; background: #f1f5fb; color: #9aabc2; font-weight: 950; }
+        .canvas-card strong { display: block; color: #071d3b; font-size: 13px; font-weight: 950; }
+        .canvas-card p { margin: 4px 0 0; color: #72839d; font-size: 11px; font-weight: 800; line-height: 1.25; }
+        .canvas-card em { color: var(--pack-accent); font-style: normal; font-size: 10px; font-weight: 950; text-transform: uppercase; }
+        .summary-card { border: 1px solid #d9e4f2; border-radius: 18px; background: #ffffff; padding: 14px; box-shadow: 0 10px 24px rgba(15,35,71,.045); margin-bottom: 12px; }
+        .summary-card h3 { margin: 0 0 6px; font-size: 15px; font-weight: 950; }
+        .summary-card p { margin: 0; color: #72839d; font-size: 12px; font-weight: 800; line-height: 1.35; }
+        .summary-metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+        .summary-metric { border: 1px solid #e0e9f5; border-radius: 14px; background: #f8fbff; padding: 10px; }
+        .summary-metric span { display: block; color: #7b8ca7; font-size: 9px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; }
+        .summary-metric strong { display: block; margin-top: 4px; color: #071d3b; font-size: 18px; font-weight: 950; }
+        .selected-pack-list { display: grid; gap: 8px; margin-top: 12px; }
+        .selected-pack-pill { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; align-items: center; border: 1px solid #e0e9f5; border-radius: 13px; background: #f8fbff; padding: 8px; }
+        .selected-pack-pill i { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 10px; color: var(--pack-accent); background: color-mix(in srgb, var(--pack-accent) 12%, #ffffff); font-style: normal; font-weight: 950; }
+        .selected-pack-pill strong { display: block; font-size: 11px; line-height: 1.1; }
+        .selected-pack-pill small { color: #72839d; font-size: 10px; font-weight: 800; }
+        .builder-error { max-width: 820px; margin: 14px auto 0; border: 1px solid rgba(239, 68, 68, .24); border-radius: 16px; background: rgba(239, 68, 68, .08); color: #b91c1c; padding: 12px 14px; font-weight: 850; }
+        .report-preview-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 18px; background: rgba(15, 23, 42, .56); backdrop-filter: blur(8px); }
+        .report-preview-modal { width: min(1180px, 100%); height: min(92vh, 900px); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border-radius: 24px; border: 1px solid #d8e5f6; background: #eef3f8; box-shadow: 0 28px 80px rgba(15, 23, 42, .30); }
+        .report-preview-modal header { display: flex; justify-content: space-between; gap: 16px; align-items: center; border-bottom: 1px solid #d6e3f5; padding: 12px 14px; background: #ffffff; }
+        .report-preview-modal h3 { margin: 0; font-size: 22px; }
         .report-preview-modal header small { color: #64748b; font-weight: 800; }
-        .report-preview-modal header button {
-          border: 1px solid #d4e1f3;
-          background: #f8fbff;
-          border-radius: 12px;
-          padding: 8px 12px;
-          font-weight: 900;
-        }
-        .report-preview-summary,
-        .report-preview-section,
-        .report-preview-packs {
-          border: 1px solid #d7e3f3;
-          border-radius: 16px;
-          background: #f8fbff;
-          padding: 14px;
-          color: #304a70;
-          font-weight: 760;
-          margin-top: 14px;
-        }
-        .report-preview-summary { white-space: pre-line; }
-        .report-preview-section h4,
-        .report-preview-packs h4 { margin: 0 0 10px; }
-        .report-preview-section li,
-        .report-preview-packs li { margin: 7px 0; color: #3a5274; }
-        @media (max-width: 1280px) {
-          .builder-shell { grid-template-columns: 290px minmax(0, 1fr); }
-          .builder-summary { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #d8e3f1; }
-        }
-        @media (max-width: 980px) {
-          .builder-topbar { grid-template-columns: 1fr 1fr; }
-          .builder-actions { justify-content: flex-start; }
-          .builder-shell { grid-template-columns: 1fr; }
-          .builder-sidebar { border-right: 0; border-bottom: 1px solid #d8e3f1; }
-          .pack-list { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
-        }
-        @media (max-width: 720px) {
-          .builder-topbar { grid-template-columns: 1fr; }
-          .canvas-grid,
-          .pack-list { grid-template-columns: 1fr; }
-        }
+        .preview-actions { display: flex; gap: 8px; align-items: center; }
+        .preview-actions button { border: 1px solid #d4e1f3; background: #f8fbff; border-radius: 12px; padding: 8px 12px; font-weight: 900; }
+        .preview-actions .primary { color: #ffffff; border-color: transparent; background: linear-gradient(135deg, #2563eb, #6d28d9); }
+        .report-pdf-frame { width: 100%; height: 100%; border: 0; background: #eef3f8; }
+        @media (max-width: 1280px) { .builder-shell { grid-template-columns: 290px minmax(0, 1fr); } .builder-summary { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #d8e3f1; } }
+        @media (max-width: 980px) { .builder-topbar { grid-template-columns: 1fr 1fr; } .builder-actions { justify-content: flex-start; } .builder-shell { grid-template-columns: 1fr; } .builder-sidebar { border-right: 0; border-bottom: 1px solid #d8e3f1; } .pack-list { grid-template-columns: repeat(2, minmax(220px, 1fr)); } }
+        @media (max-width: 720px) { .builder-topbar { grid-template-columns: 1fr; } .canvas-grid, .pack-list { grid-template-columns: 1fr; } }
       `}</style>
 
       <section className="builder-topbar">
@@ -960,21 +506,9 @@ export default function ReportBoard() {
               <input className="pack-search" placeholder="Search report pack..." value={search} onChange={(event) => setSearch(event.target.value)} />
               <div className="pack-list">
                 {filteredPacks.map((pack) => (
-                  <button
-                    key={pack.id}
-                    type="button"
-                    draggable
-                    className="builder-pack-card"
-                    style={{ "--pack-accent": pack.tone } as CSSProperties}
-                    onDragStart={(event) => handleDragStart(event, pack.id)}
-                    onClick={() => placePack(pack.id)}
-                    title="Drag to canvas or click to add"
-                  >
+                  <button key={pack.id} type="button" draggable className="builder-pack-card" style={{ "--pack-accent": pack.tone } as CSSProperties} onDragStart={(event) => handleDragStart(event, pack.id)} onClick={() => placePack(pack.id)} title="Drag to canvas or click to add">
                     <span className="pack-icon">{pack.icon}</span>
-                    <span>
-                      <strong>{pack.title}</strong>
-                      <small>{pack.subtitle}</small>
-                    </span>
+                    <span><strong>{pack.title}</strong><small>{pack.subtitle}</small></span>
                     <em className="pack-type">{pack.category}</em>
                   </button>
                 ))}
@@ -984,12 +518,7 @@ export default function ReportBoard() {
 
           {viewMode === "templates" && (
             <div className="pack-list">
-              {TEMPLATES.map((template) => (
-                <button key={template.id} type="button" className="template-card" onClick={() => applyTemplate(template.id)}>
-                  <strong>{template.title}</strong>
-                  <small>{template.subtitle}</small>
-                </button>
-              ))}
+              {TEMPLATES.map((template) => <button key={template.id} type="button" className="template-card" onClick={() => applyTemplate(template.id)}><strong>{template.title}</strong><small>{template.subtitle}</small></button>)}
             </div>
           )}
         </aside>
@@ -998,65 +527,33 @@ export default function ReportBoard() {
           <div className="canvas-head">
             <div>
               <h2>Report Canvas</h2>
-              <p>Drag report packs here. Preview and generate will preserve the original content from every selected report. Selected: {selectedPacks.length}/{CANVAS_SIZE}</p>
+              <p>Drag report packs here. Preview and generate will use the original PDF-style report format. Selected: {selectedPacks.length}/{CANVAS_SIZE}</p>
             </div>
             <button type="button" onClick={clearCanvas}>Clear Canvas</button>
           </div>
 
           <div className="canvas-grid">
             {slots.map((slot, index) => (
-              <div
-                key={index}
-                className={`canvas-slot ${slot ? "is-filled" : ""}`}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => handleDrop(event, index)}
-              >
+              <div key={index} className={`canvas-slot ${slot ? "is-filled" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => handleDrop(event, index)}>
                 {slot ? (
                   <div className="canvas-card" style={{ "--pack-accent": slot.tone } as CSSProperties}>
-                    <div className="canvas-card-top">
-                      <span className="pack-icon">{slot.icon}</span>
-                      <button className="canvas-remove" type="button" onClick={() => removePack(index)}>×</button>
-                    </div>
-                    <div>
-                      <strong>{slot.title}</strong>
-                      <p>{slot.subtitle}</p>
-                    </div>
+                    <div className="canvas-card-top"><span className="pack-icon">{slot.icon}</span><button className="canvas-remove" type="button" onClick={() => removePack(index)}>×</button></div>
+                    <div><strong>{slot.title}</strong><p>{slot.subtitle}</p></div>
                     <em>{slot.category} Pack</em>
                   </div>
-                ) : (
-                  <div className="drop-empty"><i>+</i><span>Drop Report Pack</span></div>
-                )}
+                ) : <div className="drop-empty"><i>+</i><span>Drop Report Pack</span></div>}
               </div>
             ))}
           </div>
-
           {error && <div className="builder-error">{error}</div>}
         </section>
 
         <aside className="builder-summary">
           <h2 className="section-title">Build Summary</h2>
-          <div className="summary-card">
-            <h3>{title || "Untitled Report"}</h3>
-            <p>{range.from} to {range.to}</p>
-            <div className="summary-metric-grid">
-              <div className="summary-metric"><span>Packs</span><strong>{selectedPacks.length}</strong></div>
-              <div className="summary-metric"><span>AI Packs</span><strong>{selectedPacks.filter((pack) => pack.dynamic).length}</strong></div>
-            </div>
-          </div>
+          <div className="summary-card"><h3>{title || "Untitled Report"}</h3><p>{range.from} to {range.to}</p><div className="summary-metric-grid"><div className="summary-metric"><span>Packs</span><strong>{selectedPacks.length}</strong></div><div className="summary-metric"><span>AI Packs</span><strong>{selectedPacks.filter((pack) => pack.dynamic).length}</strong></div></div></div>
           <div className="summary-card">
             <h3>Selected Packs</h3>
-            {selectedPacks.length ? (
-              <div className="selected-pack-list">
-                {selectedPacks.map((pack) => (
-                  <div className="selected-pack-pill" key={pack.id} style={{ "--pack-accent": pack.tone } as CSSProperties}>
-                    <i>{pack.icon}</i>
-                    <span><strong>{pack.title}</strong><small>{pack.category}</small></span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p>No pack selected yet. Drag a report pack into the canvas.</p>
-            )}
+            {selectedPacks.length ? <div className="selected-pack-list">{selectedPacks.map((pack) => <div className="selected-pack-pill" key={pack.id} style={{ "--pack-accent": pack.tone } as CSSProperties}><i>{pack.icon}</i><span><strong>{pack.title}</strong><small>{pack.category}</small></span></div>)}</div> : <p>No pack selected yet. Drag a report pack into the canvas.</p>}
           </div>
         </aside>
       </div>
@@ -1065,29 +562,10 @@ export default function ReportBoard() {
         <div className="report-preview-backdrop" onClick={(event) => event.target === event.currentTarget && setPreview(null)}>
           <section className="report-preview-modal">
             <header>
-              <div>
-                <h3>{preview.title}</h3>
-                <small>{preview.from} to {preview.to}</small>
-              </div>
-              <button type="button" onClick={() => setPreview(null)}>Close</button>
+              <div><h3>{preview.title}</h3><small>{preview.from} to {preview.to} · {preview.packs.length} selected pack(s)</small></div>
+              <div className="preview-actions"><button className="primary" type="button" onClick={downloadPreview}>Download</button><button type="button" onClick={() => setPreview(null)}>Close</button></div>
             </header>
-            <div className="report-preview-packs">
-              <h4>Selected Report Packs</h4>
-              <ol>{preview.packs.map((pack) => <li key={pack.id}>{pack.title}</li>)}</ol>
-            </div>
-            <div className="report-preview-summary">
-              {textValue(preview.payload?.narrative?.executiveSummary || preview.payload?.narrative?.summary || preview.payload?.narrative?.title || "Preview loaded.")}
-            </div>
-            {(Array.isArray(preview.payload?.sections) ? preview.payload.sections : []).slice(0, 10).map((section: any, index: number) => (
-              <section className="report-preview-section" key={`${section?.title || section?.type || "section"}-${index}`}>
-                <h4>{textValue(section?.title || section?.type, `Section ${index + 1}`)}</h4>
-                <ul>
-                  {(Array.isArray(section?.rows) ? section.rows : []).slice(0, 8).map((row: any, rowIndex: number) => (
-                    <li key={rowIndex}>{typeof row === "object" && row ? Object.entries(row).map(([key, value]) => `${key}: ${textValue(value)}`).join(" · ") : textValue(row)}</li>
-                  ))}
-                </ul>
-              </section>
-            ))}
+            <iframe title={`${preview.title} PDF preview`} className="report-pdf-frame" srcDoc={preview.html} />
           </section>
         </div>
       )}
