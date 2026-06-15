@@ -1833,13 +1833,70 @@ export default function ITOperationsDashboard() {
     { name: 'Network Mapped', value: networkRegistrationPercent, percent: networkRegistrationPercent },
   ], [endpointOnlinePercent, hasSecurityUpdateScore, locationFreshPercent, networkRegistrationPercent, onTrackTicketPercent, securityUpdateScore, taskCompletionPercent]);
 
-  const overviewDeviceRows = useMemo<BreakdownItem[]>(() => [
-    { name: 'Online', value: hardware.onlineDevices, percent: endpointOnlinePercent, tone: 'green' },
-    { name: 'Offline', value: hardware.offlineDevices, percent: hardware.totalDevices > 0 ? (hardware.offlineDevices / hardware.totalDevices) * 100 : 0, tone: 'red' },
-    { name: 'Old Data', value: hardware.staleSync, percent: hardware.totalDevices > 0 ? (hardware.staleSync / hardware.totalDevices) * 100 : 0, tone: 'amber' },
-    { name: 'Updated', value: securityUpdatedDevices, percent: hasSecurityUpdateScore ? securityUpdateScore : 0, tone: 'green' },
-    { name: 'Need Update', value: securityNeedUpdateDevices, percent: securityUpdateTotalDevices > 0 ? (securityNeedUpdateDevices / securityUpdateTotalDevices) * 100 : 0, tone: 'amber' },
-  ], [endpointOnlinePercent, hardware.offlineDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices]);
+
+
+  const endpointTrendRows = useMemo(() => {
+    type EndpointTrendRow = {
+      label: string;
+      online: number;
+      offline: number;
+      stale: number;
+      total: number;
+      sortKey: number;
+      source: 'history' | 'snapshot';
+    };
+
+    const buildSnapshotRow = (): EndpointTrendRow => {
+      const total = Math.max(0, numberOrFallback(hardware.totalDevices));
+      const online = Math.max(0, numberOrFallback(hardware.onlineDevices));
+      const offline = Math.max(0, numberOrFallback(hardware.offlineDevices));
+      const stale = Math.max(0, numberOrFallback(hardware.staleSync));
+
+      return {
+        label: rangeLabel && rangeLabel !== '-' ? rangeLabel : 'Current',
+        online,
+        offline,
+        stale,
+        total: total || online + offline,
+        sortKey: Date.now(),
+        source: 'snapshot',
+      };
+    };
+
+    const grouped = new Map<string, EndpointTrendRow>();
+
+    hardware.endpointRows.forEach((device) => {
+      const parsed = Date.parse(String(device.lastSeen || ''));
+      if (!Number.isFinite(parsed)) return;
+
+      const day = new Date(parsed);
+      day.setHours(0, 0, 0, 0);
+      const sortKey = day.getTime();
+      const label = day.toLocaleDateString('en-MY', { day: '2-digit', month: 'short' });
+      const existing = grouped.get(label) || { label, online: 0, offline: 0, stale: 0, total: 0, sortKey, source: 'history' as const };
+      const statusText = String(device.status || '').toLowerCase();
+      const isOnline = Boolean(device.isOnline) || statusText.includes('online') || statusText.includes('active') || statusText.includes('connected');
+      const isStale = Boolean(device.isStale) || statusText.includes('stale') || statusText.includes('old');
+
+      existing.total += 1;
+      if (isOnline) existing.online += 1;
+      else existing.offline += 1;
+      if (isStale) existing.stale += 1;
+      grouped.set(label, existing);
+    });
+
+    const historyRows = Array.from(grouped.values())
+      .filter((row) => row.total > 0)
+      .sort((a, b) => a.sortKey - b.sortKey)
+      .slice(-5);
+
+    return historyRows.length >= 2 ? historyRows : [buildSnapshotRow()];
+  }, [hardware.endpointRows, hardware.offlineDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, rangeLabel]);
+
+  const endpointTrendMaxTotal = useMemo(() => Math.max(1, ...endpointTrendRows.map((row) => row.total)), [endpointTrendRows]);
+  const endpointTrendUsesHistory = endpointTrendRows.some((row) => row.source === 'history');
+  const ticketTrendRows = useMemo(() => incidentTrend.slice(-5), [incidentTrend]);
+  const ticketTrendMaxTotal = useMemo(() => Math.max(1, ...ticketTrendRows.map((row) => numberOrFallback(row.newIncidents) + numberOrFallback(row.resolved) + numberOrFallback(row.open))), [ticketTrendRows]);
 
   const overviewBranchRows = useMemo<BreakdownItem[]>(() => {
     const branchSource = departmentRows.length
@@ -2153,30 +2210,104 @@ export default function ITOperationsDashboard() {
       </section>
 
       <section className="itops-main-overview-grid">
-        <Panel title="Today" subtitle="Simple view of what is okay and what needs attention." icon={Gauge} className="span-2 main-today-panel">
-          <div className="itops-main-today-layout">
-            <button type="button" className="itops-main-health-card" onClick={() => openLevel2('overview')}>
-              <span>Overall Status</span>
-              <strong>{formatPercent(overallHealth, 0)}</strong>
-              <small>{healthStatus(overallHealth) === 'Healthy' ? 'Looks good' : healthStatus(overallHealth) === 'Watch' ? 'Needs monitoring' : 'Needs action'}</small>
-              <em><i style={{ width: `${clampPercent(overallHealth)}%` }} /></em>
+        <Panel title="Operational Trends" subtitle="Short-term movement across devices, tickets and execution health." icon={Gauge} className="span-2 main-today-panel">
+          <div className="itops-main-trend-layout">
+            <button type="button" className="itops-main-trend-hero" onClick={() => openLevel2('hardware')}>
+              <div className="itops-main-trend-hero-head">
+                <div>
+                  <span>Device Availability Trend</span>
+                  <strong>{endpointTrendUsesHistory ? 'Latest 5 checkpoints' : 'Current availability snapshot'}</strong>
+                </div>
+                <small>{formatPercent(endpointOnlinePercent, 0)} online</small>
+              </div>
+
+              <div className="itops-main-trend-bars" aria-label="Device availability trend">
+                {endpointTrendRows.map((row) => {
+                  const onlinePercent = row.total > 0 ? (row.online / row.total) * 100 : 0;
+                  const offlinePercent = row.total > 0 ? (row.offline / row.total) * 100 : 0;
+                  const stalePercent = row.total > 0 ? (row.stale / row.total) * 100 : 0;
+                  return (
+                    <div key={`ops-trend-${row.label}`} className="itops-main-trend-row">
+                      <div className="itops-main-trend-label">
+                        <span>{row.label}</span>
+                        <strong>{formatNumber(row.total)}</strong>
+                      </div>
+                      <div className="itops-main-trend-track">
+                        <i className="online" style={{ width: `${clampPercent(onlinePercent)}%` }} />
+                        <i className="offline" style={{ width: `${clampPercent(offlinePercent)}%` }} />
+                        <i className="stale" style={{ width: `${clampPercent(stalePercent)}%` }} />
+                      </div>
+                      <div className="itops-main-trend-values">
+                        <small className="online">{formatNumber(row.online)} online</small>
+                        <small className="offline">{formatNumber(row.offline)} offline</small>
+                        <small className="stale">{formatNumber(row.stale)} old</small>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </button>
 
-            <div className="itops-main-ready-list">
-              {overviewHealthRows.map((row) => {
-                const percent = clampPercent(row.percent ?? row.value);
-                const status = healthStatus(percent).toLowerCase();
-                const targetView = row.name.includes('Update') ? 'patch' : row.name.includes('Ticket') ? 'serviceDesk' : resolveDomainView(row.name);
-                return (
-                  <button type="button" key={`overview-health-${row.name}`} className={`itops-main-ready-row ${status}`} onClick={() => openLevel2(targetView)}>
-                    <div>
-                      <span>{row.name}</span>
-                      <strong>{formatPercent(percent, 0)}</strong>
-                    </div>
-                    <em><i style={{ width: `${percent}%` }} /></em>
-                  </button>
-                );
-              })}
+            <div className="itops-main-trend-side">
+              <button type="button" className="itops-main-trend-summary" onClick={() => openLevel2('overview')}>
+                <div>
+                  <span>Overall Health</span>
+                  <strong>{formatPercent(overallHealth, 0)}</strong>
+                </div>
+                <StatusBadge status={healthStatus(overallHealth)} />
+                <em><i style={{ width: `${clampPercent(overallHealth)}%` }} /></em>
+                <small>{healthStatus(overallHealth) === 'Healthy' ? 'Overall operating state is stable.' : healthStatus(overallHealth) === 'Watch' ? 'Trend is acceptable but needs monitoring.' : 'Several signals need immediate follow-up.'}</small>
+              </button>
+
+              <button type="button" className="itops-main-ticket-trend" onClick={() => openLevel2('serviceDesk')}>
+                <div className="itops-main-ticket-trend-head">
+                  <div>
+                    <span>Ticket Movement</span>
+                    <strong>{formatNumber(trendSummary.openBacklog)} open backlog</strong>
+                  </div>
+                  <small>{ticketTrendRows.length ? `${ticketTrendRows.length} day view` : 'No history'}</small>
+                </div>
+                <div className="itops-main-ticket-trend-bars" aria-label="Ticket movement trend">
+                  {ticketTrendRows.length ? ticketTrendRows.map((row) => {
+                    const total = numberOrFallback(row.newIncidents) + numberOrFallback(row.resolved) + numberOrFallback(row.open);
+                    const width = total > 0 ? Math.max(10, (total / ticketTrendMaxTotal) * 100) : 10;
+                    return (
+                      <div key={`ticket-trend-${row.day}`} className="itops-main-ticket-trend-row">
+                        <span>{row.day}</span>
+                        <div className="itops-main-ticket-trend-track" style={{ '--trend-width': `${width}%` } as CSSProperties & Record<string, string>}>
+                          <i className="new" style={{ flexGrow: numberOrFallback(row.newIncidents) || 0.5 }} />
+                          <i className="resolved" style={{ flexGrow: numberOrFallback(row.resolved) || 0.5 }} />
+                          <i className="open" style={{ flexGrow: numberOrFallback(row.open) || 0.5 }} />
+                        </div>
+                        <strong>{formatNumber(total)}</strong>
+                      </div>
+                    );
+                  }) : <EmptyState label="No ticket movement found yet." />}
+                </div>
+              </button>
+
+              <div className="itops-main-trend-mini-grid">
+                <button type="button" className="itops-main-trend-mini blue" onClick={() => openLevel2('patch')}>
+                  <span>Updates Done</span>
+                  <strong>{formatPercent(hasSecurityUpdateScore ? securityUpdateScore : 0, 0)}</strong>
+                  <small>{formatNumber(securityUpdatedDevices)} device(s) updated</small>
+                </button>
+                <button type="button" className="itops-main-trend-mini amber" onClick={() => openLevel2('serviceDesk')}>
+                  <span>Tickets On Track</span>
+                  <strong>{formatPercent(onTrackTicketPercent, 0)}</strong>
+                  <small>{formatNumber(onTrackTicketCount)} currently on SLA</small>
+                </button>
+                <button type="button" className="itops-main-trend-mini green" onClick={() => openLevel2('tasks')}>
+                  <span>Jobs Completed</span>
+                  <strong>{formatPercent(taskCompletionPercent, 0)}</strong>
+                  <small>{formatNumber(tasks.completedTasks)} completed jobs</small>
+                </button>
+                <button type="button" className="itops-main-trend-mini orange" onClick={() => openLevel2('geolocation')}>
+                  <span>Location Ready</span>
+                  <strong>{formatPercent(locationFreshPercent, 0)}</strong>
+                  <small>{formatNumber(geolocation.trackedDevices)} tracked devices</small>
+                </button>
+              </div>
             </div>
           </div>
         </Panel>
@@ -2200,84 +2331,8 @@ export default function ITOperationsDashboard() {
         </Panel>
       </section>
 
-      <section className="itops-pro-command-grid itops-main-command-grid">
-        <Panel title="Ticket Movement" subtitle="New, closed and open tickets." icon={Activity} className="span-2" action={<div className="itops-pro-legend"><span className="new" /> New <span className="resolved" /> Closed <span className="open" /> Open</div>}>
-          <IncidentTrendChart data={incidentTrend} summary={trendSummary} />
-        </Panel>
-
-        <Panel title="Risk" subtitle="EOL/EOS and Management Policy score only." icon={ShieldAlert}>
-          <button type="button" className="itops-risk-command-summary" onClick={() => openLevel2('risk')}>
-            <div className="itops-risk-command-copy">
-              <span>Device Risk</span>
-              <strong>{formatNumber(deviceRiskCount)}</strong>
-              <small>EOL/EOS and Management Policy score.</small>
-            </div>
-            <StatusBadge status={riskStatus(deviceRiskCount, 1, 6)} />
-            <div className="itops-risk-command-meter" aria-hidden="true"><i style={{ width: `${clampPercent(deviceRiskScore)}%` }} /></div>
-          </button>
-
-          <div className="itops-risk-severity-grid">
-            <button type="button" className="itops-risk-severity itops-risk-severity-critical" onClick={() => openLevel3('risk', 'Critical')}>
-              <span>Critical</span>
-              <strong>{formatNumber(deviceRiskCriticalCount)}</strong>
-              <small>Risk devices</small>
-            </button>
-            <button type="button" className="itops-risk-severity itops-risk-severity-high" onClick={() => openLevel3('risk', 'High')}>
-              <span>High</span>
-              <strong>{formatNumber(deviceRiskHighCount)}</strong>
-              <small>Risk devices</small>
-            </button>
-            <button type="button" className="itops-risk-severity itops-risk-severity-medium" onClick={() => openLevel3('risk', 'Medium')}>
-              <span>Medium</span>
-              <strong>{formatNumber(deviceRiskMediumCount)}</strong>
-              <small>Risk devices</small>
-            </button>
-          </div>
-
-          <div className="itops-risk-driver-mini">
-            <BarList items={riskCategoryRows} limit={4} emptyLabel="No device risk cause returned yet." />
-          </div>
-          <button type="button" className="itops-pro-link-btn itops-pro-link-btn-risk" onClick={() => openLevel2('risk')}>Open risk <ChevronRight size={15} /></button>
-        </Panel>
-
-        <Panel title="Device & Update" subtitle="Device status and update readiness." icon={Laptop} className="span-2 main-device-panel">
-          <div className="itops-main-device-grid">
-            <div className="itops-main-device-stack" aria-label="Device status mix">
-              <div className="itops-main-stack-head">
-                <span>Total Devices</span>
-                <strong>{formatNumber(hardware.totalDevices)}</strong>
-              </div>
-              <div className="itops-main-stack-bar" aria-hidden="true">
-                <i className="online" style={{ width: `${clampPercent(endpointOnlinePercent)}%` }} />
-                <i className="offline" style={{ width: `${hardware.totalDevices > 0 ? clampPercent((hardware.offlineDevices / hardware.totalDevices) * 100) : 0}%` }} />
-                <i className="old" style={{ width: `${hardware.totalDevices > 0 ? clampPercent((hardware.staleSync / hardware.totalDevices) * 100) : 0}%` }} />
-              </div>
-              <div className="itops-main-stack-legend">
-                <span><i className="online" />Online</span>
-                <span><i className="offline" />Offline</span>
-                <span><i className="old" />Old data</span>
-              </div>
-            </div>
-
-            <div className="itops-main-bar-list">
-              {overviewDeviceRows.map((row) => {
-                const percent = clampPercent(row.percent ?? row.value);
-                return (
-                  <button type="button" key={`main-device-${row.name}`} className={`itops-main-bar-row ${row.tone || 'blue'}`} onClick={() => openLevel3(row.name.includes('Update') || row.name === 'Updated' ? 'patch' : 'hardware', row.name)}>
-                    <div>
-                      <span>{row.name}</span>
-                      <strong>{formatNumber(row.value)}</strong>
-                    </div>
-                    <em><i style={{ width: `${percent}%` }} /></em>
-                    <b>{formatPercent(percent, 0)}</b>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </Panel>
-
-        <Panel title="Branch Check" subtitle="Branches with the lowest score appear first." icon={Users}>
+      <section className="itops-pro-command-grid itops-main-command-grid itops-main-filled-grid">
+        <Panel title="Branch Check" subtitle="Compact branch score view." icon={Users} className="main-branch-filled-panel">
           <div className="itops-main-branch-list">
             {overviewBranchRows.map((row) => {
               const percent = clampPercent(row.percent ?? row.value);
@@ -2292,6 +2347,41 @@ export default function ITOperationsDashboard() {
               );
             })}
             {!overviewBranchRows.length && <EmptyState label="No branch score yet." />}
+          </div>
+        </Panel>
+
+        <Panel title="Decision Signals" subtitle="Compact health signals without leaving empty dashboard space." icon={Gauge} className="span-2 main-decision-panel">
+          <div className="itops-main-decision-grid">
+            <button type="button" className="itops-main-decision-card blue" onClick={() => openLevel2('overview')}>
+              <span>Overall Health</span>
+              <strong>{formatPercent(overallHealth, 0)}</strong>
+              <small>{healthStatus(overallHealth)}</small>
+            </button>
+            <button type="button" className="itops-main-decision-card cyan" onClick={() => openLevel2('dataConfidence')}>
+              <span>Data Confidence</span>
+              <strong>{formatPercent(dataConfidenceScore, 0)}</strong>
+              <small>Decision readiness</small>
+            </button>
+            <button type="button" className="itops-main-decision-card purple" onClick={() => openLevel2('network')}>
+              <span>Network Mapped</span>
+              <strong>{formatPercent(networkRegistrationPercent, 0)}</strong>
+              <small>{formatNumber(network.registeredDevices)} registered IP(s)</small>
+            </button>
+            <button type="button" className="itops-main-decision-card red" onClick={() => openLevel2('risk')}>
+              <span>Device Risk</span>
+              <strong>{formatNumber(deviceRiskCount)}</strong>
+              <small>{formatNumber(deviceRiskCriticalCount)} critical</small>
+            </button>
+            <button type="button" className="itops-main-decision-card amber" onClick={() => openLevel2('serviceDesk')}>
+              <span>Open Tickets</span>
+              <strong>{formatNumber(openTicketCount)}</strong>
+              <small>{formatNumber(overdueTicketCount)} overdue</small>
+            </button>
+            <button type="button" className="itops-main-decision-card green" onClick={() => openLevel2('tasks')}>
+              <span>Job Completion</span>
+              <strong>{formatPercent(taskCompletionPercent, 0)}</strong>
+              <small>{formatNumber(tasks.failedTasks)} failed jobs</small>
+            </button>
           </div>
         </Panel>
       </section>
@@ -4079,7 +4169,103 @@ export default function ITOperationsDashboard() {
 
   return (
     <div ref={pageRef} className="itops-pro-page">
-      <style>{ITOPS_PRO_STYLES}</style>
+      <style>{ITOPS_PRO_STYLES + `
+/* Main dashboard compact fill fix */
+.itops-main-filled-grid {
+  align-items: stretch;
+  margin-top: 14px;
+}
+
+.itops-main-filled-grid .itops-pro-panel {
+  min-height: 0;
+}
+
+.main-branch-filled-panel,
+.main-decision-panel {
+  height: 100%;
+}
+
+.main-branch-filled-panel .itops-main-branch-list {
+  gap: 9px;
+}
+
+.main-branch-filled-panel .itops-main-branch-row {
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.main-decision-panel .itops-pro-panel-head {
+  margin-bottom: 12px;
+}
+
+.itops-main-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.itops-main-decision-card {
+  min-height: 92px;
+  width: 100%;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 13px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.itops-main-decision-card:hover {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.10);
+}
+
+.itops-main-decision-card span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.itops-main-decision-card strong {
+  color: #0f172a;
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.itops-main-decision-card small {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.itops-main-decision-card.blue { background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%); border-color: #bfdbfe; }
+.itops-main-decision-card.cyan { background: linear-gradient(180deg, #ffffff 0%, #ecfeff 100%); border-color: #a5f3fc; }
+.itops-main-decision-card.purple { background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%); border-color: #ddd6fe; }
+.itops-main-decision-card.red { background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%); border-color: #fecaca; }
+.itops-main-decision-card.amber { background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%); border-color: #fde68a; }
+.itops-main-decision-card.green { background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%); border-color: #bbf7d0; }
+
+@media (max-width: 1180px) {
+  .itops-main-decision-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .itops-main-decision-grid {
+    grid-template-columns: 1fr;
+  }
+}
+`}</style>
 
       <div className="itops-pro-bg-grid" />
 
@@ -9081,6 +9267,248 @@ body.itops-dashboard-page-active .router-content {
   border-color: rgba(147, 197, 253, 0.38);
 }
 
+.itops-main-trend-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.itops-main-trend-hero,
+.itops-main-trend-summary,
+.itops-main-ticket-trend,
+.itops-main-trend-mini {
+  width: 100%;
+  border: 1px solid #dbeafe;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.itops-main-trend-hero:hover,
+.itops-main-trend-summary:hover,
+.itops-main-ticket-trend:hover,
+.itops-main-trend-mini:hover {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.10);
+}
+
+.itops-main-trend-hero {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  background: radial-gradient(circle at 84% 12%, rgba(56, 189, 248, 0.14), transparent 34%), linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+}
+
+.itops-main-trend-hero-head,
+.itops-main-ticket-trend-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.itops-main-trend-hero-head span,
+.itops-main-ticket-trend-head span,
+.itops-main-trend-summary span,
+.itops-main-trend-mini span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.itops-main-trend-hero-head strong,
+.itops-main-ticket-trend-head strong,
+.itops-main-trend-summary strong,
+.itops-main-trend-mini strong {
+  display: block;
+  color: #0f172a;
+  letter-spacing: -0.03em;
+  font-weight: 950;
+}
+
+.itops-main-trend-hero-head strong,
+.itops-main-ticket-trend-head strong {
+  margin-top: 4px;
+  font-size: 20px;
+}
+
+.itops-main-trend-hero-head small,
+.itops-main-ticket-trend-head small,
+.itops-main-trend-summary small,
+.itops-main-trend-mini small {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.itops-main-trend-bars,
+.itops-main-ticket-trend-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.itops-main-trend-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.itops-main-trend-label {
+  display: grid;
+  gap: 2px;
+}
+
+.itops-main-trend-label span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.itops-main-trend-label strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.itops-main-trend-track {
+  height: 12px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.itops-main-trend-track i { display: block; height: 100%; }
+.itops-main-trend-track .online { background: linear-gradient(90deg, #10b981, #22c55e); }
+.itops-main-trend-track .offline { background: linear-gradient(90deg, #ef4444, #fb7185); }
+.itops-main-trend-track .stale { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+
+.itops-main-trend-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.itops-main-trend-values small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.itops-main-trend-values .online { color: #047857; background: #dcfce7; }
+.itops-main-trend-values .offline { color: #b91c1c; background: #fee2e2; }
+.itops-main-trend-values .stale { color: #92400e; background: #fef3c7; }
+
+.itops-main-trend-side {
+  display: grid;
+  gap: 12px;
+}
+
+.itops-main-trend-summary {
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.itops-main-trend-summary > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.itops-main-trend-summary strong {
+  font-size: 34px;
+}
+
+.itops-main-trend-summary em {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.itops-main-trend-summary em i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #22c55e);
+}
+
+.itops-main-ticket-trend {
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.itops-main-ticket-trend-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 36px;
+  gap: 10px;
+  align-items: center;
+}
+
+.itops-main-ticket-trend-row span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.itops-main-ticket-trend-row strong {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.itops-main-ticket-trend-track {
+  width: var(--trend-width, 100%);
+  height: 12px;
+  display: flex;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.itops-main-ticket-trend-track i { display: block; height: 100%; }
+.itops-main-ticket-trend-track .new { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.itops-main-ticket-trend-track .resolved { background: linear-gradient(90deg, #10b981, #34d399); }
+.itops-main-ticket-trend-track .open { background: linear-gradient(90deg, #f97316, #fb923c); }
+
+.itops-main-trend-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.itops-main-trend-mini {
+  min-height: 92px;
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.itops-main-trend-mini strong { font-size: 24px; }
+.itops-main-trend-mini.blue { background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%); border-color: #bfdbfe; }
+.itops-main-trend-mini.amber { background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%); border-color: #fde68a; }
+.itops-main-trend-mini.green { background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%); border-color: #bbf7d0; }
+.itops-main-trend-mini.orange { background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%); border-color: #fdba74; }
+
 .itops-main-today-layout {
   display: grid;
   grid-template-columns: minmax(210px, 0.68fr) minmax(0, 1.32fr);
@@ -9422,6 +9850,7 @@ body.itops-dashboard-page-active .router-content {
 @media (max-width: 1180px) {
   .itops-main-overview-grid,
   .itops-main-command-grid,
+  .itops-main-trend-layout,
   .itops-main-today-layout,
   .itops-main-device-grid { grid-template-columns: 1fr; }
   .itops-main-overview-grid .span-2,
@@ -9628,6 +10057,158 @@ body.itops-dashboard-page-active .router-content {
 
 @media (max-width: 760px) {
   .itops-main-kpi-grid { grid-template-columns: 1fr !important; }
+}
+
+
+/* Main dashboard: endpoint trend replaces duplicate device/update + risk panels */
+.itops-endpoint-trend-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.58fr) minmax(0, 1.42fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.itops-endpoint-trend-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.itops-endpoint-trend-metric {
+  width: 100%;
+  min-height: 78px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.itops-endpoint-trend-metric:hover {
+  transform: translateY(-1px);
+  border-color: #bfdbfe;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.10);
+}
+
+.itops-endpoint-trend-metric span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.itops-endpoint-trend-metric strong {
+  color: #0f172a;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-weight: 950;
+}
+
+.itops-endpoint-trend-metric small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.itops-endpoint-trend-metric.online { background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%); border-color: #bbf7d0; }
+.itops-endpoint-trend-metric.offline { background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%); border-color: #fecaca; }
+.itops-endpoint-trend-metric.stale { background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%); border-color: #fde68a; }
+
+.itops-endpoint-trend-chart {
+  display: grid;
+  gap: 10px;
+}
+
+.itops-endpoint-trend-row {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(92px, 0.42fr) minmax(180px, 1fr) minmax(210px, 0.72fr);
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.itops-endpoint-trend-row:hover {
+  transform: translateY(-1px);
+  border-color: #bfdbfe;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.10);
+}
+
+.itops-endpoint-trend-label strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.itops-endpoint-trend-label span {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.itops-endpoint-trend-track {
+  width: var(--trend-width);
+  min-width: 42px;
+  max-width: 100%;
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.itops-endpoint-trend-track i {
+  display: block;
+  min-width: 3px;
+  height: 100%;
+}
+
+.itops-endpoint-trend-track .online { background: linear-gradient(90deg, #10b981, #22c55e); }
+.itops-endpoint-trend-track .offline { background: linear-gradient(90deg, #ef4444, #fb7185); }
+
+.itops-endpoint-trend-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.itops-endpoint-trend-values span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.itops-endpoint-trend-values .online { color: #047857; background: #dcfce7; }
+.itops-endpoint-trend-values .offline { color: #b91c1c; background: #fee2e2; }
+.itops-endpoint-trend-values .stale { color: #92400e; background: #fef3c7; }
+
+@media (max-width: 1180px) {
+  .itops-endpoint-trend-layout,
+  .itops-endpoint-trend-row { grid-template-columns: 1fr; }
+  .itops-endpoint-trend-track { width: 100%; }
+  .itops-endpoint-trend-values { justify-content: flex-start; }
 }
 
 `;
