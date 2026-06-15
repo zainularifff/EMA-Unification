@@ -1,6 +1,20 @@
 import api, { apiRequest, unwrapArray, unwrapData, type QueryParams } from "./apiClient";
 import { getAssets, getAssetsByRelationID, getDepartmentChildren, getDepartments, type AnyRecord } from "./commonService";
 
+
+function withDefaultInternetMeteringParams(params?: QueryParams): QueryParams {
+  const next: QueryParams = { ...(params || {}) };
+  const rawUrlId = (next as AnyRecord).urlID ?? (next as AnyRecord).urlId ?? (next as AnyRecord).URLMain_Idn ?? (next as AnyRecord).url_id;
+
+  // Web Metering stored procedures expect -1 for All Domains.
+  // Never allow missing URL ID to become 0 in the backend.
+  if (rawUrlId === undefined || rawUrlId === null || String(rawUrlId).trim() === "") {
+    (next as AnyRecord).urlID = -1;
+  }
+
+  return next;
+}
+
 export async function ping() {
   return api.get("/api/internet-metering/ping");
 }
@@ -25,21 +39,21 @@ export async function getUrlChildren(params?: QueryParams) {
 }
 
 export async function getUsage(params?: QueryParams) {
-  const payload = await api.get("/api/internet-metering/usage", { params });
+  const payload = await api.get("/api/internet-metering/usage", { params: withDefaultInternetMeteringParams(params) });
   return unwrapData(payload, payload);
 }
 
 export async function getUsagePayload(params?: QueryParams) {
-  return api.get("/api/internet-metering/usage", { params });
+  return api.get("/api/internet-metering/usage", { params: withDefaultInternetMeteringParams(params) });
 }
 
 export async function getStats(params?: QueryParams) {
-  const payload = await api.get("/api/internet-metering/stats", { params });
+  const payload = await api.get("/api/internet-metering/stats", { params: withDefaultInternetMeteringParams(params) });
   return unwrapData(payload, payload);
 }
 
 export async function getStatsPayload(params?: QueryParams) {
-  return api.get("/api/internet-metering/stats", { params });
+  return api.get("/api/internet-metering/stats", { params: withDefaultInternetMeteringParams(params) });
 }
 
 export async function start(payload: AnyRecord) {

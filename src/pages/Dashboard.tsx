@@ -2210,104 +2210,95 @@ export default function ITOperationsDashboard() {
       </section>
 
       <section className="itops-main-overview-grid">
-        <Panel title="Operational Trends" subtitle="Short-term movement across devices, tickets and execution health." icon={Gauge} className="span-2 main-today-panel">
-          <div className="itops-main-trend-layout">
-            <button type="button" className="itops-main-trend-hero" onClick={() => openLevel2('hardware')}>
-              <div className="itops-main-trend-hero-head">
+        <Panel title="Operational Trends" subtitle="Analytics style view for devices, tickets and execution." icon={Gauge} className="span-2 main-today-panel main-analytics-panel">
+          <div className="itops-analytics-dashboard">
+            <button type="button" className="itops-analytics-chart-card device" onClick={() => openLevel2('hardware')}>
+              <div className="itops-analytics-card-head">
                 <div>
-                  <span>Device Availability Trend</span>
-                  <strong>{endpointTrendUsesHistory ? 'Latest 5 checkpoints' : 'Current availability snapshot'}</strong>
+                  <span>Device Availability</span>
+                  <strong>{formatNumber(hardware.totalDevices)} devices</strong>
+                  <small>{endpointTrendUsesHistory ? 'Last seen trend' : 'Current snapshot'}</small>
                 </div>
-                <small>{formatPercent(endpointOnlinePercent, 0)} online</small>
+                <b>{formatPercent(endpointOnlinePercent, 0)} online</b>
               </div>
-
-              <div className="itops-main-trend-bars" aria-label="Device availability trend">
+              <div className="itops-analytics-stat-row">
+                <span className="online">{formatNumber(hardware.onlineDevices)} online</span>
+                <span className="offline">{formatNumber(hardware.offlineDevices)} offline</span>
+                <span className="stale">{formatNumber(hardware.staleSync)} old data</span>
+              </div>
+              <div className="itops-modern-column-chart" aria-label="Device availability chart">
                 {endpointTrendRows.map((row) => {
-                  const onlinePercent = row.total > 0 ? (row.online / row.total) * 100 : 0;
-                  const offlinePercent = row.total > 0 ? (row.offline / row.total) * 100 : 0;
-                  const stalePercent = row.total > 0 ? (row.stale / row.total) * 100 : 0;
+                  const onlineHeight = endpointTrendMaxTotal > 0 ? (row.online / endpointTrendMaxTotal) * 100 : 0;
+                  const offlineHeight = endpointTrendMaxTotal > 0 ? (row.offline / endpointTrendMaxTotal) * 100 : 0;
+                  const staleHeight = endpointTrendMaxTotal > 0 ? (row.stale / endpointTrendMaxTotal) * 100 : 0;
                   return (
-                    <div key={`ops-trend-${row.label}`} className="itops-main-trend-row">
-                      <div className="itops-main-trend-label">
-                        <span>{row.label}</span>
-                        <strong>{formatNumber(row.total)}</strong>
+                    <div key={`device-chart-${row.label}`} className="itops-modern-column">
+                      <div className="itops-modern-column-stack">
+                        {row.online > 0 && <i className="online" style={{ height: `${Math.max(8, clampPercent(onlineHeight))}%` }} />}
+                        {row.offline > 0 && <i className="offline" style={{ height: `${Math.max(8, clampPercent(offlineHeight))}%` }} />}
+                        {row.stale > 0 && <i className="stale" style={{ height: `${Math.max(8, clampPercent(staleHeight))}%` }} />}
+                        {row.total <= 0 && <i className="empty" style={{ height: '8%' }} />}
                       </div>
-                      <div className="itops-main-trend-track">
-                        <i className="online" style={{ width: `${clampPercent(onlinePercent)}%` }} />
-                        <i className="offline" style={{ width: `${clampPercent(offlinePercent)}%` }} />
-                        <i className="stale" style={{ width: `${clampPercent(stalePercent)}%` }} />
-                      </div>
-                      <div className="itops-main-trend-values">
-                        <small className="online">{formatNumber(row.online)} online</small>
-                        <small className="offline">{formatNumber(row.offline)} offline</small>
-                        <small className="stale">{formatNumber(row.stale)} old</small>
-                      </div>
+                      <span>{row.label}</span>
+                      <strong>{formatNumber(row.total)}</strong>
                     </div>
                   );
                 })}
               </div>
             </button>
 
-            <div className="itops-main-trend-side">
-              <button type="button" className="itops-main-trend-summary" onClick={() => openLevel2('overview')}>
+            <button type="button" className="itops-analytics-chart-card ticket" onClick={() => openLevel2('serviceDesk')}>
+              <div className="itops-analytics-card-head">
                 <div>
-                  <span>Overall Health</span>
-                  <strong>{formatPercent(overallHealth, 0)}</strong>
+                  <span>Ticket Movement</span>
+                  <strong>{formatNumber(trendSummary.openBacklog)} open backlog</strong>
+                  <small>{ticketTrendRows.length ? `${ticketTrendRows.length} day trend` : 'No history yet'}</small>
                 </div>
-                <StatusBadge status={healthStatus(overallHealth)} />
-                <em><i style={{ width: `${clampPercent(overallHealth)}%` }} /></em>
-                <small>{healthStatus(overallHealth) === 'Healthy' ? 'Overall operating state is stable.' : healthStatus(overallHealth) === 'Watch' ? 'Trend is acceptable but needs monitoring.' : 'Several signals need immediate follow-up.'}</small>
-              </button>
-
-              <button type="button" className="itops-main-ticket-trend" onClick={() => openLevel2('serviceDesk')}>
-                <div className="itops-main-ticket-trend-head">
-                  <div>
-                    <span>Ticket Movement</span>
-                    <strong>{formatNumber(trendSummary.openBacklog)} open backlog</strong>
-                  </div>
-                  <small>{ticketTrendRows.length ? `${ticketTrendRows.length} day view` : 'No history'}</small>
-                </div>
-                <div className="itops-main-ticket-trend-bars" aria-label="Ticket movement trend">
-                  {ticketTrendRows.length ? ticketTrendRows.map((row) => {
-                    const total = numberOrFallback(row.newIncidents) + numberOrFallback(row.resolved) + numberOrFallback(row.open);
-                    const width = total > 0 ? Math.max(10, (total / ticketTrendMaxTotal) * 100) : 10;
-                    return (
-                      <div key={`ticket-trend-${row.day}`} className="itops-main-ticket-trend-row">
-                        <span>{row.day}</span>
-                        <div className="itops-main-ticket-trend-track" style={{ '--trend-width': `${width}%` } as CSSProperties & Record<string, string>}>
-                          <i className="new" style={{ flexGrow: numberOrFallback(row.newIncidents) || 0.5 }} />
-                          <i className="resolved" style={{ flexGrow: numberOrFallback(row.resolved) || 0.5 }} />
-                          <i className="open" style={{ flexGrow: numberOrFallback(row.open) || 0.5 }} />
-                        </div>
-                        <strong>{formatNumber(total)}</strong>
-                      </div>
-                    );
-                  }) : <EmptyState label="No ticket movement found yet." />}
-                </div>
-              </button>
-
-              <div className="itops-main-trend-mini-grid">
-                <button type="button" className="itops-main-trend-mini blue" onClick={() => openLevel2('patch')}>
-                  <span>Updates Done</span>
-                  <strong>{formatPercent(hasSecurityUpdateScore ? securityUpdateScore : 0, 0)}</strong>
-                  <small>{formatNumber(securityUpdatedDevices)} device(s) updated</small>
-                </button>
-                <button type="button" className="itops-main-trend-mini amber" onClick={() => openLevel2('serviceDesk')}>
-                  <span>Tickets On Track</span>
-                  <strong>{formatPercent(onTrackTicketPercent, 0)}</strong>
-                  <small>{formatNumber(onTrackTicketCount)} currently on SLA</small>
-                </button>
-                <button type="button" className="itops-main-trend-mini green" onClick={() => openLevel2('tasks')}>
-                  <span>Jobs Completed</span>
-                  <strong>{formatPercent(taskCompletionPercent, 0)}</strong>
-                  <small>{formatNumber(tasks.completedTasks)} completed jobs</small>
-                </button>
-                <button type="button" className="itops-main-trend-mini orange" onClick={() => openLevel2('geolocation')}>
-                  <span>Location Ready</span>
-                  <strong>{formatPercent(locationFreshPercent, 0)}</strong>
-                  <small>{formatNumber(geolocation.trackedDevices)} tracked devices</small>
-                </button>
+                <b>{formatNumber(trendSummary.newIncidents)} new</b>
               </div>
+              <div className="itops-analytics-stat-row">
+                <span className="new">{formatNumber(trendSummary.newIncidents)} new</span>
+                <span className="resolved">{formatNumber(trendSummary.resolved)} closed</span>
+                <span className="open">{formatNumber(trendSummary.openBacklog)} open</span>
+              </div>
+              <div className="itops-modern-column-chart ticket" aria-label="Ticket movement chart">
+                {ticketTrendRows.length ? ticketTrendRows.map((row) => {
+                  const newCount = numberOrFallback(row.newIncidents);
+                  const resolvedCount = numberOrFallback(row.resolved);
+                  const openCount = numberOrFallback(row.open);
+                  const total = newCount + resolvedCount + openCount;
+                  const newHeight = ticketTrendMaxTotal > 0 ? (newCount / ticketTrendMaxTotal) * 100 : 0;
+                  const resolvedHeight = ticketTrendMaxTotal > 0 ? (resolvedCount / ticketTrendMaxTotal) * 100 : 0;
+                  const openHeight = ticketTrendMaxTotal > 0 ? (openCount / ticketTrendMaxTotal) * 100 : 0;
+                  return (
+                    <div key={`ticket-chart-${row.day}`} className="itops-modern-column">
+                      <div className="itops-modern-column-stack">
+                        {newCount > 0 && <i className="new" style={{ height: `${Math.max(8, clampPercent(newHeight))}%` }} />}
+                        {resolvedCount > 0 && <i className="resolved" style={{ height: `${Math.max(8, clampPercent(resolvedHeight))}%` }} />}
+                        {openCount > 0 && <i className="open" style={{ height: `${Math.max(8, clampPercent(openHeight))}%` }} />}
+                        {total <= 0 && <i className="empty" style={{ height: '8%' }} />}
+                      </div>
+                      <span>{row.day}</span>
+                      <strong>{formatNumber(total)}</strong>
+                    </div>
+                  );
+                }) : <div className="itops-analytics-empty-chart"><Database size={18} /><span>No ticket movement found yet.</span></div>}
+              </div>
+            </button>
+
+            <div className="itops-analytics-mini-grid">
+              <button type="button" className="itops-analytics-mini blue" onClick={() => openLevel2('patch')}>
+                <span>Updates Done</span><strong>{formatPercent(hasSecurityUpdateScore ? securityUpdateScore : 0, 0)}</strong><small>{formatNumber(securityUpdatedDevices)} device(s) updated</small>
+              </button>
+              <button type="button" className="itops-analytics-mini amber" onClick={() => openLevel2('serviceDesk')}>
+                <span>Tickets On Track</span><strong>{formatPercent(onTrackTicketPercent, 0)}</strong><small>{formatNumber(onTrackTicketCount)} currently on SLA</small>
+              </button>
+              <button type="button" className="itops-analytics-mini green" onClick={() => openLevel2('tasks')}>
+                <span>Jobs Completed</span><strong>{formatPercent(taskCompletionPercent, 0)}</strong><small>{formatNumber(tasks.completedTasks)} completed jobs</small>
+              </button>
+              <button type="button" className="itops-analytics-mini orange" onClick={() => openLevel2('geolocation')}>
+                <span>Location Ready</span><strong>{formatPercent(locationFreshPercent, 0)}</strong><small>{formatNumber(geolocation.trackedDevices)} tracked devices</small>
+              </button>
             </div>
           </div>
         </Panel>
@@ -2350,37 +2341,25 @@ export default function ITOperationsDashboard() {
           </div>
         </Panel>
 
-        <Panel title="Decision Signals" subtitle="Compact health signals without leaving empty dashboard space." icon={Gauge} className="span-2 main-decision-panel">
+        <Panel title="Decision Signals" subtitle="One-row health signals without repeating big panels." icon={Gauge} className="span-2 main-decision-panel">
           <div className="itops-main-decision-grid">
             <button type="button" className="itops-main-decision-card blue" onClick={() => openLevel2('overview')}>
-              <span>Overall Health</span>
-              <strong>{formatPercent(overallHealth, 0)}</strong>
-              <small>{healthStatus(overallHealth)}</small>
+              <span>Overall Health</span><strong>{formatPercent(overallHealth, 0)}</strong><small>{healthStatus(overallHealth)}</small>
             </button>
             <button type="button" className="itops-main-decision-card cyan" onClick={() => openLevel2('dataConfidence')}>
-              <span>Data Confidence</span>
-              <strong>{formatPercent(dataConfidenceScore, 0)}</strong>
-              <small>Decision readiness</small>
+              <span>Data Confidence</span><strong>{formatPercent(dataConfidenceScore, 0)}</strong><small>Decision readiness</small>
             </button>
             <button type="button" className="itops-main-decision-card purple" onClick={() => openLevel2('network')}>
-              <span>Network Mapped</span>
-              <strong>{formatPercent(networkRegistrationPercent, 0)}</strong>
-              <small>{formatNumber(network.registeredDevices)} registered IP(s)</small>
+              <span>Network Mapped</span><strong>{formatPercent(networkRegistrationPercent, 0)}</strong><small>{formatNumber(network.registeredDevices)} registered IP(s)</small>
             </button>
             <button type="button" className="itops-main-decision-card red" onClick={() => openLevel2('risk')}>
-              <span>Device Risk</span>
-              <strong>{formatNumber(deviceRiskCount)}</strong>
-              <small>{formatNumber(deviceRiskCriticalCount)} critical</small>
+              <span>Device Risk</span><strong>{formatNumber(deviceRiskCount)}</strong><small>{formatNumber(deviceRiskCriticalCount)} critical</small>
             </button>
             <button type="button" className="itops-main-decision-card amber" onClick={() => openLevel2('serviceDesk')}>
-              <span>Open Tickets</span>
-              <strong>{formatNumber(openTicketCount)}</strong>
-              <small>{formatNumber(overdueTicketCount)} overdue</small>
+              <span>Open Tickets</span><strong>{formatNumber(openTicketCount)}</strong><small>{formatNumber(overdueTicketCount)} overdue</small>
             </button>
             <button type="button" className="itops-main-decision-card green" onClick={() => openLevel2('tasks')}>
-              <span>Job Completion</span>
-              <strong>{formatPercent(taskCompletionPercent, 0)}</strong>
-              <small>{formatNumber(tasks.failedTasks)} failed jobs</small>
+              <span>Job Completion</span><strong>{formatPercent(taskCompletionPercent, 0)}</strong><small>{formatNumber(tasks.failedTasks)} failed jobs</small>
             </button>
           </div>
         </Panel>
@@ -4169,103 +4148,7 @@ export default function ITOperationsDashboard() {
 
   return (
     <div ref={pageRef} className="itops-pro-page">
-      <style>{ITOPS_PRO_STYLES + `
-/* Main dashboard compact fill fix */
-.itops-main-filled-grid {
-  align-items: stretch;
-  margin-top: 14px;
-}
-
-.itops-main-filled-grid .itops-pro-panel {
-  min-height: 0;
-}
-
-.main-branch-filled-panel,
-.main-decision-panel {
-  height: 100%;
-}
-
-.main-branch-filled-panel .itops-main-branch-list {
-  gap: 9px;
-}
-
-.main-branch-filled-panel .itops-main-branch-row {
-  min-height: 58px;
-  padding: 10px 12px;
-}
-
-.main-decision-panel .itops-pro-panel-head {
-  margin-bottom: 12px;
-}
-
-.itops-main-decision-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.itops-main-decision-card {
-  min-height: 92px;
-  width: 100%;
-  display: grid;
-  align-content: center;
-  gap: 5px;
-  padding: 13px;
-  border: 1px solid #dbeafe;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  color: #0f172a;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.itops-main-decision-card:hover {
-  transform: translateY(-1px);
-  border-color: #93c5fd;
-  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.10);
-}
-
-.itops-main-decision-card span {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-}
-
-.itops-main-decision-card strong {
-  color: #0f172a;
-  font-size: 25px;
-  line-height: 1;
-  font-weight: 950;
-  letter-spacing: -0.04em;
-}
-
-.itops-main-decision-card small {
-  color: #475569;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.itops-main-decision-card.blue { background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%); border-color: #bfdbfe; }
-.itops-main-decision-card.cyan { background: linear-gradient(180deg, #ffffff 0%, #ecfeff 100%); border-color: #a5f3fc; }
-.itops-main-decision-card.purple { background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%); border-color: #ddd6fe; }
-.itops-main-decision-card.red { background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%); border-color: #fecaca; }
-.itops-main-decision-card.amber { background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%); border-color: #fde68a; }
-.itops-main-decision-card.green { background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%); border-color: #bbf7d0; }
-
-@media (max-width: 1180px) {
-  .itops-main-decision-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 780px) {
-  .itops-main-decision-grid {
-    grid-template-columns: 1fr;
-  }
-}
-`}</style>
+      <style>{ITOPS_PRO_STYLES}</style>
 
       <div className="itops-pro-bg-grid" />
 
@@ -10209,6 +10092,253 @@ body.itops-dashboard-page-active .router-content {
   .itops-endpoint-trend-row { grid-template-columns: 1fr; }
   .itops-endpoint-trend-track { width: 100%; }
   .itops-endpoint-trend-values { justify-content: flex-start; }
+}
+
+
+/* Better main dashboard analytics charts */
+.main-analytics-panel .itops-pro-panel-head { margin-bottom: 12px; }
+
+.itops-analytics-dashboard {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.itops-analytics-chart-card {
+  min-height: 272px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 24px;
+  background: radial-gradient(circle at 82% 10%, rgba(56, 189, 248, 0.14), transparent 34%), linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.itops-analytics-chart-card.ticket {
+  background: radial-gradient(circle at 88% 8%, rgba(34, 197, 94, 0.12), transparent 32%), linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.itops-analytics-chart-card:hover,
+.itops-analytics-mini:hover,
+.itops-main-decision-card:hover {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.10);
+}
+
+.itops-analytics-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.itops-analytics-card-head span,
+.itops-analytics-mini span,
+.itops-main-decision-card span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.itops-analytics-card-head strong {
+  display: block;
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 21px;
+  line-height: 1.05;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.itops-analytics-card-head small,
+.itops-analytics-mini small,
+.itops-main-decision-card small {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.itops-analytics-card-head b {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.itops-analytics-stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.itops-analytics-stat-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.itops-analytics-stat-row .online,
+.itops-analytics-stat-row .resolved { color: #047857; background: #dcfce7; }
+.itops-analytics-stat-row .offline,
+.itops-analytics-stat-row .open { color: #b91c1c; background: #fee2e2; }
+.itops-analytics-stat-row .stale { color: #92400e; background: #fef3c7; }
+.itops-analytics-stat-row .new { color: #1d4ed8; background: #dbeafe; }
+
+.itops-modern-column-chart {
+  min-height: 148px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+  padding: 14px 12px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: linear-gradient(to top, rgba(148, 163, 184, 0.18) 1px, transparent 1px) 0 0 / 100% 25%, linear-gradient(180deg, rgba(255,255,255,0.75), rgba(248,250,252,0.92));
+}
+
+.itops-modern-column {
+  min-width: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(96px, 1fr) auto auto;
+  align-items: end;
+  gap: 6px;
+  text-align: center;
+}
+
+.itops-modern-column-stack {
+  width: min(46px, 82%);
+  height: 108px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-start;
+  overflow: hidden;
+  border-radius: 14px 14px 8px 8px;
+  background: #e2e8f0;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+
+.itops-modern-column-stack i {
+  display: block;
+  width: 100%;
+  min-height: 0;
+}
+
+.itops-modern-column-stack .online,
+.itops-modern-column-stack .resolved { background: linear-gradient(180deg, #34d399, #10b981); }
+.itops-modern-column-stack .offline,
+.itops-modern-column-stack .open { background: linear-gradient(180deg, #fb7185, #ef4444); }
+.itops-modern-column-stack .stale { background: linear-gradient(180deg, #fbbf24, #f59e0b); }
+.itops-modern-column-stack .new { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+.itops-modern-column-stack .empty { background: #cbd5e1; }
+
+.itops-modern-column span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.itops-modern-column strong {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.itops-analytics-empty-chart {
+  grid-column: 1 / -1;
+  min-height: 118px;
+  display: grid;
+  place-items: center;
+  gap: 7px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.itops-analytics-mini-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.itops-analytics-mini,
+.itops-main-decision-card {
+  min-height: 86px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.itops-analytics-mini strong,
+.itops-main-decision-card strong {
+  color: #0f172a;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+}
+
+.itops-analytics-mini.blue,
+.itops-main-decision-card.blue { background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%); border-color: #bfdbfe; }
+.itops-analytics-mini.amber,
+.itops-main-decision-card.amber { background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%); border-color: #fde68a; }
+.itops-analytics-mini.green,
+.itops-main-decision-card.green { background: linear-gradient(180deg, #ffffff 0%, #ecfdf5 100%); border-color: #bbf7d0; }
+.itops-analytics-mini.orange { background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%); border-color: #fdba74; }
+
+.itops-main-filled-grid { align-items: stretch; margin-top: 14px; }
+.main-branch-filled-panel,
+.main-decision-panel { height: 100%; }
+
+.main-branch-filled-panel .itops-main-branch-list { gap: 9px; }
+.main-branch-filled-panel .itops-main-branch-row { min-height: 58px; padding: 10px 12px; }
+.main-decision-panel .itops-pro-panel-head { margin-bottom: 12px; }
+
+.itops-main-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.itops-main-decision-card.cyan { background: linear-gradient(180deg, #ffffff 0%, #ecfeff 100%); border-color: #a5f3fc; }
+.itops-main-decision-card.purple { background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%); border-color: #ddd6fe; }
+.itops-main-decision-card.red { background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%); border-color: #fecaca; }
+
+@media (max-width: 1180px) {
+  .itops-analytics-dashboard,
+  .itops-main-decision-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .itops-analytics-mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 780px) {
+  .itops-analytics-dashboard,
+  .itops-analytics-mini-grid,
+  .itops-main-decision-grid { grid-template-columns: 1fr; }
+  .itops-modern-column-chart { gap: 8px; }
 }
 
 `;
