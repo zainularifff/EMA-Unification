@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { CSSProperties, useState } from "react";
 import { generateReport, previewReport } from "../services/reportService";
 
 type ReportCard = {
   id: string;
   title: string;
   subtitle: string;
-  group: "Featured Reports" | "Dynamic Reporting";
+  group: "Featured" | "Dynamic";
   tone: string;
   icon: string;
   dynamic?: boolean;
@@ -24,15 +24,15 @@ type PreviewState = {
 } | null;
 
 const REPORTS: ReportCard[] = [
-  { id: "ai-executive-summary", title: "AI Executive Summary", subtitle: "Executive snapshot", group: "Featured Reports", tone: "#2563eb", icon: "▥" },
-  { id: "client-summary-rnr", title: "Client RNR Report", subtitle: "Client risk & resource", group: "Featured Reports", tone: "#0f766e", icon: "◈" },
-  { id: "hardware-asset-lifecycle", title: "Hardware Lifecycle", subtitle: "Asset lifecycle", group: "Featured Reports", tone: "#7c3aed", icon: "▧" },
-  { id: "operations-health-sla", title: "Ops Health & SLA", subtitle: "Ops and SLA health", group: "Featured Reports", tone: "#0284c7", icon: "▤" },
-  { id: "security-compliance-exposure", title: "Security Exposure", subtitle: "Risk exposure", group: "Featured Reports", tone: "#ef4444", icon: "!" },
-  { id: "software-application-governance", title: "Software Governance", subtitle: "BSA and software", group: "Featured Reports", tone: "#f59e0b", icon: "◇" },
-  { id: "dynamic-compliance-report", title: "Compliance Report", subtitle: "AI compliance", group: "Dynamic Reporting", tone: "#f59e0b", icon: "✓", dynamic: true },
-  { id: "dynamic-cost-saving-report", title: "Cost Saving Report", subtitle: "AI savings", group: "Dynamic Reporting", tone: "#10b981", icon: "↗", dynamic: true },
-  { id: "dynamic-risk-management-report", title: "Risk Management Report", subtitle: "AI risk management", group: "Dynamic Reporting", tone: "#ef4444", icon: "!", dynamic: true },
+  { id: "ai-executive-summary", title: "AI Executive Summary", subtitle: "Executive snapshot", group: "Featured", tone: "#2563eb", icon: "▥" },
+  { id: "client-summary-rnr", title: "Client RNR Report", subtitle: "Client risk & resource", group: "Featured", tone: "#0f766e", icon: "◈" },
+  { id: "hardware-asset-lifecycle", title: "Hardware Lifecycle", subtitle: "Asset lifecycle", group: "Featured", tone: "#7c3aed", icon: "▧" },
+  { id: "operations-health-sla", title: "Ops Health & SLA", subtitle: "Ops and SLA health", group: "Featured", tone: "#0284c7", icon: "▤" },
+  { id: "security-compliance-exposure", title: "Security Exposure", subtitle: "Risk exposure", group: "Featured", tone: "#ef4444", icon: "!" },
+  { id: "software-application-governance", title: "Software Governance", subtitle: "BSA and software", group: "Featured", tone: "#f59e0b", icon: "◇" },
+  { id: "dynamic-compliance-report", title: "Compliance Report", subtitle: "AI compliance", group: "Dynamic", tone: "#f59e0b", icon: "✓", dynamic: true },
+  { id: "dynamic-cost-saving-report", title: "Cost Saving Report", subtitle: "AI savings", group: "Dynamic", tone: "#10b981", icon: "↗", dynamic: true },
+  { id: "dynamic-risk-management-report", title: "Risk Management Report", subtitle: "AI risk management", group: "Dynamic", tone: "#ef4444", icon: "!", dynamic: true },
 ];
 
 function today() {
@@ -100,9 +100,9 @@ function downloadHtml(report: ReportCard, payload: any, range: DateRange) {
   <style>
     body{font-family:Arial,Helvetica,sans-serif;margin:36px;color:#12233f;background:#f8fbff;line-height:1.45}
     main{max-width:980px;margin:auto;background:white;border:1px solid #d8e5f6;border-radius:24px;padding:34px;box-shadow:0 18px 45px rgba(15,35,71,.10)}
-    h1{margin:0 0 6px;font-size:30px} .meta{color:#64748b;font-weight:700;margin-bottom:22px}
+    h1{margin:0 0 6px;font-size:30px}.meta{color:#64748b;font-weight:700;margin-bottom:22px}
     .summary{background:#eef6ff;border:1px solid #d3e4fb;border-radius:16px;padding:18px;margin:18px 0}
-    h2{font-size:18px;margin:24px 0 10px;color:#17325d} li{margin:8px 0} strong{color:#17325d}
+    h2{font-size:18px;margin:24px 0 10px;color:#17325d}li{margin:8px 0}strong{color:#17325d}
   </style>
 </head>
 <body>
@@ -138,13 +138,6 @@ export default function ReportBoard() {
   const [loading, setLoading] = useState<Record<string, "preview" | "download" | undefined>>({});
   const [preview, setPreview] = useState<PreviewState>(null);
   const [error, setError] = useState("");
-
-  const groupedReports = useMemo(() => {
-    return ["Featured Reports", "Dynamic Reporting"].map((group) => ({
-      name: group as ReportCard["group"],
-      items: REPORTS.filter((report) => report.group === group),
-    }));
-  }, []);
 
   const updateRange = (reportId: string, key: keyof DateRange, value: string) => {
     setRanges((current) => ({ ...current, [reportId]: { ...current[reportId], [key]: value } }));
@@ -183,75 +176,72 @@ export default function ReportBoard() {
       <style>{`
         .report-board-page {
           min-height: 100%;
-          padding: 22px;
+          padding: 16px;
           color: #13294b;
           background:
-            radial-gradient(circle at 10% 0%, rgba(37, 99, 235, 0.07), transparent 24rem),
-            radial-gradient(circle at 92% 2%, rgba(14, 165, 233, 0.06), transparent 22rem),
+            radial-gradient(circle at 10% 0%, rgba(37, 99, 235, 0.055), transparent 22rem),
             linear-gradient(135deg, #f6f8fb 0%, #edf2f7 54%, #e5ecf4 100%);
         }
         .report-board-head {
+          min-height: 82px;
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           justify-content: space-between;
           gap: 16px;
-          margin-bottom: 18px;
+          margin-bottom: 12px;
+          padding: 14px 16px;
+          border: 1px solid #d6e3f5;
+          border-radius: 22px;
+          background: rgba(255,255,255,.72);
+          box-shadow: 0 10px 26px rgba(15,35,71,.045);
         }
-        .report-board-head span,
-        .report-board-section-title span {
+        .report-board-head span {
           display: block;
           color: #2563eb;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 950;
           letter-spacing: .13em;
           text-transform: uppercase;
         }
         .report-board-head h2 {
-          margin: 4px 0 3px;
-          font-size: clamp(24px, 3vw, 38px);
+          margin: 4px 0 2px;
+          font-size: clamp(22px, 2.2vw, 32px);
           line-height: 1;
           letter-spacing: -0.055em;
         }
         .report-board-head p {
           margin: 0;
           color: #667996;
+          font-size: 13px;
           font-weight: 760;
         }
         .report-board-count {
-          min-width: 120px;
+          min-width: 78px;
           border: 1px solid #d6e3f5;
-          border-radius: 18px;
-          background: rgba(255,255,255,.78);
-          padding: 13px 16px;
-          text-align: right;
-          box-shadow: 0 12px 28px rgba(15,35,71,.05);
+          border-radius: 16px;
+          background: #ffffff;
+          padding: 10px 12px;
+          text-align: center;
         }
-        .report-board-count strong { display: block; font-size: 24px; line-height: 1; }
-        .report-board-count small { color: #72839d; font-weight: 800; }
-        .report-board-section { margin-top: 18px; }
-        .report-board-section-title {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin: 0 2px 10px;
-        }
-        .report-board-section-title small { color: #64748b; font-weight: 850; }
+        .report-board-count strong { display: block; font-size: 22px; line-height: 1; }
+        .report-board-count small { color: #72839d; font-size: 11px; font-weight: 850; }
         .report-card-grid {
           display: grid;
-          grid-template-columns: repeat(4, minmax(230px, 1fr));
-          gap: 16px;
+          grid-template-columns: repeat(4, minmax(210px, 1fr));
+          gap: 12px;
+          align-items: stretch;
         }
         .report-card {
           position: relative;
-          min-height: 230px;
-          display: flex;
-          flex-direction: column;
-          gap: 13px;
+          min-height: 184px;
+          display: grid;
+          grid-template-rows: auto auto auto;
+          gap: 10px;
           border: 1px solid #d6e3f5;
-          border-radius: 24px;
-          background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(249,252,255,.94));
-          padding: 18px;
-          box-shadow: 0 16px 34px rgba(15,35,71,.065);
+          border-radius: 20px;
+          background: linear-gradient(180deg, rgba(255,255,255,.97), rgba(249,252,255,.95));
+          padding: 14px;
+          box-shadow: 0 12px 26px rgba(15,35,71,.055);
           overflow: hidden;
         }
         .report-card::before {
@@ -263,89 +253,89 @@ export default function ReportBoard() {
         }
         .report-card-top {
           display: grid;
-          grid-template-columns: 46px minmax(0, 1fr);
-          gap: 13px;
+          grid-template-columns: 40px minmax(0, 1fr) auto;
+          gap: 10px;
           align-items: center;
         }
         .report-card-icon {
-          width: 46px;
-          height: 46px;
+          width: 40px;
+          height: 40px;
           display: grid;
           place-items: center;
-          border-radius: 16px;
+          border-radius: 14px;
           color: var(--report-accent);
           background: color-mix(in srgb, var(--report-accent) 12%, #ffffff);
           font-weight: 950;
         }
+        .report-card-badge {
+          align-self: start;
+          padding: 4px 7px;
+          border-radius: 999px;
+          color: var(--report-accent);
+          background: color-mix(in srgb, var(--report-accent) 10%, #ffffff);
+          font-size: 10px;
+          font-weight: 950;
+        }
         .report-card h3 {
           margin: 0;
-          font-size: 16px;
-          line-height: 1.1;
-          letter-spacing: -0.025em;
+          font-size: 14px;
+          line-height: 1.12;
+          letter-spacing: -0.02em;
         }
         .report-card p {
-          margin: 4px 0 0;
+          margin: 3px 0 0;
           color: #647895;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 800;
-          line-height: 1.2;
+          line-height: 1.18;
         }
         .report-date-grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 10px;
-          margin-top: auto;
+          gap: 8px;
         }
         .report-date-grid label {
           display: grid;
-          gap: 5px;
+          gap: 4px;
           color: #6d7f9a;
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 950;
           letter-spacing: .08em;
           text-transform: uppercase;
         }
         .report-date-grid input {
           width: 100%;
-          min-height: 38px;
+          min-height: 32px;
           border: 1px solid #d4e1f3;
-          border-radius: 13px;
+          border-radius: 11px;
           background: #fff;
           color: #13294b;
-          padding: 8px 10px;
-          font-weight: 800;
+          padding: 6px 8px;
+          font-size: 11px;
+          font-weight: 850;
           outline: none;
         }
         .report-card-actions {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 10px;
+          gap: 8px;
         }
         .report-card-actions button {
-          min-height: 40px;
-          border-radius: 14px;
+          min-height: 34px;
+          border-radius: 12px;
           border: 1px solid #cfddef;
           background: #ffffff;
           color: #13294b;
+          font-size: 12px;
           font-weight: 950;
         }
         .report-card-actions button.primary {
           border-color: transparent;
           color: #ffffff;
           background: linear-gradient(135deg, var(--report-accent), color-mix(in srgb, var(--report-accent) 72%, #071d3b));
-          box-shadow: 0 12px 22px color-mix(in srgb, var(--report-accent) 22%, transparent);
+          box-shadow: 0 10px 18px color-mix(in srgb, var(--report-accent) 18%, transparent);
         }
         .report-card-actions button:disabled { opacity: .58; cursor: wait; }
-        .report-card-notice {
-          margin: -2px 0 0;
-          color: #7b5c12;
-          background: rgba(245, 158, 11, .10);
-          border: 1px solid rgba(245, 158, 11, .22);
-          border-radius: 12px;
-          padding: 8px 10px;
-          font-size: 11px;
-          font-weight: 800;
-        }
         .report-board-error {
           margin: 12px 0 0;
           border: 1px solid rgba(239, 68, 68, .24);
@@ -409,16 +399,16 @@ export default function ReportBoard() {
         }
         .report-preview-section h4 { margin: 0 0 10px; }
         .report-preview-section li { margin: 7px 0; color: #3a5274; }
-        @media (max-width: 1500px) { .report-card-grid { grid-template-columns: repeat(3, minmax(230px, 1fr)); } }
-        @media (max-width: 1080px) { .report-card-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); } }
-        @media (max-width: 720px) { .report-board-page { padding: 14px; } .report-card-grid { grid-template-columns: 1fr; } .report-board-head { align-items: flex-start; flex-direction: column; } }
+        @media (max-width: 1480px) { .report-card-grid { grid-template-columns: repeat(3, minmax(210px, 1fr)); } }
+        @media (max-width: 1080px) { .report-card-grid { grid-template-columns: repeat(2, minmax(210px, 1fr)); } }
+        @media (max-width: 720px) { .report-board-page { padding: 12px; } .report-card-grid { grid-template-columns: 1fr; } .report-board-head { align-items: flex-start; flex-direction: column; } }
       `}</style>
 
       <section className="report-board-head">
         <div>
           <span>Reporting</span>
           <h2>Report Center</h2>
-          <p>Select a report card, choose the date range, then preview or download.</p>
+          <p>Choose a report, set the date range, then preview or download.</p>
         </div>
         <div className="report-board-count">
           <strong>{REPORTS.length}</strong>
@@ -426,53 +416,44 @@ export default function ReportBoard() {
         </div>
       </section>
 
-      {groupedReports.map((group) => (
-        <section className="report-board-section" key={group.name}>
-          <div className="report-board-section-title">
-            <span>{group.name}</span>
-            <small>{group.items.length} reports</small>
-          </div>
-          <div className="report-card-grid">
-            {group.items.map((report) => {
-              const range = ranges[report.id];
-              const state = loading[report.id];
-              return (
-                <article className="report-card" key={report.id} style={{ "--report-accent": report.tone } as React.CSSProperties}>
-                  <div className="report-card-top">
-                    <div className="report-card-icon">{report.icon}</div>
-                    <div>
-                      <h3>{report.title}</h3>
-                      <p>{report.subtitle}</p>
-                    </div>
-                  </div>
+      <section className="report-card-grid" aria-label="Report cards">
+        {REPORTS.map((report) => {
+          const range = ranges[report.id];
+          const state = loading[report.id];
+          return (
+            <article className="report-card" key={report.id} style={{ "--report-accent": report.tone } as CSSProperties}>
+              <div className="report-card-top">
+                <div className="report-card-icon">{report.icon}</div>
+                <div>
+                  <h3>{report.title}</h3>
+                  <p>{report.subtitle}</p>
+                </div>
+                <span className="report-card-badge">{report.group}</span>
+              </div>
 
-                  {report.dynamic && <div className="report-card-notice">AI dynamic report is generated once per day for this report title.</div>}
+              <div className="report-date-grid">
+                <label>
+                  From
+                  <input type="date" value={range.from} onChange={(event) => updateRange(report.id, "from", event.target.value)} />
+                </label>
+                <label>
+                  To
+                  <input type="date" value={range.to} onChange={(event) => updateRange(report.id, "to", event.target.value)} />
+                </label>
+              </div>
 
-                  <div className="report-date-grid">
-                    <label>
-                      From
-                      <input type="date" value={range.from} onChange={(event) => updateRange(report.id, "from", event.target.value)} />
-                    </label>
-                    <label>
-                      To
-                      <input type="date" value={range.to} onChange={(event) => updateRange(report.id, "to", event.target.value)} />
-                    </label>
-                  </div>
-
-                  <div className="report-card-actions">
-                    <button type="button" onClick={() => runPreview(report)} disabled={Boolean(state)}>
-                      {state === "preview" ? "Loading..." : "Preview"}
-                    </button>
-                    <button className="primary" type="button" onClick={() => runDownload(report)} disabled={Boolean(state)}>
-                      {state === "download" ? "Preparing..." : "Download"}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      ))}
+              <div className="report-card-actions">
+                <button type="button" onClick={() => runPreview(report)} disabled={Boolean(state)}>
+                  {state === "preview" ? "Loading..." : "Preview"}
+                </button>
+                <button className="primary" type="button" onClick={() => runDownload(report)} disabled={Boolean(state)}>
+                  {state === "download" ? "Preparing..." : "Download"}
+                </button>
+              </div>
+            </article>
+          );
+        })}
+      </section>
 
       {error && <div className="report-board-error">{error}</div>}
 
