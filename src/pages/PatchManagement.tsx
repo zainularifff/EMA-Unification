@@ -93,7 +93,7 @@ const defaultSummary: OnlinePatchSummary = {
   LastInstallTime: null,
 };
 
-const pageSizeOptions = [10];
+const pageSizeOptions = [10, 25, 50, 100];
 const severityOptions = ['Critical', 'Important', 'Moderate', 'Low', 'Unspecified'];
 
 const formatNumber = (value?: number | string | null) => {
@@ -216,6 +216,13 @@ const toScopeParams = (selection: ScopeSelection): OnlinePatchScopeParams => ({
   Object_Root_Idn: selection.Object_Root_Idn,
 });
 
+const extractPatchRows = (response: any): OnlinePatchRow[] => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.rows)) return response.rows;
+  return [];
+};
+
 
 function PatchManagement() {
   const [mode, setMode] = useState<PatchMode>('online');
@@ -252,7 +259,14 @@ function PatchManagement() {
   const scopeParams = useMemo(() => toScopeParams(selectedScope), [selectedScope]);
   const filteredDepartments = useMemo(() => filterDepartmentNodes(departments, scopeSearch), [departments, scopeSearch]);
   const currentResult = activeTab === 'status' ? statusResult : catalogResult;
-  const totalPages = Math.max(1, Math.ceil((currentResult.totalRecords || 0) / limit));
+  const currentRows = currentResult.rows || [];
+  const displayTotalRecords = currentRows.length;
+  const totalPages = Math.max(1, Math.ceil(displayTotalRecords / limit));
+  const pagedRows = useMemo(() => {
+    const safePage = Math.max(page, 1);
+    const start = (safePage - 1) * limit;
+    return currentRows.slice(start, start + limit);
+  }, [currentRows, limit, page]);
 
   const installableMissingCount = useMemo(() => {
     return statusResult.rows.filter((row) => getRowStatus(row) === 'Missing' && Number(row.Object_Root_Idn || 0) > 0).length;
@@ -338,51 +352,70 @@ function PatchManagement() {
     if (mode !== 'online') return;
 
     setLoadingData(true);
-    try {
-      const summaryPromise = getOnlinePatchSummary(scopeParams);
 
+    const requestLimit = 500;
+
+    try {
       if (activeTab === 'status') {
         const params: OnlinePatchQueryParams = {
           ...scopeParams,
           search: debouncedSearch,
           severity: severityFilter,
           status: statusFilter,
-          page,
-          limit,
+          page: 1,
+          limit: requestLimit,
         };
 
-        const [summaryData, statusData] = await Promise.all([
-          summaryPromise,
+        const [summaryResult, statusResultResponse] = await Promise.allSettled([
+          getOnlinePatchSummary(scopeParams),
           getOnlinePatchStatus(params),
         ]);
 
-        setSummary(summaryData || defaultSummary);
-        setStatusResult({
-          rows: statusData.data || [],
-          page: statusData.page || page,
-          limit: statusData.limit || limit,
-          totalRecords: statusData.totalRecords || 0,
-        });
-      } else {
-        const [summaryData, catalogData] = await Promise.all([
-          summaryPromise,
-          getOnlinePatchCatalog({ search: debouncedSearch, severity: severityFilter, page, limit }),
-        ]);
+        if (summaryResult.status === 'fulfilled') {
+          setSummary(summaryResult.value || defaultSummary);
+        }
 
-        setSummary(summaryData || defaultSummary);
-        setCatalogResult({
-          rows: catalogData.data || [],
-          page: catalogData.page || page,
-          limit: catalogData.limit || limit,
-          totalRecords: catalogData.totalRecords || 0,
-        });
+        if (statusResultResponse.status === 'fulfilled') {
+          const rows = extractPatchRows(statusResultResponse.value);
+          setStatusResult({
+            rows,
+            page: 1,
+            limit: requestLimit,
+            totalRecords: rows.length,
+          });
+          return;
+        }
+
+        throw statusResultResponse.reason;
       }
+
+      const [summaryResult, catalogResultResponse] = await Promise.allSettled([
+        getOnlinePatchSummary(scopeParams),
+        getOnlinePatchCatalog({ search: debouncedSearch, severity: severityFilter, page: 1, limit: requestLimit }),
+      ]);
+
+      if (summaryResult.status === 'fulfilled') {
+        setSummary(summaryResult.value || defaultSummary);
+      }
+
+      if (catalogResultResponse.status === 'fulfilled') {
+        const rows = extractPatchRows(catalogResultResponse.value);
+        setCatalogResult({
+          rows,
+          page: 1,
+          limit: requestLimit,
+          totalRecords: rows.length,
+        });
+        return;
+      }
+
+      throw catalogResultResponse.reason;
     } catch (error) {
       showToast({ type: 'error', message: extractErrorMessage(error, 'Failed to load online patching data.') });
     } finally {
       setLoadingData(false);
     }
-  }, [activeTab, debouncedSearch, limit, mode, page, scopeParams, severityFilter, showToast, statusFilter]);
+  }, [activeTab, debouncedSearch, mode, scopeParams, severityFilter, showToast, statusFilter]);
 
   useEffect(() => {
     loadPatchData();
@@ -413,6 +446,8 @@ function PatchManagement() {
     const relationID = Number(node.Object_Rel_Idn || 0);
     const label = node.Object_Full_Name || node.Object_Rel_Name || `Department ${relationID}`;
     setSelectedScope({ scope: 'relation', Object_Rel_Idn: relationID, label });
+    setExpanded((current) => new Set(current).add(relationID));
+    void loadAssetsForRelation(relationID);
   };
 
   const selectDevice = (asset: AssetItem, relationID: number) => {
@@ -801,7 +836,7 @@ function PatchManagement() {
                 </div>
               ) : (
                 <PatchTable
-                  rows={currentResult.rows}
+                  rows={pagedRows}
                   activeTab={activeTab}
                   page={page}
                   limit={limit}
@@ -812,7 +847,7 @@ function PatchManagement() {
 
               <footer className="uam-pagination global-style">
                 <span className="uam-page-summary">Page {page} of {totalPages}</span>
-                <span className="uam-page-status">{formatNumber(currentResult.totalRecords)} record(s)</span>
+                <span className="uam-page-status">{formatNumber(displayTotalRecords)} record(s)</span>
                 <nav className="uam-pagination-controls global-style" aria-label="Patch pagination">
                   <button className="uam-page-icon" type="button" onClick={() => goToPage(1)} disabled={page <= 1} aria-label="First page"><ChevronsLeft size={14} /></button>
                   <button className="uam-page-icon" type="button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="Previous page"><ChevronLeft size={14} /></button>

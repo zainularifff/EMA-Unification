@@ -10907,6 +10907,14 @@ async function rcHandleMdmRemoteControl(req, res, mode = "auto") {
 }
 
 
+
+
+
+
+
+
+
+
 /* ============================================================
    EMA MDM ACTION PATCH - Advanced Remote Control + Lock/Unlock
    Safe insert block. Do not replace full server.js.
@@ -13410,6 +13418,7 @@ app.get("/api/software-distribution/targets", authenticateToken, async (req, res
 });
 
 
+
 app.delete("/api/software-distribution/packages/:packageName/versions/:version", authenticateToken, async (req, res) => {
     try {
         const packageName = decodeURIComponent(req.params.packageName || "").trim();
@@ -13457,6 +13466,7 @@ app.delete("/api/software-distribution/packages/:packageName/versions/:version",
 | from TS_JOB_HISTORY. Keep both tables aligned for software distribution.
 |--------------------------------------------------------------------------
 */
+
 
 
 /*
@@ -13753,6 +13763,7 @@ function softAdvNormalizeExtension(value) {
 // Software registry report/stat endpoint.
 
 // Software registry detail endpoint by client.
+
 
 
 // ============================================================
@@ -17926,6 +17937,9 @@ let networkDeviceStatusRows = [
     { id: 2, deviceName: "PX1500 Javelin", deviceBrand: "ASUS", deviceStatus: "Active", deviceVersion: "V1.0", location: "Workgroup", purpose: "Router", patchDate: "2021-09-21", remarks: "-" },
     { id: 3, deviceName: "PS1000 Spear", deviceBrand: "ASUS", deviceStatus: "Active", deviceVersion: "V2.0", location: "User-Management", purpose: "Router", patchDate: "2021-11-21", remarks: "-" }
 ];
+
+
+
 
 
 /*
@@ -22918,6 +22932,9 @@ function getOnlinePatchMasterSearchSql() {
 }
 
 
+
+
+
 async function getOnlinePatchInstallPayload(pool, objectRootIdn, updateID, revisionNumber) {
     const optionalMasterSelectSql = await getOnlinePatchOptionalMasterSelectSql(pool, "");
     const [deviceResult, patchResult, filesResult, statusResult] = await Promise.all([
@@ -23720,6 +23737,10 @@ function itopsRiskPercent(value, total) {
     return itopsPercent(value, total, 0);
 }
 
+function itopsExposureRatio(value, denominator) {
+    const base = Math.max(itopsToNumber(denominator), 1);
+    return Math.max(0, Math.min(100, itopsRound((itopsToNumber(value) / base) * 100, 1)));
+}
 
 function itopsRiskSeverityCount(count, criticalThreshold, highThreshold) {
     const value = itopsToNumber(count);
@@ -23729,6 +23750,210 @@ function itopsRiskSeverityCount(count, criticalThreshold, highThreshold) {
     return "Low";
 }
 
+async function getItOpsHardwareSummary(pool) {
+    const hasEmAssets = await itopsTableExists(pool, "TS_OBJECT_ROOT");
+    const hasMdmAssets = await itopsTableExists(pool, "TSMDM_ASSET");
+    const hasMdmMapping = await itopsTableExists(pool, "TSMDM_TS_OBJECT_MAPPING");
+    const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
+
+    if (!hasEmAssets && !hasMdmAssets) {
+        return {
+            totalDevices: 0,
+            onlineDevices: 0,
+            offlineDevices: 0,
+            staleSync: 0,
+            lockedDevices: 0,
+            mdmDevices: 0,
+            emDevices: 0,
+            topModels: [],
+            platformBreakdown: [],
+            endpointRows: []
+        };
+    }
+
+    const emRelationJoin = hasEmAssets && hasRelations
+        ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON r.Object_Rel_Idn = rel.Object_Rel_Idn"
+        : "";
+    const emDepartmentExpr = hasRelations
+        ? "ISNULL(NULLIF(rel.Object_Full_Name, ''), ISNULL(NULLIF(rel.Object_Rel_Name, ''), 'Unmapped'))"
+        : "'Unmapped'";
+
+    const emSql = hasEmAssets
+        ? `
+            SELECT
+                'EM' AS SourceType,
+                ISNULL(NULLIF(r.ComputerName, ''), r.Object_DeviceID) AS DeviceName,
+                ISNULL(NULLIF(r.Model, ''), '-') AS Model,
+                'Windows' AS Platform,
+                ${emDepartmentExpr} AS Department,
+                CASE WHEN TRY_CONVERT(int, r.ConnectionStatus) = 1 THEN 1 ELSE 0 END AS IsOnline,
+                CASE WHEN TRY_CONVERT(int, r.ConnectionStatus) = 1 THEN 'Online' ELSE 'Offline' END AS StatusLabel,
+                TRY_CONVERT(datetime, r.ConnectionTime) AS LastSeen
+            FROM TS_OBJECT_ROOT r WITH (NOLOCK)
+            ${emRelationJoin}
+            WHERE ISNULL(r.Object_Root_Idn, 0) > 0
+        `
+        : `
+            SELECT 'EM' AS SourceType, NULL AS DeviceName, NULL AS Model, NULL AS Platform, NULL AS Department, 0 AS IsOnline, 'Offline' AS StatusLabel, NULL AS LastSeen
+            WHERE 1 = 0
+        `;
+
+    const mdmExcludeMappedSql = hasMdmMapping
+        ? "AND a.MDM_Asset_Idn NOT IN (SELECT MDM_Asset_Idn FROM TSMDM_TS_OBJECT_MAPPING WITH (NOLOCK))"
+        : "";
+
+    const mdmSql = hasMdmAssets
+        ? `
+            SELECT
+                'MDM' AS SourceType,
+                ISNULL(NULLIF(a.DeviceName, ''), a.DeviceID) AS DeviceName,
+                ISNULL(a.DeviceModelName, '-') AS Model,
+                ISNULL(NULLIF(a.PlatformType, ''), 'MDM') AS Platform,
+                'MDM Unmapped' AS Department,
+                CASE
+                    WHEN TRY_CONVERT(int, a.ConnectionStatus) = 1 THEN 1
+                    WHEN LOWER(CONVERT(nvarchar(50), a.ConnectionStatus)) = 'online' THEN 1
+                    ELSE 0
+                END AS IsOnline,
+                CASE
+                    WHEN TRY_CONVERT(int, a.ConnectionStatus) = 1 THEN 'Online'
+                    WHEN LOWER(CONVERT(nvarchar(50), a.ConnectionStatus)) = 'online' THEN 'Online'
+                    WHEN NULLIF(CONVERT(nvarchar(50), a.ConnectionStatus), '') IS NOT NULL THEN CONVERT(nvarchar(50), a.ConnectionStatus)
+                    ELSE 'Offline'
+                END AS StatusLabel,
+                TRY_CONVERT(datetime, COALESCE(a.DeviceTimeStamp, a.LastTimeStamp)) AS LastSeen
+            FROM TSMDM_ASSET a WITH (NOLOCK)
+            WHERE ISNULL(a.MDM_Asset_Idn, 0) > 0
+            ${mdmExcludeMappedSql}
+        `
+        : `
+            SELECT 'MDM' AS SourceType, NULL AS DeviceName, NULL AS Model, NULL AS Platform, NULL AS Department, 0 AS IsOnline, 'Offline' AS StatusLabel, NULL AS LastSeen
+            WHERE 1 = 0
+        `;
+
+    const summaryResult = await pool.request().query(`
+        ;WITH Assets AS (
+            ${emSql}
+            UNION ALL
+            ${mdmSql}
+        )
+        SELECT
+            COUNT(1) AS TotalDevices,
+            SUM(CASE WHEN IsOnline = 1 THEN 1 ELSE 0 END) AS OnlineDevices,
+            SUM(CASE WHEN IsOnline = 0 THEN 1 ELSE 0 END) AS OfflineDevices,
+            SUM(CASE WHEN LastSeen IS NULL OR LastSeen < DATEADD(day, -7, GETDATE()) THEN 1 ELSE 0 END) AS StaleSync,
+            SUM(CASE WHEN SourceType = 'MDM' THEN 1 ELSE 0 END) AS MdmDevices,
+            SUM(CASE WHEN SourceType = 'EM' THEN 1 ELSE 0 END) AS EmDevices
+        FROM Assets;
+    `);
+
+    const platformResult = await pool.request().query(`
+        ;WITH Assets AS (
+            ${emSql}
+            UNION ALL
+            ${mdmSql}
+        )
+        SELECT TOP 6
+            ISNULL(NULLIF(Platform, ''), 'Unknown') AS Name,
+            COUNT(1) AS Value
+        FROM Assets
+        GROUP BY ISNULL(NULLIF(Platform, ''), 'Unknown')
+        ORDER BY COUNT(1) DESC;
+    `);
+
+    const modelResult = await pool.request().query(`
+        ;WITH Assets AS (
+            ${emSql}
+            UNION ALL
+            ${mdmSql}
+        )
+        SELECT TOP 6
+            ISNULL(NULLIF(Model, ''), 'Unknown Model') AS Name,
+            COUNT(1) AS Value
+        FROM Assets
+        GROUP BY ISNULL(NULLIF(Model, ''), 'Unknown Model')
+        ORDER BY COUNT(1) DESC;
+    `);
+
+    const endpointResult = await pool.request().query(`
+        ;WITH Assets AS (
+            ${emSql}
+            UNION ALL
+            ${mdmSql}
+        ), EndpointEvidence AS (
+            SELECT
+                ISNULL(NULLIF(DeviceName, ''), '-') AS DeviceName,
+                ISNULL(NULLIF(Model, ''), '-') AS Model,
+                ISNULL(NULLIF(Platform, ''), 'Unknown') AS Platform,
+                ISNULL(NULLIF(Department, ''), 'Unmapped') AS Department,
+                ISNULL(NULLIF(StatusLabel, ''), CASE WHEN IsOnline = 1 THEN 'Online' ELSE 'Offline' END) AS StatusLabel,
+                IsOnline,
+                LastSeen,
+                CASE WHEN LastSeen IS NULL OR LastSeen < DATEADD(day, -7, GETDATE()) THEN 1 ELSE 0 END AS IsStale,
+                CASE WHEN NULLIF(DeviceName, '') IS NULL OR NULLIF(Model, '-') IS NULL THEN 1 ELSE 0 END AS HasMissingIdentity
+            FROM Assets
+        )
+        SELECT TOP 500
+            DeviceName,
+            Model,
+            Platform,
+            Department,
+            StatusLabel,
+            IsOnline,
+            LastSeen,
+            IsStale,
+            (
+                CASE WHEN IsOnline = 0 THEN 20 ELSE 0 END
+                + CASE WHEN IsStale = 1 THEN 25 ELSE 0 END
+                + CASE WHEN HasMissingIdentity = 1 THEN 10 ELSE 0 END
+            ) AS RiskScore,
+            CONCAT(
+                CASE WHEN IsOnline = 0 THEN 'Offline endpoint; ' ELSE '' END,
+                CASE WHEN IsStale = 1 THEN 'Stale connection; ' ELSE '' END,
+                CASE WHEN HasMissingIdentity = 1 THEN 'Missing identity; ' ELSE '' END
+            ) AS Reasons
+        FROM EndpointEvidence
+        ORDER BY
+            (CASE WHEN IsOnline = 0 THEN 20 ELSE 0 END + CASE WHEN IsStale = 1 THEN 25 ELSE 0 END + CASE WHEN HasMissingIdentity = 1 THEN 10 ELSE 0 END) DESC,
+            LastSeen DESC,
+            DeviceName ASC;
+    `);
+
+    const summary = summaryResult.recordset?.[0] || {};
+    const totalDevices = itopsToNumber(summary.TotalDevices);
+
+    return {
+        totalDevices,
+        onlineDevices: itopsToNumber(summary.OnlineDevices),
+        offlineDevices: itopsToNumber(summary.OfflineDevices),
+        staleSync: itopsToNumber(summary.StaleSync),
+        lockedDevices: 0,
+        mdmDevices: itopsToNumber(summary.MdmDevices),
+        emDevices: itopsToNumber(summary.EmDevices),
+        platformBreakdown: (platformResult.recordset || []).map(row => ({
+            name: row.Name || "Unknown",
+            value: itopsToNumber(row.Value),
+            percent: itopsPercent(row.Value, totalDevices)
+        })),
+        topModels: (modelResult.recordset || []).map(row => ({
+            name: row.Name || "Unknown Model",
+            value: itopsToNumber(row.Value),
+            percent: itopsPercent(row.Value, totalDevices)
+        })),
+        endpointRows: (endpointResult.recordset || []).map(row => ({
+            deviceName: row.DeviceName || "-",
+            platform: row.Platform || "Unknown",
+            model: row.Model || "-",
+            department: row.Department || "Unmapped",
+            lastSeen: itopsDateLabel(row.LastSeen),
+            status: row.StatusLabel || (itopsToNumber(row.IsOnline) === 1 ? "Online" : "Offline"),
+            isOnline: itopsToNumber(row.IsOnline) === 1,
+            isStale: itopsToNumber(row.IsStale) === 1,
+            riskScore: itopsToNumber(row.RiskScore),
+            reasons: String(row.Reasons || "").replace(/;\s*$/, "") || (itopsToNumber(row.IsOnline) === 1 ? "Inventory evidence" : "Offline endpoint")
+        }))
+    };
+}
 
 async function getItOpsSoftwareSummary(pool) {
     const hasSoftware = await itopsTableExists(pool, "TSMDM_SW_LIST");
@@ -23955,6 +24180,60 @@ async function getItOpsHardwareSummary(pool) {
     };
 }
 
+async function getItOpsGeoSummary(pool) {
+    const hasGeo = await itopsTableExists(pool, "TSMDM_GEOLOCATION");
+
+    if (!hasGeo) {
+        return {
+            trackedDevices: 0,
+            staleLocations: 0,
+            unknownLocations: 0,
+            latestLocationTime: "-",
+            topLocations: []
+        };
+    }
+
+    const result = await pool.request().query(`
+        SELECT
+            COUNT(DISTINCT NULLIF(DeviceID, '')) AS TrackedDevices,
+            COUNT(CASE WHEN TRY_CONVERT(datetime, [Time]) < DATEADD(day, -7, GETDATE()) OR [Time] IS NULL THEN 1 END) AS StaleLocations,
+            COUNT(CASE WHEN LocationName IS NULL OR LocationName = '' OR LocationName = 'Unable to fetch the address.' THEN 1 END) AS UnknownLocations,
+            MAX(TRY_CONVERT(datetime, [Time])) AS LatestLocationTime
+        FROM TSMDM_GEOLOCATION WITH (NOLOCK);
+    `);
+
+    const locationResult = await pool.request().query(`
+        SELECT TOP 6
+            CASE
+                WHEN LocationName IS NULL OR LocationName = '' OR LocationName = 'Unable to fetch the address.'
+                    THEN 'Unknown Location'
+                ELSE LocationName
+            END AS Name,
+            COUNT(1) AS Value
+        FROM TSMDM_GEOLOCATION WITH (NOLOCK)
+        GROUP BY CASE
+            WHEN LocationName IS NULL OR LocationName = '' OR LocationName = 'Unable to fetch the address.'
+                THEN 'Unknown Location'
+            ELSE LocationName
+        END
+        ORDER BY COUNT(1) DESC;
+    `);
+
+    const row = result.recordset?.[0] || {};
+    const total = itopsToNumber(row.TrackedDevices);
+
+    return {
+        trackedDevices: total,
+        staleLocations: itopsToNumber(row.StaleLocations),
+        unknownLocations: itopsToNumber(row.UnknownLocations),
+        latestLocationTime: itopsDateLabel(row.LatestLocationTime),
+        topLocations: (locationResult.recordset || []).map(item => ({
+            name: item.Name || "Unknown Location",
+            value: itopsToNumber(item.Value),
+            percent: itopsPercent(item.Value, total)
+        }))
+    };
+}
 
 async function getItOpsTaskSummary(pool) {
     const hasJobs = await itopsTableExists(pool, "TS_JOB");
@@ -24036,6 +24315,291 @@ async function getItOpsTaskSummary(pool) {
     };
 }
 
+async function getItOpsIncidentSummary(pool) {
+    const hasEmaIncidents = await itopsTableExists(pool, "EMA_Incidents");
+    const hasHdIncidents = await itopsTableExists(pool, "HD_Incidents");
+    const incidentTable = hasEmaIncidents ? "EMA_Incidents" : hasHdIncidents ? "HD_Incidents" : "";
+
+    if (!incidentTable) {
+        return {
+            source: "none",
+            openIncidents: 0,
+            overdueTickets: 0,
+            mttrMinutes: 0,
+            firstResponseMinutes: 0,
+            slaAchievement: 0,
+            priorityBreakdown: [
+                { label: "Critical", value: 0, tone: "red" },
+                { label: "High", value: 0, tone: "amber" },
+                { label: "Medium", value: 0, tone: "yellow" },
+                { label: "Low", value: 0, tone: "green" }
+            ],
+            incidentTrend: [],
+            trendSummary: { newIncidents: 0, resolved: 0, openBacklog: 0 },
+            activeAlerts: [],
+            problematicSystems: []
+        };
+    }
+
+    const closedStatusSql = "('resolved', 'closed', 'solved')";
+
+    const summaryResult = await pool.request().query(`
+        ;WITH Normalized AS (
+            SELECT
+                IncidentID,
+                Title,
+                CASE
+                    WHEN LOWER(ISNULL(Priority, '')) IN ('critical', 'p1', 'urgent') THEN 'Critical'
+                    WHEN LOWER(ISNULL(Priority, '')) IN ('high', 'p2') THEN 'High'
+                    WHEN LOWER(ISNULL(Priority, '')) IN ('low', 'p4') THEN 'Low'
+                    ELSE 'Medium'
+                END AS Priority,
+                ISNULL(Status, '') AS Status,
+                ISNULL(AssetID, '') AS AssetID,
+                ISNULL(AssignedTo, '') AS AssignedTo,
+                ISNULL(AssignedLevel, '') AS AssignedLevel,
+                TRY_CONVERT(datetime, CreatedAt) AS CreatedAtDate,
+                TRY_CONVERT(datetime, FirstResponseAt) AS FirstResponseAtDate,
+                TRY_CONVERT(datetime, ResolvedAt) AS ResolvedAtDate,
+                TRY_CONVERT(datetime, SlaDue) AS SlaDueDate
+            FROM ${incidentTable} WITH (NOLOCK)
+        )
+        SELECT
+            COUNT(CASE WHEN LOWER(Status) NOT IN ${closedStatusSql} THEN 1 END) AS OpenIncidents,
+            COUNT(CASE WHEN LOWER(Status) NOT IN ${closedStatusSql} AND SlaDueDate IS NOT NULL AND SlaDueDate < GETDATE() THEN 1 END) AS OverdueTickets,
+            AVG(CASE WHEN ResolvedAtDate IS NOT NULL AND CreatedAtDate IS NOT NULL THEN DATEDIFF(minute, CreatedAtDate, ResolvedAtDate) END) AS MttrMinutes,
+            AVG(CASE WHEN FirstResponseAtDate IS NOT NULL AND CreatedAtDate IS NOT NULL THEN DATEDIFF(minute, CreatedAtDate, FirstResponseAtDate) END) AS FirstResponseMinutes,
+            COUNT(CASE WHEN ResolvedAtDate IS NOT NULL AND SlaDueDate IS NOT NULL AND ResolvedAtDate <= SlaDueDate THEN 1 END) AS ResolvedWithinSla,
+            COUNT(CASE WHEN ResolvedAtDate IS NOT NULL AND SlaDueDate IS NOT NULL THEN 1 END) AS ResolvedWithSla
+        FROM Normalized;
+    `);
+
+    const priorityResult = await pool.request().query(`
+        SELECT
+            CASE
+                WHEN LOWER(ISNULL(Priority, '')) IN ('critical', 'p1', 'urgent') THEN 'Critical'
+                WHEN LOWER(ISNULL(Priority, '')) IN ('high', 'p2') THEN 'High'
+                WHEN LOWER(ISNULL(Priority, '')) IN ('low', 'p4') THEN 'Low'
+                ELSE 'Medium'
+            END AS Priority,
+            COUNT(1) AS Total
+        FROM ${incidentTable} WITH (NOLOCK)
+        WHERE LOWER(ISNULL(Status, '')) NOT IN ${closedStatusSql}
+        GROUP BY CASE
+            WHEN LOWER(ISNULL(Priority, '')) IN ('critical', 'p1', 'urgent') THEN 'Critical'
+            WHEN LOWER(ISNULL(Priority, '')) IN ('high', 'p2') THEN 'High'
+            WHEN LOWER(ISNULL(Priority, '')) IN ('low', 'p4') THEN 'Low'
+            ELSE 'Medium'
+        END;
+    `);
+
+    const trendResult = await pool.request().query(`
+        ;WITH Days AS (
+            SELECT CAST(DATEADD(day, -6, CAST(GETDATE() AS date)) AS date) AS DayDate
+            UNION ALL
+            SELECT DATEADD(day, 1, DayDate)
+            FROM Days
+            WHERE DayDate < CAST(GETDATE() AS date)
+        ), Normalized AS (
+            SELECT
+                TRY_CONVERT(datetime, CreatedAt) AS CreatedAtDate,
+                TRY_CONVERT(datetime, ResolvedAt) AS ResolvedAtDate,
+                ISNULL(Status, '') AS Status
+            FROM ${incidentTable} WITH (NOLOCK)
+        )
+        SELECT
+            CONVERT(varchar(11), d.DayDate, 106) AS DayLabel,
+            COUNT(CASE WHEN CAST(n.CreatedAtDate AS date) = d.DayDate THEN 1 END) AS NewIncidents,
+            COUNT(CASE WHEN CAST(n.ResolvedAtDate AS date) = d.DayDate THEN 1 END) AS Resolved,
+            COUNT(CASE
+                WHEN n.CreatedAtDate IS NOT NULL
+                 AND CAST(n.CreatedAtDate AS date) <= d.DayDate
+                 AND (
+                    LOWER(n.Status) NOT IN ${closedStatusSql}
+                    OR n.ResolvedAtDate IS NULL
+                    OR CAST(n.ResolvedAtDate AS date) > d.DayDate
+                 )
+                THEN 1
+            END) AS OpenBacklog
+        FROM Days d
+        LEFT JOIN Normalized n
+            ON (
+                CAST(n.CreatedAtDate AS date) <= d.DayDate
+                OR CAST(n.ResolvedAtDate AS date) = d.DayDate
+            )
+        GROUP BY d.DayDate
+        ORDER BY d.DayDate
+        OPTION (MAXRECURSION 8);
+    `);
+
+    const alertsResult = await pool.request().query(`
+        SELECT TOP 50
+            CASE
+                WHEN LOWER(ISNULL(Priority, '')) IN ('critical', 'p1', 'urgent') THEN 'Critical'
+                WHEN LOWER(ISNULL(Priority, '')) IN ('high', 'p2') THEN 'High'
+                WHEN LOWER(ISNULL(Priority, '')) IN ('low', 'p4') THEN 'Low'
+                ELSE 'Medium'
+            END AS Priority,
+            ISNULL(Title, IncidentID) AS Title,
+            ISNULL(AssetID, '-') AS AssetID,
+            ISNULL(NULLIF(AssignedTo, ''), NULLIF(AssignedLevel, '')) AS Owner,
+            CASE WHEN Status = 'Solved' THEN 'Resolved' ELSE ISNULL(Status, 'Open') END AS Status
+        FROM ${incidentTable} WITH (NOLOCK)
+        WHERE LOWER(ISNULL(Status, '')) NOT IN ${closedStatusSql}
+        ORDER BY
+            CASE
+                WHEN LOWER(ISNULL(Priority, '')) IN ('critical', 'p1', 'urgent') THEN 1
+                WHEN LOWER(ISNULL(Priority, '')) IN ('high', 'p2') THEN 2
+                WHEN LOWER(ISNULL(Priority, '')) IN ('medium', 'p3') THEN 3
+                ELSE 4
+            END,
+            TRY_CONVERT(datetime, CreatedAt) DESC;
+    `);
+
+    const problematicResult = await pool.request().query(`
+        SELECT TOP 20
+            ISNULL(NULLIF(AssetID, ''), 'Unassigned Asset') AS Device,
+            COUNT(1) AS IncidentCount,
+            SUM(CASE
+                WHEN LOWER(ISNULL(Priority, '')) IN ('critical', 'p1', 'urgent') THEN 8
+                WHEN LOWER(ISNULL(Priority, '')) IN ('high', 'p2') THEN 5
+                WHEN LOWER(ISNULL(Priority, '')) IN ('medium', 'p3') THEN 3
+                ELSE 1
+            END) AS RiskWeight,
+            SUM(CASE WHEN LOWER(ISNULL(Status, '')) NOT IN ${closedStatusSql} THEN 1 ELSE 0 END) AS OpenCount
+        FROM ${incidentTable} WITH (NOLOCK)
+        WHERE AssetID IS NOT NULL AND AssetID <> ''
+        GROUP BY ISNULL(NULLIF(AssetID, ''), 'Unassigned Asset')
+        ORDER BY RiskWeight DESC, IncidentCount DESC;
+    `);
+
+    const summary = summaryResult.recordset?.[0] || {};
+    const priorityMap = new Map((priorityResult.recordset || []).map(row => [String(row.Priority), itopsToNumber(row.Total)]));
+    const incidentTrend = (trendResult.recordset || []).map(row => ({
+        day: String(row.DayLabel || ""),
+        newIncidents: itopsToNumber(row.NewIncidents),
+        resolved: itopsToNumber(row.Resolved),
+        open: itopsToNumber(row.OpenBacklog)
+    }));
+
+    const trendSummary = {
+        newIncidents: incidentTrend.reduce((total, item) => total + item.newIncidents, 0),
+        resolved: incidentTrend.reduce((total, item) => total + item.resolved, 0),
+        openBacklog: incidentTrend.length ? incidentTrend[incidentTrend.length - 1].open : itopsToNumber(summary.OpenIncidents)
+    };
+
+    const resolvedWithSla = itopsToNumber(summary.ResolvedWithSla);
+    const slaAchievement = resolvedWithSla
+        ? itopsPercent(summary.ResolvedWithinSla, resolvedWithSla, 0)
+        : 0;
+
+    return {
+        source: incidentTable,
+        openIncidents: itopsToNumber(summary.OpenIncidents),
+        overdueTickets: itopsToNumber(summary.OverdueTickets),
+        mttrMinutes: itopsToNumber(summary.MttrMinutes),
+        firstResponseMinutes: itopsToNumber(summary.FirstResponseMinutes),
+        slaAchievement,
+        priorityBreakdown: [
+            { label: "Critical", value: priorityMap.get("Critical") || 0, tone: "red" },
+            { label: "High", value: priorityMap.get("High") || 0, tone: "amber" },
+            { label: "Medium", value: priorityMap.get("Medium") || 0, tone: "yellow" },
+            { label: "Low", value: priorityMap.get("Low") || 0, tone: "green" }
+        ],
+        incidentTrend,
+        trendSummary,
+        activeAlerts: (alertsResult.recordset || []).map(row => ({
+            severity: itopsSeverity(row.Priority),
+            alert: row.Title || "Incident requires attention",
+            system: row.AssetID || "-",
+            owner: row.Owner || "Unassigned",
+            status: row.Status || "Open",
+            tone: itopsStatusTone(row.Status, row.Priority)
+        })),
+        problematicSystems: (problematicResult.recordset || []).map((row, index) => {
+            const score = Math.min(99, Math.max(10, itopsToNumber(row.RiskWeight) * 8 + itopsToNumber(row.OpenCount) * 4));
+            return {
+                rank: index + 1,
+                device: row.Device || "-",
+                score,
+                trend: [Math.max(0, score - 18), Math.max(0, score - 12), Math.max(0, score - 20), Math.max(0, score - 8), Math.max(0, score - 6), Math.max(0, score - 10), score]
+            };
+        })
+    };
+}
+
+async function getItOpsPatchSummary(pool) {
+    const hasPatchStatus = await itopsTableExists(pool, "TS_UPDATE_ONLINE_STATUS");
+    const hasPatchMaster = await itopsTableExists(pool, "TS_UPDATE_ONLINE_MASTER");
+    const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
+
+    if (!hasPatchStatus) {
+        return {
+            patchCompliance: 0,
+            missingPatches: 0,
+            criticalVulnerabilities: 0,
+            patchDepartments: []
+        };
+    }
+
+    const summaryResult = await pool.request().query(`
+        SELECT
+            COUNT(CASE WHEN ISNULL(IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
+            COUNT(CASE WHEN ISNULL(IsApplicable, 0) = 1 AND (ISNULL(IsInstalled, 0) = 1 OR ISNULL(IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches,
+            COUNT(CASE WHEN ISNULL(IsApplicable, 0) = 1 AND ISNULL(IsInstalled, 0) = 0 AND ISNULL(IsDownloaded, 0) = 0 THEN 1 END) AS MissingPatches
+        FROM TS_UPDATE_ONLINE_STATUS WITH (NOLOCK);
+    `);
+
+    let criticalVulnerabilities = 0;
+
+    if (hasPatchMaster) {
+        const criticalResult = await pool.request().query(`
+            SELECT COUNT(1) AS CriticalMissing
+            FROM TS_UPDATE_ONLINE_STATUS s WITH (NOLOCK)
+            LEFT JOIN TS_UPDATE_ONLINE_MASTER m WITH (NOLOCK)
+                ON m.UpdateID = s.UpdateID
+               AND m.RevisionNumber = s.RevisionNumber
+            WHERE ISNULL(s.IsApplicable, 0) = 1
+              AND ISNULL(s.IsInstalled, 0) = 0
+              AND ISNULL(s.IsDownloaded, 0) = 0
+              AND LOWER(ISNULL(m.MsrcSeverity, '')) = 'critical';
+        `);
+
+        criticalVulnerabilities = itopsToNumber(criticalResult.recordset?.[0]?.CriticalMissing);
+    }
+
+    let patchDepartments = [];
+
+    if (hasRelations) {
+        const departmentResult = await pool.request().query(`
+            SELECT TOP 7
+                ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned')) AS Department,
+                COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
+                COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND (ISNULL(s.IsInstalled, 0) = 1 OR ISNULL(s.IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches
+            FROM TS_UPDATE_ONLINE_STATUS s WITH (NOLOCK)
+            LEFT JOIN TS_OBJECT_ROOT r WITH (NOLOCK)
+                ON s.Object_Root_Idn = r.Object_Root_Idn
+            LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
+                ON r.Object_Rel_Idn = rel.Object_Rel_Idn
+            GROUP BY ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned'))
+            ORDER BY COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) DESC;
+        `);
+
+        patchDepartments = (departmentResult.recordset || []).map(row => ({
+            name: row.Department || "Unassigned",
+            percent: itopsPercent(row.InstalledPatches, row.ApplicablePatches, 0)
+        }));
+    }
+
+    const summary = summaryResult.recordset?.[0] || {};
+
+    return {
+        patchCompliance: itopsPercent(summary.InstalledPatches, summary.ApplicablePatches, 0),
+        missingPatches: itopsToNumber(summary.MissingPatches),
+        criticalVulnerabilities,
+        patchDepartments
+    };
+}
 
 async function getItOpsDepartmentRows(pool) {
     const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
@@ -26356,6 +26920,8 @@ async function buildRestrictionPolicyDetail(pool, moduleConfig, foundPolicy) {
 }
 
 
+
+
 /*
 |--------------------------------------------------------------------------
 | APP RESTRICTION APPLICATION PACKAGE MANAGER APIs
@@ -26508,6 +27074,15 @@ async function getPackageManagerDetail(pool, packageId) {
         files: filesResult.recordset || []
     };
 }
+
+
+
+
+
+
+
+
+
 
 
 /*
@@ -26685,6 +27260,13 @@ async function ensureWhitelistSoftwareExists(poolOrTransaction, item = {}) {
 }
 
 
+
+
+
+
+
+
+
 function normalizeWebsiteRestrictionUrl(value) {
     let url = normalizeRestrictionValue(value);
     if (!url) return "";
@@ -26750,6 +27332,14 @@ async function getWebsiteGroupDetail(pool, groupId) {
 
     return { ...group, urls: urlsResult.recordset || [] };
 }
+
+
+
+
+
+
+
+
 
 
 async function getRestrictionStatusRows(pool, moduleConfig, targetType, targetId, startDate, endDate, includeSub) {
@@ -29970,6 +30560,7 @@ app.post("/api/management-dashboard/storytelling/refresh", authenticateToken, as
 });
 
 
+
 /* ============================================================
    EMA BACKEND MERGE FROM server(1).js
    Source EMA route handlers below were copied from server(1).js.
@@ -30302,6 +30893,7 @@ async function handleMoveAssetDepartment(req, res) {
 
 app.put("/api/assets/:objectAgent/:assetId/department", authenticateToken, handleMoveAssetDepartment);
 app.patch("/api/assets/:objectAgent/:assetId/department", authenticateToken, handleMoveAssetDepartment);
+
 
 
 // GET /api/hardware-inventory/assets
@@ -32978,6 +33570,7 @@ function normalizeAppMeteringStatRows(rows = []) {
         rows
     };
 }
+
 
 
 function normalizeApplicationMeteringTargetInput(payload = {}) {
@@ -36094,6 +36687,9 @@ app.post("/api/net/getSearchDate.do", authenticateToken, async (req, res) => {
 });
 
 
+
+
+
 /*
 |--------------------------------------------------------------------------
 | NETWORK INVENTORY SCAN JOB APIs
@@ -36798,6 +37394,7 @@ function getOnlinePatchStatusFilterSql() {
         )
     `;
 }
+
 
 
 let onlinePatchMasterColumnsCache = null;
@@ -37533,6 +38130,7 @@ app.post("/api/patch/online/install", authenticateToken, async (req, res) => {
         return res.status(500).json({ success: false, message: "Failed to create online patch install job", error: err.message || String(err) });
     }
 });
+
 
 
 /*
@@ -38296,6 +38894,7 @@ app.get("/api/hardware-reports/:relationID/:reportKey", authenticateToken, async
         return res.status(500).json({ success: false, message: "Failed to retrieve hardware report" });
     }
 });
+
 
 
 /*

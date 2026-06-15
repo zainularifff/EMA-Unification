@@ -26,13 +26,25 @@ export async function getPackageFiles(packageId: number | string) {
   return unwrapArray<AnyRecord>(payload);
 }
 
+
+function normalizeApplicationUsageParams(params?: QueryParams): QueryParams {
+  const next = { ...(params || {}) } as QueryParams & Record<string, unknown>;
+  const rawSoftwareFilter = next.swPkgId ?? next.sw_pkg_id ?? next.SW_Idn ?? next.SW_Pkg_Idn ?? next.packageId;
+
+  if (rawSoftwareFilter === undefined || rawSoftwareFilter === null || rawSoftwareFilter === "" || String(rawSoftwareFilter) === "0") {
+    next.swPkgId = -1;
+  }
+
+  return next;
+}
+
 export async function getUsage(params?: QueryParams) {
-  const payload = await api.get("/api/application-metering/usage", { params });
+  const payload = await api.get("/api/application-metering/usage", { params: normalizeApplicationUsageParams(params) });
   return unwrapData(payload, payload);
 }
 
 export async function getStats(params?: QueryParams) {
-  const payload = await api.get("/api/application-metering/stats", { params });
+  const payload = await api.get("/api/application-metering/stats", { params: normalizeApplicationUsageParams(params) });
   return unwrapData(payload, payload);
 }
 

@@ -103,19 +103,41 @@ type RiskFindingRow = {
 };
 
 type HardwareRiskDeviceRow = {
+  id?: string;
+  assetId?: string;
+  deviceId?: string;
+  source?: string;
   deviceName: string;
   platform: string;
   model: string;
   department: string;
+  site?: string;
+  ipAddress?: string;
+  status?: string;
   lastSeen: string;
+  ageSource?: string;
+  ageSourceDate?: string;
+  pcAgeYears?: number | null;
+  pcAgeLabel?: string;
+  pcAgingStatus?: string;
+  pcAgingSeverity?: Severity | string;
+  pcAgingReason?: string;
+  hiUpdateTime?: string;
+  regDate?: string;
   biosDate: string;
   osName: string;
   riskScore: number;
+  riskSeverity?: Severity | string;
+  severity?: Severity | string;
+  riskSignals?: string[];
+  riskCategory?: string;
   reasons: string;
+  reason?: string;
   osLifecycleStatus?: string;
   osLifecycleSeverity?: Severity | string;
   osLifecycleCycle?: string;
   osLifecycleEolDate?: string;
+  osLifecycleDaysToEol?: number | null;
   osLifecycleSource?: string;
   osLifecycleBasis?: string;
 };
@@ -662,6 +684,90 @@ function normalizeHardwareEndpointRows(rows: unknown): HardwareEndpointRow[] {
   }).filter((row) => row.deviceName && row.deviceName !== '-');
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? '').trim()).filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    return value
+      .split(/[,+|]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeHardwareRiskDeviceRows(rows: unknown): HardwareRiskDeviceRow[] {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.map((row) => {
+    const record = (row || {}) as Record<string, unknown>;
+    const lastSeenRaw = firstRawValue(record, ['lastSeen', 'LastSeen', 'connectionTime', 'ConnectionTime', 'DeviceTimeStamp', 'updatedAt', 'UpdatedAt']);
+    const ageSourceDateRaw = firstRawValue(record, ['ageSourceDate', 'AgeSourceDate', 'purchaseDate', 'PurchaseDate', 'regDate', 'RegDate', 'hiUpdateTime', 'HIUpdateTime', 'biosDate', 'BiosDate']);
+    const biosDateRaw = firstRawValue(record, ['biosDate', 'BiosDate', 'BIOSDate']);
+    const regDateRaw = firstRawValue(record, ['regDate', 'RegDate']);
+    const hiUpdateTimeRaw = firstRawValue(record, ['hiUpdateTime', 'HIUpdateTime']);
+    const riskSignals = normalizeStringArray(firstRawValue(record, ['riskSignals', 'RiskSignals', 'signals', 'Signals', 'riskCategory', 'RiskCategory', 'category', 'Category']));
+    const riskCategory = firstTextValue(record, ['riskCategory', 'RiskCategory', 'category', 'Category'], riskSignals.join(' + '));
+    const reasons = firstTextValue(record, ['reasons', 'Reasons', 'reason', 'Reason', 'riskReason', 'RiskReason', 'description', 'Description'], riskCategory || 'Device risk record');
+    const osName = firstTextValue(record, ['osName', 'OSName', 'operatingSystem', 'OperatingSystem', 'platform', 'Platform'], 'Unknown');
+    const platform = firstTextValue(record, ['platform', 'Platform', 'osName', 'OSName', 'operatingSystem', 'OperatingSystem'], osName);
+    const department = firstTextValue(record, ['department', 'Department', 'site', 'Site', 'objectFullName', 'Object_Full_Name', 'Object_Rel_Name', 'branch', 'Branch'], 'Unmapped');
+
+    return {
+      id: firstTextValue(record, ['id', 'ID', 'riskId', 'RiskID']),
+      assetId: firstTextValue(record, ['assetId', 'AssetID', 'MDM_Asset_Idn', '_Idn']),
+      deviceId: firstTextValue(record, ['deviceId', 'DeviceID', 'Object_DeviceID', 'serialNumber', 'SerialNumber']),
+      source: firstTextValue(record, ['source', 'Source', 'sourceType', 'SourceType'], 'Hardware'),
+      deviceName: firstTextValue(record, ['deviceName', 'DeviceName', 'computerName', 'ComputerName', 'hostname', 'HostName', 'name', 'Name', 'Object_DeviceID'], firstTextValue(record, ['deviceId', 'DeviceID'], '-')),
+      platform,
+      model: firstTextValue(record, ['model', 'Model', 'deviceModelName', 'DeviceModelName'], '-'),
+      department,
+      site: firstTextValue(record, ['site', 'Site'], department),
+      ipAddress: firstTextValue(record, ['ipAddress', 'IPAddress', 'ip', 'IP', 'DeviceIPAddress', 'DeviceLocalIPAddress']),
+      status: firstTextValue(record, ['status', 'Status', 'connectionStatus', 'ConnectionStatus'], 'Unknown'),
+      lastSeen: lastSeenRaw ? formatDateLabel(lastSeenRaw) : firstTextValue(record, ['lastSeenLabel', 'LastSeenLabel'], '-'),
+      ageSource: firstTextValue(record, ['ageSource', 'AgeSource'], ''),
+      ageSourceDate: ageSourceDateRaw ? formatDateLabel(ageSourceDateRaw) : firstTextValue(record, ['ageSourceDateLabel', 'AgeSourceDateLabel'], ''),
+      pcAgeYears: (() => {
+        const age = firstRawValue(record, ['pcAgeYears', 'PcAgeYears', 'ageYears', 'AgeYears']);
+        if (age === undefined || age === null || String(age).trim() === '') return null;
+        const parsed = Number(age);
+        return Number.isFinite(parsed) ? parsed : null;
+      })(),
+      pcAgeLabel: firstTextValue(record, ['pcAgeLabel', 'PcAgeLabel', 'ageLabel', 'AgeLabel']),
+      pcAgingStatus: firstTextValue(record, ['pcAgingStatus', 'PcAgingStatus', 'agingStatus', 'AgingStatus']),
+      pcAgingSeverity: firstTextValue(record, ['pcAgingSeverity', 'PcAgingSeverity', 'agingSeverity', 'AgingSeverity']),
+      pcAgingReason: firstTextValue(record, ['pcAgingReason', 'PcAgingReason', 'agingReason', 'AgingReason']),
+      hiUpdateTime: hiUpdateTimeRaw ? formatDateLabel(hiUpdateTimeRaw) : firstTextValue(record, ['hiUpdateTimeLabel', 'HIUpdateTimeLabel'], ''),
+      regDate: regDateRaw ? formatDateLabel(regDateRaw) : firstTextValue(record, ['regDateLabel', 'RegDateLabel'], ''),
+      biosDate: biosDateRaw ? formatDateLabel(biosDateRaw) : firstTextValue(record, ['biosDateLabel', 'BiosDateLabel'], '-'),
+      osName,
+      riskScore: numberOrFallback(firstRawValue(record, ['riskScore', 'RiskScore', 'score', 'Score', 'policyScore', 'PolicyScore']), 0),
+      riskSeverity: firstTextValue(record, ['riskSeverity', 'RiskSeverity', 'severity', 'Severity']),
+      severity: firstTextValue(record, ['severity', 'Severity', 'riskSeverity', 'RiskSeverity']),
+      riskSignals,
+      riskCategory,
+      reasons,
+      reason: firstTextValue(record, ['reason', 'Reason'], reasons),
+      osLifecycleStatus: firstTextValue(record, ['osLifecycleStatus', 'OSLifecycleStatus', 'lifecycleStatus', 'LifecycleStatus']),
+      osLifecycleSeverity: firstTextValue(record, ['osLifecycleSeverity', 'OSLifecycleSeverity', 'lifecycleSeverity', 'LifecycleSeverity']),
+      osLifecycleCycle: firstTextValue(record, ['osLifecycleCycle', 'OSLifecycleCycle', 'lifecycleCycle', 'LifecycleCycle']),
+      osLifecycleEolDate: firstTextValue(record, ['osLifecycleEolDate', 'OSLifecycleEolDate', 'eolDate', 'EolDate', 'EOLDate']),
+      osLifecycleDaysToEol: (() => {
+        const days = firstRawValue(record, ['osLifecycleDaysToEol', 'OSLifecycleDaysToEol', 'daysToEol', 'DaysToEol']);
+        if (days === undefined || days === null || String(days).trim() === '') return null;
+        const parsed = Number(days);
+        return Number.isFinite(parsed) ? parsed : null;
+      })(),
+      osLifecycleSource: firstTextValue(record, ['osLifecycleSource', 'OSLifecycleSource', 'lifecycleSource', 'LifecycleSource'], ''),
+      osLifecycleBasis: firstTextValue(record, ['osLifecycleBasis', 'OSLifecycleBasis', 'lifecycleBasis', 'LifecycleBasis'], ''),
+    };
+  }).filter((row) => row.deviceName && row.deviceName !== '-');
+}
+
 function uniqueHardwareEndpointRows(rows: HardwareEndpointRow[]) {
   const seen = new Set<string>();
   return rows.filter((row) => {
@@ -793,16 +899,32 @@ function normalizeDashboardData(raw: Partial<ItOpsDashboardData> | null | undefi
       recentTasks: Array.isArray(data.tasks?.recentTasks) ? data.tasks.recentTasks : [],
       jobTypeBreakdown: Array.isArray(data.tasks?.jobTypeBreakdown) ? data.tasks.jobTypeBreakdown : [],
     },
-    risk: {
-      ...EMPTY_RISK_SUMMARY,
-      ...(data.risk || {}),
-      severityBreakdown: Array.isArray(data.risk?.severityBreakdown) ? data.risk.severityBreakdown : [],
-      categoryBreakdown: Array.isArray(data.risk?.categoryBreakdown) ? data.risk.categoryBreakdown : [],
-      osBreakdown: Array.isArray(data.risk?.osBreakdown) ? data.risk.osBreakdown : [],
-      biosAgeBreakdown: Array.isArray(data.risk?.biosAgeBreakdown) ? data.risk.biosAgeBreakdown : [],
-      topFindings: Array.isArray(data.risk?.topFindings) ? data.risk.topFindings.map((row) => ({ ...row, severity: normalizeSeverity(row.severity) })) : [],
-      deviceRiskRows: Array.isArray(data.risk?.deviceRiskRows) ? data.risk.deviceRiskRows : [],
-    },
+    risk: (() => {
+      const riskRecord = (data.risk || {}) as Partial<RiskSummary> & Record<string, unknown>;
+      const deviceRiskRows = normalizeHardwareRiskDeviceRows(readArrayFromRecord(riskRecord, [
+        'deviceRiskRows',
+        'deviceRiskRecords',
+        'riskDeviceRows',
+        'riskDevices',
+        'hardwareRiskRows',
+        'hardwareRiskDevices',
+        'affectedDevices',
+        'affectedDeviceRows',
+        'records',
+        'rows',
+      ]));
+
+      return {
+        ...EMPTY_RISK_SUMMARY,
+        ...riskRecord,
+        severityBreakdown: Array.isArray(riskRecord.severityBreakdown) ? riskRecord.severityBreakdown : [],
+        categoryBreakdown: Array.isArray(riskRecord.categoryBreakdown) ? riskRecord.categoryBreakdown : [],
+        osBreakdown: Array.isArray(riskRecord.osBreakdown) ? riskRecord.osBreakdown : [],
+        biosAgeBreakdown: Array.isArray(riskRecord.biosAgeBreakdown) ? riskRecord.biosAgeBreakdown : [],
+        topFindings: Array.isArray(riskRecord.topFindings) ? riskRecord.topFindings.map((row) => ({ ...row, severity: normalizeSeverity((row as RiskFindingRow).severity) })) : [],
+        deviceRiskRows,
+      };
+    })(),
     attentionQueue: Array.isArray(data.attentionQueue) ? data.attentionQueue.map((row) => ({ ...row, severity: normalizeSeverity(row.severity) })) : [],
   };
 }
@@ -1522,24 +1644,34 @@ export default function ITOperationsDashboard() {
   ], [endpointFreshnessPercent, locationFreshPercent, networkRegistrationPercent, serviceDesk.slaAchievement, softwareMappingPercent, taskCompletionPercent]);
   const dataConfidenceScore = useMemo(() => averagePercent(dataConfidenceRows), [dataConfidenceRows]);
   const deviceRiskRows = useMemo(() => Array.isArray(risk.deviceRiskRows) ? risk.deviceRiskRows : [], [risk.deviceRiskRows]);
-  const deviceRiskCount = deviceRiskRows.length;
+  const linkedDeviceRiskCount = deviceRiskRows.length;
+  const deviceRiskCount = linkedDeviceRiskCount || Math.max(numberOrFallback(risk.hardwareRiskItems), numberOrFallback(risk.totalRiskItems));
   const deviceRiskScore = useMemo(() => deviceRiskRows.length
     ? Math.max(...deviceRiskRows.map((device) => clampPercent(device.riskScore)))
-    : 0, [deviceRiskRows]);
-  const deviceRiskCriticalCount = useMemo(() => deviceRiskRows.filter((device) => {
-    const severity = String(device.osLifecycleSeverity || '').toLowerCase();
-    return severity === 'critical' || numberOrFallback(device.riskScore) >= 70;
-  }).length, [deviceRiskRows]);
-  const deviceRiskHighCount = useMemo(() => deviceRiskRows.filter((device) => {
-    const severity = String(device.osLifecycleSeverity || '').toLowerCase();
-    const score = numberOrFallback(device.riskScore);
-    return severity === 'high' || (score >= 40 && score < 70);
-  }).length, [deviceRiskRows]);
-  const deviceRiskMediumCount = useMemo(() => deviceRiskRows.filter((device) => {
-    const severity = String(device.osLifecycleSeverity || '').toLowerCase();
-    const score = numberOrFallback(device.riskScore);
-    return severity === 'medium' || (score >= 20 && score < 40);
-  }).length, [deviceRiskRows]);
+    : clampPercent(risk.score), [deviceRiskRows, risk.score]);
+  const deviceRiskCriticalCount = useMemo(() => {
+    if (!deviceRiskRows.length) return numberOrFallback(risk.totalCritical);
+    return deviceRiskRows.filter((device) => {
+      const severity = String(device.riskSeverity || device.severity || device.osLifecycleSeverity || '').toLowerCase();
+      return severity === 'critical' || numberOrFallback(device.riskScore) >= 70;
+    }).length;
+  }, [deviceRiskRows, risk.totalCritical]);
+  const deviceRiskHighCount = useMemo(() => {
+    if (!deviceRiskRows.length) return numberOrFallback(risk.totalHigh);
+    return deviceRiskRows.filter((device) => {
+      const severity = String(device.riskSeverity || device.severity || device.osLifecycleSeverity || '').toLowerCase();
+      const score = numberOrFallback(device.riskScore);
+      return severity === 'high' || (score >= 40 && score < 70);
+    }).length;
+  }, [deviceRiskRows, risk.totalHigh]);
+  const deviceRiskMediumCount = useMemo(() => {
+    if (!deviceRiskRows.length) return numberOrFallback(risk.totalMedium);
+    return deviceRiskRows.filter((device) => {
+      const severity = String(device.riskSeverity || device.severity || device.osLifecycleSeverity || '').toLowerCase();
+      const score = numberOrFallback(device.riskScore);
+      return severity === 'medium' || (score >= 20 && score < 40);
+    }).length;
+  }, [deviceRiskRows, risk.totalMedium]);
   const geoEvidenceRows = useMemo(() => uniqueGeoRows([
     ...geolocation.locationRows,
     ...geolocation.trackedRows,
@@ -1774,32 +1906,53 @@ export default function ITOperationsDashboard() {
   ], [deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, hasSecurityUpdateScore, overdueTicketCount, risk.missingGeoDevices, securityNeedUpdateDevices, tasks.failedTasks]);
 
   const riskCategoryRows = useMemo<BreakdownItem[]>(() => {
-    const lifecycleRows = deviceRiskRows.filter((device) => {
-      const text = [
-        device.osLifecycleStatus,
-        device.osLifecycleSeverity,
-        device.osLifecycleCycle,
-        device.osLifecycleEolDate,
-        device.osName,
-        device.reasons,
-      ].filter(Boolean).join(' ').toLowerCase();
+    const apiCategoryRows = Array.isArray(risk.categoryBreakdown)
+      ? risk.categoryBreakdown.filter((row) => numberOrFallback(row.value) > 0)
+      : [];
+    if (apiCategoryRows.length) return apiCategoryRows;
 
-      return /eol|eos|end of life|end of support|unsupported|outdated|near/i.test(text);
+    const apiFindingRows = Array.isArray(risk.topFindings)
+      ? risk.topFindings
+          .filter((row) => numberOrFallback(row.count) > 0)
+          .map((row) => ({ name: row.title || row.module, value: numberOrFallback(row.count), tone: row.severity === 'Critical' ? 'red' : row.severity === 'High' ? 'amber' : 'purple' }))
+      : [];
+    if (apiFindingRows.length) return apiFindingRows;
+
+    const countByCause = new Map<string, number>();
+    deviceRiskRows.forEach((device) => {
+      const signals = Array.isArray(device.riskSignals) && device.riskSignals.length
+        ? device.riskSignals
+        : normalizeStringArray(device.riskCategory || device.reasons || device.osLifecycleStatus || device.pcAgingStatus);
+
+      signals.forEach((signal) => {
+        const normalized = signal.toLowerCase();
+        let label = signal;
+        if (/near/.test(normalized)) label = 'Near EOS';
+        else if (/eol|eos|end of life|end of support|unsupported/.test(normalized)) label = 'EOL / EOS';
+        else if (/aging monitor|monitor/.test(normalized)) label = 'PC Aging Monitor';
+        else if (/aging|pc age/.test(normalized)) label = 'PC Aging';
+        else if (/policy|score|management/.test(normalized)) label = 'Management Policy Score';
+        countByCause.set(label, (countByCause.get(label) || 0) + 1);
+      });
     });
 
-    const policyScoreRows = deviceRiskRows.filter((device) => numberOrFallback(device.riskScore) > 0);
+    return [...countByCause.entries()]
+      .map(([name, value]) => ({ name, value, tone: name.includes('EOL') || name.includes('Aging') ? 'red' : name.includes('Near') || name.includes('Monitor') ? 'amber' : 'purple' }))
+      .filter((row) => row.value > 0);
+  }, [deviceRiskRows, risk.categoryBreakdown, risk.topFindings]);
+
+  const riskSeverityRows = useMemo<BreakdownItem[]>(() => {
+    const apiSeverityRows = Array.isArray(risk.severityBreakdown)
+      ? risk.severityBreakdown.filter((row) => numberOrFallback(row.value) > 0)
+      : [];
+    if (apiSeverityRows.length) return apiSeverityRows;
 
     return [
-      { name: 'EOL / EOS', value: lifecycleRows.length, tone: 'red' },
-      { name: 'Management Policy Score', value: policyScoreRows.length, tone: 'purple' },
+      { name: 'Critical', value: deviceRiskCriticalCount, tone: 'red' },
+      { name: 'High', value: deviceRiskHighCount, tone: 'amber' },
+      { name: 'Medium', value: deviceRiskMediumCount, tone: 'yellow' },
     ].filter((row) => row.value > 0);
-  }, [deviceRiskRows]);
-
-  const riskSeverityRows = useMemo<BreakdownItem[]>(() => [
-    { name: 'Critical', value: deviceRiskCriticalCount, tone: 'red' },
-    { name: 'High', value: deviceRiskHighCount, tone: 'amber' },
-    { name: 'Medium', value: deviceRiskMediumCount, tone: 'yellow' },
-  ].filter((row) => row.value > 0), [deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskMediumCount]);
+  }, [deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskMediumCount, risk.severityBreakdown]);
 
 
   const resolveTicketRows = useCallback((item = '') => {
@@ -2428,34 +2581,86 @@ export default function ITOperationsDashboard() {
   };
 
   const getDeviceRiskLevel = useCallback((device: HardwareRiskDeviceRow): Severity => {
-    const lifecycleSeverity = normalizeSeverity(device.osLifecycleSeverity || '');
-    if (lifecycleSeverity === 'Critical' || numberOrFallback(device.riskScore) >= 70) return 'Critical';
-    if (lifecycleSeverity === 'High' || numberOrFallback(device.riskScore) >= 40) return 'High';
-    if (lifecycleSeverity === 'Medium' || numberOrFallback(device.riskScore) >= 20) return 'Medium';
+    const directSeverity = String(device.riskSeverity || device.severity || '').trim();
+    if (directSeverity === 'Critical' || directSeverity === 'High' || directSeverity === 'Medium' || directSeverity === 'Low') return directSeverity;
+
+    const lifecycleSeverity = String(device.osLifecycleSeverity || '').trim();
+    if (lifecycleSeverity === 'Critical' || lifecycleSeverity === 'High' || lifecycleSeverity === 'Medium' || lifecycleSeverity === 'Low') {
+      if (lifecycleSeverity === 'Critical' || numberOrFallback(device.riskScore) >= 70) return 'Critical';
+      if (lifecycleSeverity === 'High' || numberOrFallback(device.riskScore) >= 40) return 'High';
+      if (lifecycleSeverity === 'Medium' || numberOrFallback(device.riskScore) >= 20) return 'Medium';
+    }
+
+    if (numberOrFallback(device.riskScore) >= 70) return 'Critical';
+    if (numberOrFallback(device.riskScore) >= 40) return 'High';
+    if (numberOrFallback(device.riskScore) >= 20) return 'Medium';
     return 'Low';
   }, []);
 
   const getDeviceRiskMainIssue = useCallback((device: HardwareRiskDeviceRow) => {
-    const reasons = String(device.reasons || '').trim();
+    const signals = Array.isArray(device.riskSignals) ? device.riskSignals.filter(Boolean).join(' + ') : '';
+    const category = String(device.riskCategory || '').trim();
     const lifecycle = String(device.osLifecycleStatus || '').trim();
+    const pcAging = String(device.pcAgingStatus || '').trim();
+    const reasons = String(device.reasons || device.reason || device.pcAgingReason || '').trim();
+
+    if (signals) return signals;
+    if (category) return category;
     if (lifecycle && lifecycle !== 'Lifecycle Not Provided') return lifecycle;
+    if (pcAging) return pcAging;
     if (reasons) return reasons;
     if (numberOrFallback(device.riskScore) >= 70) return 'High device risk score';
     if (numberOrFallback(device.riskScore) >= 40) return 'Needs review';
     return 'Risk record';
   }, []);
 
+  const getDeviceRiskEvidence = useCallback((device: HardwareRiskDeviceRow) => {
+    const evidence = [
+      getDeviceRiskMainIssue(device),
+      device.osLifecycleStatus ? `Lifecycle: ${device.osLifecycleStatus}` : '',
+      device.osLifecycleCycle ? `Cycle: ${device.osLifecycleCycle}` : '',
+      device.osLifecycleEolDate ? `EOL/EOS date: ${device.osLifecycleEolDate}` : '',
+      device.pcAgingStatus ? `PC aging: ${device.pcAgingStatus}` : '',
+      device.pcAgeLabel ? `PC age: ${device.pcAgeLabel}` : '',
+      device.ageSourceDate ? `Age source: ${device.ageSourceDate}` : '',
+      device.pcAgingReason || '',
+      device.reasons || device.reason || '',
+    ];
+
+    const seen = new Set<string>();
+    return evidence
+      .map((value) => String(value || '').trim())
+      .filter((value) => {
+        if (!value || value === '-' || seen.has(value.toLowerCase())) return false;
+        seen.add(value.toLowerCase());
+        return true;
+      });
+  }, [getDeviceRiskMainIssue]);
+
   const resolveRiskFindingRows = useCallback((item = '') => {
     const selected = String(item || '').trim().toLowerCase();
-    const rows: RiskFindingRow[] = riskCategoryRows.map((row) => ({
-      id: `device-risk-${row.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-      module: 'Device Risk',
-      title: row.name,
-      count: numberOrFallback(row.value),
-      severity: row.name.toLowerCase().includes('eol') || row.name.toLowerCase().includes('eos') ? 'Critical' : 'High',
-      recommendation: row.name.toLowerCase().includes('eol') || row.name.toLowerCase().includes('eos')
-        ? 'Check OS lifecycle status and plan upgrade/replacement.'
-        : 'Review Management Policy score and assigned threshold.',
+    const sourceRows = risk.topFindings.length
+      ? risk.topFindings
+      : riskCategoryRows.map((row) => ({
+          id: `device-risk-${row.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          module: 'Device Risk',
+          title: row.name,
+          count: numberOrFallback(row.value),
+          severity: row.name.toLowerCase().includes('eol') || row.name.toLowerCase().includes('eos') || row.name.toLowerCase().includes('aging') ? 'Critical' as Severity : 'High' as Severity,
+          recommendation: row.name.toLowerCase().includes('eol') || row.name.toLowerCase().includes('eos')
+            ? 'Check OS lifecycle status and plan upgrade/replacement.'
+            : row.name.toLowerCase().includes('aging')
+              ? 'Review PC Aging Rule threshold and replacement planning.'
+              : 'Review Management Policy score and assigned threshold.',
+        }));
+
+    const rows: RiskFindingRow[] = sourceRows.map((row) => ({
+      id: row.id || `device-risk-${String(row.title || row.module).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      module: row.module || 'Device Risk',
+      title: row.title || row.module || 'Device Risk',
+      count: numberOrFallback(row.count),
+      severity: normalizeSeverity(row.severity),
+      recommendation: row.recommendation || 'Check affected devices and assign action.',
     }));
 
     if (!selected || ['critical risk', 'device risk', 'risk', 'all risk', 'all'].includes(selected)) return rows;
@@ -2463,11 +2668,13 @@ export default function ITOperationsDashboard() {
     return rows.filter((row) => {
       const rowText = [row.title, row.module, row.severity, row.recommendation].join(' ').toLowerCase();
       if (['critical', 'high', 'medium', 'low'].includes(selected)) return String(row.severity || '').toLowerCase() === selected;
-      if (selected.includes('eol') || selected.includes('eos') || selected.includes('lifecycle')) return row.title.toLowerCase().includes('eol') || row.title.toLowerCase().includes('eos');
-      if (selected.includes('policy') || selected.includes('score') || selected.includes('management')) return row.title.toLowerCase().includes('policy');
+      if (selected.includes('near')) return rowText.includes('near');
+      if (selected.includes('eol') || selected.includes('eos') || selected.includes('lifecycle')) return /eol|eos|lifecycle|end of support|end of life/i.test(rowText);
+      if (selected.includes('aging') || selected.includes('pc age')) return /aging|pc age|refresh|replacement/i.test(rowText);
+      if (selected.includes('policy') || selected.includes('score') || selected.includes('management')) return /policy|score|management/i.test(rowText);
       return rowText.includes(selected);
     });
-  }, [riskCategoryRows]);
+  }, [risk.topFindings, riskCategoryRows]);
 
   const resolveRiskDeviceRows = useCallback((item = '') => {
     const selected = String(item || '').trim().toLowerCase();
@@ -2477,23 +2684,42 @@ export default function ITOperationsDashboard() {
     return baseRows.filter((device) => {
       const riskLevel = getDeviceRiskLevel(device).toLowerCase();
       const mainIssue = getDeviceRiskMainIssue(device).toLowerCase();
+      const signalText = Array.isArray(device.riskSignals) ? device.riskSignals.join(' ') : '';
       const rowText = [
         device.deviceName,
+        device.deviceId,
+        device.assetId,
         device.department,
+        device.site,
         device.platform,
         device.model,
+        device.status,
+        device.source,
         device.osName,
         device.osLifecycleStatus,
         device.osLifecycleSeverity,
         device.osLifecycleCycle,
         device.osLifecycleEolDate,
+        device.riskSeverity,
+        device.severity,
+        device.riskCategory,
+        signalText,
+        device.pcAgingStatus,
+        device.pcAgingSeverity,
+        device.pcAgingReason,
+        device.pcAgeLabel,
+        device.ageSource,
+        device.ageSourceDate,
         device.reasons,
+        device.reason,
         mainIssue,
       ].filter(Boolean).join(' ').toLowerCase();
 
       if (['critical', 'high', 'medium', 'low'].includes(selected)) return riskLevel === selected;
-      if (selected.includes('eol') || selected.includes('eos') || selected.includes('lifecycle')) return /eol|eos|end of life|end of support|unsupported|outdated|near/i.test(rowText);
-      if (selected.includes('policy') || selected.includes('score') || selected.includes('management')) return numberOrFallback(device.riskScore) > 0;
+      if (selected.includes('near')) return /near/.test(rowText);
+      if (selected.includes('eol') || selected.includes('eos') || selected.includes('lifecycle')) return /eol|eos|end of life|end of support|unsupported|outdated/i.test(rowText);
+      if (selected.includes('aging') || selected.includes('pc age')) return /pc aging|aging|pc age|replacement|refresh/.test(rowText);
+      if (selected.includes('policy') || selected.includes('score') || selected.includes('management')) return numberOrFallback(device.riskScore) > 0 || /policy|score|management/.test(rowText);
       return rowText.includes(selected);
     });
   }, [deviceRiskRows, getDeviceRiskLevel, getDeviceRiskMainIssue]);
@@ -2547,23 +2773,37 @@ export default function ITOperationsDashboard() {
 
     return (
       <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+        <table className="itops-pro-table itops-pro-device-risk-table">
           <thead>
-            <tr>
-              <th>Device</th>
-              <th>Branch</th>
-              <th>OS</th>
-              <th>Last Seen</th>
-              <th>Risk Level</th>
-              <th>Score</th>
-              <th>Main Issue</th>
-              <th>Next</th>
-            </tr>
+            {level === 'level3' ? (
+              <tr>
+                <th>Device</th>
+                <th>Branch</th>
+                <th>OS / Lifecycle</th>
+                <th>Last Seen</th>
+                <th>Risk Level</th>
+                <th>Score</th>
+                <th>Why Listed</th>
+              </tr>
+            ) : (
+              <tr>
+                <th>Device</th>
+                <th>Branch</th>
+                <th>OS</th>
+                <th>Last Seen</th>
+                <th>Risk Level</th>
+                <th>Score</th>
+                <th>Main Issue</th>
+                <th>Next</th>
+              </tr>
+            )}
           </thead>
           <tbody>
             {visibleRows.map((device, index) => {
               const levelText = getDeviceRiskLevel(device);
               const mainIssue = getDeviceRiskMainIssue(device);
+              const evidenceRows = getDeviceRiskEvidence(device);
+              const listedEvidenceRows = evidenceRows.filter((evidence) => evidence.toLowerCase() !== mainIssue.toLowerCase());
               return (
                 <tr
                   key={`${device.deviceName}-${device.department}-${startIndex + index}`}
@@ -2572,12 +2812,33 @@ export default function ITOperationsDashboard() {
                 >
                   <td><strong>{device.deviceName || '-'}</strong><span className="itops-pro-muted-block">{device.model || '-'}</span></td>
                   <td>{device.department || 'Unmapped'}</td>
-                  <td><strong>{device.osName || device.platform || '-'}</strong><span className="itops-pro-muted-block">{device.osLifecycleCycle || device.osLifecycleEolDate || ''}</span></td>
+                  <td>
+                    <strong>{device.osName || device.platform || '-'}</strong>
+                    <span className="itops-pro-muted-block">
+                      {[device.osLifecycleCycle, device.osLifecycleEolDate ? `EOL/EOS: ${device.osLifecycleEolDate}` : ''].filter(Boolean).join(' • ')}
+                    </span>
+                  </td>
                   <td>{device.lastSeen || '-'}</td>
                   <td><SeverityBadge severity={levelText} /></td>
                   <td><ToneBadge tone={device.riskScore >= 70 ? 'danger' : device.riskScore >= 40 ? 'warning' : 'info'}>{formatNumber(device.riskScore)}</ToneBadge></td>
-                  <td>{mainIssue}</td>
-                  <td>{level === 'level2' ? <ChevronRight size={15} /> : <ToneBadge tone={levelText === 'Critical' ? 'danger' : levelText === 'High' ? 'warning' : 'info'}>Check</ToneBadge>}</td>
+                  {level === 'level3' ? (
+                    <td className="itops-risk-why-cell">
+                      <strong>{mainIssue}</strong>
+                      <ul className="itops-risk-evidence-list" aria-label={`Risk evidence for ${device.deviceName || 'device'}`}>
+                        {listedEvidenceRows.slice(0, 7).map((evidence) => <li key={evidence}>{evidence}</li>)}
+                      </ul>
+                    </td>
+                  ) : (
+                    <>
+                      <td>
+                        <strong>{mainIssue}</strong>
+                        <span className="itops-pro-muted-block">
+                          {[device.pcAgingStatus, device.pcAgeLabel, device.ageSourceDate ? `Age source: ${device.ageSourceDate}` : ''].filter(Boolean).join(' • ')}
+                        </span>
+                      </td>
+                      <td><ChevronRight size={15} /></td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -3700,65 +3961,19 @@ export default function ITOperationsDashboard() {
 
     if (view === 'risk') {
       const selectedRiskDevices = resolveRiskDeviceRows(item);
-      const selectedRiskFindings = resolveRiskFindingRows(item);
-      const selectedCriticalDevices = selectedRiskDevices.filter((device) => getDeviceRiskLevel(device) === 'Critical').length;
-      const selectedHighDevices = selectedRiskDevices.filter((device) => getDeviceRiskLevel(device) === 'High').length;
-      const selectedBranchCount = selectedRiskDevices.length ? new Set(selectedRiskDevices.map((device) => device.department || 'Unmapped')).size : 0;
       const hasLinkedDeviceRows = selectedRiskDevices.length > 0;
-      const selectedAction = selectedCriticalDevices > 0
-        ? 'Check critical linked devices first.'
-        : selectedHighDevices > 0
-          ? 'Review high risk linked devices next.'
-          : hasLinkedDeviceRows
-            ? 'Monitor and confirm the reason listed in the table.'
-            : selectedRiskFindings.length > 0
-              ? 'Review the risk cause summary and validate the Management Policy value.'
-              : 'No matching device risk record for this selection.';
 
       return (
-        <div className="itops-pro-drawer-stack itops-risk-detail-stack">
-          <div className="itops-pro-story-panel level3"><strong>Device Risk Details</strong><p>Selected: {selectedLabel}. Device risk is based on EOL/EOS and Management Policy score values.</p></div>
-          <div className="itops-pro-summary-row five">
-            <MiniMetric label="Devices" value={formatNumber(selectedRiskDevices.length)} tone="blue" />
-            <MiniMetric label="Critical Devices" value={formatNumber(selectedCriticalDevices)} tone="red" />
-            <MiniMetric label="High Devices" value={formatNumber(selectedHighDevices)} tone="amber" />
-            <MiniMetric label="Branches" value={formatNumber(selectedBranchCount)} tone="purple" />
-            <MiniMetric label="Causes" value={formatNumber(selectedRiskFindings.length)} tone="cyan" />
+        <div className="itops-pro-drawer-stack itops-risk-detail-stack itops-risk-selected-device-stack">
+          <div className="itops-pro-story-panel level3">
+            <strong>Device Risk Details</strong>
+            <p>Selected: {selectedLabel}. This level only shows the selected device record and the reason it appears in the risk list.</p>
           </div>
           {hasLinkedDeviceRows ? (
-            <Panel title="Device Risk Details" subtitle="Devices that meet the selected policy/lifecycle risk condition." icon={Laptop}>{renderEndpointRiskDrillTable('level3', item)}</Panel>
+            <Panel title="Selected Device Risk" subtitle="Device details and exact risk evidence from EOL/EOS, PC Aging and Management Policy score." icon={Laptop}>{renderEndpointRiskDrillTable('level3', item)}</Panel>
           ) : (
-            <Panel title="Device Risk Cause Details" subtitle="No linked device rows matched this selection; showing device-only policy/lifecycle causes." icon={ShieldAlert}>{renderRiskDrillTable('level3', item)}</Panel>
+            <Panel title="Device Risk Cause Details" subtitle="No linked device row matched this selection. Showing the matched risk cause only." icon={ShieldAlert}>{renderRiskDrillTable('level3', item)}</Panel>
           )}
-          <div className="itops-risk-detail-lower-grid">
-            <section className="itops-risk-detail-card action">
-              <div className="itops-risk-detail-card-head">
-                <span>Next Action</span>
-                <strong>{selectedCriticalDevices > 0 || selectedHighDevices > 0 || selectedRiskFindings.length > 0 ? 'Check Now' : 'Monitor'}</strong>
-              </div>
-              <p>{selectedAction}</p>
-              <div className="itops-risk-detail-mini-grid">
-                <div><span>Risk Score</span><strong>{formatNumber(deviceRiskScore)}/100</strong></div>
-                <div><span>Risk Devices</span><strong>{formatNumber(deviceRiskCount)}</strong></div>
-              </div>
-            </section>
-            <section className="itops-risk-detail-card causes">
-              <div className="itops-risk-detail-card-head">
-                <span>Main Causes</span>
-                <strong>{formatNumber(riskCategoryRows.length)}</strong>
-              </div>
-              <div className="itops-risk-detail-cause-list">
-                {riskCategoryRows.slice(0, 5).map((row) => (
-                  <button type="button" key={`risk-detail-cause-${row.name}`} onClick={() => openLevel3('risk', row.name)}>
-                    <span>{row.name}</span>
-                    <strong>{formatNumber(row.value)}</strong>
-                  </button>
-                ))}
-                {!riskCategoryRows.length && <EmptyState label="No cause breakdown returned yet." />}
-              </div>
-            </section>
-          </div>
-          {hasLinkedDeviceRows && <Panel title="Device Risk Causes" subtitle="Cause summary for this selected device risk item." icon={ShieldAlert}>{renderRiskDrillTable('level3', item)}</Panel>}
         </div>
       );
     }
@@ -8755,6 +8970,51 @@ body.itops-dashboard-page-active .router-content {
   font-size: 13px;
   font-weight: 950;
 }
+
+.itops-risk-selected-device-stack .itops-pro-panel {
+  margin-bottom: 0;
+}
+
+.itops-pro-device-risk-table th:nth-child(7),
+.itops-pro-device-risk-table td:nth-child(7) {
+  min-width: 320px;
+}
+
+.itops-risk-why-cell strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.itops-risk-evidence-list {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.itops-risk-evidence-list li {
+  position: relative;
+  padding-left: 14px;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 780;
+  line-height: 1.35;
+}
+
+.itops-risk-evidence-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #64748b;
+}
+
 
 @media (max-width: 1180px) {
   .itops-security-update-layout { grid-template-columns: 1fr; }
