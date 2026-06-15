@@ -124,6 +124,11 @@ const REPORT_SHELL_FIX_CSS = `
   body.ema-report-page-active .ema-report-module-root .report-workspace-body {
     padding-bottom: 56px !important;
   }
+
+  body.ema-report-page-active .ema-report-module-root .featured-report-nav-panel,
+  body.ema-report-page-active .ema-report-module-root .settings-sidebar {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  }
 `;
 
 function installReportShellFixes() {
