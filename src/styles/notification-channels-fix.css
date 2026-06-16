@@ -73,6 +73,63 @@
   color: #1d4ed8;
 }
 
+.notification-toggle.whatsapp {
+  width: fit-content;
+  min-width: 154px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0;
+  font-weight: 950;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.notification-toggle.whatsapp input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.notification-toggle.whatsapp::after {
+  content: "Enable Channel";
+  font-size: 12px;
+}
+
+.notification-toggle.whatsapp:has(input:checked) {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.notification-toggle.whatsapp:has(input:checked)::after {
+  content: "Disable Channel";
+}
+
+.notification-toggle.whatsapp::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.notification-panel:has(.notification-toggle.whatsapp input:not(:checked)) .notification-actions .notification-btn:first-child {
+  opacity: .48;
+  pointer-events: none;
+}
+
+.notification-panel:has(.notification-toggle.whatsapp input:not(:checked)) .notification-actions .notification-btn:first-child::after {
+  content: " Disabled";
+}
+
 @media (max-width: 1100px) {
   .notification-grid,
   .notification-whatsapp-grid {
