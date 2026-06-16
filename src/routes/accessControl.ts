@@ -205,7 +205,7 @@ function routeMatches(allowedRoute: string, pathname: string): boolean {
   return current === allowed || current.startsWith(`${allowed}/`);
 }
 
-function getRouteModuleKeys(pathname: string): string[] {
+export function getRouteModuleKeys(pathname: string): string[] {
   const current = cleanPath(pathname);
   const matched = Object.entries(ROUTE_MODULE_MAP)
     .filter(([route]) => current === route || current.startsWith(`${route}/`))
