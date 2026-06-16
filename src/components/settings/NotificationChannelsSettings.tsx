@@ -83,7 +83,7 @@ export default function NotificationChannelsSettings() {
       ]);
       const next = cloneEmailConfigs();
       emailRows.forEach((row) => {
-        next[row.provider] = { ...next[row.provider], ...row, pass: "", azureClientSecret: "", azurePass: "", exchangePass: "", gmailPass: "" };
+        next[row.provider] = { ...next[row.provider], ...row, pass: row.pass || "", azureClientSecret: row.azureClientSecret || "", azurePass: row.azurePass || "", exchangePass: row.exchangePass || "", gmailPass: row.gmailPass || "" };
       });
       setEmailConfigs(next);
       const activeProvider = emailRows.find((row) => row.isActive)?.provider;
@@ -104,8 +104,9 @@ export default function NotificationChannelsSettings() {
     setSaving(true);
     setMessage(null);
     try {
-      await notificationSettingsService.saveEmailSettings({ ...activeEmail, provider });
-      setMessage({ tone: "success", text: `${provider} email configuration saved.` });
+      const result = await notificationSettingsService.saveEmailSettings({ ...activeEmail, provider });
+      const isLocal = Boolean((result as any)?.localOnly);
+      setMessage({ tone: isLocal ? "info" : "success", text: isLocal ? `${provider} email configuration saved locally.` : `${provider} email configuration saved.` });
       await load();
     } catch (error) {
       setMessage({ tone: "error", text: readError(error) });
@@ -131,8 +132,9 @@ export default function NotificationChannelsSettings() {
     setSaving(true);
     setMessage(null);
     try {
-      await notificationSettingsService.saveWhatsappSettings(whatsapp);
-      setMessage({ tone: "success", text: "WhatsApp configuration saved." });
+      const result = await notificationSettingsService.saveWhatsappSettings(whatsapp);
+      const isLocal = Boolean((result as any)?.localOnly);
+      setMessage({ tone: isLocal ? "info" : "success", text: isLocal ? "WhatsApp configuration saved locally." : "WhatsApp configuration saved." });
       await load();
     } catch (error) {
       setMessage({ tone: "error", text: readError(error) });
@@ -150,14 +152,19 @@ export default function NotificationChannelsSettings() {
     setMessage(null);
     try {
       const result = await notificationSettingsService.testWhatsapp({ ...whatsapp, testNumber: testNumber.trim() });
-      const usageFromResult = (result as any)?.usage as WhatsappUsage | undefined;
+      const resultData = result as any;
+      const usageFromResult = resultData?.usage as WhatsappUsage | undefined;
       if (usageFromResult) {
         setUsage(normalizeUsage(usageFromResult));
       } else {
         const nextUsage = await notificationSettingsService.getWhatsappUsage();
         setUsage(normalizeUsage(nextUsage));
       }
-      setMessage({ tone: "success", text: "WhatsApp test sent successfully. Check the recipient WhatsApp inbox." });
+      const isLocal = Boolean(resultData?.simulated || resultData?.localOnly);
+      setMessage({
+        tone: isLocal ? "info" : "success",
+        text: resultData?.message || (isLocal ? "WhatsApp test recorded locally. Backend route is required for real delivery." : "WhatsApp test sent successfully. Check the recipient WhatsApp inbox."),
+      });
     } catch (error) {
       setMessage({ tone: "error", text: readError(error) });
     } finally {
@@ -253,8 +260,12 @@ export default function NotificationChannelsSettings() {
                   <Field label="From Number"><input value={whatsapp.fromNumber} onChange={(e) => setWhatsapp({ ...whatsapp, fromNumber: e.target.value })} placeholder="whatsapp:+14155238886" /></Field>
                   <Field label="Test Recipient"><input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} placeholder="+60123456789" /></Field>
                 </div>
-                <label className="notification-toggle on whatsapp"><input type="checkbox" checked={whatsapp.isEnabled} onChange={(e) => setWhatsapp({ ...whatsapp, isEnabled: e.target.checked })} /> Enable WhatsApp channel globally</label>
-                <div className="notification-actions"><button className="notification-btn" onClick={testWhatsapp} disabled={saving}><Send size={15} /> Send Test</button><button className="notification-btn success" onClick={saveWhatsapp} disabled={saving}>Save WhatsApp</button></div>
+                <div className="notification-actions split">
+                  <button type="button" className={`notification-toggle whatsapp ${whatsapp.isEnabled ? "on" : ""}`} onClick={() => setWhatsapp({ ...whatsapp, isEnabled: !whatsapp.isEnabled })}>{whatsapp.isEnabled ? "Disable Channel" : "Enable Channel"}</button>
+                  <span />
+                  <button className="notification-btn" onClick={testWhatsapp} disabled={saving || !whatsapp.isEnabled}><Send size={15} /> {whatsapp.isEnabled ? "Send Test" : "Send Test Disabled"}</button>
+                  <button className="notification-btn success" onClick={saveWhatsapp} disabled={saving}>Save WhatsApp</button>
+                </div>
               </div>
             </section>
             <aside className="notification-card notification-status-card notification-usage-card">
