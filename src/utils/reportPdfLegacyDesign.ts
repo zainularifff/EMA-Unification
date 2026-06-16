@@ -139,8 +139,8 @@ function legacyCss(payload: any) {
   `;
 }
 
-export function buildLegacyReportHtml(payload: any, filters: any, options: { autoPrint?: boolean; preview?: boolean } = {}) {
-  const html = buildRegeneratedReportHtml(payload, filters, options);
+export function buildLegacyReportHtml(payload: any, filters: any, _options: { autoPrint?: boolean; preview?: boolean } = {}) {
+  const html = buildRegeneratedReportHtml(payload, filters);
   const themedHtml = html.replace("</head>", `${legacyCss(payload)}</head>`);
   const id = escapeHtml(payload?.report?.id || "report");
   return themedHtml.replace("<body ", `<body data-report-id="${id}" `);
