@@ -78,30 +78,57 @@ const DYNAMIC_REPORTS: Record<string, DynamicDefinition> = {
   }
 };
 
-const REPORT_CATALOG = [
-  {
-    name: 'Featured Reports',
-    desc: 'Focused report packs for management, inventory, operations, security and software governance.',
-    icon: 'chart',
-    items: [
-      { id: 'ai-executive-summary', title: 'AI Executive Summary', description: 'Executive KPI summary, key findings and priority recommendations.', type: 'Summary', source: 'Endpoint Inventory + Service Desk + Software Inventory + Jobs + Geolocation', outputs: ['PDF', 'PowerPoint', 'Excel'] },
-      { id: 'client-summary-rnr', title: 'Client RNR Report', description: 'Client-facing risk and resource planning pack.', type: 'Summary', source: 'Endpoint Inventory + Subscription + Asset Pricing + Software Inventory + Browser Risk', outputs: ['PDF', 'PowerPoint', 'Excel'] },
-      { id: 'hardware-asset-lifecycle', title: 'Hardware Lifecycle', description: 'Asset estate, device age and refresh planning.', type: 'Summary', source: 'Hardware Inventory + Asset Lifecycle + Endpoint Inventory', outputs: ['PDF', 'Excel'] },
-      { id: 'operations-health-sla', title: 'Ops Health & SLA', description: 'Endpoint health, service activity and SLA follow-up.', type: 'Summary', source: 'Endpoint Inventory + Jobs + HD_Incidents + SLA Due', outputs: ['PDF', 'PowerPoint', 'Excel'] },
-      { id: 'security-compliance-exposure', title: 'Security Exposure', description: 'Endpoint risk, compliance gaps and exception action list.', type: 'Risk', source: 'Device Status + OS Inventory + Software Inventory + Data Quality + Service Desk SLA', outputs: ['PDF', 'Excel'] },
-      { id: 'software-application-governance', title: 'Software Governance', description: 'Application inventory, licence review and cleanup actions.', type: 'Compliance', source: 'TSMDM_SW_LIST + TS_SW_CATEGORY + Application Metering + Browser Inventory', outputs: ['PDF', 'Excel'] }
-    ]
+const METERING_REPORTS: Record<string, ReportDefinition> = {
+  'software-metering-report': {
+    id: 'software-metering-report',
+    title: 'Software Metering Report',
+    type: 'Metering',
+    category: 'Metering Reports',
+    description: 'Software installation, licence utilisation, overuse exposure and cleanup planning report.',
+    source: 'Software Inventory + Licence Usage + Installation Evidence',
+    outputs: ['PDF', 'Excel']
   },
-  {
-    name: 'Dynamic Reporting',
-    desc: 'Gemini Flash generated report modules for compliance, savings and risk management.',
-    icon: 'chart',
-    items: Object.values(DYNAMIC_REPORTS)
+  'application-metering-report': {
+    id: 'application-metering-report',
+    title: 'Application Metering Report',
+    type: 'Metering',
+    category: 'Metering Reports',
+    description: 'Application usage, active users, usage hours, unused applications and rationalisation report.',
+    source: 'Application Metering + Usage Hours + Active Users',
+    outputs: ['PDF', 'Excel']
+  },
+  'internet-metering-report': {
+    id: 'internet-metering-report',
+    title: 'Internet Metering Report',
+    type: 'Metering',
+    category: 'Metering Reports',
+    description: 'Internet usage, bandwidth trend, department usage, category exposure and governance report.',
+    source: 'Internet Metering + Bandwidth Usage + Protocol / Category Evidence',
+    outputs: ['PDF', 'Excel']
   }
+};
+
+const FEATURED_REPORTS: ReportDefinition[] = [
+  { id: 'ai-executive-summary', title: 'AI Executive Summary', description: 'Executive KPI summary, key findings and priority recommendations.', type: 'Summary', source: 'Endpoint Inventory + Service Desk + Software Inventory + Jobs + Geolocation', outputs: ['PDF', 'PowerPoint', 'Excel'] },
+  { id: 'client-summary-rnr', title: 'Client RNR Report', description: 'Client-facing risk and resource planning pack.', type: 'Summary', source: 'Endpoint Inventory + Subscription + Asset Pricing + Software Inventory + Browser Risk', outputs: ['PDF', 'PowerPoint', 'Excel'] },
+  { id: 'hardware-asset-lifecycle', title: 'Hardware Lifecycle', description: 'Asset estate, device age and refresh planning.', type: 'Summary', source: 'Hardware Inventory + Asset Lifecycle + Endpoint Inventory', outputs: ['PDF', 'Excel'] },
+  { id: 'operations-health-sla', title: 'Ops Health & SLA', description: 'Endpoint health, service activity and SLA follow-up.', type: 'Summary', source: 'Endpoint Inventory + Jobs + HD_Incidents + SLA Due', outputs: ['PDF', 'PowerPoint', 'Excel'] },
+  { id: 'security-compliance-exposure', title: 'Security Exposure', description: 'Endpoint risk, compliance gaps and exception action list.', type: 'Risk', source: 'Device Status + OS Inventory + Software Inventory + Data Quality + Service Desk SLA', outputs: ['PDF', 'Excel'] },
+  { id: 'software-application-governance', title: 'Software Governance', description: 'Application inventory, licence review and cleanup actions.', type: 'Compliance', source: 'TSMDM_SW_LIST + TS_SW_CATEGORY + Application Metering + Browser Inventory', outputs: ['PDF', 'Excel'] }
+];
+
+const REPORT_CATALOG = [
+  { name: 'Featured Reports', desc: 'Focused report packs for management, inventory, operations, security and software governance.', icon: 'chart', items: FEATURED_REPORTS },
+  { name: 'Metering Reports', desc: 'Client-ready metering reports for software, application and internet usage governance.', icon: 'meter', items: Object.values(METERING_REPORTS) },
+  { name: 'Dynamic Reporting', desc: 'Gemini Flash generated report modules for compliance, savings and risk management.', icon: 'chart', items: Object.values(DYNAMIC_REPORTS) }
 ];
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function reportId(reqBody: ReportRequest) {
+  return String(reqBody.dynamicReportType || reqBody.reportId || reqBody.report?.id || '').trim();
 }
 
 function dailyKey(definition: DynamicDefinition, reqBody: ReportRequest) {
@@ -116,10 +143,38 @@ function unwrapCount(result: any, key = 'cnt') {
   return Number(result?.recordset?.[0]?.[key] || 0);
 }
 
+function num(value: any, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function sqlText(value: any) {
+  return String(value ?? '').replace(/'/g, "''");
+}
+
+function validDate(value: any) {
+  const text = String(value || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+}
+
+function datePredicate(column: string, reqBody: ReportRequest) {
+  const start = validDate(reqBody.startDate || reqBody.from);
+  const end = validDate(reqBody.endDate || reqBody.to);
+  if (start && end) return ` AND ${column} >= '${start}' AND ${column} < DATEADD(day, 1, '${end}')`;
+  if (start) return ` AND ${column} >= '${start}'`;
+  if (end) return ` AND ${column} < DATEADD(day, 1, '${end}')`;
+  return '';
+}
+
+function reportScope(reqBody: ReportRequest) {
+  return reqBody.locationBranch || reqBody.branchName || (reqBody.relationID ? `Site ${reqBody.relationID}` : 'All Sites');
+}
+
 async function safeQuery(pool: any, query: string) {
   try {
     return await pool.request().query(query);
-  } catch {
+  } catch (err) {
+    console.warn('[reports] Query skipped:', query.split(/\s+/).slice(0, 12).join(' '), err instanceof Error ? err.message : err);
     return { recordset: [] };
   }
 }
@@ -225,11 +280,6 @@ function buildSections(definition: DynamicDefinition, metrics: any) {
         { area: 'Renewal Cleanup', severity: 'High', finding: `${metrics.softwareRationalisation} software item(s) should be reviewed for rationalisation before renewal.`, action: 'Assign procurement or application owner to validate removal, consolidation or renewal decision.' },
         { area: 'Refresh Planning', severity: 'Medium', finding: `${metrics.refreshCandidates} endpoint(s) should be reviewed for refresh planning and avoidable support cost.`, action: 'Prioritise refresh plan by business impact and support workload.' },
         { area: 'Support Cost', severity: 'Medium', finding: `${metrics.avoidableSupport} support-cost signal(s) may create avoidable operational spend.`, action: 'Track avoidable support workload as a saving opportunity with owner and target date.' }
-      ]},
-      { type: 'table', title: definition.tableTitle, columns: ['opportunity', 'value', 'owner', 'nextAction'], rows: [
-        { opportunity: 'Software rationalisation', value: metrics.softwareRationalisation, owner: 'Application Owner', nextAction: 'Review duplicate, unused and renewal candidates.' },
-        { opportunity: 'Endpoint refresh planning', value: metrics.refreshCandidates, owner: 'Asset / Procurement Team', nextAction: 'Create refresh candidate shortlist with estimated value.' },
-        { opportunity: 'Avoidable support workload', value: metrics.avoidableSupport, owner: 'Operations Manager', nextAction: 'Quantify recurring effort and convert to saving tracker.' }
       ]}
     ];
   }
@@ -252,11 +302,6 @@ function buildSections(definition: DynamicDefinition, metrics: any) {
         { area: 'Endpoint Exposure', severity: 'High', finding: `${metrics.highRisk} high-risk signal(s) require remediation ownership.`, action: 'Assign risk owner, due date and evidence requirement for each high-risk item.' },
         { area: 'Unsupported / Patch Exposure', severity: metrics.unsupportedExposure > 0 ? 'High' : 'Low', finding: `${metrics.unsupportedExposure} unsupported or patch exposure item(s) need validation.`, action: 'Validate support status and create remediation or exception approval.' },
         { area: 'Telemetry Confidence', severity: metrics.staleTelemetry > 0 ? 'Medium' : 'Low', finding: `${metrics.staleTelemetry} stale or offline signal(s) may hide risk exposure.`, action: 'Refresh agent status and confirm ownership before governance review.' }
-      ]},
-      { type: 'table', title: definition.tableTitle, columns: ['risk', 'severity', 'owner', 'remediation'], rows: [
-        { risk: 'High-risk endpoint exposure', severity: 'High', owner: 'Risk Owner', remediation: 'Create remediation plan with target date and evidence.' },
-        { risk: 'Unsupported or patch exposure', severity: metrics.unsupportedExposure > 0 ? 'High' : 'Monitor', owner: 'Endpoint Team', remediation: 'Confirm support status and exception approval.' },
-        { risk: 'Software risk', severity: 'Medium', owner: 'Application Owner', remediation: 'Validate sensitive or unwanted application exposure.' }
       ]}
     ];
   }
@@ -278,11 +323,6 @@ function buildSections(definition: DynamicDefinition, metrics: any) {
       { area: 'Audit Evidence', severity: metrics.auditGaps > 0 ? 'High' : 'Low', finding: `${metrics.auditGaps} audit evidence gap(s) require validation.`, action: 'Attach evidence owner, status and target closure date.' },
       { area: 'Policy Exception', severity: metrics.complianceExceptions > 0 ? 'Medium' : 'Low', finding: `${metrics.complianceExceptions} compliance exception(s) need owner sign-off.`, action: 'Convert exception records into a compliance action register.' },
       { area: 'Software Governance', severity: 'Medium', finding: `${metrics.evidenceRecords} evidence record(s) are available for compliance validation.`, action: 'Review software and OS evidence before management sign-off.' }
-    ]},
-    { type: 'table', title: definition.tableTitle, columns: ['control', 'evidence', 'status', 'nextAction'], rows: [
-      { control: 'Patch compliance', evidence: `${metrics.patchCompliance}%`, status: metrics.patchCompliance >= 85 ? 'Controlled' : 'Exception', nextAction: 'Validate patch evidence and close gaps.' },
-      { control: 'Audit exception register', evidence: metrics.complianceExceptions, status: metrics.complianceExceptions > 0 ? 'Action Required' : 'Controlled', nextAction: 'Assign owner and target date.' },
-      { control: 'Software governance evidence', evidence: metrics.evidenceRecords, status: 'Review', nextAction: 'Confirm evidence quality before sign-off.' }
     ]}
   ];
 }
@@ -291,53 +331,27 @@ function fallbackNarrative(definition: DynamicDefinition, metrics: any) {
   if (definition.id === 'dynamic-cost-saving-report') {
     return {
       title: 'Cost saving opportunities require tracked financial ownership',
-      executiveSummary: `This Cost Saving Report focuses only on optimisation and cost reduction opportunities. The current dataset shows ${metrics.savingsOpportunities} saving opportunity signal(s), including ${metrics.softwareRationalisation} software rationalisation candidate(s), ${metrics.refreshCandidates} refresh planning candidate(s) and ${metrics.avoidableSupport} avoidable support workload signal(s).\n\nManagement should convert these items into a savings tracker with estimated value, owner, decision status and target review date. The report should not be treated as an executive endpoint health summary; its purpose is to support budget discussion, renewal cleanup and procurement planning.`,
-      keyFindings: [
-        `${metrics.softwareRationalisation} software item(s) should be reviewed for rationalisation or renewal cleanup.`,
-        `${metrics.refreshCandidates} endpoint(s) require refresh planning assessment to reduce avoidable support cost.`,
-        `${metrics.avoidableSupport} support workload signal(s) should be quantified as possible recurring cost leakage.`
-      ],
-      managementConclusion: 'Cost saving follow-up should be owned by procurement, operations and application owners with a single savings tracker.',
-      recommendations: [
-        'Create a cost saving tracker with opportunity value, owner and target date.',
-        'Validate unused, duplicate or low-value software before renewal.',
-        'Prioritise refresh planning where old or problematic endpoints create avoidable support cost.'
-      ]
+      executiveSummary: `This Cost Saving Report focuses only on optimisation and cost reduction opportunities. The current dataset shows ${metrics.savingsOpportunities} saving opportunity signal(s), including ${metrics.softwareRationalisation} software rationalisation candidate(s), ${metrics.refreshCandidates} refresh planning candidate(s) and ${metrics.avoidableSupport} avoidable support workload signal(s).`,
+      keyFindings: [`${metrics.softwareRationalisation} software item(s) should be reviewed for rationalisation or renewal cleanup.`, `${metrics.refreshCandidates} endpoint(s) require refresh planning assessment.`, `${metrics.avoidableSupport} support workload signal(s) should be quantified.`],
+      managementConclusion: 'Cost saving follow-up should be owned by procurement, operations and application owners.',
+      recommendations: ['Create a cost saving tracker with opportunity value, owner and target date.', 'Validate unused, duplicate or low-value software before renewal.', 'Prioritise refresh planning where old endpoints create avoidable support cost.']
     };
   }
-
   if (definition.id === 'dynamic-risk-management-report') {
     return {
       title: 'Risk exposure requires severity-based remediation ownership',
-      executiveSummary: `This Risk Management Report focuses only on exposure, severity and remediation accountability. The current dataset shows ${metrics.highRisk} high-risk signal(s), ${metrics.mediumRisk} medium-risk signal(s), ${metrics.unsupportedExposure} unsupported exposure item(s) and ${metrics.softwareRisk} software risk signal(s).\n\nManagement should convert each exposure into a risk register entry with owner, target date, severity, exception status and remediation evidence. The report should not be used as a cost saving or generic executive summary; its purpose is risk treatment and governance escalation.`,
-      keyFindings: [
-        `${metrics.highRisk} high-risk signal(s) require urgent owner assignment and remediation tracking.`,
-        `${metrics.unsupportedExposure} unsupported or patch exposure item(s) require validation or approved exception.`,
-        `${metrics.softwareRisk} software risk signal(s) should be reviewed for exposure and remediation evidence.`
-      ],
+      executiveSummary: `This Risk Management Report focuses only on exposure, severity and remediation accountability. The current dataset shows ${metrics.highRisk} high-risk signal(s), ${metrics.mediumRisk} medium-risk signal(s), ${metrics.unsupportedExposure} unsupported exposure item(s) and ${metrics.softwareRisk} software risk signal(s).`,
+      keyFindings: [`${metrics.highRisk} high-risk signal(s) require urgent owner assignment.`, `${metrics.unsupportedExposure} unsupported or patch exposure item(s) require validation.`, `${metrics.softwareRisk} software risk signal(s) should be reviewed.`],
       managementConclusion: 'Risk management follow-up must be severity-led and tracked through a formal risk register.',
-      recommendations: [
-        'Assign risk owners and target dates for high-risk records.',
-        'Validate unsupported OS, patch exposure and stale telemetry before governance review.',
-        'Maintain remediation evidence and exception approval status for overdue items.'
-      ]
+      recommendations: ['Assign risk owners and target dates for high-risk records.', 'Validate unsupported OS, patch exposure and stale telemetry.', 'Maintain remediation evidence and exception approval status.']
     };
   }
-
   return {
     title: 'Compliance evidence requires owner validation before sign-off',
-    executiveSummary: `This Compliance Report focuses only on audit readiness, control evidence and exception ownership. The current dataset shows a ${metrics.complianceScore}% compliance score, ${metrics.patchCompliance}% patch compliance, ${metrics.complianceExceptions} compliance exception(s) and ${metrics.evidenceRecords} evidence record(s) available for review.\n\nManagement should validate each exception against owner, evidence quality, status and closure date before sign-off. The report should not be treated as a cost saving or generic executive summary; its purpose is compliance readiness and management approval evidence.`,
-    keyFindings: [
-      `${metrics.complianceExceptions} compliance exception(s) require owner validation and target closure date.`,
-      `${metrics.auditGaps} audit gap(s) should be reviewed against supporting evidence.`,
-      `${metrics.evidenceRecords} evidence record(s) are available for compliance validation and audit preparation.`
-    ],
-    managementConclusion: 'Compliance follow-up should produce an evidence register that is ready for management sign-off.',
-    recommendations: [
-      'Create a compliance action register with owner, evidence and target closure date.',
-      'Validate patch and OS support posture before audit sign-off.',
-      'Confirm exception acceptance status for any unresolved compliance item.'
-    ]
+    executiveSummary: `This Compliance Report focuses only on audit readiness, control evidence and exception ownership. The current dataset shows a ${metrics.complianceScore}% compliance score, ${metrics.patchCompliance}% patch compliance, ${metrics.complianceExceptions} compliance exception(s) and ${metrics.evidenceRecords} evidence record(s).`,
+    keyFindings: [`${metrics.complianceExceptions} compliance exception(s) require owner validation.`, `${metrics.auditGaps} audit gap(s) should be reviewed.`, `${metrics.evidenceRecords} evidence record(s) are available for compliance validation.`],
+    managementConclusion: 'Compliance follow-up should produce an evidence register ready for management sign-off.',
+    recommendations: ['Create a compliance action register.', 'Validate patch and OS support posture.', 'Confirm exception acceptance status.']
   };
 }
 
@@ -345,35 +359,26 @@ function extractJsonObject(text: string) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start === -1 || end === -1 || end <= start) return null;
-  try {
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(text.slice(start, end + 1)); } catch { return null; }
 }
 
 async function generateAiNarrative(definition: DynamicDefinition, metrics: any, sections: any[]) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey || typeof fetch !== 'function') return fallbackNarrative(definition, metrics);
-
-  const prompt = `You are generating an EMA AI Dynamic Reporting document.\nReport title: ${definition.title}\nAllowed topic only: ${definition.focus}\nDo not discuss: ${definition.bannedFocus}\nRules:\n1. Content must be specific to ${definition.title}.\n2. Do not reuse Executive Summary wording.\n3. Do not use headings like "Immediate management attention is required".\n4. Do not mention topics outside the title. For Cost Saving Report, discuss savings only. For Compliance Report, discuss compliance only. For Risk Management Report, discuss risk only.\n5. Include this disclaimer in the conclusion: ${DAILY_DISCLAIMER}\nReturn JSON only with keys: title, executiveSummary, keyFindings, managementConclusion, recommendations.\nMetrics: ${JSON.stringify(metrics)}\nSections: ${JSON.stringify(sections)}`;
-
+  const prompt = `Generate EMA ${definition.title}. Allowed topic: ${definition.focus}. Avoid: ${definition.bannedFocus}. Return JSON only with keys: title, executiveSummary, keyFindings, managementConclusion, recommendations. Metrics: ${JSON.stringify(metrics)} Sections: ${JSON.stringify(sections)}`;
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-    });
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
     const json = await response.json();
-    const text = json?.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('\n') || '';
-    const parsed = extractJsonObject(text);
-    if (!parsed) return fallbackNarrative(definition, metrics);
+    const raw = json?.candidates?.[0]?.content?.parts?.map((part: any) => part.text || '').join('\n') || '';
+    const parsed = extractJsonObject(raw);
+    const fallback = fallbackNarrative(definition, metrics);
+    if (!parsed) return fallback;
     return {
-      title: parsed.title || fallbackNarrative(definition, metrics).title,
-      executiveSummary: parsed.executiveSummary || fallbackNarrative(definition, metrics).executiveSummary,
-      keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings.slice(0, 7) : fallbackNarrative(definition, metrics).keyFindings,
-      managementConclusion: parsed.managementConclusion || fallbackNarrative(definition, metrics).managementConclusion,
-      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations.slice(0, 7) : fallbackNarrative(definition, metrics).recommendations
+      title: parsed.title || fallback.title,
+      executiveSummary: parsed.executiveSummary || fallback.executiveSummary,
+      keyFindings: Array.isArray(parsed.keyFindings) ? parsed.keyFindings.slice(0, 7) : fallback.keyFindings,
+      managementConclusion: parsed.managementConclusion || fallback.managementConclusion,
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations.slice(0, 7) : fallback.recommendations
     };
   } catch {
     return fallbackNarrative(definition, metrics);
@@ -381,77 +386,180 @@ async function generateAiNarrative(definition: DynamicDefinition, metrics: any, 
 }
 
 function resolveDefinition(reqBody: ReportRequest): DynamicDefinition {
-  const requestedId = String(reqBody.dynamicReportType || reqBody.reportId || reqBody.report?.id || '').trim();
+  const requestedId = reportId(reqBody);
   return DYNAMIC_REPORTS[requestedId] || DYNAMIC_REPORTS['dynamic-compliance-report'];
 }
 
 async function buildDynamicReport(reqBody: ReportRequest, mode: 'preview' | 'generate') {
   const definition = resolveDefinition(reqBody);
   const cacheKey = dailyKey(definition, reqBody);
-  if (mode === 'generate' && dailyCache.has(cacheKey)) {
-    return dailyCache.get(cacheKey) as ReportPayload;
-  }
-
+  if (mode === 'generate' && dailyCache.has(cacheKey)) return dailyCache.get(cacheKey) as ReportPayload;
   const baseMetrics = await collectReportMetrics();
   const metrics = reportSpecificMetrics(definition, baseMetrics);
   const sections = buildSections(definition, metrics);
   const ai = await generateAiNarrative(definition, metrics, sections);
-  const generatedAt = new Date().toISOString();
   const recommendations = (ai.recommendations || []).map((action: string, index: number) => ({ priority: index === 0 ? 'High' : index === 1 ? 'Medium' : 'Monitor', action }));
-
   const payload: ReportPayload = {
     success: true,
     mode: 'dynamic-reporting',
-    generatedAt,
+    generatedAt: new Date().toISOString(),
     report: definition,
-    filters: {
-      ...reqBody,
-      useAiAnalysis: true,
-      aiEngine: 'gemini-flash',
-      aiModel: 'gemini-2.5-flash',
-      aiReportMode: 'dynamic-reporting',
-      dynamicReportType: definition.id,
-      dynamicReportTitle: definition.title,
-      dynamicReportCategory: 'Dynamic Reporting',
-      generationFrequency: 'once-per-day',
-      dailyGenerationKey: cacheKey,
-      aiDisclaimer: DAILY_DISCLAIMER
-    },
+    filters: { ...reqBody, useAiAnalysis: true, aiEngine: 'gemini-flash', aiModel: 'gemini-2.5-flash', aiReportMode: 'dynamic-reporting', dynamicReportType: definition.id, dynamicReportTitle: definition.title, dynamicReportCategory: 'Dynamic Reporting', generationFrequency: 'once-per-day', dailyGenerationKey: cacheKey, aiDisclaimer: DAILY_DISCLAIMER },
     metrics,
-    narrative: {
-      title: ai.title,
-      period: reqBody.dateRange || 'current-month',
-      scope: reqBody.relationID ? `Site ${reqBody.relationID}` : 'All Sites',
-      executiveSummary: `${ai.executiveSummary}\n\n${DAILY_DISCLAIMER}`,
-      keyFindings: ai.keyFindings || [],
-      managementConclusion: ai.managementConclusion,
-      recommendations: ai.recommendations || [],
-      disclaimer: DAILY_DISCLAIMER
-    },
-    sections: [
-      { type: 'notice', title: 'AI Dynamic Reporting Notice', rows: [
-        { label: 'Generation Frequency', value: 'Once per day', note: cacheKey },
-        { label: 'Disclaimer', value: DAILY_DISCLAIMER, note: definition.title }
-      ]},
-      ...sections
-    ],
+    narrative: { title: ai.title, period: reqBody.dateRange || 'current-month', scope: reportScope(reqBody), executiveSummary: `${ai.executiveSummary}\n\n${DAILY_DISCLAIMER}`, keyFindings: ai.keyFindings || [], managementConclusion: ai.managementConclusion, recommendations: ai.recommendations || [], disclaimer: DAILY_DISCLAIMER },
+    sections: [{ type: 'notice', title: 'AI Dynamic Reporting Notice', rows: [{ label: 'Generation Frequency', value: 'Once per day', note: cacheKey }, { label: 'Disclaimer', value: DAILY_DISCLAIMER, note: definition.title }] }, ...sections],
     recommendations,
-    dataSources: [
-      { name: 'Hardware Inventory', table: 'hardware_assets', rows: baseMetrics.totalAssets },
-      { name: 'Software Inventory', table: 'software_inventory', rows: baseMetrics.softwareCount },
-      { name: 'Patch Records', table: 'patch_records', rows: baseMetrics.patchTotal },
-      { name: 'Event Logs', table: 'event_logs', rows: baseMetrics.criticalCount }
-    ],
-    exportData: {
-      metrics: [metrics],
-      sections,
-      recommendations,
-      aiDisclaimer: [{ value: DAILY_DISCLAIMER }]
-    }
+    dataSources: [{ name: 'Hardware Inventory', table: 'hardware_assets', rows: baseMetrics.totalAssets }, { name: 'Software Inventory', table: 'software_inventory', rows: baseMetrics.softwareCount }, { name: 'Patch Records', table: 'patch_records', rows: baseMetrics.patchTotal }, { name: 'Event Logs', table: 'event_logs', rows: baseMetrics.criticalCount }],
+    exportData: { metrics: [metrics], sections, recommendations, aiDisclaimer: [{ value: DAILY_DISCLAIMER }] }
   };
-
   if (mode === 'generate') dailyCache.set(cacheKey, payload);
   return payload;
+}
+
+function buildMeteringRecommendations(definition: ReportDefinition, metrics: any) {
+  if (definition.id === 'software-metering-report') {
+    return [
+      { priority: metrics.overusedLicenses > 0 ? 'High' : 'Monitor', action: `Validate ${metrics.overusedLicenses} over-used licence signal(s) and assign renewal or remediation owner.`, owner: 'Software Asset Manager', target: 'Next licence review' },
+      { priority: metrics.unlicensedSoftware > 0 ? 'High' : 'Monitor', action: `Review ${metrics.unlicensedSoftware} unlicensed software item(s) and confirm compliance status.`, owner: 'Compliance Owner', target: 'Current reporting cycle' },
+      { priority: 'Medium', action: `Review ${metrics.unusedLicenses} unused licence seat(s) for possible cost saving or reallocation.`, owner: 'Procurement Team', target: 'Renewal window' }
+    ];
+  }
+  if (definition.id === 'application-metering-report') {
+    return [
+      { priority: metrics.unusedApplications > 0 ? 'High' : 'Monitor', action: `Review ${metrics.unusedApplications} unused or near-unused application(s) before renewal or redeployment.`, owner: 'Application Owner', target: 'Next review' },
+      { priority: 'Medium', action: 'Confirm top usage applications have valid business ownership and support coverage.', owner: 'Operations Team', target: 'Monthly review' },
+      { priority: 'Medium', action: 'Create rationalisation shortlist for low-usage tools and duplicate publishers.', owner: 'Software Governance Team', target: 'Quarterly cleanup' }
+    ];
+  }
+  return [
+    { priority: metrics.highBandwidthUsers > 0 ? 'High' : 'Monitor', action: `Review ${metrics.highBandwidthUsers} high bandwidth user(s) and validate business usage.`, owner: 'Network Owner', target: 'Current reporting cycle' },
+    { priority: 'Medium', action: 'Validate top department usage against approved business requirement and capacity plan.', owner: 'IT Operations', target: 'Monthly review' },
+    { priority: 'Medium', action: 'Review category and protocol exposure for non-business or high-risk usage patterns.', owner: 'Security / Network Team', target: 'Next governance review' }
+  ];
+}
+
+function meteringNarrative(definition: ReportDefinition, metrics: any, reqBody: ReportRequest) {
+  if (definition.id === 'software-metering-report') {
+    return {
+      title: 'Software metering requires licence and cleanup ownership',
+      executiveSummary: `The Software Metering Report covers ${metrics.totalSoftware} software record(s), ${metrics.totalInstalls} installation signal(s), ${metrics.licensesUsed} used licence seat(s) and ${metrics.licensesOwned} owned licence seat(s) for ${reportScope(reqBody)}. The report highlights ${metrics.unlicensedSoftware} unlicensed software item(s), ${metrics.overusedLicenses} over-used licence signal(s) and ${metrics.unusedLicenses} unused seat(s) that may support compliance cleanup or cost saving.`,
+      keyFindings: [`${metrics.unlicensedSoftware} unlicensed software item(s) require compliance validation.`, `${metrics.overusedLicenses} over-used licence signal(s) should be reviewed before renewal or audit sign-off.`, `${metrics.unusedLicenses} unused licence seat(s) may support cost saving or reallocation.`],
+      managementConclusion: 'Software metering should be owned by Software Asset Management with clear entitlement validation, cleanup decision and renewal action tracking.'
+    };
+  }
+  if (definition.id === 'application-metering-report') {
+    return {
+      title: 'Application usage evidence supports rationalisation decisions',
+      executiveSummary: `The Application Metering Report covers ${metrics.totalApplications} tracked application(s), ${metrics.totalActiveUsers} active user signal(s) and ${metrics.totalUsageHours} measured usage hour(s) for ${reportScope(reqBody)}. ${metrics.unusedApplications} application(s) show low or no usage and should be reviewed before renewal, deployment expansion or cleanup decisions.`,
+      keyFindings: [`${metrics.totalUsageHours} application usage hour(s) were recorded in the selected period.`, `${metrics.unusedApplications} low or no usage application(s) should be reviewed for rationalisation.`, `${metrics.totalActiveUsers} active user signal(s) are available for ownership and support validation.`],
+      managementConclusion: 'Application metering should be used to validate business usage, remove low-value tools and support renewal decisions with evidence.'
+    };
+  }
+  return {
+    title: 'Internet usage requires bandwidth and policy governance',
+    executiveSummary: `The Internet Metering Report covers ${metrics.usersTracked} user(s), ${metrics.totalRecords} usage record(s) and ${metrics.totalBandwidth} MB total bandwidth for ${reportScope(reqBody)}. Download traffic is ${metrics.totalDownload} MB and upload traffic is ${metrics.totalUpload} MB. ${metrics.highBandwidthUsers} user(s) exceed the current average usage baseline and should be reviewed for business justification or policy alignment.`,
+    keyFindings: [`${metrics.totalBandwidth} MB total internet bandwidth was recorded in the selected scope.`, `${metrics.highBandwidthUsers} high-bandwidth user(s) require validation against business requirement.`, `${metrics.usersTracked} distinct user(s) have internet usage evidence available for governance review.`],
+    managementConclusion: 'Internet metering should be reviewed by network and security owners to validate capacity, category exposure and policy compliance.'
+  };
+}
+
+function buildMeteringPayload(definition: ReportDefinition, reqBody: ReportRequest, metrics: any, sections: any[]) {
+  const narrative = meteringNarrative(definition, metrics, reqBody);
+  const recommendations = buildMeteringRecommendations(definition, metrics);
+  const period = reqBody.startDate && reqBody.endDate ? `${reqBody.startDate} to ${reqBody.endDate}` : reqBody.dateRange || 'selected period';
+  return {
+    success: true,
+    mode: 'metering-report',
+    generatedAt: new Date().toISOString(),
+    report: definition,
+    filters: reqBody,
+    metrics,
+    narrative: { ...narrative, period, scope: reportScope(reqBody), recommendations: recommendations.map((item: any) => item.action) },
+    sections,
+    recommendations,
+    dataSources: [{ name: definition.source, table: definition.source, rows: 0 }],
+    exportData: { metrics: [metrics], sections, recommendations }
+  };
+}
+
+async function buildSoftwareMeteringReport(reqBody: ReportRequest) {
+  const pool = await getPool();
+  const [stats, categoryRows, topRows, licenceRows] = await Promise.all([
+    safeQuery(pool, `SELECT COUNT(*) as totalSoftware, SUM(ISNULL(install_count,0)) as totalInstalls, SUM(ISNULL(licenses_owned,0)) as licensesOwned, SUM(ISNULL(licenses_used,0)) as licensesUsed, SUM(CASE WHEN status = 'Unlicensed' THEN 1 ELSE 0 END) as unlicensedSoftware, SUM(CASE WHEN ISNULL(licenses_used,0) > ISNULL(licenses_owned,0) AND ISNULL(licenses_owned,0) > 0 THEN 1 ELSE 0 END) as overusedLicenses, SUM(CASE WHEN ISNULL(licenses_owned,0) > ISNULL(licenses_used,0) THEN ISNULL(licenses_owned,0) - ISNULL(licenses_used,0) ELSE 0 END) as unusedLicenses FROM software_inventory`),
+    safeQuery(pool, `SELECT TOP 10 ISNULL(category,'Uncategorised') as label, SUM(ISNULL(install_count,0)) as value FROM software_inventory GROUP BY ISNULL(category,'Uncategorised') ORDER BY value DESC`),
+    safeQuery(pool, `SELECT TOP 30 name, vendor, version, license_type as licenseType, licenses_owned as licensesOwned, licenses_used as licensesUsed, install_count as installCount, category, status, last_detected as lastDetected FROM software_inventory ORDER BY ISNULL(install_count,0) DESC, name`),
+    safeQuery(pool, `SELECT TOP 30 name, vendor, license_type as licenseType, licenses_owned as licensesOwned, licenses_used as licensesUsed, status, CASE WHEN ISNULL(licenses_used,0) > ISNULL(licenses_owned,0) AND ISNULL(licenses_owned,0) > 0 THEN 'Over Used' WHEN status = 'Unlicensed' THEN 'Unlicensed' WHEN ISNULL(licenses_owned,0) > ISNULL(licenses_used,0) THEN 'Under Used' ELSE 'Controlled' END as licenceSignal FROM software_inventory WHERE status = 'Unlicensed' OR ISNULL(licenses_used,0) <> ISNULL(licenses_owned,0) ORDER BY licenceSignal DESC, name`)
+  ]);
+  const row = stats.recordset?.[0] || {};
+  const metrics = { totalSoftware: num(row.totalSoftware), totalInstalls: num(row.totalInstalls), licensesOwned: num(row.licensesOwned), licensesUsed: num(row.licensesUsed), unlicensedSoftware: num(row.unlicensedSoftware), overusedLicenses: num(row.overusedLicenses), unusedLicenses: num(row.unusedLicenses) };
+  return buildMeteringPayload(METERING_REPORTS['software-metering-report'], reqBody, metrics, [
+    { type: 'kpi', title: 'Software Metering KPI', rows: [{ label: 'Software Records', value: metrics.totalSoftware, note: 'Software titles available in inventory scope.' }, { label: 'Total Installs', value: metrics.totalInstalls, note: 'Installation count across inventoried software.' }, { label: 'Licence Seats Used', value: metrics.licensesUsed, note: `${metrics.licensesOwned} owned seat(s) recorded.` }, { label: 'Unused Seats', value: metrics.unusedLicenses, note: 'Potential saving or reallocation opportunity.' }] },
+    { type: 'bar', title: 'Install Distribution by Category', rows: categoryRows.recordset || [] },
+    { type: 'risk', title: 'Licence & Cleanup Focus', rows: [{ area: 'Unlicensed Software', severity: metrics.unlicensedSoftware > 0 ? 'High' : 'Low', finding: `${metrics.unlicensedSoftware} unlicensed software item(s) require compliance validation.`, action: 'Assign compliance owner to validate entitlement, exception or removal.' }, { area: 'Licence Overuse', severity: metrics.overusedLicenses > 0 ? 'High' : 'Low', finding: `${metrics.overusedLicenses} software item(s) appear to use more licences than owned.`, action: 'Check licence entitlement and procurement requirement before renewal.' }, { area: 'Unused Licence Capacity', severity: metrics.unusedLicenses > 0 ? 'Medium' : 'Low', finding: `${metrics.unusedLicenses} unused licence seat(s) may be available for reallocation or cost saving.`, action: 'Review under-used seats during renewal and reallocation planning.' }] },
+    { type: 'table', title: 'Top Installed Software', rows: topRows.recordset || [] },
+    { type: 'table', title: 'Licence Evidence Register', rows: licenceRows.recordset || [] }
+  ]);
+}
+
+async function buildApplicationMeteringReport(reqBody: ReportRequest) {
+  const pool = await getPool();
+  const where = `WHERE 1=1${datePredicate('last_used', reqBody)}`;
+  const [stats, categoryRows, topApps, lowUsage] = await Promise.all([
+    safeQuery(pool, `SELECT COUNT(*) as totalApplications, SUM(ISNULL(active_users,0)) as totalActiveUsers, SUM(ISNULL(usage_hours,0)) as totalUsageHours, AVG(CAST(ISNULL(usage_hours,0) AS FLOAT)) as avgUsageHours, SUM(CASE WHEN ISNULL(active_users,0) = 0 OR ISNULL(usage_hours,0) <= 1 THEN 1 ELSE 0 END) as unusedApplications FROM application_metering ${where}`),
+    safeQuery(pool, `SELECT TOP 10 ISNULL(category,'Uncategorised') as label, SUM(ISNULL(usage_hours,0)) as value FROM application_metering ${where} GROUP BY ISNULL(category,'Uncategorised') ORDER BY value DESC`),
+    safeQuery(pool, `SELECT TOP 30 application_name as applicationName, publisher, version, executable_name as executableName, total_installs as totalInstalls, active_users as activeUsers, usage_hours as usageHours, last_used as lastUsed, category FROM application_metering ${where} ORDER BY ISNULL(usage_hours,0) DESC`),
+    safeQuery(pool, `SELECT TOP 30 application_name as applicationName, publisher, version, total_installs as totalInstalls, active_users as activeUsers, usage_hours as usageHours, last_used as lastUsed, category FROM application_metering ${where} AND (ISNULL(active_users,0) = 0 OR ISNULL(usage_hours,0) <= 1) ORDER BY last_used ASC`)
+  ]);
+  const row = stats.recordset?.[0] || {};
+  const metrics = { totalApplications: num(row.totalApplications), totalActiveUsers: num(row.totalActiveUsers), totalUsageHours: Math.round(num(row.totalUsageHours)), avgUsageHours: Math.round(num(row.avgUsageHours)), unusedApplications: num(row.unusedApplications) };
+  return buildMeteringPayload(METERING_REPORTS['application-metering-report'], reqBody, metrics, [
+    { type: 'kpi', title: 'Application Usage KPI', rows: [{ label: 'Applications Tracked', value: metrics.totalApplications, note: 'Applications available in metering scope.' }, { label: 'Active Users', value: metrics.totalActiveUsers, note: 'Users with recorded application activity.' }, { label: 'Usage Hours', value: metrics.totalUsageHours, note: 'Total measured application usage hours.' }, { label: 'Low / No Usage Apps', value: metrics.unusedApplications, note: 'Applications requiring rationalisation review.' }] },
+    { type: 'bar', title: 'Usage Hours by Category', rows: categoryRows.recordset || [] },
+    { type: 'risk', title: 'Application Rationalisation Focus', rows: [{ area: 'Low Usage Applications', severity: metrics.unusedApplications > 0 ? 'High' : 'Low', finding: `${metrics.unusedApplications} application(s) show low or no usage.`, action: 'Validate owner, business need and renewal status before cleanup.' }, { area: 'High Usage Applications', severity: 'Medium', finding: `${metrics.totalUsageHours} total usage hour(s) indicate business-critical usage concentration.`, action: 'Confirm high usage applications have support ownership and licence coverage.' }, { area: 'Application Governance', severity: 'Medium', finding: `${metrics.totalApplications} application(s) require category and publisher governance.`, action: 'Review duplicate tools and consolidate where business function overlaps.' }] },
+    { type: 'table', title: 'Top Used Applications', rows: topApps.recordset || [] },
+    { type: 'table', title: 'Low Usage / Cleanup Candidates', rows: lowUsage.recordset || [] }
+  ]);
+}
+
+async function buildInternetMeteringReport(reqBody: ReportRequest) {
+  const pool = await getPool();
+  const branch = String(reqBody.branchName || reqBody.locationBranch || '').trim();
+  const branchWhere = branch && !/^all/i.test(branch) ? ` AND department = '${sqlText(branch)}'` : '';
+  const where = `WHERE 1=1${branchWhere}${datePredicate('timestamp', reqBody)}`;
+  const [stats, trendRows, topUsers, deptRows, categoryRows] = await Promise.all([
+    safeQuery(pool, `SELECT COUNT(*) as totalRecords, COUNT(DISTINCT username) as usersTracked, SUM(ISNULL(download_mb,0)) as totalDownload, SUM(ISNULL(upload_mb,0)) as totalUpload, SUM(ISNULL(total_mb,0)) as totalBandwidth, AVG(CAST(ISNULL(total_mb,0) AS FLOAT)) as avgUsageMb FROM internet_metering ${where}`),
+    safeQuery(pool, `SELECT TOP 14 CONVERT(VARCHAR(10), timestamp, 120) as label, SUM(ISNULL(total_mb,0)) as value, SUM(ISNULL(download_mb,0)) as download, SUM(ISNULL(upload_mb,0)) as upload FROM internet_metering ${where} GROUP BY CONVERT(VARCHAR(10), timestamp, 120) ORDER BY label DESC`),
+    safeQuery(pool, `SELECT TOP 30 username, department, ip_address as ipAddress, SUM(ISNULL(download_mb,0)) as downloadMb, SUM(ISNULL(upload_mb,0)) as uploadMb, SUM(ISNULL(total_mb,0)) as totalMb FROM internet_metering ${where} GROUP BY username, department, ip_address ORDER BY totalMb DESC`),
+    safeQuery(pool, `SELECT TOP 10 ISNULL(department,'Unmapped') as label, SUM(ISNULL(total_mb,0)) as value FROM internet_metering ${where} GROUP BY ISNULL(department,'Unmapped') ORDER BY value DESC`),
+    safeQuery(pool, `SELECT TOP 10 COALESCE(category, protocol, 'Uncategorised') as label, SUM(ISNULL(total_mb,0)) as value FROM internet_metering ${where} GROUP BY COALESCE(category, protocol, 'Uncategorised') ORDER BY value DESC`)
+  ]);
+  const row = stats.recordset?.[0] || {};
+  const topRows = topUsers.recordset || [];
+  const avg = num(row.avgUsageMb);
+  const highBandwidthUsers = topRows.filter((item: any) => num(item.totalMb) > avg && avg > 0).length;
+  const metrics = { totalRecords: num(row.totalRecords), usersTracked: num(row.usersTracked), totalDownload: Math.round(num(row.totalDownload)), totalUpload: Math.round(num(row.totalUpload)), totalBandwidth: Math.round(num(row.totalBandwidth)), avgUsageMb: Math.round(avg), highBandwidthUsers };
+  return buildMeteringPayload(METERING_REPORTS['internet-metering-report'], reqBody, metrics, [
+    { type: 'kpi', title: 'Internet Usage KPI', rows: [{ label: 'Users Tracked', value: metrics.usersTracked, note: 'Distinct users in internet usage scope.' }, { label: 'Total Bandwidth MB', value: metrics.totalBandwidth, note: `${metrics.totalDownload} MB download / ${metrics.totalUpload} MB upload.` }, { label: 'Average Usage MB', value: metrics.avgUsageMb, note: 'Average bandwidth per usage record.' }, { label: 'High Bandwidth Users', value: metrics.highBandwidthUsers, note: 'Users above current average usage baseline.' }] },
+    { type: 'bar', title: 'Bandwidth Trend', rows: (trendRows.recordset || []).reverse() },
+    { type: 'bar', title: 'Usage by Department', rows: deptRows.recordset || [] },
+    { type: 'bar', title: 'Usage by Category / Protocol', rows: categoryRows.recordset || [] },
+    { type: 'risk', title: 'Internet Governance Focus', rows: [{ area: 'High Bandwidth Usage', severity: metrics.highBandwidthUsers > 0 ? 'High' : 'Low', finding: `${metrics.highBandwidthUsers} user(s) are above the average usage baseline.`, action: 'Validate business justification and monitor recurring high-bandwidth users.' }, { area: 'Department Capacity', severity: 'Medium', finding: `${deptRows.recordset?.length || 0} department usage group(s) are available for review.`, action: 'Compare top department usage with approved capacity and business requirement.' }, { area: 'Category / Protocol Exposure', severity: 'Medium', finding: `${categoryRows.recordset?.length || 0} usage category or protocol group(s) were detected.`, action: 'Review non-business categories and high-risk protocols for policy alignment.' }] },
+    { type: 'table', title: 'Top Bandwidth Users', rows: topRows }
+  ]);
+}
+
+async function buildMeteringReport(reqBody: ReportRequest) {
+  const id = reportId(reqBody);
+  if (id === 'software-metering-report') return buildSoftwareMeteringReport(reqBody);
+  if (id === 'application-metering-report') return buildApplicationMeteringReport(reqBody);
+  if (id === 'internet-metering-report') return buildInternetMeteringReport(reqBody);
+  return buildSoftwareMeteringReport({ ...reqBody, reportId: 'software-metering-report' });
+}
+
+async function buildRequestedReport(reqBody: ReportRequest, mode: 'preview' | 'generate') {
+  const id = reportId(reqBody);
+  if (METERING_REPORTS[id]) return buildMeteringReport(reqBody);
+  return buildDynamicReport(reqBody, mode);
 }
 
 export async function getCatalog(_req: AuthRequest, res: Response): Promise<void> {
@@ -463,17 +571,7 @@ export async function getOptions(_req: AuthRequest, res: Response): Promise<void
     const pool = await getPool();
     const siteRows = await safeQuery(pool, 'SELECT DISTINCT department as name FROM hardware_assets WHERE department IS NOT NULL');
     const sites = (siteRows.recordset || []).map((row: any, index: number) => ({ id: index + 1, name: row.name || `Site ${index + 1}` }));
-    res.json({
-      status: 'success',
-      data: {
-        sites,
-        groups: [{ value: 'all', label: 'All Groups' }, { value: 'em', label: 'EM Devices' }, { value: 'mdm', label: 'MDM Devices' }],
-        statuses: [{ value: 'all', label: 'All Status' }, { value: 'online', label: 'Online' }, { value: 'offline', label: 'Offline' }, { value: 'stale', label: 'Stale Sync' }, { value: 'locked', label: 'Locked' }],
-        dateRanges: [{ value: 'current-month', label: 'Current Month' }, { value: 'last-7-days', label: 'Last 7 Days' }, { value: 'last-30-days', label: 'Last 30 Days' }, { value: 'quarter-to-date', label: 'Quarter to Date' }, { value: 'year-to-date', label: 'Year to Date' }, { value: 'custom', label: 'Custom Range' }],
-        outputFormats: [{ value: 'PDF', label: 'PDF' }, { value: 'Excel', label: 'Excel / CSV' }, { value: 'PowerPoint', label: 'PowerPoint' }]
-      },
-      message: ''
-    });
+    res.json({ status: 'success', data: { sites, groups: [{ value: 'all', label: 'All Groups' }, { value: 'em', label: 'EM Devices' }, { value: 'mdm', label: 'MDM Devices' }], statuses: [{ value: 'all', label: 'All Status' }, { value: 'online', label: 'Online' }, { value: 'offline', label: 'Offline' }, { value: 'stale', label: 'Stale Sync' }, { value: 'locked', label: 'Locked' }], dateRanges: [{ value: 'current-month', label: 'Current Month' }, { value: 'last-7-days', label: 'Last 7 Days' }, { value: 'last-30-days', label: 'Last 30 Days' }, { value: 'quarter-to-date', label: 'Quarter to Date' }, { value: 'year-to-date', label: 'Year to Date' }, { value: 'custom', label: 'Custom Range' }], outputFormats: [{ value: 'PDF', label: 'PDF' }, { value: 'Excel', label: 'Excel / CSV' }, { value: 'PowerPoint', label: 'PowerPoint' }] }, message: '' });
   } catch {
     res.json({ status: 'success', data: { sites: [], groups: [], statuses: [], dateRanges: [], outputFormats: [] }, message: '' });
   }
@@ -481,30 +579,32 @@ export async function getOptions(_req: AuthRequest, res: Response): Promise<void
 
 export async function preview(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const payload = await buildDynamicReport(req.body || {}, 'preview');
+    const payload = await buildRequestedReport(req.body || {}, 'preview');
     res.json(payload);
-  } catch {
-    res.status(500).json({ status: 'error', message: 'Failed to preview dynamic report' });
+  } catch (err) {
+    console.error('[reports] preview failed', err);
+    res.status(500).json({ status: 'error', message: 'Failed to preview report' });
   }
 }
 
 export async function generate(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const payload = await buildDynamicReport(req.body || {}, 'generate');
+    const payload = await buildRequestedReport(req.body || {}, 'generate');
     res.json(payload);
-  } catch {
-    res.status(500).json({ status: 'error', message: 'Failed to generate dynamic report' });
+  } catch (err) {
+    console.error('[reports] generate failed', err);
+    res.status(500).json({ status: 'error', message: 'Failed to generate report' });
   }
 }
 
 export async function getReport(req: AuthRequest, res: Response): Promise<void> {
-  const definition = DYNAMIC_REPORTS[req.params.id];
+  const definition = DYNAMIC_REPORTS[req.params.id] || METERING_REPORTS[req.params.id];
   if (!definition) {
     res.status(404).json({ status: 'error', message: 'Report not found' });
     return;
   }
   try {
-    const payload = await buildDynamicReport({ ...req.query, reportId: definition.id, dynamicReportType: definition.id }, 'preview');
+    const payload = await buildRequestedReport({ ...req.query, reportId: definition.id, dynamicReportType: DYNAMIC_REPORTS[definition.id] ? definition.id : undefined }, 'preview');
     res.json(payload);
   } catch {
     res.status(500).json({ status: 'error', message: 'Failed to load report' });
@@ -516,11 +616,7 @@ export async function getAll(req: AuthRequest, res: Response): Promise<void> {
   try {
     const pool = await getPool();
     const count = await pool.request().query('SELECT COUNT(*) as total FROM summary_reports');
-    const result = await pool.request()
-      .input('offset', sql.Int, offset).input('limit', sql.Int, limit)
-      .query(`SELECT id, title, category, generated_by as generatedBy, status, created_at as createdAt
-        FROM summary_reports ORDER BY created_at DESC
-        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`);
+    const result = await pool.request().input('offset', sql.Int, offset).input('limit', sql.Int, limit).query(`SELECT id, title, category, generated_by as generatedBy, status, created_at as createdAt FROM summary_reports ORDER BY created_at DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`);
     res.json({ status: 'success', data: buildResponse(result.recordset, count.recordset[0].total, page, limit), message: '' });
   } catch { res.status(500).json({ status: 'error', message: 'Server error' }); }
 }
@@ -529,12 +625,7 @@ export async function create(req: AuthRequest, res: Response): Promise<void> {
   const { title, category } = req.body;
   try {
     const pool = await getPool();
-    await pool.request()
-      .input('title', sql.NVarChar, title)
-      .input('category', sql.NVarChar, category || 'General')
-      .input('generatedBy', sql.NVarChar, req.user?.username || 'system')
-      .query(`INSERT INTO summary_reports (title, category, generated_by, status, created_at)
-        VALUES (@title, @category, @generatedBy, 'Completed', GETDATE())`);
+    await pool.request().input('title', sql.NVarChar, title).input('category', sql.NVarChar, category || 'General').input('generatedBy', sql.NVarChar, req.user?.username || 'system').query(`INSERT INTO summary_reports (title, category, generated_by, status, created_at) VALUES (@title, @category, @generatedBy, 'Completed', GETDATE())`);
     res.status(201).json({ status: 'success', data: null, message: 'Report generated' });
   } catch { res.status(500).json({ status: 'error', message: 'Server error' }); }
 }
