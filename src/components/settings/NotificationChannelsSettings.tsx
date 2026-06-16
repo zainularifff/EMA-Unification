@@ -149,10 +149,15 @@ export default function NotificationChannelsSettings() {
     setSaving(true);
     setMessage(null);
     try {
-      await notificationSettingsService.testWhatsapp({ ...whatsapp, testNumber: testNumber.trim() });
-      setMessage({ tone: "success", text: "WhatsApp test recorded successfully." });
-      const nextUsage = await notificationSettingsService.getWhatsappUsage();
-      setUsage(normalizeUsage(nextUsage));
+      const result = await notificationSettingsService.testWhatsapp({ ...whatsapp, testNumber: testNumber.trim() });
+      const usageFromResult = (result as any)?.usage as WhatsappUsage | undefined;
+      if (usageFromResult) {
+        setUsage(normalizeUsage(usageFromResult));
+      } else {
+        const nextUsage = await notificationSettingsService.getWhatsappUsage();
+        setUsage(normalizeUsage(nextUsage));
+      }
+      setMessage({ tone: "success", text: "WhatsApp test sent successfully. Check the recipient WhatsApp inbox." });
     } catch (error) {
       setMessage({ tone: "error", text: readError(error) });
     } finally {
