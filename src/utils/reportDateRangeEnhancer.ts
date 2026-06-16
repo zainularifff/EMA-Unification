@@ -55,6 +55,17 @@ function setRange(range: EnhancedRange) {
   });
 }
 
+function styleInput(input: HTMLInputElement) {
+  input.style.width = "100%";
+  input.style.height = "32px";
+  input.style.border = "1px solid #cfdced";
+  input.style.borderRadius = "10px";
+  input.style.background = "#f9fbff";
+  input.style.padding = "6px 8px";
+  input.style.fontWeight = "850";
+  input.style.color = "#0b2447";
+}
+
 function ensureCustomInputs(field: HTMLElement, select: HTMLSelectElement) {
   let wrap = field.querySelector<HTMLDivElement>(".custom-range");
   if (!wrap) {
@@ -63,7 +74,11 @@ function ensureCustomInputs(field: HTMLElement, select: HTMLSelectElement) {
     wrap.innerHTML = `<input type="date" aria-label="Report start date" /><input type="date" aria-label="Report end date" />`;
     field.appendChild(wrap);
   }
+  wrap.style.gridTemplateColumns = "1fr 1fr";
+  wrap.style.gap = "6px";
+  wrap.style.marginTop = "6px";
   const inputs = Array.from(wrap.querySelectorAll<HTMLInputElement>("input"));
+  inputs.forEach(styleInput);
   const current = window.__emaReportDateRange || makeRange("last-30-days");
   inputs[0].value = current.startDate;
   inputs[1].value = current.endDate;
