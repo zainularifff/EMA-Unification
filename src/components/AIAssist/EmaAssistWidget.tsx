@@ -40,6 +40,14 @@ type CachedAiSession = {
   expiresAt: number;
 };
 
+type EmaAssistWidgetProps = {
+  /**
+   * TopNavbar renders its own AI button. When this is false, only the panel is rendered
+   * after the global `ema-ai-assist-open` event is fired.
+   */
+  showFloatingLauncher?: boolean;
+};
+
 const TOKEN_STORAGE_KEYS = [
   "ema-access-token",
   "accessToken",
@@ -122,7 +130,33 @@ function createMessage(
   };
 }
 
-export default function EmaAssistWidget() {
+function formatTime(value: string) {
+  try {
+    return new Intl.DateTimeFormat("en-MY", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "now";
+  }
+}
+
+function AiAvatar() {
+  return (
+    <span className="ema-ai-avatar" aria-hidden="true">
+      <span className="ema-ai-avatar-core">
+        <span className="ema-ai-avatar-ring" />
+        <span className="ema-ai-avatar-face">
+          <span className="ema-ai-avatar-eye" />
+          <span className="ema-ai-avatar-eye" />
+        </span>
+      </span>
+      <span className="ema-ai-avatar-status" />
+    </span>
+  );
+}
+
+export default function EmaAssistWidget({ showFloatingLauncher = true }: EmaAssistWidgetProps) {
   const restored = useMemo(() => {
     if (typeof window === "undefined") return null;
     const cached = safeParseJson<CachedAiSession>(localStorage.getItem(AI_SESSION_CACHE_KEY));
@@ -151,6 +185,16 @@ export default function EmaAssistWidget() {
       }),
     );
   }, [messages, input, isOpen, isExpanded, isHidden]);
+
+  useEffect(() => {
+    const openAssistant = () => {
+      setIsHidden(false);
+      setIsOpen(true);
+    };
+
+    window.addEventListener("ema-ai-assist-open", openAssistant);
+    return () => window.removeEventListener("ema-ai-assist-open", openAssistant);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -198,71 +242,114 @@ export default function EmaAssistWidget() {
     }
   };
 
+  const clearSession = () => {
+    setMessages([]);
+    setInput("");
+    setStatus("idle");
+  };
+
   if (isHidden) return null;
+  if (!isOpen && !showFloatingLauncher) return null;
 
   return (
-    <div className={`ema-ai-assist ${isOpen ? "is-open" : ""} ${isExpanded ? "is-expanded" : ""}`}>
-      {isOpen && (
-        <section className="ema-ai-panel">
-          <header className="ema-ai-header">
-            <div>
-              <Sparkles size={18} />
-              <span>EMA AI Assistant</span>
+    <div className={`ema-assist-widget ${isOpen ? "is-open" : ""} ${isExpanded ? "is-expanded" : ""}`}>
+      {isOpen ? (
+        <section className="ema-ai-command-panel" role="dialog" aria-label="EMA AI Assistant">
+          <header className="ema-ai-panel-top">
+            <div className="ema-ai-brand">
+              <AiAvatar />
+              <div>
+                <span className="ema-ai-kicker">EMA Intelligence</span>
+                <strong>AI Assistant</strong>
+                <small>Ask about endpoint, risk, patch, support and reporting data.</small>
+              </div>
             </div>
-            <nav>
+            <div className="ema-ai-top-actions">
+              <span className={`ema-ai-status-pill is-${status}`}>
+                {status === "loading" ? <Loader2 size={14} className="spin" /> : status === "error" ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+                {status === "loading" ? "Thinking" : status === "error" ? "Needs attention" : "Ready"}
+              </span>
               <button type="button" onClick={() => setIsExpanded((value) => !value)} title={isExpanded ? "Minimize" : "Expand"}>
                 {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
               <button type="button" onClick={() => setIsOpen(false)} title="Close"><X size={16} /></button>
-            </nav>
+            </div>
           </header>
 
-          <div className="ema-ai-messages">
-            {!messages.length && (
-              <div className="ema-ai-empty">
-                <Zap size={22} />
-                <strong>Ask about your operations data</strong>
-                <p>Use quick prompts or ask for endpoint, risk, patch, service desk, or reporting insight.</p>
-                <div className="ema-ai-prompts">
-                  {quickPrompts.map((prompt) => (
-                    <button type="button" key={prompt.title} onClick={() => sendPrompt(prompt.text)}>
-                      <strong>{prompt.title}</strong>
-                      <span>{prompt.desc}</span>
-                    </button>
-                  ))}
-                </div>
+          <div className="ema-ai-panel-body">
+            <aside className="ema-ai-sidecar">
+              <div className="ema-ai-sidecar-card">
+                <Zap size={20} />
+                <h3>Quick prompts</h3>
+                <p>Start with common operational questions.</p>
               </div>
-            )}
+              <div className="ema-ai-prompt-stack">
+                {quickPrompts.map((prompt) => (
+                  <button type="button" key={prompt.title} onClick={() => sendPrompt(prompt.text)} disabled={status === "loading"}>
+                    <span>{prompt.title}</span>
+                    <small>{prompt.desc}</small>
+                  </button>
+                ))}
+              </div>
+            </aside>
 
-            {messages.map((message) => (
-              <article key={message.id} className={`ema-ai-message is-${message.role} ${message.status ? `status-${message.status}` : ""}`}>
-                <div className="ema-ai-message-meta">
-                  {message.status === "loading" && <Loader2 size={14} className="spin" />}
-                  {message.status === "ready" && <CheckCircle2 size={14} />}
-                  {message.status === "error" && <AlertTriangle size={14} />}
-                  {!message.status && <Clock3 size={14} />}
-                  <span>{message.role === "user" ? "You" : "Assistant"}</span>
+            <main className="ema-ai-chat-stage">
+              {!messages.length && (
+                <div className="ema-ai-empty-state">
+                  <span className="ema-ai-empty-orb"><Sparkles size={26} /></span>
+                  <h2>Ask about your operations data</h2>
+                  <p>Use the quick prompts or ask for endpoint, risk, patch, service desk, or reporting insight.</p>
                 </div>
-                <p>{message.content}</p>
-              </article>
-            ))}
-            <div ref={messagesEndRef} />
+              )}
+
+              {messages.map((message) => (
+                <article key={message.id} className={`ema-ai-message is-${message.role} ${message.status === "error" ? "is-error" : ""}`}>
+                  <div className="ema-ai-message-meta">
+                    <span>{message.role === "user" ? "You" : "Assistant"}</span>
+                    <small>
+                      {message.status === "loading" && <Loader2 size={13} className="spin" />}
+                      {message.status === "ready" && <CheckCircle2 size={13} />}
+                      {message.status === "error" && <AlertTriangle size={13} />}
+                      {!message.status && <Clock3 size={13} />}
+                      {formatTime(message.createdAt)}
+                    </small>
+                  </div>
+                  {message.status === "loading" ? (
+                    <div className="ema-ai-loading-block"><i /><i /><i /></div>
+                  ) : (
+                    <div className="ema-ai-markdown"><p>{message.content}</p></div>
+                  )}
+                </article>
+              ))}
+              <div ref={messagesEndRef} />
+            </main>
           </div>
 
-          <footer className="ema-ai-footer">
-            <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} placeholder="Ask EMA AI..." />
-            <button type="button" onClick={() => sendPrompt()} disabled={!input.trim() || status === "loading"}>
+          <footer className="ema-ai-composer">
+            <div className="ema-ai-input-shell">
+              <span><Sparkles size={17} /></span>
+              <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={handleKeyDown} placeholder="Ask EMA AI..." />
+            </div>
+            <button type="button" className="ema-ai-clear-btn" onClick={clearSession} title="Clear chat">
+              <Trash2 size={18} />
+            </button>
+            <button type="button" className="ema-ai-send-btn" onClick={() => sendPrompt()} disabled={!input.trim() || status === "loading"} title="Send">
               {status === "loading" ? <Loader2 size={18} className="spin" /> : <SendHorizontal size={18} />}
             </button>
           </footer>
         </section>
+      ) : (
+        <div className="ema-ai-launcher-shell">
+          <button type="button" className="ema-ai-launcher" onClick={() => setIsOpen(true)}>
+            <AiAvatar />
+            <span>
+              <strong>AI Assistant</strong>
+              <small>Open EMA intelligence</small>
+            </span>
+          </button>
+          <button type="button" className="ema-ai-launcher-dismiss" onClick={() => setIsHidden(true)} title="Hide AI assistant"><Trash2 size={14} /></button>
+        </div>
       )}
-
-      <button type="button" className="ema-ai-toggle" onClick={() => setIsOpen((value) => !value)}>
-        <Sparkles size={18} />
-        <span>AI Assistant</span>
-      </button>
-      <button type="button" className="ema-ai-hide" onClick={() => setIsHidden(true)} title="Hide AI assistant"><Trash2 size={14} /></button>
     </div>
   );
 }
