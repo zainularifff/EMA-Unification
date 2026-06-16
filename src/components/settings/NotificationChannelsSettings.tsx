@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Bell, CheckCircle2, Loader2, Mail, MessageSquare, RefreshCw, Send, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Bell, Loader2, Mail, MessageSquare, RefreshCw, Send, ShieldCheck } from "lucide-react";
 import "../../styles/notification-channels.css";
 import notificationSettingsService, {
   type NotificationEmailConfig,
@@ -17,6 +17,8 @@ const emptyEmailConfigs: Record<NotificationEmailProvider, NotificationEmailConf
   Gmail: { provider: "Gmail", gmailUser: "", gmailPass: "", isActive: false },
 };
 
+const DEFAULT_WHATSAPP_LIMIT = 200;
+
 function cloneEmailConfigs() {
   return JSON.parse(JSON.stringify(emptyEmailConfigs)) as Record<NotificationEmailProvider, NotificationEmailConfig>;
 }
@@ -33,8 +35,19 @@ function readError(error: unknown) {
   return error instanceof Error ? error.message : String(error || "Request failed");
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="notification-field"><span>{label}</span>{children}</label>;
+}
+
+function normalizeUsage(row: WhatsappUsage): WhatsappUsage {
+  const count = Math.max(0, Number(row?.count || 0));
+  const limit = DEFAULT_WHATSAPP_LIMIT;
+  return {
+    count,
+    limit,
+    remaining: Math.max(0, limit - count),
+    activeProvider: row?.activeProvider || "Twilio",
+  };
 }
 
 export default function NotificationChannelsSettings() {
@@ -42,7 +55,7 @@ export default function NotificationChannelsSettings() {
   const [provider, setProvider] = useState<NotificationEmailProvider>("SMTP");
   const [emailConfigs, setEmailConfigs] = useState<Record<NotificationEmailProvider, NotificationEmailConfig>>(cloneEmailConfigs);
   const [whatsapp, setWhatsapp] = useState<NotificationWhatsappConfig>({ accountSid: "", authToken: "", fromNumber: "", isEnabled: false });
-  const [usage, setUsage] = useState<WhatsappUsage>({ count: 0, limit: 50, remaining: 50, activeProvider: "Twilio" });
+  const [usage, setUsage] = useState<WhatsappUsage>({ count: 0, limit: DEFAULT_WHATSAPP_LIMIT, remaining: DEFAULT_WHATSAPP_LIMIT, activeProvider: "Twilio" });
   const [rules, setRules] = useState<NotificationRule[]>([]);
   const [testNumber, setTestNumber] = useState("");
   const [loading, setLoading] = useState(false);
@@ -51,6 +64,7 @@ export default function NotificationChannelsSettings() {
 
   const activeEmail = emailConfigs[provider];
   const enabledRules = useMemo(() => rules.filter((rule) => rule.Enabled || rule.WhatsAppEnabled).length, [rules]);
+  const usedPercent = Math.min(100, Math.round((usage.count / Math.max(usage.limit, 1)) * 100));
 
   const patchEmail = (patch: Partial<NotificationEmailConfig>) => {
     setEmailConfigs((current) => ({ ...current, [provider]: { ...current[provider], provider, ...patch } }));
@@ -67,12 +81,14 @@ export default function NotificationChannelsSettings() {
         notificationSettingsService.getRules(),
       ]);
       const next = cloneEmailConfigs();
-      emailRows.forEach((row) => { next[row.provider] = { ...next[row.provider], ...row, pass: "", azureClientSecret: "", azurePass: "", exchangePass: "", gmailPass: "" }; });
+      emailRows.forEach((row) => {
+        next[row.provider] = { ...next[row.provider], ...row, pass: "", azureClientSecret: "", azurePass: "", exchangePass: "", gmailPass: "" };
+      });
       setEmailConfigs(next);
       const activeProvider = emailRows.find((row) => row.isActive)?.provider;
       if (activeProvider) setProvider(activeProvider);
       setWhatsapp(whatsappRow);
-      setUsage(usageRow);
+      setUsage(normalizeUsage(usageRow));
       setRules(ruleRows);
     } catch (error) {
       setMessage({ tone: "error", text: readError(error) });
@@ -102,7 +118,7 @@ export default function NotificationChannelsSettings() {
     setMessage(null);
     try {
       await notificationSettingsService.testEmail({ ...activeEmail, provider });
-      setMessage({ tone: "success", text: `${provider} test email sent successfully.` });
+      setMessage({ tone: "success", text: `${provider} test completed.` });
     } catch (error) {
       setMessage({ tone: "error", text: readError(error) });
     } finally {
@@ -133,9 +149,9 @@ export default function NotificationChannelsSettings() {
     setMessage(null);
     try {
       await notificationSettingsService.testWhatsapp({ ...whatsapp, testNumber: testNumber.trim() });
-      setMessage({ tone: "success", text: "WhatsApp test message sent successfully." });
+      setMessage({ tone: "success", text: "WhatsApp test recorded successfully." });
       const nextUsage = await notificationSettingsService.getWhatsappUsage();
-      setUsage(nextUsage);
+      setUsage(normalizeUsage(nextUsage));
     } catch (error) {
       setMessage({ tone: "error", text: readError(error) });
     } finally {
@@ -221,7 +237,7 @@ export default function NotificationChannelsSettings() {
             <aside className="notification-card notification-status-card"><span className={`notification-status-pill ${activeEmail.isActive ? "enabled" : ""}`}><ShieldCheck size={14} /> {activeEmail.isActive ? "Active Provider" : "Inactive Provider"}</span><p>Only one email provider should be active for system alerts. Password fields are never returned from the API.</p></aside>
           </div>
         ) : activeTab === "whatsapp" ? (
-          <div className="notification-grid">
+          <div className="notification-grid notification-whatsapp-grid">
             <section className="notification-panel">
               <div className="notification-panel-head"><div><h3>WhatsApp Integration</h3><p>Connect WhatsApp Business/Twilio sender for incident, SLA and client alerts.</p></div><span className={`notification-status-pill ${whatsapp.isEnabled ? "enabled" : ""}`}>{whatsapp.isEnabled ? "Enabled" : "Disabled"}</span></div>
               <div className="notification-form">
@@ -235,13 +251,27 @@ export default function NotificationChannelsSettings() {
                 <div className="notification-actions"><button className="notification-btn" onClick={testWhatsapp} disabled={saving}><Send size={15} /> Send Test</button><button className="notification-btn success" onClick={saveWhatsapp} disabled={saving}>Save WhatsApp</button></div>
               </div>
             </section>
-            <aside className="notification-card notification-status-card"><span className="notification-status-pill enabled">{usage.activeProvider || "Twilio"}</span><p>Monthly WhatsApp usage limit is controlled by backend env <b>WHATSAPP_MONTHLY_LIMIT</b>.</p><div className="notification-usage"><div><span>Sent</span><strong>{usage.count}</strong></div><div><span>Limit</span><strong>{usage.limit}</strong></div><div><span>Remaining</span><strong>{usage.remaining}</strong></div></div></aside>
+            <aside className="notification-card notification-status-card notification-usage-card">
+              <div className="notification-usage-head">
+                <span className="notification-status-pill enabled">{usage.activeProvider || "Twilio"}</span>
+                <div>
+                  <h4>WhatsApp Monthly Usage</h4>
+                  <p>Temporary working limit is fixed at <b>{DEFAULT_WHATSAPP_LIMIT}</b> messages for now.</p>
+                </div>
+              </div>
+              <div className="notification-usage-meter"><i style={{ width: `${usedPercent}%` }} /></div>
+              <div className="notification-usage">
+                <div><span>Sent</span><strong>{usage.count}</strong></div>
+                <div><span>Limit</span><strong>{usage.limit}</strong></div>
+                <div><span>Remaining</span><strong>{usage.remaining}</strong></div>
+              </div>
+            </aside>
           </div>
         ) : (
           <section className="notification-panel">
             <div className="notification-panel-head"><div><h3>Notification Event Triggers</h3><p>Choose which system events send Email and/or WhatsApp notifications.</p></div><span className="notification-status-pill">{enabledRules} Active Rules</span></div>
             <div className="notification-form notification-rule-list">
-              {rules.length === 0 && <div className="notification-alert">No notification rules returned from backend.</div>}
+              {rules.length === 0 && <div className="notification-alert">No notification rules returned.</div>}
               {rules.map((rule) => <div key={rule.RuleKey} className="notification-rule-card"><div><div className="notification-rule-title">{titleFromRule(rule.RuleKey)}</div><div className="notification-rule-desc">{rule.Description}</div></div><div className="notification-toggle-group"><button className={`notification-toggle email ${rule.Enabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "email")}>Email {rule.Enabled ? "On" : "Off"}</button><button className={`notification-toggle whatsapp ${rule.WhatsAppEnabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "whatsapp")}>WhatsApp {rule.WhatsAppEnabled ? "On" : "Off"}</button></div></div>)}
             </div>
           </section>
