@@ -20,7 +20,7 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
   background: #f6f8fb;
   color: #0b2447;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -174,7 +174,7 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
 .metric strong { display: block; margin-top: 3px; }
 .selected-pill { display: flex; gap: 8px; align-items: center; font-size: 11px; font-weight: 900; margin-bottom: 8px; }
 .rule-note { border: 1px solid #cfe0f6; border-radius: 14px; background: #f8fbff; padding: 10px; color: #45607f; font-size: 11px; font-weight: 850; line-height: 1.35; }
-.error { margin: 12px 18px 0; border: 1px solid rgba(239,68,68,.24); border-radius: 14px; background: rgba(239,68,68,.08); color: #b91c1c; padding: 12px 14px; font-weight: 850; }
+.error { margin: 8px 18px 0; border: 1px solid rgba(239,68,68,.24); border-radius: 12px; background: rgba(239,68,68,.07); color: #b91c1c; padding: 8px 12px; font-size: 12px; line-height: 1.25; font-weight: 850; min-height: 0; max-height: 42px; overflow: hidden; display: flex; align-items: center; }
 .backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(15,23,42,.48); backdrop-filter: blur(8px); }
 .preview { width: min(1120px,100%); height: min(860px,calc(100vh - 48px)); border-radius: 24px; background: #eef3f8; overflow: hidden; box-shadow: 0 34px 90px rgba(15,23,42,.32); display: grid; grid-template-rows: auto minmax(0,1fr); }
 .preview-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #d8e4f4; background: #fff; }
