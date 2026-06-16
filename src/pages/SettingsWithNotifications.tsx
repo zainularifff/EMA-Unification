@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import LegacySettings from "./Settings";
 import NotificationChannelsSettings from "../components/settings/NotificationChannelsSettings";
 import "../styles/notification-channels.css";
+import "../styles/management-control-settings.css";
 
 type SettingsView = "settings" | "management" | "notifications";
 type ManagementSection = "aging" | "pricing" | "policy";
@@ -9,7 +10,7 @@ type ManagementSection = "aging" | "pricing" | "policy";
 const MANAGEMENT_SECTIONS: { key: ManagementSection; title: string; desc: string }[] = [
   { key: "aging", title: "PC Aging", desc: "Aging PC Rule and lifecycle threshold." },
   { key: "pricing", title: "Device Pricing", desc: "Device replacement and costing values." },
-  { key: "policy", title: "Management Policy", desc: "Dashboard risk, exposure and saving policy." },
+  { key: "policy", title: "Management Policy", desc: "Dashboard policy control values." },
 ];
 
 function readInitialView(): SettingsView {
