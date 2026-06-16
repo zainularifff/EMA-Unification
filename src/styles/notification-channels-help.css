@@ -1,0 +1,23 @@
+.notification-field-hint {
+  display: block;
+  margin-top: -2px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.notification-actions.split {
+  display: grid;
+  grid-template-columns: auto minmax(8px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 720px) {
+  .notification-actions.split {
+    grid-template-columns: 1fr;
+  }
+}
