@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "dev": "nodemon server.js",
-    "start": "node server.js",
-    "dev:ts": "nodemon server.js",
+    "dev": "nodemon server-runner.js",
+    "start": "node server-runner.js",
+    "dev:ts": "nodemon server-runner.js",
     "build": "tsc",
-    "start:dist": "node server.js"
+    "start:dist": "node server-runner.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
