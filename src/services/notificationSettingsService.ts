@@ -53,7 +53,8 @@ const STORAGE_KEYS = {
   rules: "ema.notification.rules",
 };
 
-const ENABLE_REMOTE_NOTIFICATION_API = String((import.meta as any)?.env?.VITE_NOTIFICATION_SETTINGS_API || "").toLowerCase() === "true";
+// Backend DB persistence is the default. Set VITE_NOTIFICATION_SETTINGS_API=false only for local UI demo mode.
+const USE_BACKEND_NOTIFICATION_API = String((import.meta as any)?.env?.VITE_NOTIFICATION_SETTINGS_API ?? "true").toLowerCase() !== "false";
 
 const DEFAULT_EMAIL_SETTINGS: NotificationEmailConfig[] = [
   { provider: "SMTP", host: "", port: "587", user: "", pass: "", ssl: true, isActive: true },
@@ -106,8 +107,13 @@ function writeLocal<T>(key: string, value: T) {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // Local persistence is best-effort only.
+    // Local cache is best-effort only. DB persistence is handled by backend API.
   }
+}
+
+function readErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error || "Request failed");
 }
 
 function currentUsageFallback(): WhatsappUsage {
@@ -133,28 +139,25 @@ function saveUsage(countOrUsage: number | Partial<WhatsappUsage>) {
   return usage;
 }
 
-function readErrorMessage(error: unknown) {
-  if (error instanceof Error) return error.message;
-  return String(error || "Request failed");
-}
-
 function localWhatsappTestResult(message?: string) {
   const usage = saveUsage(currentUsageFallback().count + 1);
   return {
     simulated: true,
     localOnly: true,
     usage,
-    message: message || "Local WhatsApp test recorded. Backend route /api/settings/whatsapp/test is required for real delivery.",
+    message: message || "Local WhatsApp test recorded. Backend API is disabled by VITE_NOTIFICATION_SETTINGS_API=false.",
   };
 }
 
-async function remoteOrLocal<T>(remoteCall: () => Promise<T>, localValue: () => T): Promise<T> {
-  if (!ENABLE_REMOTE_NOTIFICATION_API) return localValue();
-  try {
-    return await remoteCall();
-  } catch {
-    return localValue();
+function withBackendHint(error: unknown) {
+  const message = readErrorMessage(error);
+  if (/404|not found/i.test(message)) {
+    return new Error("Notification backend route is missing in backend/server.js. Save cannot write DB until /api/settings/whatsapp is registered.");
   }
+  if (/401|403|forbidden|invalid|expired/i.test(message)) {
+    return new Error("Notification save blocked by auth. Login again, then retry saving notification settings.");
+  }
+  return error instanceof Error ? error : new Error(message);
 }
 
 export function normalizeEmailConfig(row: AnyRecord = {}): NotificationEmailConfig {
@@ -200,33 +203,53 @@ export function normalizeNotificationRule(row: AnyRecord = {}): NotificationRule
 
 export const notificationSettingsService = {
   async getEmailSettings() {
-    return remoteOrLocal(
-      async () => unwrapArray<AnyRecord>(await api.get("/api/settings/email", { forceRefresh: true, cacheTtlMs: 0 })).map(normalizeEmailConfig),
-      () => readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS).map(normalizeEmailConfig),
-    );
+    if (!USE_BACKEND_NOTIFICATION_API) {
+      return readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS).map(normalizeEmailConfig);
+    }
+    try {
+      const rows = unwrapArray<AnyRecord>(await api.get("/api/settings/email", { forceRefresh: true, cacheTtlMs: 0 })).map(normalizeEmailConfig);
+      writeLocal(STORAGE_KEYS.email, rows);
+      return rows;
+    } catch {
+      return readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS).map(normalizeEmailConfig);
+    }
   },
+
   async saveEmailSettings(payload: NotificationEmailConfig) {
     const current = readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS);
     const next = current.filter((item) => item.provider !== payload.provider);
     next.push({ ...payload });
     writeLocal(STORAGE_KEYS.email, next);
-    if (!ENABLE_REMOTE_NOTIFICATION_API) return { saved: true, localOnly: true };
+
+    if (!USE_BACKEND_NOTIFICATION_API) return { saved: true, localOnly: true };
+
     try {
       return unwrapData(await api.post("/api/settings/email", payload));
     } catch (error) {
-      return { saved: true, localOnly: true, apiWarning: readErrorMessage(error) };
+      throw withBackendHint(error);
     }
   },
+
   async testEmail(payload: NotificationEmailConfig) {
-    if (ENABLE_REMOTE_NOTIFICATION_API) return unwrapData(await api.post("/api/settings/email/test", payload));
-    return { simulated: true, provider: payload.provider };
+    if (!USE_BACKEND_NOTIFICATION_API) return { simulated: true, provider: payload.provider };
+    return unwrapData(await api.post("/api/settings/email/test", payload));
   },
+
   async getWhatsappSettings() {
-    return remoteOrLocal(
-      async () => normalizeWhatsappConfig(unwrapData<AnyRecord>(await api.get("/api/settings/whatsapp", { forceRefresh: true, cacheTtlMs: 0 }), {})),
-      () => normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS)),
-    );
+    if (!USE_BACKEND_NOTIFICATION_API) {
+      return normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+    }
+    try {
+      const row = normalizeWhatsappConfig(unwrapData<AnyRecord>(await api.get("/api/settings/whatsapp", { forceRefresh: true, cacheTtlMs: 0 }), {}));
+      const current = normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+      const merged = normalizeWhatsappConfig({ ...current, ...row, authToken: current.authToken || row.authToken || "" });
+      writeLocal(STORAGE_KEYS.whatsapp, merged);
+      return merged;
+    } catch {
+      return normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+    }
   },
+
   async saveWhatsappSettings(payload: NotificationWhatsappConfig) {
     const current = normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
     const localPayload = normalizeWhatsappConfig({
@@ -236,54 +259,66 @@ export const notificationSettingsService = {
     });
     writeLocal(STORAGE_KEYS.whatsapp, localPayload);
 
-    if (!ENABLE_REMOTE_NOTIFICATION_API) return { saved: true, localOnly: true };
+    if (!USE_BACKEND_NOTIFICATION_API) return { saved: true, localOnly: true };
 
     try {
-      return unwrapData(await api.post("/api/settings/whatsapp", payload));
+      const result = unwrapData(await api.post("/api/settings/whatsapp", localPayload));
+      return result;
     } catch (error) {
-      return { saved: true, localOnly: true, apiWarning: readErrorMessage(error) };
+      throw withBackendHint(error);
     }
   },
+
   async testWhatsapp(payload: NotificationWhatsappConfig & { testNumber: string }) {
     if (!String(payload.testNumber || "").trim()) throw new Error("Recipient phone number is required.");
     if (!payload.isEnabled) throw new Error("Enable WhatsApp channel before sending test.");
 
-    if (!ENABLE_REMOTE_NOTIFICATION_API) {
-      return localWhatsappTestResult();
-    }
+    if (!USE_BACKEND_NOTIFICATION_API) return localWhatsappTestResult();
 
     try {
-      const result = unwrapData<AnyRecord>(await api.post("/api/settings/whatsapp/test", payload), {});
+      const stored = normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+      const result = unwrapData<AnyRecord>(await api.post("/api/settings/whatsapp/test", { ...stored, ...payload, authToken: payload.authToken || stored.authToken }), {});
       if (result?.usage) saveUsage(result.usage);
       return result;
     } catch (error) {
-      return localWhatsappTestResult(`Backend WhatsApp test route is not available yet (${readErrorMessage(error)}). Local test usage recorded only.`);
+      throw withBackendHint(error);
     }
   },
+
   async getWhatsappUsage() {
-    return remoteOrLocal(
-      async () => {
-        const payload = await api.get("/api/settings/whatsapp/usage", { forceRefresh: true, cacheTtlMs: 0 });
-        const data = unwrapData<WhatsappUsage>(payload, currentUsageFallback());
-        const count = Math.max(0, Number(data.count || 0));
-        return { ...data, count, limit: WHATSAPP_MONTHLY_LIMIT, remaining: Math.max(0, WHATSAPP_MONTHLY_LIMIT - count), activeProvider: data.activeProvider || "Twilio" };
-      },
-      currentUsageFallback,
-    );
+    if (!USE_BACKEND_NOTIFICATION_API) return currentUsageFallback();
+    try {
+      const payload = await api.get("/api/settings/whatsapp/usage", { forceRefresh: true, cacheTtlMs: 0 });
+      const data = unwrapData<WhatsappUsage>(payload, currentUsageFallback());
+      const count = Math.max(0, Number(data.count || 0));
+      const usage = { ...data, count, limit: WHATSAPP_MONTHLY_LIMIT, remaining: Math.max(0, WHATSAPP_MONTHLY_LIMIT - count), activeProvider: data.activeProvider || "Twilio" };
+      saveUsage(usage);
+      return usage;
+    } catch {
+      return currentUsageFallback();
+    }
   },
+
   async getRules() {
-    return remoteOrLocal(
-      async () => unwrapArray<AnyRecord>(await api.get("/api/settings/notification-rules", { forceRefresh: true, cacheTtlMs: 0 })).map(normalizeNotificationRule).filter((rule) => rule.RuleKey),
-      () => readLocal<NotificationRule[]>(STORAGE_KEYS.rules, DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey),
-    );
+    if (!USE_BACKEND_NOTIFICATION_API) {
+      return readLocal<NotificationRule[]>(STORAGE_KEYS.rules, DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey);
+    }
+    try {
+      const rules = unwrapArray<AnyRecord>(await api.get("/api/settings/notification-rules", { forceRefresh: true, cacheTtlMs: 0 })).map(normalizeNotificationRule).filter((rule) => rule.RuleKey);
+      writeLocal(STORAGE_KEYS.rules, rules);
+      return rules;
+    } catch {
+      return readLocal<NotificationRule[]>(STORAGE_KEYS.rules, DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey);
+    }
   },
+
   async saveRules(rules: NotificationRule[]) {
     writeLocal(STORAGE_KEYS.rules, rules);
-    if (!ENABLE_REMOTE_NOTIFICATION_API) return { saved: true, localOnly: true };
+    if (!USE_BACKEND_NOTIFICATION_API) return { saved: true, localOnly: true };
     try {
       return unwrapData(await api.put("/api/settings/notification-rules", rules));
     } catch (error) {
-      return { saved: true, localOnly: true, apiWarning: readErrorMessage(error) };
+      throw withBackendHint(error);
     }
   },
 };
