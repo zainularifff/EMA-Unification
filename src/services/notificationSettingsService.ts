@@ -138,6 +138,16 @@ function readErrorMessage(error: unknown) {
   return String(error || "Request failed");
 }
 
+function localWhatsappTestResult(message?: string) {
+  const usage = saveUsage(currentUsageFallback().count + 1);
+  return {
+    simulated: true,
+    localOnly: true,
+    usage,
+    message: message || "Local WhatsApp test recorded. Backend route /api/settings/whatsapp/test is required for real delivery.",
+  };
+}
+
 async function remoteOrLocal<T>(remoteCall: () => Promise<T>, localValue: () => T): Promise<T> {
   if (!ENABLE_REMOTE_NOTIFICATION_API) return localValue();
   try {
@@ -237,13 +247,18 @@ export const notificationSettingsService = {
   async testWhatsapp(payload: NotificationWhatsappConfig & { testNumber: string }) {
     if (!String(payload.testNumber || "").trim()) throw new Error("Recipient phone number is required.");
     if (!payload.isEnabled) throw new Error("Enable WhatsApp channel before sending test.");
+
     if (!ENABLE_REMOTE_NOTIFICATION_API) {
-      throw new Error("WhatsApp test needs backend route /api/settings/whatsapp/test. Settings are saved locally for now.");
+      return localWhatsappTestResult();
     }
 
-    const result = unwrapData<AnyRecord>(await api.post("/api/settings/whatsapp/test", payload), {});
-    if (result?.usage) saveUsage(result.usage);
-    return result;
+    try {
+      const result = unwrapData<AnyRecord>(await api.post("/api/settings/whatsapp/test", payload), {});
+      if (result?.usage) saveUsage(result.usage);
+      return result;
+    } catch (error) {
+      return localWhatsappTestResult(`Backend WhatsApp test route is not available yet (${readErrorMessage(error)}). Local test usage recorded only.`);
+    }
   },
   async getWhatsappUsage() {
     return remoteOrLocal(
