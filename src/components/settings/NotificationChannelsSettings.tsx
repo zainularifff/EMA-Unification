@@ -40,6 +40,16 @@ function readError(error: unknown) {
   return error instanceof Error ? error.message : String(error || "Request failed");
 }
 
+function cleanNotice(text: string) {
+  const message = String(text || "Request failed").trim();
+  if (/backend server is offline/i.test(message)) return "Backend server is offline. Start backend and try again.";
+  if (/session expired|sign in/i.test(message)) return "Session expired. Please sign in again.";
+  if (/database|sql error/i.test(message)) return "Database save failed. Check backend terminal for details.";
+  if (/route is not active/i.test(message)) return "Backend route is not active. Restart backend and try again.";
+  if (/failed to fetch|err_connection_refused/i.test(message)) return "Backend server is offline. Start backend and try again.";
+  return message.replace(/\.+$/, ".");
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="notification-field"><span>{label}</span>{children}</label>;
 }
@@ -75,11 +85,12 @@ export default function NotificationChannelsSettings() {
 
   const notify = (tone: ToastTone, title: string, detail: string) => {
     const id = Date.now();
+    const safeDetail = cleanNotice(detail);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    setToast({ id, tone, title, message: detail });
+    setToast({ id, tone, title, message: safeDetail });
     toastTimerRef.current = window.setTimeout(() => {
       setToast((current) => (current?.id === id ? null : current));
-    }, 4200);
+    }, tone === "error" ? 5200 : 3600);
   };
 
   useEffect(() => () => {
@@ -118,11 +129,11 @@ export default function NotificationChannelsSettings() {
       setWhatsapp((current) => ({ ...current, ...whatsappRow, authToken: current.authToken || whatsappRow.authToken || "" }));
       setUsage(normalizeUsage(usageRow));
       setRules(ruleRows);
-      if (!silent) notify("success", "Notification settings refreshed", "Latest notification configuration has been loaded.");
+      if (!silent) notify("success", "Settings refreshed", "Latest notification settings loaded.");
     } catch (error) {
-      const detail = readError(error);
+      const detail = cleanNotice(readError(error));
       setMessage({ tone: "error", text: detail });
-      notify("error", "Notification load failed", detail);
+      notify("error", "Load failed", detail);
     } finally {
       setLoading(false);
     }
@@ -136,13 +147,13 @@ export default function NotificationChannelsSettings() {
     try {
       const result = await notificationSettingsService.saveEmailSettings({ ...activeEmail, provider });
       const isLocal = Boolean((result as any)?.localOnly);
-      const detail = isLocal ? `${provider} email configuration saved locally.` : `${provider} email configuration saved to database.`;
+      const detail = isLocal ? `${provider} email settings saved locally.` : `${provider} email settings saved.`;
       setMessage({ tone: isLocal ? "info" : "success", text: detail });
-      notify(isLocal ? "info" : "success", "Email settings saved", detail);
+      notify(isLocal ? "info" : "success", "Email saved", detail);
     } catch (error) {
-      const detail = readError(error);
+      const detail = cleanNotice(readError(error));
       setMessage({ tone: "error", text: detail });
-      notify("error", "Email save failed", detail);
+      notify("error", "Save failed", detail);
     } finally {
       setSaving(false);
     }
@@ -157,9 +168,9 @@ export default function NotificationChannelsSettings() {
       setMessage({ tone: "success", text: detail });
       notify("success", "Email test completed", detail);
     } catch (error) {
-      const detail = readError(error);
+      const detail = cleanNotice(readError(error));
       setMessage({ tone: "error", text: detail });
-      notify("error", "Email test failed", detail);
+      notify("error", "Test failed", detail);
     } finally {
       setSaving(false);
     }
@@ -171,13 +182,13 @@ export default function NotificationChannelsSettings() {
     try {
       const result = await notificationSettingsService.saveWhatsappSettings(whatsapp);
       const isLocal = Boolean((result as any)?.localOnly);
-      const detail = isLocal ? "WhatsApp configuration saved locally." : "WhatsApp configuration saved to database.";
+      const detail = isLocal ? "WhatsApp settings saved locally." : "WhatsApp settings saved.";
       setMessage({ tone: isLocal ? "info" : "success", text: detail });
-      notify(isLocal ? "info" : "success", "WhatsApp settings saved", detail);
+      notify(isLocal ? "info" : "success", "WhatsApp saved", detail);
     } catch (error) {
-      const detail = readError(error);
+      const detail = cleanNotice(readError(error));
       setMessage({ tone: "error", text: detail });
-      notify("error", "WhatsApp save failed", detail);
+      notify("error", "Save failed", detail);
     } finally {
       setSaving(false);
     }
@@ -187,7 +198,7 @@ export default function NotificationChannelsSettings() {
     if (!whatsapp.isEnabled) {
       const detail = "Enable WhatsApp channel before sending test.";
       setMessage({ tone: "error", text: detail });
-      notify("error", "WhatsApp test blocked", detail);
+      notify("error", "Test blocked", detail);
       return;
     }
     if (!testNumber.trim()) {
@@ -209,13 +220,13 @@ export default function NotificationChannelsSettings() {
         setUsage(normalizeUsage(nextUsage));
       }
       const isLocal = Boolean(resultData?.simulated || resultData?.localOnly);
-      const detail = resultData?.message || (isLocal ? "WhatsApp test recorded locally. Backend route is required for real delivery." : "WhatsApp test sent successfully. Check the recipient WhatsApp inbox.");
-      setMessage({ tone: isLocal ? "info" : "success", text: detail });
-      notify(isLocal ? "info" : "success", isLocal ? "WhatsApp test recorded" : "WhatsApp test sent", detail);
+      const detail = resultData?.message || (isLocal ? "WhatsApp test recorded locally." : "WhatsApp test sent successfully.");
+      setMessage({ tone: isLocal ? "info" : "success", text: cleanNotice(detail) });
+      notify(isLocal ? "info" : "success", isLocal ? "Test recorded" : "WhatsApp sent", detail);
     } catch (error) {
-      const detail = readError(error);
+      const detail = cleanNotice(readError(error));
       setMessage({ tone: "error", text: detail });
-      notify("error", "WhatsApp test failed", detail);
+      notify("error", "Test failed", detail);
     } finally {
       setSaving(false);
     }
@@ -233,11 +244,11 @@ export default function NotificationChannelsSettings() {
       await notificationSettingsService.saveRules(next);
       const detail = `${titleFromRule(ruleKey)} ${channel === "email" ? "Email" : "WhatsApp"} trigger updated.`;
       setMessage({ tone: "success", text: detail });
-      notify("success", "Notification trigger updated", detail);
+      notify("success", "Trigger updated", detail);
     } catch (error) {
-      const detail = readError(error);
+      const detail = cleanNotice(readError(error));
       setMessage({ tone: "error", text: detail });
-      notify("error", "Trigger update failed", detail);
+      notify("error", "Update failed", detail);
       await load(true);
     } finally {
       setSaving(false);
@@ -246,7 +257,7 @@ export default function NotificationChannelsSettings() {
 
   return (
     <div className="settings-notification-shell">
-      <div className="notification-toast-stack" aria-live="polite">
+      <div className="notification-toast-stack" style={{ top: 78 }} aria-live="polite">
         {toast && (
           <div className={`notification-toast ${toast.tone}`}>
             <div className="notification-toast-icon">
