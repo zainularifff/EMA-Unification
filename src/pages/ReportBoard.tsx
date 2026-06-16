@@ -1,1 +1,1 @@
-export { default } from "./ReportBuilderRules";
+export { default } from "./Report";
