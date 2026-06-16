@@ -69,18 +69,13 @@ function safeName(value: string) { return value.toLowerCase().replace(/[^a-z0-9]
 function isSummary(pack?: Pack | null) { return pack?.id === SUMMARY_REPORT_ID || Boolean(pack?.standalone); }
 function categoryLabel(pack: Pack | Category) { const value = typeof pack === "string" ? pack : pack.category; return value === "Dynamic" ? "AI Dynamic Reporting" : "Standard Report"; }
 function branchLabel(branch: BranchOption) { return branch.count ? `${branch.name} (${branch.count})` : branch.name; }
+function scopeName(branch: BranchOption) { return branch.id === "all" ? "All Sites" : branch.name; }
 
 function flattenBranches(nodes: DepartmentNode[] = [], depth = 0): BranchOption[] {
   return nodes.flatMap((node, index) => {
     const relationID = Number(node.Object_Rel_Idn ?? node.id ?? 0) || 0;
     const name = String(node.Object_Rel_Name || node.Object_Full_Name || node.name || "Branch").trim();
-    const option: BranchOption = {
-      id: `${relationID || name}-${depth}-${index}`,
-      name,
-      relationID,
-      fullName: node.Object_Full_Name || name,
-      count: Number(node.assetCount || node.count || node.total || 0) || undefined,
-    };
+    const option: BranchOption = { id: `${relationID || name}-${depth}-${index}`, name, relationID, fullName: node.Object_Full_Name || name, count: Number(node.assetCount || node.count || node.total || 0) || undefined };
     return [option, ...flattenBranches(node.children || [], depth + 1)];
   });
 }
@@ -94,7 +89,7 @@ function filters(range: Range, branch: BranchOption) {
     relationID: branch.relationID,
     branchName: branch.name,
     locationBranch: branch.fullName || branch.name,
-    scope: branch.id === "all" ? "All Sites" : branch.name,
+    scope: scopeName(branch),
     department: branch.id === "all" ? undefined : branch.name,
     deviceGroup: "all",
     status: "all",
@@ -109,20 +104,82 @@ function requestPayload(title: string, branch: BranchOption, range: Range, pack:
   return { ...filters(range, branch), reportId: pack.id, dynamicReportType: pack.dynamic ? pack.id : undefined, dynamicReportTitle: pack.dynamic ? pack.title : undefined, customReportTitle: pack.title, parentReportTitle: title };
 }
 
+function defaultMetricRows(pack: Pack, metrics: Record<string, any>) {
+  const metricEntries = Object.entries(metrics || {}).slice(0, 4);
+  if (metricEntries.length) return metricEntries.map(([label, value]) => ({ label, value, note: "Current report metric" }));
+  return [
+    { label: "Report Scope", value: pack.title, note: pack.subtitle },
+    { label: "Output", value: "PDF", note: "Generated using legacy PDF design" },
+    { label: "Data Source", value: pack.category, note: categoryLabel(pack) },
+  ];
+}
+
+function fallbackPayload(pack: Pack, range: Range, branch: BranchOption, sourceData: any = {}) {
+  const metrics = sourceData.metrics && typeof sourceData.metrics === "object" ? sourceData.metrics : {};
+  const period = `${range.from} to ${range.to}`;
+  const scope = scopeName(branch);
+  const summary = `${pack.title} is prepared for ${scope} covering ${period}. ${pack.subtitle}.`;
+  return {
+    success: true,
+    mode: "frontend-fallback",
+    generatedAt: new Date().toISOString(),
+    report: { id: pack.id, title: pack.title, category: pack.category, type: pack.category, description: pack.subtitle },
+    filters: { ...filters(range, branch), reportId: pack.id },
+    dateRange: { from: range.from, to: range.to, preset: range.preset },
+    metrics,
+    narrative: {
+      title: pack.title,
+      period,
+      scope,
+      executiveSummary: summary,
+      managementConclusion: `${pack.title} should be reviewed by the assigned owner and converted into action items where required.`,
+      keyFindings: [
+        `${pack.title} was generated for ${scope}.`,
+        `The selected reporting period is ${period}.`,
+        `${pack.subtitle}.`,
+      ],
+    },
+    sections: [
+      { type: "kpi", title: `${pack.title} KPI`, rows: defaultMetricRows(pack, metrics) },
+      { type: "risk", title: `${pack.title} Management Focus`, rows: [{ area: pack.title, severity: "Review", finding: summary, action: "Validate evidence, owner and follow-up action." }] },
+    ],
+    recommendations: [{ priority: "Review", action: `Review ${pack.title} findings and assign owner.`, owner: "Management Team", target: "Next review" }],
+  };
+}
+
 function ensureOriginalPayload(payload: any, pack: Pack, range: Range, branch: BranchOption) {
   const data = unwrap(payload) || {};
-  const narrative = data.narrative || {};
+  const returnedId = String(data?.report?.id || data?.filters?.reportId || "").toLowerCase();
+  const wrongExecutivePayload = returnedId && returnedId !== pack.id && (returnedId === "ai-executive-summary" || returnedId === "executive-summary");
+  const source = wrongExecutivePayload ? fallbackPayload(pack, range, branch, data) : data;
+  const narrative = source.narrative || {};
   const summary = narrative.executiveSummary || narrative.summary || narrative.managementConclusion || narrative.title || pack.subtitle;
+
   return {
-    ...data,
-    report: { ...(data.report || {}), id: data.report?.id || pack.id, title: data.report?.title || pack.title, category: data.report?.category || pack.category, type: data.report?.type || pack.category, description: data.report?.description || pack.subtitle },
-    generatedAt: data.generatedAt || new Date().toISOString(),
-    dateRange: data.dateRange || { from: range.from, to: range.to, preset: range.preset },
-    narrative: { ...narrative, title: narrative.title || pack.title, period: narrative.period || `${range.from} to ${range.to}`, scope: branch.id === "all" ? "All Sites" : branch.name, executiveSummary: summary, managementConclusion: narrative.managementConclusion || summary, keyFindings: Array.isArray(narrative.keyFindings) && narrative.keyFindings.length ? narrative.keyFindings : [summary] },
-    sections: Array.isArray(data.sections) ? data.sections : [],
-    recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
-    metrics: data.metrics || {},
-    filters: { ...(data.filters || {}), ...filters(range, branch) },
+    ...source,
+    report: {
+      ...(source.report || {}),
+      id: pack.id,
+      title: pack.title,
+      category: source.report?.category || pack.category,
+      type: source.report?.type || pack.category,
+      description: source.report?.description || pack.subtitle,
+    },
+    generatedAt: source.generatedAt || new Date().toISOString(),
+    dateRange: source.dateRange || { from: range.from, to: range.to, preset: range.preset },
+    narrative: {
+      ...narrative,
+      title: pack.title,
+      period: narrative.period || `${range.from} to ${range.to}`,
+      scope: scopeName(branch),
+      executiveSummary: summary,
+      managementConclusion: narrative.managementConclusion || summary,
+      keyFindings: Array.isArray(narrative.keyFindings) && narrative.keyFindings.length ? narrative.keyFindings : [summary],
+    },
+    sections: Array.isArray(source.sections) ? source.sections : [],
+    recommendations: Array.isArray(source.recommendations) ? source.recommendations : [],
+    metrics: source.metrics || {},
+    filters: { ...(source.filters || {}), ...filters(range, branch), reportId: pack.id },
   };
 }
 
@@ -141,7 +198,7 @@ function composePayload(title: string, range: Range, branch: BranchOption, packs
 
   responses.forEach((response, index) => {
     const pack = packs[index];
-    const payload = unwrap(response) || {};
+    const payload = ensureOriginalPayload(response, pack, range, branch);
     const summary = summaryOf(payload, pack);
     keyFindings.push(`${pack.title}: ${summary}`);
     if (payload.metrics && typeof payload.metrics === "object") Object.assign(metrics, payload.metrics);
@@ -154,13 +211,14 @@ function composePayload(title: string, range: Range, branch: BranchOption, packs
 
   const executiveSummary = packs.map((pack, index) => `${index + 1}. ${pack.title}: ${summaryOf(responses[index], pack)}`).join("\n\n");
   return {
-    report: { id: "report-pack-builder", title, category: "Combined Report Pack", type: "Dynamic Report Builder", description: "Combined report generated from selected canvas report packs." },
+    report: { id: "report-pack-builder", title, category: "Combined Report Pack", type: "Combined Report Pack", description: "Combined report generated from selected canvas report packs." },
     generatedAt: new Date().toISOString(),
     dateRange: { from: range.from, to: range.to, preset: range.preset },
-    narrative: { title, period: `${range.from} to ${range.to}`, scope: branch.id === "all" ? "All Sites" : branch.name, executiveSummary, managementConclusion: executiveSummary, keyFindings: keyFindings.slice(0, 18) },
+    narrative: { title, period: `${range.from} to ${range.to}`, scope: scopeName(branch), executiveSummary, managementConclusion: executiveSummary, keyFindings: keyFindings.slice(0, 18) },
     metrics,
     sections,
     recommendations: recommendations.length ? recommendations : packs.map((pack) => ({ priority: "Review", action: `Review ${pack.title} findings and assign owner.`, owner: "Management Team" })),
+    filters: { ...filters(range, branch), reportId: "report-pack-builder" },
     builderPacks: packs.map((pack, index) => ({ order: index + 1, id: pack.id, title: pack.title, category: pack.category })),
   };
 }
@@ -172,17 +230,28 @@ async function buildReport(mode: "preview" | "generate", title: string, branch: 
   return composePayload(title, range, branch, packs, responses);
 }
 
-function downloadHtml(title: string, payload: any, range: Range, branch: BranchOption) {
-  const html = buildBuilderReportHtml(payload, filters(range, branch));
+function downloadFallbackHtml(title: string, html: string, range: Range) {
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${safeName(title)}-${range.from}-to-${range.to}.html`;
+  link.download = `${safeName(title)}-${range.from}-to-${range.to}-print-to-pdf.html`;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function openPdfPrintWindow(title: string, payload: any, range: Range, branch: BranchOption) {
+  const html = buildBuilderReportHtml(payload, filters(range, branch), { autoPrint: true, preview: false });
+  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
+  if (!printWindow) {
+    downloadFallbackHtml(title, html, range);
+    return;
+  }
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
 }
 
 export default function ReportBuilderRules() {
@@ -252,7 +321,7 @@ export default function ReportBuilderRules() {
     setError(""); setLoading("generate");
     try {
       const payload = await buildReport("generate", title, selectedBranch, range, selected);
-      downloadHtml(selected.length === 1 ? selected[0].title : title, payload, range, selectedBranch);
+      openPdfPrintWindow(selected.length === 1 ? selected[0].title : title, payload, range, selectedBranch);
     } catch (err) { setError(err instanceof Error ? err.message : "Unable to generate report."); }
     finally { setLoading(null); }
   };
@@ -266,7 +335,7 @@ export default function ReportBuilderRules() {
         <label className="field"><span>Report Title</span><input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
         <label className="field"><span>Location / Branch</span><select value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branchLabel(branch)}</option>)}</select></label>
         <label className="field"><span>Date Range</span><select value={range.preset} onChange={(event) => setRange(rangeOf(event.target.value as Period))}>{PERIODS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-        <div className="actions"><button className="builder-btn" onClick={runPreview} disabled={Boolean(loading)}>{loading === "preview" ? "Loading..." : "Preview"}</button><button className="builder-btn primary" onClick={runGenerate} disabled={Boolean(loading)}>{loading === "generate" ? "Generating..." : "Generate Report"}</button></div>
+        <div className="actions"><button className="builder-btn" onClick={runPreview} disabled={Boolean(loading)}>{loading === "preview" ? "Loading..." : "Preview"}</button><button className="builder-btn primary" onClick={runGenerate} disabled={Boolean(loading)}>{loading === "generate" ? "Opening PDF..." : "Generate Report"}</button></div>
       </section>
       {range.preset === "custom" && <section className="builder-top" style={{ position: "relative", top: "auto", zIndex: 1 }}><label className="field"><span>Date From</span><input type="date" value={range.from} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} /></label><label className="field"><span>Date To</span><input type="date" value={range.to} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} /></label></section>}
       {error && <div className="error">{error}</div>}
