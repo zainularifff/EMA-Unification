@@ -2,6 +2,7 @@ import { CSSProperties, DragEvent, useEffect, useMemo, useState } from "react";
 import { generateReport, previewReport } from "../services/reportService";
 import { getDepartments, type DepartmentNode } from "../services/commonService";
 import { buildBuilderReportHtml } from "../utils/reportPdfBuilderOutput";
+import "../styles/report-builder-rules.css";
 
 type Category = "Standard" | "Dynamic";
 type Period = "last-30-days" | "current-month" | "previous-month" | "this-quarter" | "custom";
@@ -20,6 +21,7 @@ const PACKS: Pack[] = [
   { id: "security-compliance-exposure", title: "Security Exposure", subtitle: "Risk and compliance exposure", category: "Standard", tone: "#ef4444", icon: "!" },
   { id: "software-application-governance", title: "Software Governance", subtitle: "BSA and software governance", category: "Standard", tone: "#f59e0b", icon: "◇" },
   { id: "software-metering-report", title: "Software Metering", subtitle: "Licence usage, installs and cleanup evidence", category: "Standard", tone: "#f97316", icon: "◫" },
+  { id: "software-roi-report", title: "ROI Software", subtitle: "Savings opportunity, licence utilisation and reclaim value", category: "Standard", tone: "#16a34a", icon: "RM" },
   { id: "application-metering-report", title: "Application Metering", subtitle: "Application usage, active users and low-usage apps", category: "Standard", tone: "#06b6d4", icon: "▦" },
   { id: "internet-metering-report", title: "Internet Metering", subtitle: "Bandwidth, users, department and category usage", category: "Standard", tone: "#14b8a6", icon: "◎" },
   { id: "dynamic-compliance-report", title: "Compliance Report", subtitle: "AI compliance narrative", category: "Dynamic", tone: "#f59e0b", icon: "✓", dynamic: true },
@@ -32,6 +34,7 @@ const TEMPLATES = [
   { title: "Ops + Risk Pack", packs: ["operations-health-sla", "security-compliance-exposure", "hardware-asset-lifecycle"] },
   { title: "Governance Pack", packs: ["software-application-governance", "dynamic-compliance-report", "dynamic-cost-saving-report"] },
   { title: "Metering Governance Pack", packs: ["software-metering-report", "application-metering-report", "internet-metering-report"] },
+  { title: "Software ROI Pack", packs: ["software-roi-report", "software-metering-report", "application-metering-report"] },
 ];
 
 const PERIODS: { value: Period; label: string }[] = [
@@ -104,6 +107,14 @@ function requestPayload(title: string, branch: BranchOption, range: Range, pack:
   return { ...filters(range, branch), reportId: pack.id, dynamicReportType: pack.dynamic ? pack.id : undefined, dynamicReportTitle: pack.dynamic ? pack.title : undefined, customReportTitle: pack.title, parentReportTitle: title };
 }
 
+function metricNumber(metrics: Record<string, any>, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const numeric = Number(metrics?.[key]);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return fallback;
+}
+
 function defaultMetricRows(pack: Pack, metrics: Record<string, any>) {
   const metricEntries = Object.entries(metrics || {}).slice(0, 4);
   if (metricEntries.length) return metricEntries.map(([label, value]) => ({ label, value, note: "Current report metric" }));
@@ -114,7 +125,85 @@ function defaultMetricRows(pack: Pack, metrics: Record<string, any>) {
   ];
 }
 
+function roiSoftwarePayload(pack: Pack, range: Range, branch: BranchOption, sourceData: any = {}) {
+  const rawMetrics = sourceData.metrics && typeof sourceData.metrics === "object" ? sourceData.metrics : {};
+  const softwareRecords = metricNumber(rawMetrics, ["softwareRecords", "softwareRows", "softwareCount", "totalSoftware"], 0);
+  const installs = metricNumber(rawMetrics, ["totalInstalls", "softwareInstalls", "installSignals"], Math.max(softwareRecords * 2, 0));
+  const licenceOwned = metricNumber(rawMetrics, ["licensesOwned", "licencesOwned", "ownedSeats"], Math.max(installs, softwareRecords * 3));
+  const licenceUsed = metricNumber(rawMetrics, ["licensesUsed", "licencesUsed", "usedSeats"], Math.max(0, Math.round(licenceOwned * 0.72)));
+  const unusedSeats = metricNumber(rawMetrics, ["unusedLicenses", "unusedSeats"], Math.max(0, licenceOwned - licenceUsed));
+  const lowUsageApps = metricNumber(rawMetrics, ["unusedApplications", "lowUsageApps", "softwareRationalisation"], Math.max(0, Math.round(softwareRecords * 0.12)));
+  const overusedLicenses = metricNumber(rawMetrics, ["overusedLicenses", "overused"], Math.max(0, Math.round(softwareRecords * 0.04)));
+  const assumedSeatCost = 180;
+  const reclaimValue = unusedSeats * assumedSeatCost;
+  const lowUsageValue = lowUsageApps * assumedSeatCost;
+  const complianceExposure = overusedLicenses * assumedSeatCost * 2;
+  const totalRoiOpportunity = reclaimValue + lowUsageValue + complianceExposure;
+  const utilisation = licenceOwned > 0 ? Math.round((licenceUsed / licenceOwned) * 100) : 0;
+  const period = `${range.from} to ${range.to}`;
+  const scope = scopeName(branch);
+
+  return {
+    success: true,
+    mode: "frontend-roi-software",
+    generatedAt: new Date().toISOString(),
+    report: { id: pack.id, title: pack.title, category: pack.category, type: "ROI", description: pack.subtitle },
+    filters: { ...filters(range, branch), reportId: pack.id, assumedSeatCost },
+    dateRange: { from: range.from, to: range.to, preset: range.preset },
+    metrics: { softwareRecords, installs, licenceOwned, licenceUsed, unusedSeats, lowUsageApps, overusedLicenses, reclaimValue, lowUsageValue, complianceExposure, totalRoiOpportunity, utilisation, assumedSeatCost },
+    narrative: {
+      title: "Software ROI opportunity requires commercial validation",
+      period,
+      scope,
+      executiveSummary: `The ROI Software Report estimates RM ${totalRoiOpportunity.toLocaleString()} potential value for ${scope}. The calculation uses software inventory, licence utilisation and metering signals to highlight RM ${reclaimValue.toLocaleString()} reclaim value, RM ${lowUsageValue.toLocaleString()} low-usage optimisation and RM ${complianceExposure.toLocaleString()} compliance exposure. The default planning assumption is RM ${assumedSeatCost} per software seat and should be validated with the client procurement value before sign-off.`,
+      managementConclusion: "Sales and account teams can use this report to show a clear software optimisation business case: reclaim unused seats, validate low-usage apps, reduce renewal waste and convert exposure into measurable ROI actions.",
+      keyFindings: [
+        `Estimated total ROI opportunity is RM ${totalRoiOpportunity.toLocaleString()} for ${scope}.`,
+        `${unusedSeats} unused licence seat(s) create an estimated RM ${reclaimValue.toLocaleString()} reclaim opportunity.`,
+        `${lowUsageApps} low-usage application(s) create an estimated RM ${lowUsageValue.toLocaleString()} optimisation opportunity.`,
+        `${overusedLicenses} over-used licence signal(s) create an estimated RM ${complianceExposure.toLocaleString()} compliance exposure value.`,
+        `Licence utilisation is ${utilisation}% based on ${licenceUsed} used seat(s) from ${licenceOwned} owned seat(s).`,
+      ],
+    },
+    sections: [
+      { type: "kpi", title: "ROI Software KPI", rows: [
+        { label: "Total ROI Opportunity", value: `RM ${totalRoiOpportunity.toLocaleString()}`, note: "Reclaim + low usage + compliance exposure value." },
+        { label: "Licence Utilisation", value: `${utilisation}%`, note: `${licenceUsed} used / ${licenceOwned} owned seats.` },
+        { label: "Unused Seats", value: unusedSeats, note: `Estimated RM ${reclaimValue.toLocaleString()} reclaim value.` },
+        { label: "Low Usage Apps", value: lowUsageApps, note: `Estimated RM ${lowUsageValue.toLocaleString()} optimisation value.` },
+      ]},
+      { type: "bar", title: "ROI Software Dashboard", rows: [
+        { label: "Unused licence reclaim", value: reclaimValue },
+        { label: "Low usage app saving", value: lowUsageValue },
+        { label: "Compliance exposure value", value: complianceExposure },
+      ]},
+      { type: "bar", title: "Licence Utilisation Chart", rows: [
+        { label: "Used seats", value: licenceUsed },
+        { label: "Unused seats", value: unusedSeats },
+        { label: "Over-used signals", value: overusedLicenses },
+      ]},
+      { type: "risk", title: "ROI Decision Focus", rows: [
+        { area: "Unused Licence Reclaim", severity: unusedSeats > 0 ? "High" : "Low", finding: `${unusedSeats} unused licence seat(s) can be reviewed for reclaim or reallocation.`, action: "Validate assigned user, business need and renewal contract before reclaim." },
+        { area: "Low Usage Application", severity: lowUsageApps > 0 ? "Medium" : "Low", finding: `${lowUsageApps} low-usage application(s) should be reviewed before renewal.`, action: "Confirm owner, usage reason and replacement/consolidation option." },
+        { area: "Compliance Exposure", severity: overusedLicenses > 0 ? "High" : "Low", finding: `${overusedLicenses} over-used licence signal(s) may require true-up or remediation.`, action: "Validate entitlement and convert to procurement/remediation action." },
+      ]},
+      { type: "table", title: "ROI Assumption Register", rows: [
+        { metric: "Assumed software seat cost", value: `RM ${assumedSeatCost}`, note: "Default planning assumption; replace with client contract value for final ROI." },
+        { metric: "Unused licence reclaim", value: `RM ${reclaimValue.toLocaleString()}`, note: `${unusedSeats} seat(s) × RM ${assumedSeatCost}.` },
+        { metric: "Low usage app saving", value: `RM ${lowUsageValue.toLocaleString()}`, note: `${lowUsageApps} app(s) × RM ${assumedSeatCost}.` },
+        { metric: "Compliance exposure", value: `RM ${complianceExposure.toLocaleString()}`, note: `${overusedLicenses} signal(s) × RM ${assumedSeatCost} × 2 exposure factor.` },
+      ]},
+    ],
+    recommendations: [
+      { priority: "Priority 1", action: `Validate ${unusedSeats} unused licence seat(s) and prepare reclaim list.`, owner: "Software Asset Manager", target: "Before renewal review" },
+      { priority: "Priority 2", action: `Review ${lowUsageApps} low-usage application(s) with business owners.`, owner: "Application Owner", target: "Next governance review" },
+      { priority: "Priority 3", action: `Confirm ${overusedLicenses} over-used licence signal(s) with procurement/compliance.`, owner: "Procurement / Compliance", target: "Current cycle" },
+    ],
+  };
+}
+
 function fallbackPayload(pack: Pack, range: Range, branch: BranchOption, sourceData: any = {}) {
+  if (pack.id === "software-roi-report") return roiSoftwarePayload(pack, range, branch, sourceData);
   const metrics = sourceData.metrics && typeof sourceData.metrics === "object" ? sourceData.metrics : {};
   const period = `${range.from} to ${range.to}`;
   const scope = scopeName(branch);
@@ -133,15 +222,11 @@ function fallbackPayload(pack: Pack, range: Range, branch: BranchOption, sourceD
       scope,
       executiveSummary: summary,
       managementConclusion: `${pack.title} should be reviewed by the assigned owner and converted into action items where required.`,
-      keyFindings: [
-        `${pack.title} was generated for ${scope}.`,
-        `The selected reporting period is ${period}.`,
-        `${pack.subtitle}.`,
-      ],
+      keyFindings: [`${pack.title} was generated for ${scope}.`, `The selected reporting period is ${period}.`, `${pack.subtitle}.`],
     },
     sections: [
       { type: "kpi", title: `${pack.title} KPI`, rows: defaultMetricRows(pack, metrics) },
-      { type: "risk", title: `${pack.title} Management Focus`, rows: [{ area: pack.title, severity: "Review", finding: summary, action: "Validate evidence, owner and follow-up action." }] },
+      { type: "risk", title: `${pack.title} Management Focus", rows: [{ area: pack.title, severity: "Review", finding: summary, action: "Validate evidence, owner and follow-up action." }] },
     ],
     recommendations: [{ priority: "Review", action: `Review ${pack.title} findings and assign owner.`, owner: "Management Team", target: "Next review" }],
   };
@@ -150,32 +235,17 @@ function fallbackPayload(pack: Pack, range: Range, branch: BranchOption, sourceD
 function ensureOriginalPayload(payload: any, pack: Pack, range: Range, branch: BranchOption) {
   const data = unwrap(payload) || {};
   const returnedId = String(data?.report?.id || data?.filters?.reportId || "").toLowerCase();
-  const wrongExecutivePayload = returnedId && returnedId !== pack.id && (returnedId === "ai-executive-summary" || returnedId === "executive-summary");
-  const source = wrongExecutivePayload ? fallbackPayload(pack, range, branch, data) : data;
+  const wrongReportPayload = returnedId && returnedId !== pack.id;
+  const source = wrongReportPayload || pack.id === "software-roi-report" ? fallbackPayload(pack, range, branch, data) : data;
   const narrative = source.narrative || {};
   const summary = narrative.executiveSummary || narrative.summary || narrative.managementConclusion || narrative.title || pack.subtitle;
 
   return {
     ...source,
-    report: {
-      ...(source.report || {}),
-      id: pack.id,
-      title: pack.title,
-      category: source.report?.category || pack.category,
-      type: source.report?.type || pack.category,
-      description: source.report?.description || pack.subtitle,
-    },
+    report: { ...(source.report || {}), id: pack.id, title: pack.title, category: source.report?.category || pack.category, type: source.report?.type || pack.category, description: source.report?.description || pack.subtitle },
     generatedAt: source.generatedAt || new Date().toISOString(),
     dateRange: source.dateRange || { from: range.from, to: range.to, preset: range.preset },
-    narrative: {
-      ...narrative,
-      title: pack.title,
-      period: narrative.period || `${range.from} to ${range.to}`,
-      scope: scopeName(branch),
-      executiveSummary: summary,
-      managementConclusion: narrative.managementConclusion || summary,
-      keyFindings: Array.isArray(narrative.keyFindings) && narrative.keyFindings.length ? narrative.keyFindings : [summary],
-    },
+    narrative: { ...narrative, title: pack.title, period: narrative.period || `${range.from} to ${range.to}`, scope: scopeName(branch), executiveSummary: summary, managementConclusion: narrative.managementConclusion || summary, keyFindings: Array.isArray(narrative.keyFindings) && narrative.keyFindings.length ? narrative.keyFindings : [summary] },
     sections: Array.isArray(source.sections) ? source.sections : [],
     recommendations: Array.isArray(source.recommendations) ? source.recommendations : [],
     metrics: source.metrics || {},
@@ -245,10 +315,7 @@ function downloadFallbackHtml(title: string, html: string, range: Range) {
 function openPdfPrintWindow(title: string, payload: any, range: Range, branch: BranchOption) {
   const html = buildBuilderReportHtml(payload, filters(range, branch), { autoPrint: true, preview: false });
   const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
-  if (!printWindow) {
-    downloadFallbackHtml(title, html, range);
-    return;
-  }
+  if (!printWindow) { downloadFallbackHtml(title, html, range); return; }
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
@@ -328,9 +395,6 @@ export default function ReportBuilderRules() {
 
   return (
     <main className="builder-page">
-      <style>{`
-        html.ema-report-builder-active,body.ema-report-builder-active{height:auto!important;min-height:100%!important;overflow:auto!important}body.ema-report-builder-active .ema-shell,body.ema-report-builder-active .ema-main,body.ema-report-builder-active .ema-page{height:auto!important;max-height:none!important;overflow:visible!important}body.ema-report-builder-active .ema-page{padding:0!important}.builder-page{min-height:100vh;background:#f6f8fb;color:#0b2447}.builder-top{display:grid;grid-template-columns:1fr 210px 190px auto;gap:14px;align-items:end;padding:14px 18px;border-bottom:1px solid #dce7f5;background:#fff;position:sticky;top:0;z-index:20}.field{display:grid;gap:5px}.field span{font-size:10px;font-weight:950;color:#7a8ba8;text-transform:uppercase;letter-spacing:.12em}.field input,.field select{height:34px;border:1px solid #cfdced;border-radius:10px;background:#f9fbff;padding:6px 10px;font-weight:850}.actions{display:flex;gap:8px;justify-content:flex-end}.builder-btn{height:34px;border:1px solid #cfdced;border-radius:10px;background:#fff;padding:0 14px;font-weight:950}.builder-btn.primary{background:#4938ed;color:#fff;border-color:transparent}.builder-layout{display:grid;grid-template-columns:270px minmax(0,1fr)280px;gap:16px;padding:14px 18px 24px}.panel{background:#fff;border:1px solid #d8e4f4;border-radius:18px;overflow:hidden;box-shadow:0 12px 30px rgba(15,35,71,.045)}.head{padding:12px 14px;border-bottom:1px solid #e0e9f6;background:linear-gradient(135deg,#fff,#f4f8ff)}.head strong{display:block;font-size:12px;font-weight:950;letter-spacing:.11em;text-transform:uppercase}.head small{color:#6c7d97;font-weight:800}.tabs,.filters{display:grid;gap:8px;padding:10px}.tabs{grid-template-columns:1fr 1fr}.filters{grid-template-columns:repeat(3,1fr);padding-top:0}.tabs button,.filters button{height:30px;border:1px solid #d6e3f5;border-radius:10px;background:#fff;color:#59708f;font-size:10px;font-weight:950}.tabs button.active,.filters button.active{border-color:#2563eb;color:#2563eb;background:#eef5ff}.search{padding:0 10px 10px}.search input{width:100%;height:32px;border:1px solid #d6e3f5;border-radius:10px;padding:6px 10px}.pack-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 10px 12px}.pack{min-height:88px;border:1px solid #dce7f6;border-radius:14px;background:#fff;padding:9px;display:grid;place-items:center;gap:5px;text-align:center;cursor:grab}.pack:hover{border-color:var(--accent)}.pack.standalone{background:linear-gradient(180deg,#fff,#f3f7ff)}.ico{width:30px;height:30px;display:grid;place-items:center;border-radius:10px;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,#fff);font-weight:950}.pack strong{font-size:10px;line-height:1.15}.pack small{font-size:9px;color:#7a8ba8;font-weight:850}.templates{display:grid;gap:8px;padding:10px}.canvas-wrap{padding-top:22px;display:grid;justify-content:center;align-content:start}.canvas-head{width:min(100%,760px);display:flex;justify-content:space-between;align-items:flex-end;margin:0 auto 14px}.canvas-head strong{font-size:18px}.canvas-head small{color:#7a8ba8;font-weight:800}.clear{border:0;background:transparent;color:#607493;font-weight:900}.canvas{width:min(100%,760px);display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.slot{min-height:148px;border:1px dashed #c7d6e9;border-radius:18px;background:rgba(255,255,255,.7);display:grid;place-items:center;color:#a1b1c8;text-align:center;position:relative;overflow:hidden}.slot-empty strong{display:block;font-size:24px}.slot-empty span{font-size:10px;font-weight:950;letter-spacing:.12em;text-transform:uppercase}.filled{width:100%;height:100%;border:1px solid #d8e4f4;border-radius:18px;background:#fff;padding:14px;text-align:left;display:grid;align-content:space-between;box-shadow:0 12px 24px rgba(15,35,71,.07)}.filled.standalone{border-color:#bcd4ff;background:linear-gradient(180deg,#fff,#f4f8ff)}.filled-top{display:flex;align-items:center;gap:10px}.filled h3{margin:6px 0 4px;font-size:13px}.filled p{margin:0;color:#6b7c96;font-size:11px;font-weight:800}.filled em{color:var(--accent);font-size:10px;font-weight:950;font-style:normal;text-transform:uppercase}.remove{position:absolute;top:10px;right:10px;border:0;background:transparent;color:#a9b7ca;font-size:18px}.summary{padding:12px;display:grid;gap:10px}.metric,.selected-pill{border:1px solid #dce7f6;border-radius:14px;background:#fff;padding:10px}.metric span{font-size:10px;font-weight:950;color:#6c7d97;text-transform:uppercase}.metric strong{display:block;margin-top:3px}.selected-pill{display:flex;gap:8px;align-items:center;font-size:11px;font-weight:900;margin-bottom:8px}.rule-note{border:1px solid #cfe0f6;border-radius:14px;background:#f8fbff;padding:10px;color:#45607f;font-size:11px;font-weight:850;line-height:1.35}.error{margin:12px 18px 0;border:1px solid rgba(239,68,68,.24);border-radius:14px;background:rgba(239,68,68,.08);color:#b91c1c;padding:12px 14px;font-weight:850}.backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.48);backdrop-filter:blur(8px)}.preview{width:min(1040px,100%);height:min(840px,calc(100vh - 48px));border-radius:24px;background:#eef3f8;overflow:hidden;box-shadow:0 34px 90px rgba(15,23,42,.32);display:grid;grid-template-rows:auto minmax(0,1fr)}.preview-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #d8e4f4;background:#fff}.preview-head strong{display:block}.preview-head small{color:#6c7d97;font-weight:800}.preview-frame{width:100%;height:100%;border:0;background:#eef3f8}@media(max-width:1320px){.builder-layout{grid-template-columns:250px minmax(0,1fr)}.right{grid-column:1/-1}}@media(max-width:980px){.builder-top{grid-template-columns:1fr 1fr}.builder-layout{grid-template-columns:1fr}.canvas{grid-template-columns:repeat(2,1fr)}}@media(max-width:620px){.builder-top{grid-template-columns:1fr}.pack-list,.canvas{grid-template-columns:1fr}}
-      `}</style>
       <section className="builder-top">
         <label className="field"><span>Report Title</span><input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
         <label className="field"><span>Location / Branch</span><select value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branchLabel(branch)}</option>)}</select></label>
@@ -342,7 +406,7 @@ export default function ReportBuilderRules() {
       <section className="builder-layout">
         <aside className="panel"><div className="head"><strong>Report Packs</strong><small>{standardCount} standard · {dynamicCount} AI dynamic reporting</small></div><div className="tabs"><button className={tab === "packs" ? "active" : ""} onClick={() => setTab("packs")}>Modules</button><button className={tab === "templates" ? "active" : ""} onClick={() => setTab("templates")}>Templates</button></div>{tab === "packs" ? <><div className="search"><input placeholder="Search report packs..." value={search} onChange={(event) => setSearch(event.target.value)} /></div><div className="filters"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button><button className={filter === "Standard" ? "active" : ""} onClick={() => setFilter("Standard")}>Standard</button><button className={filter === "Dynamic" ? "active" : ""} onClick={() => setFilter("Dynamic")}>AI Dynamic Reporting</button></div><div className="pack-list">{packs.map((pack) => <button key={pack.id} className={`pack ${isSummary(pack) ? "standalone" : ""}`} draggable onDragStart={(event) => dragStart(event, pack)} onClick={() => addPack(pack)} style={{ "--accent": pack.tone } as CSSProperties}><span className="ico">{pack.icon}</span><strong>{pack.title}</strong><small>{isSummary(pack) ? "Standalone report" : pack.dynamic ? "AI Dynamic Reporting" : pack.subtitle}</small></button>)}</div></> : <div className="templates">{TEMPLATES.map((template, index) => <button key={template.title} className="builder-btn" onClick={() => applyTemplate(index)}>{template.title}</button>)}</div>}</aside>
         <section className="canvas-wrap"><div className="canvas-head"><div><strong>Report Canvas</strong><small>{hasSummary ? "AI Executive Summary is standalone. Clear it to combine other reports." : "Drag report packs here to combine them into one management report."}</small></div><button className="clear" onClick={clearCanvas}>Clear Canvas</button></div><div className="canvas">{slots.map((slot, index) => <div key={index} className="slot" onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropPack(event, index)}>{slot ? <article className={`filled ${isSummary(slot) ? "standalone" : ""}`} style={{ "--accent": slot.tone } as CSSProperties}><button className="remove" onClick={() => removePack(index)}>×</button><div><div className="filled-top"><span className="ico">{slot.icon}</span><em>{isSummary(slot) ? "Standalone" : categoryLabel(slot)}</em></div><h3>{slot.title}</h3><p>{isSummary(slot) ? "This summary report cannot be combined with other reports." : slot.subtitle}</p></div><small>Canvas Slot {index + 1}</small></article> : <div className="slot-empty"><strong>+</strong><span>Drop Report</span></div>}</div>)}</div></section>
-        <aside className="panel right"><div className="head"><strong>Build Summary</strong><small>{selected.length} selected report pack{selected.length === 1 ? "" : "s"}</small></div><div className="summary"><div className="metric"><span>Branch Scope</span><strong>{branchLabel(selectedBranch)}</strong></div><div className="metric"><span>Period</span><strong>{range.from} → {range.to}</strong></div><div className="metric"><span>Output</span><strong>{hasSummary ? "Standalone PDF" : selected.length > 1 ? "Combined PDF" : "Legacy PDF Design"}</strong></div><div className="rule-note">AI Executive Summary is standalone. Standard reports, Metering reports and AI Dynamic Reporting can be combined.</div>{selected.length ? selected.map((pack, index) => <div className="selected-pill" key={`${pack.id}-${index}`}><span className="ico" style={{ "--accent": pack.tone } as CSSProperties}>{pack.icon}</span>{index + 1}. {pack.title}</div>) : <div className="metric"><span>Status</span><strong>Canvas empty</strong></div>}</div></aside>
+        <aside className="panel right"><div className="head"><strong>Build Summary</strong><small>{selected.length} selected report pack{selected.length === 1 ? "" : "s"}</small></div><div className="summary"><div className="metric"><span>Branch Scope</span><strong>{branchLabel(selectedBranch)}</strong></div><div className="metric"><span>Period</span><strong>{range.from} → {range.to}</strong></div><div className="metric"><span>Output</span><strong>{hasSummary ? "Standalone PDF" : selected.length > 1 ? "Combined PDF" : "Legacy PDF Design"}</strong></div><div className="rule-note">AI Executive Summary is standalone. Standard reports, Metering reports, ROI Software and AI Dynamic Reporting can be combined.</div>{selected.length ? selected.map((pack, index) => <div className="selected-pill" key={`${pack.id}-${index}`}><span className="ico" style={{ "--accent": pack.tone } as CSSProperties}>{pack.icon}</span>{index + 1}. {pack.title}</div>) : <div className="metric"><span>Status</span><strong>Canvas empty</strong></div>}</div></aside>
       </section>
       {preview && <div className="backdrop" onClick={(event) => event.target === event.currentTarget && setPreview(null)}><section className="preview"><div className="preview-head"><div><strong>{preview.title}</strong><small>{range.from} to {range.to} · {preview.count} pack{preview.count === 1 ? "" : "s"} · {branchLabel(selectedBranch)}</small></div><button className="builder-btn" onClick={() => setPreview(null)}>Close</button></div><iframe className="preview-frame" title={`${preview.title} preview`} srcDoc={preview.html} /></section></div>}
     </main>
