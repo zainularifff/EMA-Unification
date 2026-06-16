@@ -220,6 +220,7 @@ export const notificationSettingsService = {
     return { saved: true, localOnly: true };
   },
   async testWhatsapp(payload: NotificationWhatsappConfig & { testNumber: string }) {
+    if (!payload.isEnabled) throw new Error("Enable WhatsApp channel before sending test.");
     if (!String(payload.testNumber || "").trim()) throw new Error("Recipient phone number is required.");
     if (!ENABLE_REMOTE_NOTIFICATION_API && !hasWhatsappSendConfig(payload)) {
       throw new Error("Real WhatsApp test requires Account SID and From Number. Enter the credentials first, then send test.");
