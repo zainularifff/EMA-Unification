@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Bell, Loader2, Mail, MessageSquare, RefreshCw, Send, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Bell, CheckCircle2, Loader2, Mail, MessageSquare, RefreshCw, Send, ShieldCheck, XCircle } from "lucide-react";
 import "../../styles/notification-channels.css";
 import "../../styles/notification-channels-fix.css";
 import notificationSettingsService, {
@@ -11,14 +11,17 @@ import notificationSettingsService, {
 } from "../../services/notificationSettingsService";
 
 const PROVIDERS: NotificationEmailProvider[] = ["SMTP", "Azure", "Exchange", "Gmail"];
+const DEFAULT_WHATSAPP_LIMIT = 200;
+
+type ToastTone = "success" | "info" | "error";
+type ToastState = { id: number; tone: ToastTone; title: string; message: string } | null;
+
 const emptyEmailConfigs: Record<NotificationEmailProvider, NotificationEmailConfig> = {
   SMTP: { provider: "SMTP", host: "", port: "587", user: "", pass: "", ssl: true, isActive: true },
   Azure: { provider: "Azure", azureTenantId: "", azureClientId: "", azureClientSecret: "", azureUser: "", azurePass: "", isActive: false },
   Exchange: { provider: "Exchange", exchangeEndpoint: "", exchangeDomainUser: "", exchangePass: "", user: "", isActive: false },
   Gmail: { provider: "Gmail", gmailUser: "", gmailPass: "", isActive: false },
 };
-
-const DEFAULT_WHATSAPP_LIMIT = 200;
 
 function cloneEmailConfigs() {
   return JSON.parse(JSON.stringify(emptyEmailConfigs)) as Record<NotificationEmailProvider, NotificationEmailConfig>;
@@ -28,6 +31,7 @@ function titleFromRule(ruleKey: string) {
   return String(ruleKey || "")
     .toLowerCase()
     .split("_")
+    .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
@@ -40,7 +44,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="notification-field"><span>{label}</span>{children}</label>;
 }
 
-function normalizeUsage(row: WhatsappUsage): WhatsappUsage {
+function normalizeUsage(row?: Partial<WhatsappUsage>): WhatsappUsage {
   const count = Math.max(0, Number(row?.count || 0));
   const limit = DEFAULT_WHATSAPP_LIMIT;
   return {
@@ -61,19 +65,34 @@ export default function NotificationChannelsSettings() {
   const [testNumber, setTestNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ tone: "success" | "info" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ tone: ToastTone; text: string } | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   const activeEmail = emailConfigs[provider];
   const enabledRules = useMemo(() => rules.filter((rule) => rule.Enabled || rule.WhatsAppEnabled).length, [rules]);
   const usedPercent = Math.min(100, Math.round((usage.count / Math.max(usage.limit, 1)) * 100));
 
+  const notify = (tone: ToastTone, title: string, detail: string) => {
+    const id = Date.now();
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    setToast({ id, tone, title, message: detail });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((current) => (current?.id === id ? null : current));
+    }, 4200);
+  };
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+  }, []);
+
   const patchEmail = (patch: Partial<NotificationEmailConfig>) => {
     setEmailConfigs((current) => ({ ...current, [provider]: { ...current[provider], provider, ...patch } }));
   };
 
-  const load = async () => {
+  const load = async (silent = false) => {
     setLoading(true);
-    setMessage(null);
+    if (!silent) setMessage(null);
     try {
       const [emailRows, whatsappRow, usageRow, ruleRows] = await Promise.all([
         notificationSettingsService.getEmailSettings(),
@@ -83,22 +102,33 @@ export default function NotificationChannelsSettings() {
       ]);
       const next = cloneEmailConfigs();
       emailRows.forEach((row) => {
-        next[row.provider] = { ...next[row.provider], ...row, pass: row.pass || "", azureClientSecret: row.azureClientSecret || "", azurePass: row.azurePass || "", exchangePass: row.exchangePass || "", gmailPass: row.gmailPass || "" };
+        next[row.provider] = {
+          ...next[row.provider],
+          ...row,
+          pass: row.pass || "",
+          azureClientSecret: row.azureClientSecret || "",
+          azurePass: row.azurePass || "",
+          exchangePass: row.exchangePass || "",
+          gmailPass: row.gmailPass || "",
+        };
       });
       setEmailConfigs(next);
       const activeProvider = emailRows.find((row) => row.isActive)?.provider;
       if (activeProvider) setProvider(activeProvider);
-      setWhatsapp(whatsappRow);
+      setWhatsapp((current) => ({ ...current, ...whatsappRow, authToken: current.authToken || whatsappRow.authToken || "" }));
       setUsage(normalizeUsage(usageRow));
       setRules(ruleRows);
+      if (!silent) notify("success", "Notification settings refreshed", "Latest notification configuration has been loaded.");
     } catch (error) {
-      setMessage({ tone: "error", text: readError(error) });
+      const detail = readError(error);
+      setMessage({ tone: "error", text: detail });
+      notify("error", "Notification load failed", detail);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(true); }, []);
 
   const saveEmail = async () => {
     setSaving(true);
@@ -106,10 +136,13 @@ export default function NotificationChannelsSettings() {
     try {
       const result = await notificationSettingsService.saveEmailSettings({ ...activeEmail, provider });
       const isLocal = Boolean((result as any)?.localOnly);
-      setMessage({ tone: isLocal ? "info" : "success", text: isLocal ? `${provider} email configuration saved locally.` : `${provider} email configuration saved.` });
-      await load();
+      const detail = isLocal ? `${provider} email configuration saved locally.` : `${provider} email configuration saved to database.`;
+      setMessage({ tone: isLocal ? "info" : "success", text: detail });
+      notify(isLocal ? "info" : "success", "Email settings saved", detail);
     } catch (error) {
-      setMessage({ tone: "error", text: readError(error) });
+      const detail = readError(error);
+      setMessage({ tone: "error", text: detail });
+      notify("error", "Email save failed", detail);
     } finally {
       setSaving(false);
     }
@@ -120,9 +153,13 @@ export default function NotificationChannelsSettings() {
     setMessage(null);
     try {
       await notificationSettingsService.testEmail({ ...activeEmail, provider });
-      setMessage({ tone: "success", text: `${provider} test completed.` });
+      const detail = `${provider} test completed.`;
+      setMessage({ tone: "success", text: detail });
+      notify("success", "Email test completed", detail);
     } catch (error) {
-      setMessage({ tone: "error", text: readError(error) });
+      const detail = readError(error);
+      setMessage({ tone: "error", text: detail });
+      notify("error", "Email test failed", detail);
     } finally {
       setSaving(false);
     }
@@ -134,18 +171,29 @@ export default function NotificationChannelsSettings() {
     try {
       const result = await notificationSettingsService.saveWhatsappSettings(whatsapp);
       const isLocal = Boolean((result as any)?.localOnly);
-      setMessage({ tone: isLocal ? "info" : "success", text: isLocal ? "WhatsApp configuration saved locally." : "WhatsApp configuration saved." });
-      await load();
+      const detail = isLocal ? "WhatsApp configuration saved locally." : "WhatsApp configuration saved to database.";
+      setMessage({ tone: isLocal ? "info" : "success", text: detail });
+      notify(isLocal ? "info" : "success", "WhatsApp settings saved", detail);
     } catch (error) {
-      setMessage({ tone: "error", text: readError(error) });
+      const detail = readError(error);
+      setMessage({ tone: "error", text: detail });
+      notify("error", "WhatsApp save failed", detail);
     } finally {
       setSaving(false);
     }
   };
 
   const testWhatsapp = async () => {
+    if (!whatsapp.isEnabled) {
+      const detail = "Enable WhatsApp channel before sending test.";
+      setMessage({ tone: "error", text: detail });
+      notify("error", "WhatsApp test blocked", detail);
+      return;
+    }
     if (!testNumber.trim()) {
-      setMessage({ tone: "error", text: "Enter a recipient phone number first." });
+      const detail = "Enter a recipient phone number first.";
+      setMessage({ tone: "error", text: detail });
+      notify("error", "Recipient required", detail);
       return;
     }
     setSaving(true);
@@ -161,12 +209,13 @@ export default function NotificationChannelsSettings() {
         setUsage(normalizeUsage(nextUsage));
       }
       const isLocal = Boolean(resultData?.simulated || resultData?.localOnly);
-      setMessage({
-        tone: isLocal ? "info" : "success",
-        text: resultData?.message || (isLocal ? "WhatsApp test recorded locally. Backend route is required for real delivery." : "WhatsApp test sent successfully. Check the recipient WhatsApp inbox."),
-      });
+      const detail = resultData?.message || (isLocal ? "WhatsApp test recorded locally. Backend route is required for real delivery." : "WhatsApp test sent successfully. Check the recipient WhatsApp inbox.");
+      setMessage({ tone: isLocal ? "info" : "success", text: detail });
+      notify(isLocal ? "info" : "success", isLocal ? "WhatsApp test recorded" : "WhatsApp test sent", detail);
     } catch (error) {
-      setMessage({ tone: "error", text: readError(error) });
+      const detail = readError(error);
+      setMessage({ tone: "error", text: detail });
+      notify("error", "WhatsApp test failed", detail);
     } finally {
       setSaving(false);
     }
@@ -182,10 +231,14 @@ export default function NotificationChannelsSettings() {
     setMessage(null);
     try {
       await notificationSettingsService.saveRules(next);
-      setMessage({ tone: "success", text: "Notification trigger updated." });
+      const detail = `${titleFromRule(ruleKey)} ${channel === "email" ? "Email" : "WhatsApp"} trigger updated.`;
+      setMessage({ tone: "success", text: detail });
+      notify("success", "Notification trigger updated", detail);
     } catch (error) {
-      setMessage({ tone: "error", text: readError(error) });
-      await load();
+      const detail = readError(error);
+      setMessage({ tone: "error", text: detail });
+      notify("error", "Trigger update failed", detail);
+      await load(true);
     } finally {
       setSaving(false);
     }
@@ -193,6 +246,21 @@ export default function NotificationChannelsSettings() {
 
   return (
     <div className="settings-notification-shell">
+      <div className="notification-toast-stack" aria-live="polite">
+        {toast && (
+          <div className={`notification-toast ${toast.tone}`}>
+            <div className="notification-toast-icon">
+              {toast.tone === "error" ? <XCircle size={18} /> : <CheckCircle2 size={18} />}
+            </div>
+            <div>
+              <strong>{toast.title}</strong>
+              <span>{toast.message}</span>
+            </div>
+            <button type="button" onClick={() => setToast(null)}>×</button>
+          </div>
+        )}
+      </div>
+
       <div className="notification-topbar">
         <div>
           <h2>Notification Channels</h2>
@@ -202,7 +270,7 @@ export default function NotificationChannelsSettings() {
           <button className={`notification-tab ${activeTab === "email" ? "active" : ""}`} onClick={() => setActiveTab("email")}><Mail size={15} /> Email</button>
           <button className={`notification-tab ${activeTab === "whatsapp" ? "active" : ""}`} onClick={() => setActiveTab("whatsapp")}><MessageSquare size={15} /> WhatsApp</button>
           <button className={`notification-tab ${activeTab === "triggers" ? "active" : ""}`} onClick={() => setActiveTab("triggers")}><Bell size={15} /> Triggers</button>
-          <button className="notification-btn" onClick={load} disabled={loading}><RefreshCw size={15} /> Refresh</button>
+          <button className="notification-btn" onClick={() => load()} disabled={loading}><RefreshCw size={15} /> Refresh</button>
         </div>
       </div>
 
@@ -244,7 +312,10 @@ export default function NotificationChannelsSettings() {
                   <Field label="Gmail App Password"><input type="password" value={activeEmail.gmailPass || ""} onChange={(e) => patchEmail({ gmailPass: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
                 </div>}
                 <label className="notification-toggle on email"><input type="checkbox" checked={Boolean(activeEmail.isActive)} onChange={(e) => patchEmail({ isActive: e.target.checked })} /> Set as active email provider</label>
-                <div className="notification-actions"><button className="notification-btn" onClick={testEmail} disabled={saving}><Send size={15} /> Test Email</button><button className="notification-btn primary" onClick={saveEmail} disabled={saving}>Save Email Provider</button></div>
+                <div className="notification-actions">
+                  <button className="notification-btn" onClick={testEmail} disabled={saving}><Send size={15} /> Test Email</button>
+                  <button className="notification-btn primary" onClick={saveEmail} disabled={saving}>Save Email Provider</button>
+                </div>
               </div>
             </section>
             <aside className="notification-card notification-status-card"><span className={`notification-status-pill ${activeEmail.isActive ? "enabled" : ""}`}><ShieldCheck size={14} /> {activeEmail.isActive ? "Active Provider" : "Inactive Provider"}</span><p>Only one email provider should be active for system alerts. Password fields are never returned from the API.</p></aside>
