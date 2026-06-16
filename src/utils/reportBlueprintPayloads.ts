@@ -1,41 +1,142 @@
 type RangeLike = { from: string; to: string; preset?: string };
 type PackLike = { id: string; title: string; subtitle?: string; category?: string; tone?: string };
 type Row = Record<string, any>;
+type Section = { type: string; title: string; rows: Row[]; columns?: string[] };
 
-function text(parts: string[]) { return parts.join(""); }
-function chars(...codes: number[]) { return String.fromCharCode(...codes); }
+const SECTION_EMPTY_NOTE = "No live data returned for this section.";
 
-function num(source: any, keys: string[], fallback: number) {
+function array(value: any): Row[] {
+  return Array.isArray(value) ? value.filter((row) => row && typeof row === "object") : [];
+}
+
+function valueOf(row: Row, keys: string[], fallback: any = "") {
+  for (const key of keys) {
+    if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== "") return row[key];
+    const found = Object.keys(row || {}).find((item) => item.toLowerCase() === key.toLowerCase());
+    if (found && row[found] !== undefined && row[found] !== null && row[found] !== "") return row[found];
+  }
+  return fallback;
+}
+
+function numberOf(row: Row, keys: string[], fallback = 0) {
+  const raw = valueOf(row, keys, fallback);
+  const n = Number(String(raw).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function uniqueRows(rows: Row[], keySelector: (row: Row) => string) {
+  const map = new Map<string, Row>();
+  rows.forEach((row) => {
+    const key = keySelector(row).trim();
+    if (!key) return;
+    if (!map.has(key)) map.set(key, row);
+  });
+  return Array.from(map.values());
+}
+
+function allSections(source: any): Section[] {
+  return [
+    ...array(source?.sections),
+    ...array(source?.exportData?.sections),
+  ].map((section: any) => ({
+    type: String(section?.type || "table"),
+    title: String(section?.title || "Data"),
+    rows: array(section?.rows),
+    columns: Array.isArray(section?.columns) ? section.columns : undefined,
+  }));
+}
+
+function findSectionRows(source: any, terms: string[]): Row[] {
+  const sections = allSections(source);
+  const found = sections.find((section) => {
+    const title = String(section?.title || "").toLowerCase();
+    return terms.every((term) => title.includes(term.toLowerCase()));
+  });
+  return array(found?.rows);
+}
+
+function allEvidenceRows(source: any): Row[] {
+  const rows = [
+    ...array(source?.rows),
+    ...array(source?.records),
+    ...array(source?.items),
+    ...array(source?.data),
+    ...array(source?.exportData?.rows),
+    ...array(source?.exportData?.records),
+  ];
+
+  allSections(source).forEach((section) => rows.push(...array(section.rows)));
+  array(source?.dataSources).forEach((dataSource: any) => {
+    rows.push(...array(dataSource?.rows));
+    rows.push(...array(dataSource?.data));
+    rows.push(...array(dataSource?.records));
+  });
+
+  return rows;
+}
+
+function metric(source: any, keys: string[]) {
   const root = source?.metrics || source || {};
   for (const key of keys) {
     const value = Number(root[key]);
     if (Number.isFinite(value)) return value;
   }
-  return fallback;
+  return 0;
 }
 
-function evidence(source: any) {
-  const endpointTotal = num(source, ["endpointTotal", "totalEndpoints", "totalAssets", "assets"], 80);
-  const online = num(source, ["onlineEndpoints", "onlineAssets", "online"], Math.max(1, Math.round(endpointTotal * 0.25)));
-  const offline = num(source, ["offlineEndpoints", "offlineAssets", "offline"], Math.max(0, endpointTotal - online));
-  const stale = num(source, ["staleEndpoints", "staleAssets", "stale"], Math.min(45, offline));
-  const tickets = num(source, ["openTickets", "tickets"], 0);
-  const sla = num(source, ["slaBreachCandidates", "slaBreaches", "criticalCount"], 0);
-  const software = num(source, ["softwareRows", "softwareRecords", "softwareCount", "totalSoftwareRecords"], 972);
-  const distinctSoftware = num(source, ["distinctSoftware", "softwareNames"], Math.max(1, Math.round(software * 0.42)));
-  const installs = num(source, ["softwareInstalls", "totalInstalls", "installs"], software * 2);
-  const onlineRate = endpointTotal ? Math.round((online / endpointTotal) * 100) : 0;
-  return { endpointTotal, online, offline, stale, tickets, sla, software, distinctSoftware, installs, onlineRate };
+function basicMetrics(source: any) {
+  const rows = allEvidenceRows(source);
+  const endpointTotal = metric(source, ["endpointTotal", "totalEndpoints", "totalAssets", "assets"]) || rows.filter(isHardwareRow).length;
+  const online = metric(source, ["onlineEndpoints", "onlineAssets", "online"]) || rows.filter((row) => isHardwareRow(row) && isConnected(row)).length;
+  const offline = metric(source, ["offlineEndpoints", "offlineAssets", "offline"]) || rows.filter((row) => isHardwareRow(row) && isNotConnected(row)).length;
+  const stale = metric(source, ["staleEndpoints", "staleAssets", "stale"]) || rows.filter((row) => hasValue(row, ["lastSeen", "lastConnected", "LastConnected", "lastCheckIn"]) === false && isHardwareRow(row)).length;
+  const softwareRecords = metric(source, ["softwareRows", "softwareRecords", "softwareCount", "totalSoftwareRecords"]) || rows.filter(isSoftwareRow).length;
+  const distinctSoftware = metric(source, ["distinctSoftware", "softwareNames"]) || new Set(rows.filter(isSoftwareRow).map((row) => String(valueOf(row, ["softwareName", "name", "productName", "applicationName"], "")).toLowerCase()).filter(Boolean)).size;
+  return { endpointTotal, online, offline, stale, softwareRecords, distinctSoftware };
 }
 
-function money(value: number) { return `RM ${Math.round(value).toLocaleString()}`; }
-function array(value: any): Row[] { return Array.isArray(value) ? value : []; }
+function hasValue(row: Row, keys: string[]) {
+  return valueOf(row, keys, "") !== "";
+}
+
+function isHardwareRow(row: Row) {
+  const keys = Object.keys(row || {}).map((key) => key.toLowerCase());
+  return keys.some((key) => ["devicename", "computername", "assetid", "assettag", "serialnumber", "hostname", "agent", "platform", "manufacturer", "model"].includes(key));
+}
+
+function isSoftwareRow(row: Row) {
+  const keys = Object.keys(row || {}).map((key) => key.toLowerCase());
+  return keys.some((key) => ["softwarename", "productname", "applicationname", "publisher", "vendor", "installedversion", "licensetype", "executable"].includes(key));
+}
+
+function isConnected(row: Row) {
+  const status = String(valueOf(row, ["connectionStatus", "status", "agentStatus", "onlineStatus", "availability", "LastConnected"], "")).toLowerCase();
+  return /(online|connected|active|running|yes|true)/.test(status) && !/(not connected|offline|inactive|stale)/.test(status);
+}
+
+function isNotConnected(row: Row) {
+  const status = String(valueOf(row, ["connectionStatus", "status", "agentStatus", "onlineStatus", "availability", "LastConnected"], "")).toLowerCase();
+  return /(offline|not connected|inactive|stale|no|false)/.test(status);
+}
+
+function groupCount(rows: Row[], labelKeys: string[], valueKeys: string[] = []) {
+  const map = new Map<string, number>();
+  rows.forEach((row) => {
+    const label = String(valueOf(row, labelKeys, "")).trim();
+    if (!label) return;
+    const explicit = numberOf(row, valueKeys, NaN);
+    map.set(label, (map.get(label) || 0) + (Number.isFinite(explicit) && explicit > 0 ? explicit : 1));
+  });
+  return Array.from(map.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => Number(b.value) - Number(a.value));
+}
 
 function payload(pack: PackLike, range: RangeLike, filters: any, body: any) {
   return {
     success: true,
     generatedAt: new Date().toISOString(),
-    mode: "scope-locked-report",
+    mode: "data-driven-report-blueprint",
     report: {
       id: pack.id,
       title: body.reportTitle || pack.title,
@@ -43,7 +144,7 @@ function payload(pack: PackLike, range: RangeLike, filters: any, body: any) {
       type: body.type || pack.category || "Standard",
       description: body.description || pack.subtitle || "",
     },
-    filters: { ...filters, reportId: pack.id, scopeLocked: true },
+    filters: { ...filters, reportId: pack.id, dataDrivenOnly: true },
     metrics: body.metrics || {},
     narrative: {
       title: body.title || body.reportTitle || pack.title,
@@ -55,210 +156,295 @@ function payload(pack: PackLike, range: RangeLike, filters: any, body: any) {
     },
     sections: body.sections || [],
     recommendations: body.recommendations || [],
-    dataSources: [{ name: pack.title, table: "Scope locked blueprint", rows: body.metrics?.endpointTotal || body.metrics?.softwareRecords || 0 }],
+    dataSources: [{ name: pack.title, table: "Live report payload", rows: body.sourceRows || 0 }],
     exportData: { metrics: [body.metrics || {}], sections: body.sections || [], recommendations: body.recommendations || [] },
   };
 }
 
-function findSectionRows(source: any, terms: string[]): Row[] {
-  const sections = [...array(source?.sections), ...array(source?.exportData?.sections)];
-  const found = sections.find((section) => {
-    const title = String(section?.title || "").toLowerCase();
-    return terms.every((term) => title.includes(term.toLowerCase()));
-  });
-  return array(found?.rows);
+function tableSection(title: string, rows: Row[], columns?: string[]): Section {
+  return { type: "table", title, rows, columns };
 }
 
-function valueOf(row: Row, keys: string[], fallback: any = "-") {
-  for (const key of keys) {
-    if (row?.[key] !== undefined && row?.[key] !== null && row?.[key] !== "") return row[key];
-    const found = Object.keys(row || {}).find((item) => item.toLowerCase() === key.toLowerCase());
-    if (found && row[found] !== undefined && row[found] !== null && row[found] !== "") return row[found];
-  }
-  return fallback;
+function barSection(title: string, rows: Row[]): Section {
+  return { type: "bar", title, rows };
 }
 
-function numberOf(row: Row, keys: string[], fallback = 0) {
-  const raw = valueOf(row, keys, fallback);
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : fallback;
+function deriveHardwareRows(source: any) {
+  return allEvidenceRows(source).filter(isHardwareRow);
 }
 
-function branchRows(source: any, e: ReturnType<typeof evidence>) {
-  const raw = [
-    ...findSectionRows(source, ["branch", "asset"]),
+function deriveSoftwareRows(source: any) {
+  return allEvidenceRows(source).filter(isSoftwareRow);
+}
+
+function branchLocationRows(source: any, hardwareRows: Row[]) {
+  const liveSection = [
+    ...findSectionRows(source, ["branch"]),
     ...findSectionRows(source, ["location"]),
     ...findSectionRows(source, ["department"]),
   ];
-  const dedupe = new Map<string, Row>();
-  raw.forEach((row) => {
-    const location = String(valueOf(row, ["location", "department", "branch", "site", "label", "name"], "Unmapped"));
-    const total = numberOf(row, ["total", "count", "value", "endpoints", "assets"], 0);
-    if (!location || total <= 0) return;
-    dedupe.set(location, { location, total });
+  const candidates = liveSection.length ? liveSection : hardwareRows;
+  const map = new Map<string, { location: string; total: number; connected: number; notConnected: number; staleOrAging: number }>();
+
+  candidates.forEach((row) => {
+    const location = String(valueOf(row, ["location", "branch", "department", "site", "groupPath", "workgroup", "name", "label"], "")).trim();
+    if (!location) return;
+    const total = numberOf(row, ["total", "count", "value", "endpoints", "assets"], 0) || 1;
+    const connected = numberOf(row, ["online", "connected", "active"], 0) || (isConnected(row) ? 1 : 0);
+    const notConnected = numberOf(row, ["offline", "notConnected", "inactive"], 0) || (isNotConnected(row) ? 1 : 0);
+    const staleOrAging = numberOf(row, ["stale", "staleOrAging", "agingCandidate", "aging", "oldAsset"], 0);
+    const current = map.get(location) || { location, total: 0, connected: 0, notConnected: 0, staleOrAging: 0 };
+    current.total += total;
+    current.connected += connected;
+    current.notConnected += notConnected;
+    current.staleOrAging += staleOrAging;
+    map.set(location, current);
   });
 
-  let rows = Array.from(dedupe.values());
-  if (!rows.length) {
-    rows = [
-      { location: "All Branches", total: e.endpointTotal },
-      { location: "Connected Estate", total: e.online },
-      { location: "Not Connected Estate", total: e.offline },
-      { location: "Stale / Missing Telemetry", total: e.stale },
-    ];
-  }
-
-  return rows.slice(0, 40).map((row, index) => {
-    const total = Math.max(0, Number(row.total || 0));
-    const onlineShare = e.endpointTotal ? Math.round((total / e.endpointTotal) * e.online) : Math.round(total * 0.25);
-    const online = Math.min(total, Math.max(0, onlineShare));
-    const offline = Math.max(0, total - online);
-    const staleOrAging = Math.min(total, Math.max(0, Math.round((offline || total) * (index < 2 ? 0.3 : 0.18))));
-    return {
-      location: row.location,
-      total,
-      online,
-      offline,
-      staleOrAging,
-      action: staleOrAging > 0 ? "Review aging/stale endpoints by location." : "Monitor.",
-    };
-  });
+  return Array.from(map.values()).sort((a, b) => b.total - a.total);
 }
 
-function brandRows(source: any, e: ReturnType<typeof evidence>) {
-  const existing = findSectionRows(source, ["manufacturer"]).concat(findSectionRows(source, ["brand"]));
-  const mapped = existing
-    .map((row) => ({ label: String(valueOf(row, ["brand", "manufacturer", "label", "name"], "Unspecified")), value: numberOf(row, ["total", "count", "value", "endpoints", "assets"], 0) }))
-    .filter((row) => row.value > 0);
-  if (mapped.length) return mapped.slice(0, 20);
-  const dell = Math.max(1, Math.round(e.endpointTotal * 0.52));
-  const unspecified = Math.max(0, e.endpointTotal - dell - 8);
-  return [
-    { label: "Dell", value: dell },
-    { label: "Unspecified", value: unspecified },
-    { label: "HP", value: Math.max(1, Math.round(e.endpointTotal * 0.05)) },
-    { label: "Microsoft", value: Math.max(1, Math.round(e.endpointTotal * 0.04)) },
-    { label: "Apple", value: Math.max(1, Math.round(e.endpointTotal * 0.02)) },
+function brandRows(source: any, hardwareRows: Row[]) {
+  const liveSection = [
+    ...findSectionRows(source, ["manufacturer"]),
+    ...findSectionRows(source, ["brand"]),
   ];
+  const candidates = liveSection.length ? liveSection : hardwareRows;
+  return groupCount(candidates, ["brand", "manufacturer", "make", "vendor", "label", "name"], ["total", "count", "value", "endpoints", "assets"]);
+}
+
+function pcAgingRows(source: any, locationRows: Row[], hardwareRows: Row[]) {
+  const live = [
+    ...findSectionRows(source, ["pc", "aging"]),
+    ...findSectionRows(source, ["endpoint", "aging"]),
+    ...findSectionRows(source, ["asset", "aging"]),
+  ];
+  if (live.length) return live;
+
+  return locationRows
+    .filter((row) => Number(row.staleOrAging || 0) > 0 || Number(row.agingCandidate || 0) > 0)
+    .map((row) => ({
+      location: row.location || row.label || row.name,
+      agingCandidate: row.staleOrAging || row.agingCandidate || 0,
+      topBrand: valueOf(row, ["topBrand", "brand", "manufacturer"], ""),
+      sampleEndpoint: valueOf(row, ["sampleEndpoint", "deviceName", "computerName", "assetTag"], ""),
+      action: "Validate refresh/replacement requirement.",
+    }))
+    .concat(
+      hardwareRows
+        .filter((row) => Number(valueOf(row, ["ageYears", "assetAge", "yearsOld"], 0)) >= 4)
+        .map((row) => ({
+          location: valueOf(row, ["location", "branch", "department", "site"], ""),
+          agingCandidate: 1,
+          topBrand: valueOf(row, ["brand", "manufacturer", "vendor"], ""),
+          sampleEndpoint: valueOf(row, ["deviceName", "computerName", "assetTag", "hostname"], ""),
+          action: "Validate refresh/replacement requirement.",
+        }))
+    );
+}
+
+function osComplianceRows(source: any, hardwareRows: Row[]) {
+  const live = [
+    ...findSectionRows(source, ["os", "compliance"]),
+    ...findSectionRows(source, ["supported", "os"]),
+  ];
+  if (live.length) return live;
+
+  return groupCount(hardwareRows, ["os", "operatingSystem", "platform", "osName"], ["total", "count", "value", "endpoints"])
+    .map((row) => ({ os: row.label, endpoints: row.value, scope: "Live inventory", complianceStatus: "Requires lifecycle mapping", action: "Validate OS lifecycle status from inventory source." }));
+}
+
+function lifecycleRows(source: any, hardwareRows: Row[]) {
+  const live = [
+    ...findSectionRows(source, ["lifecycle"]),
+    ...findSectionRows(source, ["eol"]),
+    ...findSectionRows(source, ["eos"]),
+  ];
+  if (live.length) return live;
+
+  const rows = hardwareRows
+    .map((row) => {
+      const lifecycle = String(valueOf(row, ["lifecycleStatus", "eolStatus", "supportStatus", "osSupportStatus"], "")).trim();
+      if (!lifecycle) return null;
+      return {
+        category: lifecycle,
+        endpoints: 1,
+        severity: /eol|eos|expired|unsupported/i.test(lifecycle) ? "High" : "Monitor",
+        finding: valueOf(row, ["os", "operatingSystem", "platform"], "Lifecycle evidence available."),
+        action: /eol|eos|expired|unsupported/i.test(lifecycle) ? "Plan upgrade/replacement or exception approval." : "Maintain lifecycle evidence.",
+      };
+    })
+    .filter(Boolean) as Row[];
+  return groupCount(rows, ["category"], ["endpoints"]).map((row) => ({ category: row.label, endpoints: row.value, severity: /eol|eos|expired|unsupported/i.test(row.label) ? "High" : "Monitor", finding: "Derived from live lifecycle evidence.", action: /eol|eos|expired|unsupported/i.test(row.label) ? "Plan upgrade/replacement or exception approval." : "Maintain lifecycle evidence." }));
+}
+
+function agentStatusRows(source: any, hardwareRows: Row[]) {
+  const live = [
+    ...findSectionRows(source, ["agent", "status"]),
+    ...findSectionRows(source, ["connected"]),
+  ];
+  if (live.length) return live;
+  const connected = hardwareRows.filter(isConnected).length;
+  const notConnected = hardwareRows.filter(isNotConnected).length;
+  const unknown = Math.max(0, hardwareRows.length - connected - notConnected);
+  return [
+    connected ? { label: "Connected", value: connected } : null,
+    notConnected ? { label: "Not Connected", value: notConnected } : null,
+    unknown ? { label: "Unknown", value: unknown } : null,
+  ].filter(Boolean) as Row[];
+}
+
+function assetAgingRows(source: any, hardwareRows: Row[]) {
+  const live = [
+    ...findSectionRows(source, ["asset", "aging"]),
+    ...findSectionRows(source, ["asset", "age"]),
+  ];
+  if (live.length) return live;
+
+  const buckets = new Map<string, number>();
+  hardwareRows.forEach((row) => {
+    const age = Number(valueOf(row, ["ageYears", "assetAge", "yearsOld"], NaN));
+    const label = Number.isFinite(age)
+      ? age < 3 ? "0 - 2 Years" : age < 5 ? "3 - 4 Years" : "5+ Years"
+      : hasValue(row, ["purchaseDate", "warrantyStart", "createdDate"]) ? "Date Available / Age Not Calculated" : "Missing Purchase Date";
+    buckets.set(label, (buckets.get(label) || 0) + 1);
+  });
+  return Array.from(buckets.entries()).map(([agingBucket, endpoints]) => ({ agingBucket, endpoints, level: agingBucket.includes("5+") ? "High" : agingBucket.includes("Missing") ? "Review" : "Monitor", action: "Validate asset lifecycle evidence." }));
 }
 
 function hardwarePayload(pack: PackLike, range: RangeLike, source: any, filters: any) {
-  const e = evidence(source);
-  const lifecycle = text([chars(86,117,108,110,101,114,97,98,105,108,105,116,121), " & ", chars(83,101,99,117,114,105,116,121), " (Supported OS / EOL / EOS)"]);
-  const locations = branchRows(source, e);
-  const brands = brandRows(source, e);
-  const agingRows = locations.map((row, index) => ({
-    location: row.location,
-    agingCandidate: row.staleOrAging,
-    topBrand: brands[index % brands.length]?.label || "Unspecified",
-    sampleEndpoint: index === 0 ? "Derived from selected branch scope" : "Inventory evidence required",
-    action: row.staleOrAging > 0 ? "Validate refresh/replacement requirement." : "Monitor lifecycle evidence.",
-  })).filter((row) => row.agingCandidate > 0 || locations.length <= 8).slice(0, 40);
-
-  const assetAgingRows = [
-    { agingBucket: "0 - 2 Years", endpoints: Math.max(0, e.endpointTotal - e.stale - 18), level: "Low", action: "Maintain normal lifecycle monitoring." },
-    { agingBucket: "3 - 4 Years", endpoints: Math.max(0, Math.round(e.endpointTotal * 0.23)), level: "Medium", action: "Prepare refresh forecast." },
-    { agingBucket: "5+ Years", endpoints: Math.max(0, Math.round(e.endpointTotal * 0.18)), level: "High", action: "Confirm replacement or approved exception." },
-    { agingBucket: "Unknown / Missing Purchase Date", endpoints: Math.max(0, e.stale), level: "Review", action: "Clean asset purchase date and ownership evidence." },
-  ];
+  const hardwareRows = deriveHardwareRows(source);
+  const metrics = basicMetrics(source);
+  const locations = branchLocationRows(source, hardwareRows);
+  const brands = brandRows(source, hardwareRows);
+  const pcAging = pcAgingRows(source, locations, hardwareRows);
+  const osRows = osComplianceRows(source, hardwareRows);
+  const lifecycle = lifecycleRows(source, hardwareRows);
+  const agentRows = agentStatusRows(source, hardwareRows);
+  const assetAge = assetAgingRows(source, hardwareRows);
 
   const sections = [
-    { type: "bar", title: "Endpoint Manufacturer Brand", rows: brands },
-    { type: "table", title: "Resources Planning - PC Aging", rows: agingRows },
-    { type: "table", title: "OS Compliance", rows: [
-      { os: "Windows", endpoints: Math.max(0, e.endpointTotal - 23), scope: "Windows", complianceStatus: "Lifecycle Review", action: "Validate OS and build inventory mapping." },
-      { os: "Microsoft Windows 10 Pro", endpoints: Math.max(1, Math.round(e.endpointTotal * 0.08)), scope: "Windows", complianceStatus: "EOL / EOS", action: "Plan upgrade or approved exception." },
-      { os: "Windows Server 2022 Standard", endpoints: Math.max(1, Math.round(e.endpointTotal * 0.03)), scope: "Windows", complianceStatus: "Supported OS", action: "Maintain lifecycle evidence." },
-      { os: "macOS / iOS / Other", endpoints: Math.max(0, Math.round(e.endpointTotal * 0.04)), scope: "Other / Unknown", complianceStatus: "Validate", action: "Maintain OS lifecycle evidence." },
-    ] },
-    { type: "table", title: lifecycle, rows: [
-      { category: "Supported OS", endpoints: Math.max(0, e.endpointTotal - 14), severity: "Monitor", finding: "Supported lifecycle evidence available.", action: "Keep OS build evidence current." },
-      { category: "EOL / EOS", endpoints: 14, severity: "High", finding: "Unsupported lifecycle candidate detected.", action: "Plan upgrade, replacement or exception approval." },
-      { category: "Missing Lifecycle Mapping", endpoints: e.stale, severity: "Review", finding: "Inventory needs lifecycle mapping confirmation.", action: "Refresh inventory and validate OS build." },
-    ] },
-    { type: "table", title: "HQ / Branch Location", rows: locations },
-    { type: "bar", title: "Agent Status (Connected / Not Connected)", rows: [{ label: "Connected", value: e.online }, { label: "Not Connected", value: e.offline }, { label: "Stale / Missing", value: e.stale }] },
-    { type: "table", title: "Asset Aging", rows: assetAgingRows },
+    barSection("Endpoint Manufacturer Brand", brands),
+    tableSection("Resources Planning - PC Aging", pcAging),
+    tableSection("OS Compliance", osRows),
+    tableSection("Vulnerability & Security (Supported OS / EOL / EOS)", lifecycle),
+    tableSection("HQ / Branch Location", locations),
+    barSection("Agent Status (Connected / Not Connected)", agentRows),
+    tableSection("Asset Aging", assetAge),
   ];
 
   return payload(pack, range, filters, {
     reportTitle: "Hardware & Asset Lifecycle Report",
     category: "Asset Lifecycle Report Pack",
     type: "Hardware Reporting",
-    description: "Hardware reporting bundle for brand, PC aging, OS compliance, lifecycle exposure, location, agent status and asset aging.",
-    metrics: { endpointTotal: e.endpointTotal, online: e.online, offline: e.offline, stale: e.stale, onlineRate: e.onlineRate },
+    description: "Hardware reporting generated from live inventory evidence.",
+    metrics: { endpointTotal: metrics.endpointTotal, online: metrics.online, offline: metrics.offline, stale: metrics.stale },
     title: "Hardware Reporting",
-    summary: `Hardware Reporting evaluates ${e.endpointTotal} endpoint record(s), manufacturer brand, PC aging, OS compliance, supported/EOL/EOS exposure, HQ/Branch location, connected status and asset aging.`,
-    conclusion: "Prioritise refresh planning by aging signal, OS lifecycle, branch ownership and connected/not connected agent status.",
+    summary: hardwareRows.length ? `Hardware Reporting is generated from ${hardwareRows.length} live hardware record(s).` : SECTION_EMPTY_NOTE,
+    conclusion: hardwareRows.length ? "Review manufacturer, PC aging, OS compliance, lifecycle, branch, agent status and asset aging evidence." : "Connect hardware inventory payload to populate this report.",
     findings: [
-      `Endpoint Manufacturer Brand contains ${brands.length} brand group(s).`,
-      `Resources Planning - PC Aging contains ${agingRows.length} location/aging row(s).`,
-      `HQ / Branch Location contains ${locations.length} branch/location row(s).`,
-      "OS Compliance, Supported OS / EOL / EOS, Agent Status and Asset Aging are included.",
+      `${brands.length} manufacturer/brand group(s) returned from live evidence.`,
+      `${pcAging.length} PC aging row(s) returned from live evidence.`,
+      `${locations.length} branch/location row(s) returned from live evidence.`,
+      `${agentRows.length} agent status group(s) returned from live evidence.`,
     ],
     sections,
-    recommendations: [
-      { priority: "Priority 1", action: `Validate ${agingRows.reduce((total, row) => total + Number(row.agingCandidate || 0), 0)} PC aging candidate(s) by branch.`, owner: "Asset Manager", target: "Refresh cycle" },
-      { priority: "Priority 2", action: "Confirm EOL/EOS and supported OS evidence.", owner: "Endpoint Team", target: "Next review" },
-      { priority: "Priority 3", action: `Review ${e.offline} not connected endpoint(s).`, owner: "Operations Team", target: "Immediate" },
-    ],
+    recommendations: hardwareRows.length ? [
+      { priority: "Priority 1", action: "Review PC aging and asset aging candidates from live inventory evidence.", owner: "Asset Manager", target: "Refresh review" },
+      { priority: "Priority 2", action: "Validate OS compliance and lifecycle status from supported/EOL/EOS evidence.", owner: "Endpoint Team", target: "Next review" },
+      { priority: "Priority 3", action: "Review connected/not connected agent status and branch ownership.", owner: "Operations Team", target: "Immediate" },
+    ] : [],
+    sourceRows: hardwareRows.length,
+  });
+}
+
+function softwareCategoryRows(source: any, softwareRows: Row[], titleTerms: string[], categories: string[]) {
+  const live = findSectionRows(source, titleTerms);
+  if (live.length) return live;
+
+  return categories.map((category) => {
+    const categoryText = category.toLowerCase();
+    const matched = softwareRows.filter((row) => {
+      const text = `${valueOf(row, ["softwareName", "name", "productName", "applicationName"], "")} ${valueOf(row, ["publisher", "vendor", "manufacturer", "category", "type"], "")}`.toLowerCase();
+      if (categoryText.includes("microsoft") || categoryText.includes("adobe")) return /microsoft|adobe/.test(text);
+      if (categoryText.includes("business")) return /paid|business|commercial|licensed|subscription/.test(text);
+      if (categoryText.includes("software product")) return !!text;
+      if (categoryText.includes("remote")) return /remote|viewer|anydesk|teamviewer|vnc|rdp|screenconnect|ultraviewer/.test(text);
+      if (categoryText.includes("games")) return /game|steam|epic games|riot|roblox|minecraft/.test(text);
+      if (categoryText.includes("antivirus")) return /antivirus|defender|kaspersky|eset|symantec|mcafee|trend micro|avast|avg/.test(text);
+      if (categoryText.includes("unwanted")) return /toolbar|coupon|adware|cleaner|optimizer|pup/.test(text);
+      if (categoryText.includes("unauthorized")) return /crack|keygen|portable|torrent|bypass/.test(text);
+      if (categoryText.includes("browser")) return /chrome|edge|firefox|opera|brave|safari|browser/.test(text);
+      return false;
+    });
+    const distinct = new Set(matched.map((row) => String(valueOf(row, ["softwareName", "name", "productName", "applicationName"], "")).toLowerCase()).filter(Boolean)).size;
+    return {
+      area: category,
+      category,
+      totalRecords: matched.length,
+      records: matched.length,
+      distinctSoftware: distinct,
+      coveredDevices: new Set(matched.map((row) => String(valueOf(row, ["deviceName", "computerName", "assetId", "clientId"], "")).toLowerCase()).filter(Boolean)).size,
+      complianceStatus: matched.length ? "Review required" : "No live evidence returned",
+      recommendedAction: matched.length ? "Validate entitlement, approval and cleanup action from live software evidence." : SECTION_EMPTY_NOTE,
+    };
   });
 }
 
 function softwarePayload(pack: PackLike, range: RangeLike, source: any, filters: any) {
-  const e = evidence(source);
-  const remoteTools = text([chars(82,101,109,111,116,101), " Tools"]);
-  const unapprovedApp = text([chars(85,110), "authorized App"]);
-  const productRows = [
-    { area: "Software Product", totalRecords: Math.max(1, Math.round(e.software * 0.13)), distinctSoftware: Math.max(1, Math.round(e.distinctSoftware * 0.18)), coveredDevices: 8, complianceStatus: "Inventory baseline", recommendedAction: "Confirm product ownership and remove duplicate or obsolete software records." },
-    { area: "Business Product (Paid Version)", totalRecords: Math.max(1, Math.round(e.software * 0.02)), distinctSoftware: 9, coveredDevices: 3, complianceStatus: "Licence review required", recommendedAction: "Validate paid application entitlement against purchase or subscription records." },
-    { area: "Microsoft / Adobe", totalRecords: Math.max(1, Math.round(e.software * 0.8)), distinctSoftware: Math.max(1, Math.round(e.distinctSoftware * 0.72)), coveredDevices: 21, complianceStatus: "BSA priority review", recommendedAction: "Reconcile installs with approved licence baseline." },
-    { area: "Breakdown Details", totalRecords: e.software, distinctSoftware: e.distinctSoftware, coveredDevices: 24, complianceStatus: "Detailed evidence available", recommendedAction: "Use breakdown tables for audit evidence, cleanup and exception approval." },
-  ];
-  const riskRows = [
-    { category: remoteTools, records: 12, severity: "Review", finding: "Tool evidence must match approved policy.", action: "Validate owner, business justification and approval record." },
-    { category: "Games Application", records: 7, severity: "Medium", finding: "Games application evidence found in software inventory.", action: "Confirm policy exception or uninstall action." },
-    { category: "Antivirus", records: 18, severity: "Monitor", finding: "Tool presence should be reconciled with approved baseline.", action: "Confirm approved baseline and remove duplicate tools." },
-    { category: "Unwanted Application", records: 21, severity: "Review", finding: "Potentially unwanted software requires cleanup validation.", action: "Prepare removal list and confirm endpoint owner." },
-    { category: unapprovedApp, records: 9, severity: "High", finding: "Application not mapped to approved software list.", action: "Validate entitlement, approval and exception record." },
-    { category: "Web Browser", records: 46, severity: "Monitor", finding: "Browser footprint should be aligned with supported browser policy.", action: "Standardise browser version and remove unsupported browsers." },
-  ];
+  const softwareRows = deriveSoftwareRows(source);
+  const metrics = basicMetrics(source);
+  const bsaRows = softwareCategoryRows(source, softwareRows, ["bsa"], ["Software Product", "Business Product (Paid Version)", "Microsoft / Adobe", "Breakdown Details"]);
+  const riskRows = softwareCategoryRows(source, softwareRows, ["risk", "software"], ["Remote Tools", "Games Application", "Antivirus", "Unwanted Application", "Unauthorized App", "Web Browser"]);
+
   const sections = [
-    { type: "bar", title: "BSA Compliance", rows: productRows.map((row) => ({ label: row.area, value: row.totalRecords })) },
-    { type: "table", title: "BSA Compliance - Breakdown Details", rows: productRows },
-    { type: "bar", title: "Risk Software", rows: riskRows.map((row) => ({ label: row.category, value: row.records })) },
-    { type: "table", title: "Risk Software - Action Detail", rows: riskRows },
+    barSection("BSA Compliance", bsaRows.map((row) => ({ label: row.area || row.category, value: row.totalRecords || row.records || 0 }))),
+    tableSection("BSA Compliance - Breakdown Details", bsaRows),
+    barSection("Risk Software", riskRows.map((row) => ({ label: row.category || row.area, value: row.records || row.totalRecords || 0 }))),
+    tableSection("Risk Software - Action Detail", riskRows),
   ];
 
   return payload(pack, range, filters, {
     reportTitle: "Software & Application Governance Report",
     category: "Software Governance Report Pack",
     type: "Software Reporting",
-    description: "Software reporting covering BSA compliance and risk software categories.",
-    metrics: { softwareRecords: e.software, distinctSoftware: e.distinctSoftware, coveredDevices: 24, bsaReviewItems: productRows.reduce((total, row) => total + row.totalRecords, 0) },
+    description: "Software reporting generated from live software evidence.",
+    metrics: { softwareRecords: metrics.softwareRecords, distinctSoftware: metrics.distinctSoftware, bsaReviewItems: bsaRows.reduce((total, row) => total + Number(row.totalRecords || row.records || 0), 0) },
     title: "Software Reporting",
-    summary: `Software Reporting reviews ${e.software} software record(s), BSA Compliance and Risk Software categories for entitlement, cleanup and governance action.`,
-    conclusion: "Reconcile BSA compliance scope, validate paid software entitlement and review risk software categories before audit, cleanup or renewal.",
+    summary: softwareRows.length ? `Software Reporting is generated from ${softwareRows.length} live software record(s).` : SECTION_EMPTY_NOTE,
+    conclusion: softwareRows.length ? "Review BSA Compliance and Risk Software evidence using live software inventory rows." : "Connect software inventory payload to populate this report.",
     findings: [
-      "BSA Compliance includes Software Product, Business Product (Paid Version), Microsoft / Adobe and Breakdown Details.",
-      "Risk Software includes Remote Tools, Games Application, Antivirus, Unwanted Application, Unauthorized App and Web Browser.",
-      `${e.software} software record(s) and ${e.distinctSoftware} distinct software name(s) are available for review.`,
+      `${bsaRows.reduce((total, row) => total + Number(row.totalRecords || row.records || 0), 0)} BSA Compliance record(s) returned from live evidence.`,
+      `${riskRows.reduce((total, row) => total + Number(row.records || row.totalRecords || 0), 0)} Risk Software record(s) returned from live evidence.`,
+      `${metrics.distinctSoftware} distinct software name(s) returned from live evidence.`,
     ],
     sections,
-    recommendations: [
+    recommendations: softwareRows.length ? [
       { priority: "Priority 1", action: "Validate BSA Compliance breakdown against entitlement evidence.", owner: "Software Asset Manager", target: "Audit review" },
-      { priority: "Priority 2", action: "Review Risk Software categories and confirm policy exception or cleanup.", owner: "Security / Application Owner", target: "Next review" },
-    ],
+      { priority: "Priority 2", action: "Review Risk Software categories and confirm approval, exception or cleanup.", owner: "Security / Application Owner", target: "Next review" },
+    ] : [],
+    sourceRows: softwareRows.length,
   });
 }
 
 function simplePayload(pack: PackLike, range: RangeLike, source: any, filters: any) {
-  const e = evidence(source);
-  const sections = [
-    { type: "kpi", title: `${pack.title} Snapshot`, rows: [{ label: "Endpoint Scope", value: e.endpointTotal, note: `${e.online} online / ${e.offline} offline` }, { label: "Software Evidence", value: e.software, note: `${e.distinctSoftware} distinct software name(s)` }] },
-    { type: "bar", title: `${pack.title} Distribution`, rows: [{ label: "Online", value: e.online }, { label: "Offline", value: e.offline }, { label: "Stale", value: e.stale }] },
-  ];
-  return payload(pack, range, filters, { reportTitle: pack.title, category: pack.category || "Standard Report", type: pack.category || "Standard", description: pack.subtitle || "", metrics: { endpointTotal: e.endpointTotal, softwareRecords: e.software }, title: pack.title, summary: `${pack.title} is prepared for ${filters?.scope || "All Sites"} covering ${range.from} to ${range.to}.`, conclusion: "Review evidence, assign owner and track next action.", findings: [`${e.endpointTotal} endpoint record(s) available.`, `${e.software} software evidence row(s) available.`, `${e.stale} stale telemetry signal(s) require validation.`], sections, recommendations: [{ priority: "Review", action: `Review ${pack.title} evidence and assign owner.`, owner: "Management Team", target: "Next review" }] });
+  const rows = allEvidenceRows(source);
+  const metrics = basicMetrics(source);
+  const sections = allSections(source).length ? allSections(source) : [];
+  return payload(pack, range, filters, {
+    reportTitle: pack.title,
+    category: pack.category || "Standard Report",
+    type: pack.category || "Standard",
+    description: pack.subtitle || "",
+    metrics: { endpointTotal: metrics.endpointTotal, softwareRecords: metrics.softwareRecords },
+    title: pack.title,
+    summary: rows.length ? `${pack.title} is generated from ${rows.length} live evidence row(s).` : SECTION_EMPTY_NOTE,
+    conclusion: rows.length ? "Review evidence, assign owner and track next action." : "No live evidence was returned for this report scope.",
+    findings: rows.length ? [`${rows.length} live evidence row(s) returned.`] : [SECTION_EMPTY_NOTE],
+    sections,
+    recommendations: [],
+    sourceRows: rows.length,
+  });
 }
 
 export function buildReportBlueprintPayload(pack: PackLike, range: RangeLike, source: any, filters: any) {
