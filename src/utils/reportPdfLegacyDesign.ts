@@ -21,6 +21,7 @@ const REPORT_THEMES: Record<string, ReportTheme> = {
   "software-metering-report": { primary: "#f97316", accent: "#fdba74", label: "Software Metering Report Pack", surface: "#fff7ed" },
   "application-metering-report": { primary: "#06b6d4", accent: "#67e8f9", label: "Application Metering Report Pack", surface: "#ecfeff" },
   "internet-metering-report": { primary: "#14b8a6", accent: "#5eead4", label: "Internet Metering Report Pack", surface: "#f0fdfa" },
+  "software-roi-report": { primary: "#16a34a", accent: "#86efac", label: "ROI Software Report Pack", surface: "#f0fdf4" },
   "dynamic-compliance-report": { primary: "#f59e0b", accent: "#fbbf24", label: "AI Compliance Report Pack", surface: "#fffbeb" },
   "dynamic-cost-saving-report": { primary: "#10b981", accent: "#6ee7b7", label: "AI Cost Saving Report Pack", surface: "#ecfdf5" },
   "dynamic-risk-management-report": { primary: "#ef4444", accent: "#fca5a5", label: "AI Risk Management Report Pack", surface: "#fff1f2" },
@@ -40,6 +41,7 @@ function themeFor(payload: any): ReportTheme {
   const id = String(payload?.report?.id || payload?.filters?.reportId || "");
   const type = String(payload?.report?.type || payload?.report?.category || "").toLowerCase();
   if (REPORT_THEMES[id]) return REPORT_THEMES[id];
+  if (type.includes("roi")) return REPORT_THEMES["software-roi-report"];
   if (type.includes("metering")) return REPORT_THEMES["application-metering-report"];
   if (type.includes("risk")) return REPORT_THEMES["security-compliance-exposure"];
   if (type.includes("compliance")) return REPORT_THEMES["software-application-governance"];
