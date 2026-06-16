@@ -45,6 +45,14 @@ export type WhatsappUsage = {
   activeProvider: string;
 };
 
+type NotificationSettingsBundle = {
+  emailSettings?: NotificationEmailConfig[];
+  whatsappSettings?: NotificationWhatsappConfig;
+  whatsappUsage?: WhatsappUsage;
+  rules?: NotificationRule[];
+  notificationRules?: NotificationRule[];
+};
+
 const WHATSAPP_MONTHLY_LIMIT = 200;
 const STORAGE_KEYS = {
   email: "ema.notification.emailSettings",
@@ -116,6 +124,47 @@ function readErrorMessage(error: unknown) {
   return String(error || "Request failed");
 }
 
+function getStatus(error: unknown): number | undefined {
+  return Number((error as any)?.response?.status || 0) || undefined;
+}
+
+function isAuthError(error: unknown) {
+  const status = getStatus(error);
+  const message = readErrorMessage(error);
+  return status === 401 || status === 403 || /401|403|forbidden|unauthori[sz]ed|invalid|expired/i.test(message);
+}
+
+function isRouteMissing(error: unknown) {
+  const status = getStatus(error);
+  const message = readErrorMessage(error);
+  return status === 404 || /404|not found/i.test(message);
+}
+
+function isNetworkDown(error: unknown) {
+  const message = readErrorMessage(error);
+  return /failed to fetch|err_connection_refused|networkerror|load failed|unable to connect/i.test(message);
+}
+
+function userFacingError(error: unknown, action = "save notification settings") {
+  if (isNetworkDown(error)) {
+    return new Error("Backend server is offline. Start backend on port 3001, then try again.");
+  }
+  if (isAuthError(error)) {
+    return new Error("Session expired. Please sign in again before saving settings.");
+  }
+  if (isRouteMissing(error)) {
+    return new Error("Notification route is not active in backend. Restart backend and try again.");
+  }
+  const message = readErrorMessage(error);
+  if (/failed to load email settings|failed to load whatsapp settings|failed to load whatsapp usage|failed to load notification/i.test(message)) {
+    return new Error("Notification database is not ready. Check backend terminal for the SQL error.");
+  }
+  if (/failed to save email settings|failed to save whatsapp settings|failed to save notification/i.test(message)) {
+    return new Error("Unable to save to database. Check backend terminal for the SQL error.");
+  }
+  return error instanceof Error ? error : new Error(`Unable to ${action}.`);
+}
+
 function currentUsageFallback(): WhatsappUsage {
   const stored = readLocal<Partial<WhatsappUsage>>(STORAGE_KEYS.usage, {});
   const count = Math.max(0, Number(stored.count || 0));
@@ -145,19 +194,8 @@ function localWhatsappTestResult(message?: string) {
     simulated: true,
     localOnly: true,
     usage,
-    message: message || "Local WhatsApp test recorded. Backend API is disabled by VITE_NOTIFICATION_SETTINGS_API=false.",
+    message: message || "WhatsApp test recorded locally. Backend API is disabled.",
   };
-}
-
-function withBackendHint(error: unknown) {
-  const message = readErrorMessage(error);
-  if (/404|not found/i.test(message)) {
-    return new Error("Notification backend route is missing in backend/server.js. Save cannot write DB until /api/settings/whatsapp is registered.");
-  }
-  if (/401|403|forbidden|invalid|expired/i.test(message)) {
-    return new Error("Notification save blocked by auth. Login again, then retry saving notification settings.");
-  }
-  return error instanceof Error ? error : new Error(message);
 }
 
 export function normalizeEmailConfig(row: AnyRecord = {}): NotificationEmailConfig {
@@ -168,7 +206,7 @@ export function normalizeEmailConfig(row: AnyRecord = {}): NotificationEmailConf
     port: row.port ?? row.SmtpPort ?? "587",
     user: String(row.user ?? row.SmtpUser ?? row.AzureUser ?? row.GmailUser ?? ""),
     pass: String(row.pass ?? ""),
-    ssl: boolValue(row.ssl ?? row.SslTls, provider === "SMTP"),
+    ssl: boolValue(row.ssl ?? row.SslTls ?? row.UseTLS, provider === "SMTP"),
     isActive: boolValue(row.isActive ?? row.IsActive, provider === "SMTP"),
     azureTenantId: String(row.azureTenantId ?? row.AzureTenantId ?? ""),
     azureClientId: String(row.azureClientId ?? row.AzureClientId ?? ""),
@@ -185,8 +223,8 @@ export function normalizeEmailConfig(row: AnyRecord = {}): NotificationEmailConf
 
 export function normalizeWhatsappConfig(row: AnyRecord = {}): NotificationWhatsappConfig {
   return {
-    accountSid: String(row.accountSid ?? row.AccountSid ?? ""),
-    authToken: String(row.authToken ?? ""),
+    accountSid: String(row.accountSid ?? row.AccountSID ?? ""),
+    authToken: String(row.authToken ?? row.AuthToken ?? ""),
     fromNumber: String(row.fromNumber ?? row.FromNumber ?? ""),
     isEnabled: boolValue(row.isEnabled ?? row.IsEnabled, false),
   };
@@ -195,10 +233,46 @@ export function normalizeWhatsappConfig(row: AnyRecord = {}): NotificationWhatsa
 export function normalizeNotificationRule(row: AnyRecord = {}): NotificationRule {
   return {
     RuleKey: String(row.RuleKey ?? row.ruleKey ?? ""),
-    Enabled: boolValue(row.Enabled ?? row.enabled, false),
+    Enabled: boolValue(row.Enabled ?? row.enabled ?? row.EmailEnabled, false),
     WhatsAppEnabled: boolValue(row.WhatsAppEnabled ?? row.whatsAppEnabled ?? row.whatsappEnabled, false),
     Description: String(row.Description ?? row.description ?? ""),
   };
+}
+
+function localBundle(): NotificationSettingsBundle {
+  return {
+    emailSettings: readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS).map(normalizeEmailConfig),
+    whatsappSettings: normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS)),
+    whatsappUsage: currentUsageFallback(),
+    rules: readLocal<NotificationRule[]>(STORAGE_KEYS.rules, DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey),
+  };
+}
+
+async function getLegacyBundle(): Promise<NotificationSettingsBundle> {
+  const payload = unwrapData<AnyRecord>(await api.get("/api/settings/notifications", { forceRefresh: true, cacheTtlMs: 0 }), {});
+  const raw = payload?.settings ?? payload?.notificationSettings ?? payload;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as NotificationSettingsBundle;
+    } catch {
+      return {};
+    }
+  }
+  return (raw || {}) as NotificationSettingsBundle;
+}
+
+async function saveLegacyBundle(patch: NotificationSettingsBundle) {
+  const current = { ...localBundle(), ...(await getLegacyBundle().catch(() => ({} as NotificationSettingsBundle))) };
+  const next: NotificationSettingsBundle = {
+    ...current,
+    ...patch,
+    emailSettings: patch.emailSettings || current.emailSettings || DEFAULT_EMAIL_SETTINGS,
+    whatsappSettings: patch.whatsappSettings || current.whatsappSettings || DEFAULT_WHATSAPP_SETTINGS,
+    whatsappUsage: patch.whatsappUsage || current.whatsappUsage || currentUsageFallback(),
+    rules: patch.rules || patch.notificationRules || current.rules || DEFAULT_RULES,
+  };
+  const result = unwrapData(await api.put("/api/settings/notifications", next));
+  return { ...(typeof result === "object" && result ? result as AnyRecord : {}), saved: true, fallback: true };
 }
 
 export const notificationSettingsService = {
@@ -210,8 +284,15 @@ export const notificationSettingsService = {
       const rows = unwrapArray<AnyRecord>(await api.get("/api/settings/email", { forceRefresh: true, cacheTtlMs: 0 })).map(normalizeEmailConfig);
       writeLocal(STORAGE_KEYS.email, rows);
       return rows;
-    } catch {
-      return readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS).map(normalizeEmailConfig);
+    } catch (error) {
+      try {
+        const legacy = await getLegacyBundle();
+        const rows = (legacy.emailSettings || DEFAULT_EMAIL_SETTINGS).map(normalizeEmailConfig);
+        writeLocal(STORAGE_KEYS.email, rows);
+        return rows;
+      } catch {
+        return readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS).map(normalizeEmailConfig);
+      }
     }
   },
 
@@ -226,13 +307,24 @@ export const notificationSettingsService = {
     try {
       return unwrapData(await api.post("/api/settings/email", payload));
     } catch (error) {
-      throw withBackendHint(error);
+      if (!isAuthError(error) && !isNetworkDown(error) && !isRouteMissing(error)) {
+        try {
+          return await saveLegacyBundle({ emailSettings: next });
+        } catch (legacyError) {
+          throw userFacingError(legacyError, "save email settings");
+        }
+      }
+      throw userFacingError(error, "save email settings");
     }
   },
 
   async testEmail(payload: NotificationEmailConfig) {
     if (!USE_BACKEND_NOTIFICATION_API) return { simulated: true, provider: payload.provider };
-    return unwrapData(await api.post("/api/settings/email/test", payload));
+    try {
+      return unwrapData(await api.post("/api/settings/email/test", payload));
+    } catch (error) {
+      throw userFacingError(error, "test email settings");
+    }
   },
 
   async getWhatsappSettings() {
@@ -246,7 +338,16 @@ export const notificationSettingsService = {
       writeLocal(STORAGE_KEYS.whatsapp, merged);
       return merged;
     } catch {
-      return normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+      try {
+        const legacy = await getLegacyBundle();
+        const current = normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+        const legacyRow = normalizeWhatsappConfig(legacy.whatsappSettings || {});
+        const merged = normalizeWhatsappConfig({ ...current, ...legacyRow, authToken: current.authToken || legacyRow.authToken || "" });
+        writeLocal(STORAGE_KEYS.whatsapp, merged);
+        return merged;
+      } catch {
+        return normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+      }
     }
   },
 
@@ -262,10 +363,16 @@ export const notificationSettingsService = {
     if (!USE_BACKEND_NOTIFICATION_API) return { saved: true, localOnly: true };
 
     try {
-      const result = unwrapData(await api.post("/api/settings/whatsapp", localPayload));
-      return result;
+      return unwrapData(await api.post("/api/settings/whatsapp", localPayload));
     } catch (error) {
-      throw withBackendHint(error);
+      if (!isAuthError(error) && !isNetworkDown(error) && !isRouteMissing(error)) {
+        try {
+          return await saveLegacyBundle({ whatsappSettings: localPayload });
+        } catch (legacyError) {
+          throw userFacingError(legacyError, "save WhatsApp settings");
+        }
+      }
+      throw userFacingError(error, "save WhatsApp settings");
     }
   },
 
@@ -281,7 +388,7 @@ export const notificationSettingsService = {
       if (result?.usage) saveUsage(result.usage);
       return result;
     } catch (error) {
-      throw withBackendHint(error);
+      throw userFacingError(error, "send WhatsApp test");
     }
   },
 
@@ -295,7 +402,13 @@ export const notificationSettingsService = {
       saveUsage(usage);
       return usage;
     } catch {
-      return currentUsageFallback();
+      try {
+        const legacy = await getLegacyBundle();
+        const usage = legacy.whatsappUsage ? saveUsage(legacy.whatsappUsage) : currentUsageFallback();
+        return usage;
+      } catch {
+        return currentUsageFallback();
+      }
     }
   },
 
@@ -308,7 +421,14 @@ export const notificationSettingsService = {
       writeLocal(STORAGE_KEYS.rules, rules);
       return rules;
     } catch {
-      return readLocal<NotificationRule[]>(STORAGE_KEYS.rules, DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey);
+      try {
+        const legacy = await getLegacyBundle();
+        const rules = (legacy.rules || legacy.notificationRules || DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey);
+        writeLocal(STORAGE_KEYS.rules, rules);
+        return rules;
+      } catch {
+        return readLocal<NotificationRule[]>(STORAGE_KEYS.rules, DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey);
+      }
     }
   },
 
@@ -318,7 +438,14 @@ export const notificationSettingsService = {
     try {
       return unwrapData(await api.put("/api/settings/notification-rules", rules));
     } catch (error) {
-      throw withBackendHint(error);
+      if (!isAuthError(error) && !isNetworkDown(error) && !isRouteMissing(error)) {
+        try {
+          return await saveLegacyBundle({ rules });
+        } catch (legacyError) {
+          throw userFacingError(legacyError, "save notification rules");
+        }
+      }
+      throw userFacingError(error, "save notification rules");
     }
   },
 };
