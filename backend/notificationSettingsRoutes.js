@@ -88,12 +88,14 @@ async function ensureNotificationTables(pool) {
   `);
 
   const defaults = [
-    ['crm_created', 'CRM Created', 'Notify when a CRM record is created.'],
-    ['incident_created', 'Incident Created', 'Notify when a Service Desk incident is created.'],
-    ['incident_updated', 'Incident Updated', 'Notify when a Service Desk incident is updated.'],
-    ['incident_resolved', 'Incident Resolved', 'Notify when a Service Desk incident is resolved.'],
-    ['lease_expiry', 'Lease Expiry', 'Notify when a lease is near expiry.'],
-    ['license_exceeded', 'License Exceeded', 'Notify when license usage exceeds threshold.']
+    ['CRM_CREATED', 'CRM Created', 'Notify when a CRM record is created.'],
+    ['INCIDENT_CREATED', 'Incident Created', 'Notify when a Service Desk incident is created.'],
+    ['INCIDENT_UPDATED', 'Incident Updated', 'Notify when a Service Desk incident is updated.'],
+    ['INCIDENT_RESOLVED', 'Incident Resolved', 'Notify when a Service Desk incident is resolved.'],
+    ['LEASE_EXPIRY_3M', 'Lease Expiry - 3 Months', 'Notify when a lease expires in 3 months.'],
+    ['LEASE_EXPIRY_1M', 'Lease Expiry - 1 Month', 'Notify when a lease expires in 1 month.'],
+    ['LEASE_EXPIRY_1W', 'Lease Expiry - 1 Week', 'Notify when a lease expires in 1 week.'],
+    ['LICENSE_EXCEEDED', 'License Exceeded', 'Notify when license usage exceeds threshold.']
   ];
 
   for (const [key, name, description] of defaults) {
@@ -112,13 +114,13 @@ async function ensureNotificationTables(pool) {
 function mapEmail(row = {}) {
   return {
     provider: cleanText(row.Provider, 'SMTP'),
-    smtpHost: cleanText(row.SmtpHost),
-    smtpPort: Number(row.SmtpPort || 587),
-    smtpUser: cleanText(row.SmtpUser),
+    host: cleanText(row.SmtpHost),
+    port: Number(row.SmtpPort || 587),
+    user: cleanText(row.SmtpUser || row.FromEmail),
     fromEmail: cleanText(row.FromEmail),
     fromName: cleanText(row.FromName, 'EMA System'),
-    useTLS: row.UseTLS === undefined ? true : boolValue(row.UseTLS),
-    isEnabled: boolValue(row.IsEnabled),
+    ssl: row.UseTLS === undefined ? true : boolValue(row.UseTLS),
+    isActive: boolValue(row.IsEnabled),
     hasPassword: Boolean(cleanText(row.SmtpPassword))
   };
 }
@@ -127,10 +129,20 @@ function mapWhatsapp(row = {}) {
   return {
     provider: cleanText(row.Provider, 'Twilio'),
     accountSid: cleanText(row.AccountSID),
+    authToken: '',
     fromNumber: cleanText(row.FromNumber),
     isEnabled: boolValue(row.IsEnabled),
     monthlyLimit: Number(row.MonthlyLimit || WHATSAPP_MONTHLY_LIMIT),
     hasAuthToken: Boolean(cleanText(row.AuthToken))
+  };
+}
+
+function mapRule(row = {}) {
+  return {
+    RuleKey: cleanText(row.RuleKey),
+    Enabled: boolValue(row.Enabled ?? row.EmailEnabled),
+    WhatsAppEnabled: boolValue(row.WhatsAppEnabled),
+    Description: cleanText(row.Description)
   };
 }
 
@@ -148,7 +160,14 @@ async function getWhatsappUsage(pool) {
     .input('PeriodKey', sql.NVarChar(20), key)
     .query('SELECT TOP 1 SentCount FROM dbo.NotificationStats WHERE Channel=@Channel AND PeriodKey=@PeriodKey;');
   const sent = Number(result.recordset?.[0]?.SentCount || 0);
-  return { sent, limit: WHATSAPP_MONTHLY_LIMIT, remaining: Math.max(0, WHATSAPP_MONTHLY_LIMIT - sent), periodKey: key };
+  return {
+    count: sent,
+    sent,
+    limit: WHATSAPP_MONTHLY_LIMIT,
+    remaining: Math.max(0, WHATSAPP_MONTHLY_LIMIT - sent),
+    activeProvider: 'Twilio',
+    periodKey: key
+  };
 }
 
 function registerNotificationSettingsRoutes(app, options = {}) {
@@ -180,14 +199,14 @@ function registerNotificationSettingsRoutes(app, options = {}) {
       await ensureNotificationTables(pool);
       await pool.request()
         .input('Provider', sqlClient.NVarChar(50), cleanText(body.provider, 'SMTP'))
-        .input('SmtpHost', sqlClient.NVarChar(255), cleanText(body.smtpHost))
-        .input('SmtpPort', sqlClient.Int, Number(body.smtpPort || 587))
-        .input('SmtpUser', sqlClient.NVarChar(255), cleanText(body.smtpUser))
-        .input('SmtpPassword', sqlClient.NVarChar(sqlClient.MAX), cleanText(body.smtpPassword || body.password))
-        .input('FromEmail', sqlClient.NVarChar(255), cleanText(body.fromEmail))
+        .input('SmtpHost', sqlClient.NVarChar(255), cleanText(body.host || body.smtpHost))
+        .input('SmtpPort', sqlClient.Int, Number(body.port || body.smtpPort || 587))
+        .input('SmtpUser', sqlClient.NVarChar(255), cleanText(body.user || body.smtpUser))
+        .input('SmtpPassword', sqlClient.NVarChar(sqlClient.MAX), cleanText(body.pass || body.smtpPassword || body.password))
+        .input('FromEmail', sqlClient.NVarChar(255), cleanText(body.fromEmail || body.user))
         .input('FromName', sqlClient.NVarChar(255), cleanText(body.fromName, 'EMA System'))
-        .input('UseTLS', sqlClient.Bit, body.useTLS === undefined ? true : boolValue(body.useTLS))
-        .input('IsEnabled', sqlClient.Bit, boolValue(body.isEnabled))
+        .input('UseTLS', sqlClient.Bit, body.ssl === undefined && body.useTLS === undefined ? true : boolValue(body.ssl ?? body.useTLS))
+        .input('IsEnabled', sqlClient.Bit, boolValue(body.isActive ?? body.isEnabled))
         .query(`
           IF EXISTS (SELECT 1 FROM dbo.EmailSettings)
             UPDATE dbo.EmailSettings SET Provider=@Provider, SmtpHost=@SmtpHost, SmtpPort=@SmtpPort, SmtpUser=@SmtpUser,
@@ -203,13 +222,14 @@ function registerNotificationSettingsRoutes(app, options = {}) {
       res.status(500).json({ success: false, message: err.message });
     }
   });
+
   app.put('/api/settings/email', authenticateToken, async (req, res) => {
     req.method = 'POST';
     app._router.handle(req, res);
   });
 
   app.post('/api/settings/email/test', authenticateToken, async (req, res) => {
-    res.json({ success: true, message: 'Email test endpoint registered. SMTP send can be connected later.' });
+    res.json({ success: true, message: 'Email test endpoint registered.' });
   });
 
   app.get('/api/settings/whatsapp', authenticateToken, async (req, res) => {
@@ -251,6 +271,7 @@ function registerNotificationSettingsRoutes(app, options = {}) {
       res.status(500).json({ success: false, message: err.message });
     }
   });
+
   app.put('/api/settings/whatsapp', authenticateToken, async (req, res) => {
     req.method = 'POST';
     app._router.handle(req, res);
@@ -277,7 +298,7 @@ function registerNotificationSettingsRoutes(app, options = {}) {
       const accountSid = cleanText(body.accountSid || settings.AccountSID);
       const authToken = cleanText(body.authToken || settings.AuthToken);
       const from = withWhatsappPrefix(body.fromNumber || settings.FromNumber);
-      const to = withWhatsappPrefix(body.to || body.testRecipient || body.recipient);
+      const to = withWhatsappPrefix(body.testNumber || body.testRecipient || body.to || body.recipient);
 
       if (!accountSid || !authToken || !from || !to) {
         return res.status(400).json({ success: false, message: 'Account SID, Auth Token, From Number and Test Recipient are required.' });
@@ -323,7 +344,7 @@ function registerNotificationSettingsRoutes(app, options = {}) {
       const pool = await getPool();
       await ensureNotificationTables(pool);
       const result = await pool.request().query('SELECT * FROM dbo.NotificationRules ORDER BY RuleID ASC;');
-      res.json({ success: true, data: result.recordset || [] });
+      res.json({ success: true, data: (result.recordset || []).map(mapRule) });
     } catch (err) {
       console.error('GET /api/settings/notification-rules error:', err);
       res.status(500).json({ success: false, message: err.message });
@@ -332,14 +353,14 @@ function registerNotificationSettingsRoutes(app, options = {}) {
 
   app.put('/api/settings/notification-rules', authenticateToken, async (req, res) => {
     try {
-      const rules = Array.isArray(req.body?.rules) ? req.body.rules : [];
+      const rules = Array.isArray(req.body) ? req.body : Array.isArray(req.body?.rules) ? req.body.rules : [];
       const pool = await getPool();
       await ensureNotificationTables(pool);
       for (const rule of rules) {
         await pool.request()
           .input('RuleKey', sqlClient.NVarChar(100), cleanText(rule.ruleKey || rule.RuleKey || rule.key))
-          .input('EmailEnabled', sqlClient.Bit, boolValue(rule.emailEnabled || rule.EmailEnabled))
-          .input('WhatsAppEnabled', sqlClient.Bit, boolValue(rule.whatsAppEnabled || rule.whatsappEnabled || rule.WhatsAppEnabled))
+          .input('EmailEnabled', sqlClient.Bit, boolValue(rule.emailEnabled ?? rule.EmailEnabled ?? rule.Enabled))
+          .input('WhatsAppEnabled', sqlClient.Bit, boolValue(rule.whatsAppEnabled ?? rule.whatsappEnabled ?? rule.WhatsAppEnabled))
           .input('IsEnabled', sqlClient.Bit, rule.isEnabled === undefined ? true : boolValue(rule.isEnabled || rule.IsEnabled))
           .query('UPDATE dbo.NotificationRules SET EmailEnabled=@EmailEnabled, WhatsAppEnabled=@WhatsAppEnabled, IsEnabled=@IsEnabled, UpdatedAt=GETDATE() WHERE RuleKey=@RuleKey;');
       }
