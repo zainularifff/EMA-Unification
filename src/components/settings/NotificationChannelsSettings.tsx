@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Bell, Loader2, Mail, MessageSquare, RefreshCw, Send, ShieldCheck } from "lucide-react";
 import "../../styles/notification-channels.css";
+import "../../styles/notification-channels-fix.css";
 import notificationSettingsService, {
   type NotificationEmailConfig,
   type NotificationEmailProvider,
