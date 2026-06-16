@@ -3,13 +3,20 @@ const sql = require('mssql');
 
 const WHATSAPP_MONTHLY_LIMIT = Number(process.env.WHATSAPP_MONTHLY_LIMIT || 200);
 
+const TABLES = {
+  email: 'EMA_EmailSettings',
+  whatsapp: 'EMA_WhatsAppSettings',
+  rules: 'EMA_NotificationRules',
+  stats: 'EMA_NotificationStats'
+};
+
 function cleanText(value, fallback = '') {
   const text = String(value ?? '').trim();
   return text || fallback;
 }
 
 function boolValue(value) {
-  return value === true || value === 1 || String(value).toLowerCase() === 'true' || String(value).toLowerCase() === '1';
+  return value === true || value === 1 || String(value).toLowerCase() === 'true' || String(value).toLowerCase() === '1' || String(value).toLowerCase() === 'yes' || String(value).toLowerCase() === 'on';
 }
 
 function monthKey(date = new Date()) {
@@ -25,9 +32,9 @@ function withWhatsappPrefix(value) {
 
 async function ensureNotificationTables(pool) {
   await pool.request().query(`
-    IF OBJECT_ID('dbo.EmailSettings', 'U') IS NULL
+    IF OBJECT_ID('dbo.EMA_EmailSettings', 'U') IS NULL
     BEGIN
-      CREATE TABLE dbo.EmailSettings (
+      CREATE TABLE dbo.EMA_EmailSettings (
         SettingID INT IDENTITY(1,1) PRIMARY KEY,
         Provider NVARCHAR(50) NOT NULL DEFAULT 'SMTP',
         SmtpHost NVARCHAR(255) NULL,
@@ -43,9 +50,9 @@ async function ensureNotificationTables(pool) {
       );
     END;
 
-    IF OBJECT_ID('dbo.WhatsAppSettings', 'U') IS NULL
+    IF OBJECT_ID('dbo.EMA_WhatsAppSettings', 'U') IS NULL
     BEGIN
-      CREATE TABLE dbo.WhatsAppSettings (
+      CREATE TABLE dbo.EMA_WhatsAppSettings (
         SettingID INT IDENTITY(1,1) PRIMARY KEY,
         Provider NVARCHAR(50) NOT NULL DEFAULT 'Twilio',
         AccountSID NVARCHAR(255) NULL,
@@ -58,9 +65,9 @@ async function ensureNotificationTables(pool) {
       );
     END;
 
-    IF OBJECT_ID('dbo.NotificationRules', 'U') IS NULL
+    IF OBJECT_ID('dbo.EMA_NotificationRules', 'U') IS NULL
     BEGIN
-      CREATE TABLE dbo.NotificationRules (
+      CREATE TABLE dbo.EMA_NotificationRules (
         RuleID INT IDENTITY(1,1) PRIMARY KEY,
         RuleKey NVARCHAR(100) NOT NULL UNIQUE,
         RuleName NVARCHAR(255) NOT NULL,
@@ -73,17 +80,46 @@ async function ensureNotificationTables(pool) {
       );
     END;
 
-    IF OBJECT_ID('dbo.NotificationStats', 'U') IS NULL
+    IF OBJECT_ID('dbo.EMA_NotificationStats', 'U') IS NULL
     BEGIN
-      CREATE TABLE dbo.NotificationStats (
+      CREATE TABLE dbo.EMA_NotificationStats (
         StatID INT IDENTITY(1,1) PRIMARY KEY,
         Channel NVARCHAR(50) NOT NULL,
         PeriodKey NVARCHAR(20) NOT NULL,
         SentCount INT NOT NULL DEFAULT 0,
         CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
         UpdatedAt DATETIME NULL,
-        CONSTRAINT UQ_NotificationStats_Channel_Period UNIQUE (Channel, PeriodKey)
+        CONSTRAINT UQ_EMA_NotificationStats_Channel_Period UNIQUE (Channel, PeriodKey)
       );
+    END;
+
+    IF OBJECT_ID('dbo.EmailSettings', 'U') IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM dbo.EMA_EmailSettings)
+       AND EXISTS (SELECT 1 FROM dbo.EmailSettings)
+    BEGIN
+      INSERT INTO dbo.EMA_EmailSettings (Provider, SmtpHost, SmtpPort, SmtpUser, SmtpPassword, FromEmail, FromName, UseTLS, IsEnabled, CreatedAt, UpdatedAt)
+      SELECT TOP 1 Provider, SmtpHost, SmtpPort, SmtpUser, SmtpPassword, FromEmail, FromName, UseTLS, IsEnabled, CreatedAt, UpdatedAt
+      FROM dbo.EmailSettings
+      ORDER BY SettingID DESC;
+    END;
+
+    IF OBJECT_ID('dbo.WhatsAppSettings', 'U') IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM dbo.EMA_WhatsAppSettings)
+       AND EXISTS (SELECT 1 FROM dbo.WhatsAppSettings)
+    BEGIN
+      INSERT INTO dbo.EMA_WhatsAppSettings (Provider, AccountSID, AuthToken, FromNumber, IsEnabled, MonthlyLimit, CreatedAt, UpdatedAt)
+      SELECT TOP 1 Provider, AccountSID, AuthToken, FromNumber, IsEnabled, MonthlyLimit, CreatedAt, UpdatedAt
+      FROM dbo.WhatsAppSettings
+      ORDER BY SettingID DESC;
+    END;
+
+    IF OBJECT_ID('dbo.NotificationStats', 'U') IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationStats)
+       AND EXISTS (SELECT 1 FROM dbo.NotificationStats)
+    BEGIN
+      INSERT INTO dbo.EMA_NotificationStats (Channel, PeriodKey, SentCount, CreatedAt, UpdatedAt)
+      SELECT Channel, PeriodKey, SentCount, CreatedAt, UpdatedAt
+      FROM dbo.NotificationStats;
     END;
   `);
 
@@ -104,9 +140,9 @@ async function ensureNotificationTables(pool) {
       .input('RuleName', sql.NVarChar(255), name)
       .input('Description', sql.NVarChar(500), description)
       .query(`
-        IF NOT EXISTS (SELECT 1 FROM dbo.NotificationRules WHERE RuleKey = @RuleKey)
-          INSERT INTO dbo.NotificationRules (RuleKey, RuleName, Description)
-          VALUES (@RuleKey, @RuleName, @Description);
+        IF NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = @RuleKey)
+          INSERT INTO dbo.EMA_NotificationRules (RuleKey, RuleName, Description, EmailEnabled, WhatsAppEnabled, IsEnabled)
+          VALUES (@RuleKey, @RuleName, @Description, 0, 0, 1);
       `);
   }
 }
@@ -152,13 +188,13 @@ async function getWhatsappUsage(pool) {
     .input('Channel', sql.NVarChar(50), 'whatsapp')
     .input('PeriodKey', sql.NVarChar(20), key)
     .query(`
-      IF NOT EXISTS (SELECT 1 FROM dbo.NotificationStats WHERE Channel=@Channel AND PeriodKey=@PeriodKey)
-        INSERT INTO dbo.NotificationStats (Channel, PeriodKey, SentCount) VALUES (@Channel, @PeriodKey, 0);
+      IF NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationStats WHERE Channel=@Channel AND PeriodKey=@PeriodKey)
+        INSERT INTO dbo.EMA_NotificationStats (Channel, PeriodKey, SentCount) VALUES (@Channel, @PeriodKey, 0);
     `);
   const result = await pool.request()
     .input('Channel', sql.NVarChar(50), 'whatsapp')
     .input('PeriodKey', sql.NVarChar(20), key)
-    .query('SELECT TOP 1 SentCount FROM dbo.NotificationStats WHERE Channel=@Channel AND PeriodKey=@PeriodKey;');
+    .query('SELECT TOP 1 SentCount FROM dbo.EMA_NotificationStats WHERE Channel=@Channel AND PeriodKey=@PeriodKey;');
   const sent = Number(result.recordset?.[0]?.SentCount || 0);
   return {
     count: sent,
@@ -184,7 +220,7 @@ function registerNotificationSettingsRoutes(app, options = {}) {
     try {
       const pool = await getPool();
       await ensureNotificationTables(pool);
-      const result = await pool.request().query('SELECT TOP 1 * FROM dbo.EmailSettings ORDER BY SettingID DESC;');
+      const result = await pool.request().query('SELECT TOP 1 * FROM dbo.EMA_EmailSettings ORDER BY SettingID DESC;');
       res.json({ success: true, data: mapEmail(result.recordset?.[0] || {}) });
     } catch (err) {
       console.error('GET /api/settings/email error:', err);
@@ -208,15 +244,15 @@ function registerNotificationSettingsRoutes(app, options = {}) {
         .input('UseTLS', sqlClient.Bit, body.ssl === undefined && body.useTLS === undefined ? true : boolValue(body.ssl ?? body.useTLS))
         .input('IsEnabled', sqlClient.Bit, boolValue(body.isActive ?? body.isEnabled))
         .query(`
-          IF EXISTS (SELECT 1 FROM dbo.EmailSettings)
-            UPDATE dbo.EmailSettings SET Provider=@Provider, SmtpHost=@SmtpHost, SmtpPort=@SmtpPort, SmtpUser=@SmtpUser,
+          IF EXISTS (SELECT 1 FROM dbo.EMA_EmailSettings)
+            UPDATE dbo.EMA_EmailSettings SET Provider=@Provider, SmtpHost=@SmtpHost, SmtpPort=@SmtpPort, SmtpUser=@SmtpUser,
               SmtpPassword=CASE WHEN @SmtpPassword='' THEN SmtpPassword ELSE @SmtpPassword END,
               FromEmail=@FromEmail, FromName=@FromName, UseTLS=@UseTLS, IsEnabled=@IsEnabled, UpdatedAt=GETDATE()
           ELSE
-            INSERT INTO dbo.EmailSettings (Provider, SmtpHost, SmtpPort, SmtpUser, SmtpPassword, FromEmail, FromName, UseTLS, IsEnabled)
+            INSERT INTO dbo.EMA_EmailSettings (Provider, SmtpHost, SmtpPort, SmtpUser, SmtpPassword, FromEmail, FromName, UseTLS, IsEnabled)
             VALUES (@Provider, @SmtpHost, @SmtpPort, @SmtpUser, @SmtpPassword, @FromEmail, @FromName, @UseTLS, @IsEnabled);
         `);
-      res.json({ success: true, data: { saved: true } });
+      res.json({ success: true, data: { saved: true, table: TABLES.email } });
     } catch (err) {
       console.error('POST /api/settings/email error:', err);
       res.status(500).json({ success: false, message: err.message });
@@ -236,7 +272,7 @@ function registerNotificationSettingsRoutes(app, options = {}) {
     try {
       const pool = await getPool();
       await ensureNotificationTables(pool);
-      const result = await pool.request().query('SELECT TOP 1 * FROM dbo.WhatsAppSettings ORDER BY SettingID DESC;');
+      const result = await pool.request().query('SELECT TOP 1 * FROM dbo.EMA_WhatsAppSettings ORDER BY SettingID DESC;');
       res.json({ success: true, data: mapWhatsapp(result.recordset?.[0] || { MonthlyLimit: WHATSAPP_MONTHLY_LIMIT }) });
     } catch (err) {
       console.error('GET /api/settings/whatsapp error:', err);
@@ -257,15 +293,16 @@ function registerNotificationSettingsRoutes(app, options = {}) {
         .input('IsEnabled', sqlClient.Bit, boolValue(body.isEnabled))
         .input('MonthlyLimit', sqlClient.Int, WHATSAPP_MONTHLY_LIMIT)
         .query(`
-          IF EXISTS (SELECT 1 FROM dbo.WhatsAppSettings)
-            UPDATE dbo.WhatsAppSettings SET Provider=@Provider, AccountSID=@AccountSID,
+          IF EXISTS (SELECT 1 FROM dbo.EMA_WhatsAppSettings)
+            UPDATE dbo.EMA_WhatsAppSettings SET Provider=@Provider, AccountSID=@AccountSID,
               AuthToken=CASE WHEN @AuthToken='' THEN AuthToken ELSE @AuthToken END,
               FromNumber=@FromNumber, IsEnabled=@IsEnabled, MonthlyLimit=@MonthlyLimit, UpdatedAt=GETDATE()
           ELSE
-            INSERT INTO dbo.WhatsAppSettings (Provider, AccountSID, AuthToken, FromNumber, IsEnabled, MonthlyLimit)
+            INSERT INTO dbo.EMA_WhatsAppSettings (Provider, AccountSID, AuthToken, FromNumber, IsEnabled, MonthlyLimit)
             VALUES (@Provider, @AccountSID, @AuthToken, @FromNumber, @IsEnabled, @MonthlyLimit);
         `);
-      res.json({ success: true, data: { saved: true } });
+      const result = await pool.request().query('SELECT TOP 1 * FROM dbo.EMA_WhatsAppSettings ORDER BY SettingID DESC;');
+      res.json({ success: true, data: { saved: true, table: TABLES.whatsapp, settings: mapWhatsapp(result.recordset?.[0] || {}) } });
     } catch (err) {
       console.error('POST /api/settings/whatsapp error:', err);
       res.status(500).json({ success: false, message: err.message });
@@ -293,7 +330,7 @@ function registerNotificationSettingsRoutes(app, options = {}) {
       const body = req.body || {};
       const pool = await getPool();
       await ensureNotificationTables(pool);
-      const saved = await pool.request().query('SELECT TOP 1 * FROM dbo.WhatsAppSettings ORDER BY SettingID DESC;');
+      const saved = await pool.request().query('SELECT TOP 1 * FROM dbo.EMA_WhatsAppSettings ORDER BY SettingID DESC;');
       const settings = saved.recordset?.[0] || {};
       const accountSid = cleanText(body.accountSid || settings.AccountSID);
       const authToken = cleanText(body.authToken || settings.AuthToken);
@@ -326,10 +363,10 @@ function registerNotificationSettingsRoutes(app, options = {}) {
         .input('Channel', sqlClient.NVarChar(50), 'whatsapp')
         .input('PeriodKey', sqlClient.NVarChar(20), key)
         .query(`
-          IF EXISTS (SELECT 1 FROM dbo.NotificationStats WHERE Channel=@Channel AND PeriodKey=@PeriodKey)
-            UPDATE dbo.NotificationStats SET SentCount = ISNULL(SentCount, 0) + 1, UpdatedAt = GETDATE() WHERE Channel=@Channel AND PeriodKey=@PeriodKey
+          IF EXISTS (SELECT 1 FROM dbo.EMA_NotificationStats WHERE Channel=@Channel AND PeriodKey=@PeriodKey)
+            UPDATE dbo.EMA_NotificationStats SET SentCount = ISNULL(SentCount, 0) + 1, UpdatedAt = GETDATE() WHERE Channel=@Channel AND PeriodKey=@PeriodKey
           ELSE
-            INSERT INTO dbo.NotificationStats (Channel, PeriodKey, SentCount) VALUES (@Channel, @PeriodKey, 1);
+            INSERT INTO dbo.EMA_NotificationStats (Channel, PeriodKey, SentCount) VALUES (@Channel, @PeriodKey, 1);
         `);
 
       res.json({ success: true, message: 'WhatsApp test sent successfully.', data: { sid: twilioResponse?.data?.sid, status: twilioResponse?.data?.status || 'queued', usage: await getWhatsappUsage(pool) } });
@@ -343,7 +380,7 @@ function registerNotificationSettingsRoutes(app, options = {}) {
     try {
       const pool = await getPool();
       await ensureNotificationTables(pool);
-      const result = await pool.request().query('SELECT * FROM dbo.NotificationRules ORDER BY RuleID ASC;');
+      const result = await pool.request().query('SELECT * FROM dbo.EMA_NotificationRules ORDER BY RuleID ASC;');
       res.json({ success: true, data: (result.recordset || []).map(mapRule) });
     } catch (err) {
       console.error('GET /api/settings/notification-rules error:', err);
@@ -362,9 +399,9 @@ function registerNotificationSettingsRoutes(app, options = {}) {
           .input('EmailEnabled', sqlClient.Bit, boolValue(rule.emailEnabled ?? rule.EmailEnabled ?? rule.Enabled))
           .input('WhatsAppEnabled', sqlClient.Bit, boolValue(rule.whatsAppEnabled ?? rule.whatsappEnabled ?? rule.WhatsAppEnabled))
           .input('IsEnabled', sqlClient.Bit, rule.isEnabled === undefined ? true : boolValue(rule.isEnabled || rule.IsEnabled))
-          .query('UPDATE dbo.NotificationRules SET EmailEnabled=@EmailEnabled, WhatsAppEnabled=@WhatsAppEnabled, IsEnabled=@IsEnabled, UpdatedAt=GETDATE() WHERE RuleKey=@RuleKey;');
+          .query('UPDATE dbo.EMA_NotificationRules SET EmailEnabled=@EmailEnabled, WhatsAppEnabled=@WhatsAppEnabled, IsEnabled=@IsEnabled, UpdatedAt=GETDATE() WHERE RuleKey=@RuleKey;');
       }
-      res.json({ success: true, data: { updated: rules.length } });
+      res.json({ success: true, data: { updated: rules.length, table: TABLES.rules } });
     } catch (err) {
       console.error('PUT /api/settings/notification-rules error:', err);
       res.status(500).json({ success: false, message: err.message });
