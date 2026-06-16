@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Bell, CheckCircle2, Loader2, Mail, MessageSquare, RefreshCw, Send, ShieldCheck, XCircle } from "lucide-react";
+import "../../styles/toast.css";
 import "../../styles/notification-channels.css";
 import "../../styles/notification-channels-fix.css";
+import "../../styles/notification-channels-help.css";
 import notificationSettingsService, {
   type NotificationEmailConfig,
   type NotificationEmailProvider,
@@ -50,12 +53,12 @@ function cleanNotice(text: string) {
   return message.replace(/\.+$/, ".");
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="notification-field"><span>{label}</span>{children}</label>;
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return <label className="notification-field"><span>{label}</span>{children}{hint ? <small className="notification-field-hint">{hint}</small> : null}</label>;
 }
 
 function normalizeUsage(row?: Partial<WhatsappUsage>): WhatsappUsage {
-  const count = Math.max(0, Number(row?.count || 0));
+  const count = Math.max(0, Number(row?.count || (row as any)?.sent || 0));
   const limit = DEFAULT_WHATSAPP_LIMIT;
   return {
     count,
@@ -185,6 +188,7 @@ export default function NotificationChannelsSettings() {
       const detail = isLocal ? "WhatsApp settings saved locally." : "WhatsApp settings saved.";
       setMessage({ tone: isLocal ? "info" : "success", text: detail });
       notify(isLocal ? "info" : "success", "WhatsApp saved", detail);
+      await load(true);
     } catch (error) {
       const detail = cleanNotice(readError(error));
       setMessage({ tone: "error", text: detail });
@@ -257,20 +261,19 @@ export default function NotificationChannelsSettings() {
 
   return (
     <div className="settings-notification-shell">
-      <div className="notification-toast-stack" style={{ top: 78 }} aria-live="polite">
-        {toast && (
-          <div className={`notification-toast ${toast.tone}`}>
-            <div className="notification-toast-icon">
-              {toast.tone === "error" ? <XCircle size={18} /> : <CheckCircle2 size={18} />}
-            </div>
+      {typeof document !== "undefined" && toast ? createPortal(
+        <div className="settings-toast-layer" aria-live="polite">
+          <div className={`settings-toast settings-toast-${toast.tone}`}>
+            <div className="settings-toast-icon">{toast.tone === "error" ? "!" : toast.tone === "info" ? "i" : "✓"}</div>
             <div>
               <strong>{toast.title}</strong>
               <span>{toast.message}</span>
             </div>
-            <button type="button" onClick={() => setToast(null)}>×</button>
+            <button type="button" className="settings-toast-close" onClick={() => setToast(null)}>×</button>
           </div>
-        )}
-      </div>
+        </div>,
+        document.body
+      ) : null}
 
       <div className="notification-topbar">
         <div>
@@ -300,10 +303,10 @@ export default function NotificationChannelsSettings() {
               </div>
               <div className="notification-form">
                 {provider === "SMTP" && <div className="notification-form-grid">
-                  <Field label="SMTP Host"><input value={activeEmail.host || ""} onChange={(e) => patchEmail({ host: e.target.value })} placeholder="smtp.office365.com" /></Field>
-                  <Field label="SMTP Port"><input value={String(activeEmail.port || "587")} onChange={(e) => patchEmail({ port: e.target.value })} placeholder="587" /></Field>
-                  <Field label="Sender Email"><input value={activeEmail.user || ""} onChange={(e) => patchEmail({ user: e.target.value })} placeholder="alerts@company.com" /></Field>
-                  <Field label="Password / App Password"><input type="password" value={activeEmail.pass || ""} onChange={(e) => patchEmail({ pass: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
+                  <Field label="SMTP Host" hint="Mail server host used to send email alerts."><input value={activeEmail.host || ""} onChange={(e) => patchEmail({ host: e.target.value })} placeholder="smtp.office365.com" /></Field>
+                  <Field label="SMTP Port" hint="Common ports: 587 for TLS, 465 for SSL."><input value={String(activeEmail.port || "587")} onChange={(e) => patchEmail({ port: e.target.value })} placeholder="587" /></Field>
+                  <Field label="Sender Email" hint="Email address displayed as the system sender."><input value={activeEmail.user || ""} onChange={(e) => patchEmail({ user: e.target.value })} placeholder="alerts@company.com" /></Field>
+                  <Field label="Password / App Password" hint="Leave blank to keep the existing password in database."><input type="password" value={activeEmail.pass || ""} onChange={(e) => patchEmail({ pass: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
                 </div>}
                 {provider === "Azure" && <div className="notification-form-grid">
                   <Field label="Tenant ID"><input value={activeEmail.azureTenantId || ""} onChange={(e) => patchEmail({ azureTenantId: e.target.value })} /></Field>
@@ -337,10 +340,10 @@ export default function NotificationChannelsSettings() {
               <div className="notification-panel-head"><div><h3>WhatsApp Integration</h3><p>Connect WhatsApp Business/Twilio sender for incident, SLA and client alerts.</p></div><span className={`notification-status-pill ${whatsapp.isEnabled ? "enabled" : ""}`}>{whatsapp.isEnabled ? "Enabled" : "Disabled"}</span></div>
               <div className="notification-form">
                 <div className="notification-form-grid">
-                  <Field label="Account SID"><input value={whatsapp.accountSid} onChange={(e) => setWhatsapp({ ...whatsapp, accountSid: e.target.value })} placeholder="Twilio Account SID" /></Field>
-                  <Field label="Auth Token"><input type="password" value={whatsapp.authToken || ""} onChange={(e) => setWhatsapp({ ...whatsapp, authToken: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
-                  <Field label="From Number"><input value={whatsapp.fromNumber} onChange={(e) => setWhatsapp({ ...whatsapp, fromNumber: e.target.value })} placeholder="whatsapp:+14155238886" /></Field>
-                  <Field label="Test Recipient"><input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} placeholder="+60123456789" /></Field>
+                  <Field label="Account SID" hint="Twilio Account SID. Saved in DB for WhatsApp delivery."><input value={whatsapp.accountSid} onChange={(e) => setWhatsapp({ ...whatsapp, accountSid: e.target.value })} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" /></Field>
+                  <Field label="Auth Token" hint="Twilio Auth Token. Leave blank if you only want to keep existing token."><input type="password" value={whatsapp.authToken || ""} onChange={(e) => setWhatsapp({ ...whatsapp, authToken: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
+                  <Field label="From Number" hint="WhatsApp sender number from Twilio. This field is saved together with Account SID."><input value={whatsapp.fromNumber} onChange={(e) => setWhatsapp({ ...whatsapp, fromNumber: e.target.value })} placeholder="+14155238886" /></Field>
+                  <Field label="Test Recipient" hint="Recipient used only for Send Test. It is not saved as sender setting."><input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} placeholder="+60123456789" /></Field>
                 </div>
                 <div className="notification-actions split">
                   <button type="button" className={`notification-toggle whatsapp ${whatsapp.isEnabled ? "on" : ""}`} onClick={() => setWhatsapp({ ...whatsapp, isEnabled: !whatsapp.isEnabled })}>{whatsapp.isEnabled ? "Disable Channel" : "Enable Channel"}</button>
