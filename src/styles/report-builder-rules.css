@@ -19,12 +19,13 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
   min-height: 0;
   background: #f6f8fb;
   color: #0b2447;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
 .builder-top {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: minmax(260px, 1fr) 210px 190px auto;
   gap: 14px;
@@ -44,8 +45,25 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
 .builder-btn { height: 34px; border: 1px solid #cfdced; border-radius: 10px; background: #fff; padding: 0 14px; font-weight: 950; cursor: pointer; }
 .builder-btn.primary { background: #4938ed; color: #fff; border-color: transparent; }
 
+.error {
+  flex: 0 0 auto;
+  margin: 8px 18px 0;
+  border: 1px solid rgba(239,68,68,.24);
+  border-radius: 12px;
+  background: rgba(239,68,68,.07);
+  color: #b91c1c;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 850;
+  max-height: 42px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
 .builder-layout {
-  height: 100%;
+  flex: 1 1 0;
   min-height: 0;
   display: grid;
   grid-template-columns: 270px minmax(0, 1fr) 280px;
@@ -101,10 +119,9 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
   gap: 8px;
   padding: 0 10px 18px;
 }
-.pack-list::after { content: ""; display: block; height: 8px; grid-column: 1 / -1; }
+.pack-list::after { content: ""; display: block; height: 10px; grid-column: 1 / -1; }
 .templates { display: grid; align-content: start; gap: 8px; padding: 10px 10px 18px; }
 .summary { padding: 12px; display: grid; align-content: start; gap: 10px; }
-.right.panel .summary { overflow-y: auto; }
 
 .pack {
   height: 112px;
@@ -152,7 +169,20 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
   text-overflow: ellipsis;
 }
 
-.canvas-wrap { min-height: 0; height: 100%; padding-top: 22px; display: grid; justify-content: center; align-content: start; overflow-y: auto; overflow-x: hidden; padding-bottom: 36px; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #94a3b8 #eef4fb; }
+.canvas-wrap {
+  min-height: 0;
+  height: 100%;
+  padding-top: 22px;
+  display: grid;
+  justify-content: center;
+  align-content: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 36px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #eef4fb;
+}
 .canvas-head { width: min(100%,760px); display: flex; justify-content: space-between; align-items: flex-end; margin: 0 auto 14px; }
 .canvas-head strong { font-size: 18px; }
 .canvas-head small { color: #7a8ba8; font-weight: 800; }
@@ -174,7 +204,7 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
 .metric strong { display: block; margin-top: 3px; }
 .selected-pill { display: flex; gap: 8px; align-items: center; font-size: 11px; font-weight: 900; margin-bottom: 8px; }
 .rule-note { border: 1px solid #cfe0f6; border-radius: 14px; background: #f8fbff; padding: 10px; color: #45607f; font-size: 11px; font-weight: 850; line-height: 1.35; }
-.error { margin: 8px 18px 0; border: 1px solid rgba(239,68,68,.24); border-radius: 12px; background: rgba(239,68,68,.07); color: #b91c1c; padding: 8px 12px; font-size: 12px; line-height: 1.25; font-weight: 850; min-height: 0; max-height: 42px; overflow: hidden; display: flex; align-items: center; }
+
 .backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(15,23,42,.48); backdrop-filter: blur(8px); }
 .preview { width: min(1120px,100%); height: min(860px,calc(100vh - 48px)); border-radius: 24px; background: #eef3f8; overflow: hidden; box-shadow: 0 34px 90px rgba(15,23,42,.32); display: grid; grid-template-rows: auto minmax(0,1fr); }
 .preview-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #d8e4f4; background: #fff; }
@@ -209,7 +239,7 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
   body.ema-report-builder-active { overflow: auto !important; }
   .builder-page { height: auto; min-height: calc(100dvh - 70px); overflow: visible; }
   .builder-top { grid-template-columns: 1fr 1fr; }
-  .builder-layout { height: auto; grid-template-columns: 1fr; overflow: visible; }
+  .builder-layout { flex: 0 0 auto; height: auto; grid-template-columns: 1fr; overflow: visible; }
   .panel { height: auto; max-height: none; }
   .pack-list,
   .templates,
