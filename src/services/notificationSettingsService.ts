@@ -121,15 +121,20 @@ function currentUsageFallback(): WhatsappUsage {
   };
 }
 
-function saveUsage(count: number) {
+function saveUsage(countOrUsage: number | Partial<WhatsappUsage>) {
+  const count = typeof countOrUsage === "number" ? countOrUsage : Math.max(0, Number(countOrUsage.count || 0));
   const usage = {
     count: Math.max(0, count),
     limit: WHATSAPP_MONTHLY_LIMIT,
     remaining: Math.max(0, WHATSAPP_MONTHLY_LIMIT - Math.max(0, count)),
-    activeProvider: "Twilio",
+    activeProvider: typeof countOrUsage === "number" ? "Twilio" : String(countOrUsage.activeProvider || "Twilio"),
   };
   writeLocal(STORAGE_KEYS.usage, usage);
   return usage;
+}
+
+function hasWhatsappSendConfig(payload: Partial<NotificationWhatsappConfig>) {
+  return Boolean(String(payload.accountSid || "").trim() && String(payload.fromNumber || "").trim());
 }
 
 async function remoteOrLocal<T>(remoteCall: () => Promise<T>, localValue: () => T): Promise<T> {
@@ -209,13 +214,19 @@ export const notificationSettingsService = {
   },
   async saveWhatsappSettings(payload: NotificationWhatsappConfig) {
     writeLocal(STORAGE_KEYS.whatsapp, { ...payload, authToken: "" });
-    if (ENABLE_REMOTE_NOTIFICATION_API) return unwrapData(await api.post("/api/settings/whatsapp", payload));
+    if (ENABLE_REMOTE_NOTIFICATION_API || hasWhatsappSendConfig(payload)) {
+      return unwrapData(await api.post("/api/settings/whatsapp", payload));
+    }
     return { saved: true, localOnly: true };
   },
   async testWhatsapp(payload: NotificationWhatsappConfig & { testNumber: string }) {
-    const next = saveUsage(currentUsageFallback().count + 1);
-    if (ENABLE_REMOTE_NOTIFICATION_API) return unwrapData(await api.post("/api/settings/whatsapp/test", payload));
-    return { simulated: true, usage: next, recipient: payload.testNumber };
+    if (!String(payload.testNumber || "").trim()) throw new Error("Recipient phone number is required.");
+    if (!ENABLE_REMOTE_NOTIFICATION_API && !hasWhatsappSendConfig(payload)) {
+      throw new Error("Real WhatsApp test requires Account SID and From Number. Enter the credentials first, then send test.");
+    }
+    const result = unwrapData<AnyRecord>(await api.post("/api/settings/whatsapp/test", payload), {});
+    if (result?.usage) saveUsage(result.usage);
+    return result;
   },
   async getWhatsappUsage() {
     return remoteOrLocal(
