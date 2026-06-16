@@ -1,0 +1,81 @@
+.notification-whatsapp-grid {
+  align-items: start;
+}
+
+.notification-usage-card {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.notification-usage-head {
+  display: grid;
+  gap: 12px;
+}
+
+.notification-usage-head h4 {
+  margin: 0;
+  color: #071b3d;
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.notification-usage-head p {
+  margin: 4px 0 0;
+  line-height: 1.45;
+}
+
+.notification-usage-meter {
+  height: 10px;
+  border-radius: 999px;
+  background: #e7eefb;
+  overflow: hidden;
+  border: 1px solid #d6e3f8;
+}
+
+.notification-usage-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #16a34a, #06b6d4, #2563eb);
+  min-width: 4px;
+  transition: width .25s ease;
+}
+
+.notification-usage div {
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.notification-usage strong {
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.notification-alert.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.notification-alert.success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #047857;
+}
+
+.notification-alert.info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+@media (max-width: 1100px) {
+  .notification-grid,
+  .notification-whatsapp-grid {
+    grid-template-columns: 1fr;
+  }
+}
