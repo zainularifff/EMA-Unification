@@ -133,8 +133,9 @@ function saveUsage(countOrUsage: number | Partial<WhatsappUsage>) {
   return usage;
 }
 
-function hasWhatsappSendConfig(payload: Partial<NotificationWhatsappConfig>) {
-  return Boolean(String(payload.accountSid || "").trim() && String(payload.fromNumber || "").trim());
+function readErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  return String(error || "Request failed");
 }
 
 async function remoteOrLocal<T>(remoteCall: () => Promise<T>, localValue: () => T): Promise<T> {
@@ -153,26 +154,26 @@ export function normalizeEmailConfig(row: AnyRecord = {}): NotificationEmailConf
     host: String(row.host ?? row.SmtpHost ?? ""),
     port: row.port ?? row.SmtpPort ?? "587",
     user: String(row.user ?? row.SmtpUser ?? row.AzureUser ?? row.GmailUser ?? ""),
-    pass: "",
+    pass: String(row.pass ?? ""),
     ssl: boolValue(row.ssl ?? row.SslTls, provider === "SMTP"),
     isActive: boolValue(row.isActive ?? row.IsActive, provider === "SMTP"),
     azureTenantId: String(row.azureTenantId ?? row.AzureTenantId ?? ""),
     azureClientId: String(row.azureClientId ?? row.AzureClientId ?? ""),
-    azureClientSecret: "",
+    azureClientSecret: String(row.azureClientSecret ?? ""),
     azureUser: String(row.azureUser ?? row.AzureUser ?? ""),
-    azurePass: "",
+    azurePass: String(row.azurePass ?? ""),
     exchangeEndpoint: String(row.exchangeEndpoint ?? row.ExchangeEndpoint ?? ""),
     exchangeDomainUser: String(row.exchangeDomainUser ?? row.ExchangeDomainUser ?? ""),
-    exchangePass: "",
+    exchangePass: String(row.exchangePass ?? ""),
     gmailUser: String(row.gmailUser ?? row.GmailUser ?? ""),
-    gmailPass: "",
+    gmailPass: String(row.gmailPass ?? ""),
   };
 }
 
 export function normalizeWhatsappConfig(row: AnyRecord = {}): NotificationWhatsappConfig {
   return {
     accountSid: String(row.accountSid ?? row.AccountSid ?? ""),
-    authToken: "",
+    authToken: String(row.authToken ?? ""),
     fromNumber: String(row.fromNumber ?? row.FromNumber ?? ""),
     isEnabled: boolValue(row.isEnabled ?? row.IsEnabled, false),
   };
@@ -197,10 +198,14 @@ export const notificationSettingsService = {
   async saveEmailSettings(payload: NotificationEmailConfig) {
     const current = readLocal<NotificationEmailConfig[]>(STORAGE_KEYS.email, DEFAULT_EMAIL_SETTINGS);
     const next = current.filter((item) => item.provider !== payload.provider);
-    next.push({ ...payload, pass: "" });
+    next.push({ ...payload });
     writeLocal(STORAGE_KEYS.email, next);
-    if (ENABLE_REMOTE_NOTIFICATION_API) return unwrapData(await api.post("/api/settings/email", payload));
-    return { saved: true, localOnly: true };
+    if (!ENABLE_REMOTE_NOTIFICATION_API) return { saved: true, localOnly: true };
+    try {
+      return unwrapData(await api.post("/api/settings/email", payload));
+    } catch (error) {
+      return { saved: true, localOnly: true, apiWarning: readErrorMessage(error) };
+    }
   },
   async testEmail(payload: NotificationEmailConfig) {
     if (ENABLE_REMOTE_NOTIFICATION_API) return unwrapData(await api.post("/api/settings/email/test", payload));
@@ -213,18 +218,29 @@ export const notificationSettingsService = {
     );
   },
   async saveWhatsappSettings(payload: NotificationWhatsappConfig) {
-    writeLocal(STORAGE_KEYS.whatsapp, { ...payload, authToken: "" });
-    if (ENABLE_REMOTE_NOTIFICATION_API || hasWhatsappSendConfig(payload)) {
+    const current = normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS));
+    const localPayload = normalizeWhatsappConfig({
+      ...current,
+      ...payload,
+      authToken: String(payload.authToken || current.authToken || ""),
+    });
+    writeLocal(STORAGE_KEYS.whatsapp, localPayload);
+
+    if (!ENABLE_REMOTE_NOTIFICATION_API) return { saved: true, localOnly: true };
+
+    try {
       return unwrapData(await api.post("/api/settings/whatsapp", payload));
+    } catch (error) {
+      return { saved: true, localOnly: true, apiWarning: readErrorMessage(error) };
     }
-    return { saved: true, localOnly: true };
   },
   async testWhatsapp(payload: NotificationWhatsappConfig & { testNumber: string }) {
-    if (!payload.isEnabled) throw new Error("Enable WhatsApp channel before sending test.");
     if (!String(payload.testNumber || "").trim()) throw new Error("Recipient phone number is required.");
-    if (!ENABLE_REMOTE_NOTIFICATION_API && !hasWhatsappSendConfig(payload)) {
-      throw new Error("Real WhatsApp test requires Account SID and From Number. Enter the credentials first, then send test.");
+    if (!payload.isEnabled) throw new Error("Enable WhatsApp channel before sending test.");
+    if (!ENABLE_REMOTE_NOTIFICATION_API) {
+      throw new Error("WhatsApp test needs backend route /api/settings/whatsapp/test. Settings are saved locally for now.");
     }
+
     const result = unwrapData<AnyRecord>(await api.post("/api/settings/whatsapp/test", payload), {});
     if (result?.usage) saveUsage(result.usage);
     return result;
@@ -248,8 +264,12 @@ export const notificationSettingsService = {
   },
   async saveRules(rules: NotificationRule[]) {
     writeLocal(STORAGE_KEYS.rules, rules);
-    if (ENABLE_REMOTE_NOTIFICATION_API) return unwrapData(await api.put("/api/settings/notification-rules", rules));
-    return { saved: true, localOnly: true };
+    if (!ENABLE_REMOTE_NOTIFICATION_API) return { saved: true, localOnly: true };
+    try {
+      return unwrapData(await api.put("/api/settings/notification-rules", rules));
+    } catch (error) {
+      return { saved: true, localOnly: true, apiWarning: readErrorMessage(error) };
+    }
   },
 };
 
