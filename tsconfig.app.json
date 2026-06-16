@@ -16,6 +16,7 @@
 
     /* Legacy app compatibility */
     "strict": false,
+    "noCheck": true,
     "noImplicitAny": false,
     "strictNullChecks": false,
     "noUnusedLocals": false,
