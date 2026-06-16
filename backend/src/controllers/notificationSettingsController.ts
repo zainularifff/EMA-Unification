@@ -13,12 +13,70 @@ const DEFAULT_RULES = [
   ['LICENSE_EXCEEDED', 0, 0, 'Installed assets exceed licensed count'],
 ];
 
+const WHATSAPP_MONTHLY_LIMIT = Number(process.env.WHATSAPP_MONTHLY_LIMIT || 200) || 200;
+
 function bit(value: unknown) {
   return value === true || value === 1 || String(value).toLowerCase() === 'true' || String(value).toLowerCase() === 'on' ? 1 : 0;
 }
 
 function ok(res: Response, data: unknown, message = '') {
   res.json({ success: true, status: 'success', data, message });
+}
+
+function cleanText(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function normalizeWhatsAppAddress(value: unknown) {
+  const text = cleanText(value).replace(/\s+/g, '');
+  if (!text) return '';
+  if (text.toLowerCase().startsWith('whatsapp:')) return text;
+  const phone = text.startsWith('+') ? text : text.startsWith('00') ? `+${text.slice(2)}` : `+${text}`;
+  return `whatsapp:${phone}`;
+}
+
+function twilioErrorMessage(status: number, raw: string) {
+  try {
+    const parsed = JSON.parse(raw || '{}');
+    return parsed?.message || parsed?.error_message || raw || `Twilio request failed with status ${status}`;
+  } catch (_) {
+    return raw || `Twilio request failed with status ${status}`;
+  }
+}
+
+async function sendTwilioWhatsApp(params: { accountSid: string; authToken: string; fromNumber: string; toNumber: string; body: string }) {
+  const accountSid = cleanText(params.accountSid);
+  const authToken = cleanText(params.authToken);
+  const from = normalizeWhatsAppAddress(params.fromNumber);
+  const to = normalizeWhatsAppAddress(params.toNumber);
+
+  if (!accountSid || !authToken || !from || !to) {
+    throw new Error('Account SID, Auth Token, From Number and recipient number are required for a real WhatsApp test.');
+  }
+
+  const form = new URLSearchParams();
+  form.set('From', from);
+  form.set('To', to);
+  form.set('Body', params.body || 'EMA System WhatsApp test notification.');
+
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: form,
+  });
+
+  const raw = await response.text();
+  let payload: any = {};
+  try { payload = raw ? JSON.parse(raw) : {}; } catch (_) { payload = { raw }; }
+
+  if (!response.ok) {
+    throw new Error(`Twilio WhatsApp send failed (${response.status}): ${twilioErrorMessage(response.status, raw)}`);
+  }
+
+  return payload;
 }
 
 async function ensureNotificationTables() {
@@ -61,6 +119,9 @@ async function ensureNotificationTables() {
       );
     END;
 
+    IF COL_LENGTH('dbo.WhatsAppSettings', 'MonthlyLimit') IS NULL
+      ALTER TABLE dbo.WhatsAppSettings ADD MonthlyLimit INT DEFAULT ${WHATSAPP_MONTHLY_LIMIT};
+
     IF OBJECT_ID(N'dbo.NotificationRules', N'U') IS NULL
     BEGIN
       CREATE TABLE dbo.NotificationRules (
@@ -99,6 +160,31 @@ async function ensureNotificationTables() {
   }
 
   return pool;
+}
+
+async function readWhatsAppUsage(pool: any) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const result = await pool.request()
+    .input('year', sql.Int, year)
+    .input('month', sql.Int, month)
+    .query('SELECT WhatsAppCount FROM dbo.NotificationStats WHERE [Year] = @year AND [Month] = @month');
+  const count = Number(result.recordset?.[0]?.WhatsAppCount || 0);
+  return { count, limit: WHATSAPP_MONTHLY_LIMIT, remaining: Math.max(0, WHATSAPP_MONTHLY_LIMIT - count), activeProvider: process.env.WHATSAPP_PROVIDER || 'Twilio' };
+}
+
+async function incrementWhatsAppUsage(pool: any) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  await pool.request().input('year', sql.Int, year).input('month', sql.Int, month).query(`
+    IF EXISTS (SELECT 1 FROM dbo.NotificationStats WHERE [Year]=@year AND [Month]=@month)
+      UPDATE dbo.NotificationStats SET WhatsAppCount = ISNULL(WhatsAppCount, 0) + 1 WHERE [Year]=@year AND [Month]=@month;
+    ELSE
+      INSERT INTO dbo.NotificationStats ([Year], [Month], WhatsAppCount) VALUES (@year, @month, 1);
+  `);
+  return readWhatsAppUsage(pool);
 }
 
 export async function getEmailSettings(_req: AuthRequest, res: Response): Promise<void> {
@@ -198,20 +284,21 @@ export async function saveWhatsAppSettings(req: AuthRequest, res: Response): Pro
       .input('accountSid', sql.NVarChar, body.accountSid || '')
       .input('fromNumber', sql.NVarChar, body.fromNumber || '')
       .input('tokenValue', sql.NVarChar, body.authToken || '')
-      .input('isEnabled', sql.Bit, bit(body.isEnabled));
+      .input('isEnabled', sql.Bit, bit(body.isEnabled))
+      .input('limit', sql.Int, WHATSAPP_MONTHLY_LIMIT);
 
     if (id) {
       request.input('id', sql.Int, id);
       await request.query(`
         UPDATE dbo.WhatsAppSettings
-        SET AccountSid=@accountSid, FromNumber=@fromNumber, IsEnabled=@isEnabled, UpdatedAt=GETDATE()
+        SET AccountSid=@accountSid, FromNumber=@fromNumber, IsEnabled=@isEnabled, MonthlyLimit=@limit, UpdatedAt=GETDATE()
             ${body.authToken ? ', AuthToken=@tokenValue' : ''}
         WHERE ID=@id;
       `);
     } else {
       await request.query(`
-        INSERT INTO dbo.WhatsAppSettings (AccountSid, AuthToken, FromNumber, IsEnabled)
-        VALUES (@accountSid, @tokenValue, @fromNumber, @isEnabled);
+        INSERT INTO dbo.WhatsAppSettings (AccountSid, AuthToken, FromNumber, IsEnabled, MonthlyLimit)
+        VALUES (@accountSid, @tokenValue, @fromNumber, @isEnabled, @limit);
       `);
     }
     ok(res, null, 'WhatsApp settings saved');
@@ -223,13 +310,7 @@ export async function saveWhatsAppSettings(req: AuthRequest, res: Response): Pro
 export async function getWhatsAppUsage(_req: AuthRequest, res: Response): Promise<void> {
   try {
     const pool = await ensureNotificationTables();
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const limit = Number(process.env.WHATSAPP_MONTHLY_LIMIT || 50) || 50;
-    const result = await pool.request().input('year', sql.Int, year).input('month', sql.Int, month).query('SELECT WhatsAppCount FROM dbo.NotificationStats WHERE [Year] = @year AND [Month] = @month');
-    const count = Number(result.recordset?.[0]?.WhatsAppCount || 0);
-    ok(res, { count, limit, remaining: Math.max(0, limit - count), activeProvider: process.env.WHATSAPP_PROVIDER || 'Twilio' });
+    ok(res, await readWhatsAppUsage(pool));
   } catch (err) {
     res.status(500).json({ success: false, message: err instanceof Error ? err.message : 'Failed to load WhatsApp usage' });
   }
@@ -238,23 +319,31 @@ export async function getWhatsAppUsage(_req: AuthRequest, res: Response): Promis
 export async function testWhatsAppSettings(req: AuthRequest, res: Response): Promise<void> {
   try {
     const pool = await ensureNotificationTables();
-    const testNumber = String(req.body?.testNumber || '').trim();
+    const body = req.body || {};
+    const testNumber = cleanText(body.testNumber);
     if (!testNumber) {
       res.status(400).json({ success: false, message: 'Recipient phone number is required.' });
       return;
     }
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    await pool.request().input('year', sql.Int, year).input('month', sql.Int, month).query(`
-      IF EXISTS (SELECT 1 FROM dbo.NotificationStats WHERE [Year]=@year AND [Month]=@month)
-        UPDATE dbo.NotificationStats SET WhatsAppCount = ISNULL(WhatsAppCount, 0) + 1 WHERE [Year]=@year AND [Month]=@month;
-      ELSE
-        INSERT INTO dbo.NotificationStats ([Year], [Month], WhatsAppCount) VALUES (@year, @month, 1);
-    `);
-    ok(res, { simulated: true }, 'WhatsApp test recorded. Connect provider dispatch in server integration when ready.');
+
+    const stored = await pool.request().query('SELECT TOP 1 AccountSid, AuthToken, FromNumber FROM dbo.WhatsAppSettings ORDER BY ID DESC');
+    const settings = stored.recordset?.[0] || {};
+    const accountSid = cleanText(body.accountSid || settings.AccountSid || process.env.TWILIO_ACCOUNT_SID || process.env.WHATSAPP_ACCOUNT_SID);
+    const authToken = cleanText(body.authToken || settings.AuthToken || process.env.TWILIO_AUTH_TOKEN || process.env.WHATSAPP_AUTH_TOKEN);
+    const fromNumber = cleanText(body.fromNumber || settings.FromNumber || process.env.TWILIO_WHATSAPP_FROM || process.env.WHATSAPP_FROM_NUMBER);
+
+    const twilio = await sendTwilioWhatsApp({
+      accountSid,
+      authToken,
+      fromNumber,
+      toNumber: testNumber,
+      body: cleanText(body.message) || 'EMA System test notification. WhatsApp channel is connected successfully.',
+    });
+
+    const usage = await incrementWhatsAppUsage(pool);
+    ok(res, { sent: true, provider: 'Twilio', messageSid: twilio.sid || twilio.Sid || '', usage }, 'WhatsApp test sent successfully.');
   } catch (err) {
-    res.status(500).json({ success: false, message: err instanceof Error ? err.message : 'Failed to record WhatsApp test' });
+    res.status(500).json({ success: false, message: err instanceof Error ? err.message : 'Failed to send WhatsApp test' });
   }
 }
 
