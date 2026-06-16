@@ -13,7 +13,6 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
     "@types/node": "^25.6.0",
-    "@types/react-router-dom": "^5.3.3",
     "axios": "^1.15.2",
     "bootstrap": "^5.3.8",
     "html2canvas": "^1.4.1",
