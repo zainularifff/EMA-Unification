@@ -1,6 +1,7 @@
 import { DragEvent, useMemo, useState, type CSSProperties } from "react";
 import { previewReport } from "../services/reportService";
 import { buildBuilderReportHtml } from "../utils/reportPdfBuilderOutput";
+import { buildReportBlueprintPayload } from "../utils/reportBlueprintPayloads";
 import "../styles/report-builder-rules.css";
 
 type Pack = { id: string; title: string; subtitle: string; category: "Standard" | "Dynamic"; tone: string; icon: string; standalone?: boolean; dynamic?: boolean };
@@ -128,6 +129,9 @@ function fallbackPayload(pack: Pack, range: Range, source: any = {}) {
     };
   }
 
+  const blueprint = buildReportBlueprintPayload(pack, range, source, baseFilters(range, pack));
+  if (blueprint) return blueprint;
+
   const summary = `${pack.title} is prepared for All Sites covering ${range.from} to ${range.to}. ${pack.subtitle}.`;
   return {
     report: { id: pack.id, title: pack.title, category: pack.category, type: pack.category, description: pack.subtitle },
@@ -146,8 +150,9 @@ function fallbackPayload(pack: Pack, range: Range, source: any = {}) {
 function normalizePayload(response: any, pack: Pack, range: Range) {
   const data = response?.data && typeof response.data === "object" ? response.data : response;
   const returnedId = String(data?.report?.id || data?.filters?.reportId || "").toLowerCase();
-  const source = !returnedId || returnedId !== pack.id || pack.id === "software-roi-report" ? fallbackPayload(pack, range, data) : data;
-  return { ...source, report: { ...(source.report || {}), id: pack.id, title: pack.title, category: pack.category, description: pack.subtitle }, filters: { ...(source.filters || {}), ...baseFilters(range, pack) } };
+  const standardNeedsBlueprint = pack.category === "Standard" && pack.id !== "ai-executive-summary";
+  const source = !returnedId || returnedId !== pack.id || standardNeedsBlueprint ? fallbackPayload(pack, range, data) : data;
+  return { ...source, report: { ...(source.report || {}), id: pack.id, title: source.report?.title || pack.title, category: source.report?.category || pack.category, description: source.report?.description || pack.subtitle }, filters: { ...(source.filters || {}), ...baseFilters(range, pack) } };
 }
 
 function combinePayload(range: Range, packs: Pack[], payloads: any[]) {
@@ -230,10 +235,7 @@ export default function ReportBuilderRulesClean() {
   return (
     <main className="builder-page">
       <section className="builder-top no-report-title">
-        <div className="auto-title-field">
-          <span>Report Output</span>
-          <strong>{buildTitle}</strong>
-        </div>
+        <div className="auto-title-field"><span>Report Output</span><strong>{buildTitle}</strong></div>
         <label className="field"><span>Location / Branch</span><select><option>All Branches</option></select></label>
         <label className="field"><span>Date Range</span><select value={range.preset} onChange={(event) => setRange(rangeForPreset(event.target.value as RangePreset))}><option value="today">Today</option><option value="this-week">This Week</option><option value="this-month">This Month</option><option value="last-30-days">Last 30 Days</option><option value="custom">Custom Range</option></select></label>
         {range.preset === "custom" && <><label className="field compact-date"><span>From</span><input type="date" value={range.from} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} /></label><label className="field compact-date"><span>To</span><input type="date" value={range.to} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} /></label></>}
