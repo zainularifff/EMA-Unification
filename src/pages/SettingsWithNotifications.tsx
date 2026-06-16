@@ -83,12 +83,7 @@ export default function SettingsWithNotifications() {
           <NotificationChannelsSettings />
         ) : view === "management" ? (
           <div className="management-control-wrapper" data-management-section={managementSection}>
-            <div className="management-control-topbar">
-              <div>
-                <span>MANAGEMENT CONTROL</span>
-                <h2>Management Control</h2>
-                <p>Centralise PC aging, device pricing and management policy in one admin area.</p>
-              </div>
+            <div className="management-control-topbar compact" aria-label="Management Control sections">
               <div className="management-control-tabs" role="tablist" aria-label="Management Control">
                 {MANAGEMENT_SECTIONS.map((item) => (
                   <button
