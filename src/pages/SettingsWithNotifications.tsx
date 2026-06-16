@@ -7,12 +7,6 @@ import "../styles/management-control-settings.css";
 type SettingsView = "settings" | "management" | "notifications";
 type ManagementSection = "aging" | "pricing" | "policy";
 
-const MANAGEMENT_SECTIONS: { key: ManagementSection; title: string; desc: string }[] = [
-  { key: "aging", title: "PC Aging", desc: "Aging PC Rule and lifecycle threshold." },
-  { key: "pricing", title: "Device Pricing", desc: "Device replacement and costing values." },
-  { key: "policy", title: "Management Policy", desc: "Dashboard policy control values." },
-];
-
 function readInitialView(): SettingsView {
   if (typeof window === "undefined") return "settings";
   const hash = String(window.location.hash || "").toLowerCase();
@@ -63,13 +57,6 @@ export default function SettingsWithNotifications() {
     }
   };
 
-  const switchManagementSection = (next: ManagementSection) => {
-    setManagementSection(next);
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `${window.location.pathname}#management-control-${next}`);
-    }
-  };
-
   return (
     <div className={`settings-with-notifications settings-view-${view}`} data-settings-view={view}>
       <div className="settings-notification-page-tabs">
@@ -83,21 +70,6 @@ export default function SettingsWithNotifications() {
           <NotificationChannelsSettings />
         ) : view === "management" ? (
           <div className="management-control-wrapper" data-management-section={managementSection}>
-            <div className="management-control-topbar compact" aria-label="Management Control sections">
-              <div className="management-control-tabs" role="tablist" aria-label="Management Control">
-                {MANAGEMENT_SECTIONS.map((item) => (
-                  <button
-                    key={item.key}
-                    className={`management-control-tab ${managementSection === item.key ? "active" : ""}`}
-                    type="button"
-                    onClick={() => switchManagementSection(item.key)}
-                  >
-                    <strong>{item.title}</strong>
-                    <small>{item.desc}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
             <LegacySettings key={`management-${managementSection}`} />
           </div>
         ) : (
