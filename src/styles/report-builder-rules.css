@@ -108,6 +108,92 @@ body.ema-report-builder-active .ema-page { padding: 0 !important; }
 .preview-head strong { display: block; }
 .preview-head small { color: #6c7d97; font-weight: 800; }
 .preview-frame { width: 100%; height: 100%; border: 0; background: #eef3f8; }
+
+/* Force internal scrollbars for report builder panels. The app shell already has its own topbar,
+   so every report column must scroll inside itself and never depend on the browser/body scroll. */
+body.ema-report-builder-active .builder-page {
+  height: calc(100dvh - 64px) !important;
+  max-height: calc(100dvh - 64px) !important;
+  overflow: hidden !important;
+}
+
+body.ema-report-builder-active .builder-layout {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+body.ema-report-builder-active .left.panel,
+body.ema-report-builder-active .right.panel {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+}
+
+body.ema-report-builder-active .pack-list,
+body.ema-report-builder-active .templates,
+body.ema-report-builder-active .summary,
+body.ema-report-builder-active .canvas-wrap {
+  min-height: 0 !important;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #eef4fb;
+}
+
+body.ema-report-builder-active .pack-list,
+body.ema-report-builder-active .templates {
+  flex: 1 1 0 !important;
+  height: 0 !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  padding-bottom: 180px !important;
+}
+
+body.ema-report-builder-active .summary {
+  flex: 1 1 0 !important;
+  height: 0 !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  padding-bottom: 180px !important;
+}
+
+body.ema-report-builder-active .canvas-wrap {
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  padding-bottom: 180px !important;
+}
+
+body.ema-report-builder-active .pack-list::-webkit-scrollbar,
+body.ema-report-builder-active .templates::-webkit-scrollbar,
+body.ema-report-builder-active .summary::-webkit-scrollbar,
+body.ema-report-builder-active .canvas-wrap::-webkit-scrollbar {
+  width: 10px;
+}
+
+body.ema-report-builder-active .pack-list::-webkit-scrollbar-track,
+body.ema-report-builder-active .templates::-webkit-scrollbar-track,
+body.ema-report-builder-active .summary::-webkit-scrollbar-track,
+body.ema-report-builder-active .canvas-wrap::-webkit-scrollbar-track {
+  background: #eef4fb;
+  border-radius: 999px;
+}
+
+body.ema-report-builder-active .pack-list::-webkit-scrollbar-thumb,
+body.ema-report-builder-active .templates::-webkit-scrollbar-thumb,
+body.ema-report-builder-active .summary::-webkit-scrollbar-thumb,
+body.ema-report-builder-active .canvas-wrap::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 999px;
+  border: 2px solid #eef4fb;
+}
+
+body.ema-report-builder-active .pack-list::-webkit-scrollbar-thumb:hover,
+body.ema-report-builder-active .templates::-webkit-scrollbar-thumb:hover,
+body.ema-report-builder-active .summary::-webkit-scrollbar-thumb:hover,
+body.ema-report-builder-active .canvas-wrap::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 @media(max-width:1320px){.builder-layout{grid-template-columns:250px minmax(0,1fr)}.right{grid-column:1/-1; min-height:280px}.builder-page{height:calc(100dvh - 70px)}}
 @media(max-width:980px){body.ema-report-builder-active{overflow:auto!important}.builder-page{height:auto;min-height:calc(100dvh - 70px);overflow:visible}.builder-top{grid-template-columns:1fr 1fr}.builder-layout{height:auto;grid-template-columns:1fr;overflow:visible}.left.panel,.right.panel{height:auto;max-height:none}.pack-list,.templates,.summary,.canvas-wrap{max-height:none;overflow:visible;padding-bottom:28px}.canvas{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:620px){.builder-top{grid-template-columns:1fr}.pack-list,.canvas{grid-template-columns:1fr}}
