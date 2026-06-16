@@ -3,6 +3,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import routes from './routes';
+import settingsRoutes from './routes/settings';
+import { authMiddleware } from './middleware/auth';
 
 dotenv.config();
 
@@ -34,6 +36,11 @@ app.get('/health', (_req: Request, res: Response) => {
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', service: 'ema-backend', time: new Date().toISOString() });
 });
+
+// Register Settings routes directly as well as through the main router.
+// This keeps Notification Channels endpoints available even if an older route bundle
+// is cached or the main router is partially replaced during local merges.
+app.use('/api/settings', authMiddleware, settingsRoutes);
 
 app.use('/api', routes);
 
