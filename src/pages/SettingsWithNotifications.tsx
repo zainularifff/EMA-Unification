@@ -71,42 +71,44 @@ export default function SettingsWithNotifications() {
   };
 
   return (
-    <div className="settings-with-notifications">
+    <div className={`settings-with-notifications settings-view-${view}`} data-settings-view={view}>
       <div className="settings-notification-page-tabs">
         <button className={`notification-tab ${view === "settings" ? "active" : ""}`} onClick={() => switchView("settings")}>Settings Console</button>
         <button className={`notification-tab ${view === "management" ? "active" : ""}`} onClick={() => switchView("management")}>Management Control</button>
         <button className={`notification-tab ${view === "notifications" ? "active" : ""}`} onClick={() => switchView("notifications")}>Notification Channels</button>
       </div>
 
-      {view === "notifications" ? (
-        <NotificationChannelsSettings />
-      ) : view === "management" ? (
-        <div className="management-control-wrapper" data-management-section={managementSection}>
-          <div className="management-control-topbar">
-            <div>
-              <span>MANAGEMENT CONTROL</span>
-              <h2>Management Control</h2>
-              <p>Centralise PC aging, device pricing and management policy in one admin area.</p>
+      <div className="settings-view-host">
+        {view === "notifications" ? (
+          <NotificationChannelsSettings />
+        ) : view === "management" ? (
+          <div className="management-control-wrapper" data-management-section={managementSection}>
+            <div className="management-control-topbar">
+              <div>
+                <span>MANAGEMENT CONTROL</span>
+                <h2>Management Control</h2>
+                <p>Centralise PC aging, device pricing and management policy in one admin area.</p>
+              </div>
+              <div className="management-control-tabs" role="tablist" aria-label="Management Control">
+                {MANAGEMENT_SECTIONS.map((item) => (
+                  <button
+                    key={item.key}
+                    className={`management-control-tab ${managementSection === item.key ? "active" : ""}`}
+                    type="button"
+                    onClick={() => switchManagementSection(item.key)}
+                  >
+                    <strong>{item.title}</strong>
+                    <small>{item.desc}</small>
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="management-control-tabs" role="tablist" aria-label="Management Control">
-              {MANAGEMENT_SECTIONS.map((item) => (
-                <button
-                  key={item.key}
-                  className={`management-control-tab ${managementSection === item.key ? "active" : ""}`}
-                  type="button"
-                  onClick={() => switchManagementSection(item.key)}
-                >
-                  <strong>{item.title}</strong>
-                  <small>{item.desc}</small>
-                </button>
-              ))}
-            </div>
+            <LegacySettings key={`management-${managementSection}`} />
           </div>
-          <LegacySettings key={`management-${managementSection}`} />
-        </div>
-      ) : (
-        <LegacySettings />
-      )}
+        ) : (
+          <LegacySettings />
+        )}
+      </div>
     </div>
   );
 }
