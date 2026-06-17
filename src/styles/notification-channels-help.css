@@ -1,3 +1,5 @@
+@import "./notification-channels-density.css";
+
 .notification-field-hint {
   display: block;
   margin-top: -2px;
