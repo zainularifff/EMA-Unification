@@ -23,6 +23,7 @@ import "./styles/module-container.css";
 import "./styles/notification-channels-global-align.css";
 import "./styles/system-standard-overrides.css";
 import "./styles/page-shell-standard.css";
+import "./styles/ema-system-shell.css";
 
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
