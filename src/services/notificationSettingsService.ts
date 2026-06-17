@@ -36,6 +36,21 @@ export type NotificationRule = {
   Enabled: boolean;
   WhatsAppEnabled: boolean;
   Description: string;
+  WhatsAppContentSID?: string;
+};
+
+export type NotificationRecipient = {
+  RecipientID?: number;
+  RecipientName: string;
+  RecipientRole?: string;
+  Email?: string;
+  WhatsAppNumber?: string;
+  ReceiveIncidentCreated: boolean;
+  ReceiveIncidentUpdated: boolean;
+  ReceiveIncidentResolved: boolean;
+  ReceiveSystemLicense: boolean;
+  ReceiveLicenseExceeded: boolean;
+  IsEnabled: boolean;
 };
 
 export type WhatsappUsage = {
@@ -51,6 +66,8 @@ type NotificationSettingsBundle = {
   whatsappUsage?: WhatsappUsage;
   rules?: NotificationRule[];
   notificationRules?: NotificationRule[];
+  recipients?: NotificationRecipient[];
+  notificationRecipients?: NotificationRecipient[];
 };
 
 const WHATSAPP_MONTHLY_LIMIT = 200;
@@ -59,6 +76,7 @@ const STORAGE_KEYS = {
   whatsapp: "ema.notification.whatsappSettings",
   usage: "ema.notification.whatsappUsage",
   rules: "ema.notification.rules",
+  recipients: "ema.notification.recipients",
 };
 
 // Backend DB persistence is the default. Set VITE_NOTIFICATION_SETTINGS_API=false only for local UI demo mode.
@@ -76,13 +94,13 @@ const DEFAULT_WHATSAPP_SETTINGS: NotificationWhatsappConfig = {
 };
 
 const DEFAULT_RULES: NotificationRule[] = [
-  { RuleKey: "CRM_CREATED", Enabled: false, WhatsAppEnabled: false, Description: "Notify when a new client/customer record is created" },
   { RuleKey: "INCIDENT_CREATED", Enabled: true, WhatsAppEnabled: true, Description: "New incident ticket created" },
-  { RuleKey: "INCIDENT_UPDATED", Enabled: true, WhatsAppEnabled: false, Description: "Incident ticket updated" },
-  { RuleKey: "INCIDENT_RESOLVED", Enabled: true, WhatsAppEnabled: false, Description: "Incident ticket resolved or closed" },
-  { RuleKey: "LEASE_EXPIRY_3M", Enabled: false, WhatsAppEnabled: false, Description: "Lease expiring in 3 months" },
-  { RuleKey: "LEASE_EXPIRY_1M", Enabled: false, WhatsAppEnabled: false, Description: "Lease expiring in 1 month" },
-  { RuleKey: "LEASE_EXPIRY_1W", Enabled: false, WhatsAppEnabled: false, Description: "Lease expiring in 1 week" },
+  { RuleKey: "INCIDENT_UPDATED", Enabled: true, WhatsAppEnabled: true, Description: "Incident ticket updated" },
+  { RuleKey: "INCIDENT_RESOLVED", Enabled: true, WhatsAppEnabled: true, Description: "Incident ticket resolved or closed" },
+  { RuleKey: "SYSTEM_LICENSE_EXPIRY_3M", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 3 months" },
+  { RuleKey: "SYSTEM_LICENSE_EXPIRY_1M", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 1 month" },
+  { RuleKey: "SYSTEM_LICENSE_EXPIRY_1W", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 1 week" },
+  { RuleKey: "SYSTEM_LICENSE_EXPIRED", Enabled: true, WhatsAppEnabled: true, Description: "System license has expired" },
   { RuleKey: "LICENSE_EXCEEDED", Enabled: false, WhatsAppEnabled: false, Description: "Installed assets exceed licensed count" },
 ];
 
@@ -236,6 +254,23 @@ export function normalizeNotificationRule(row: AnyRecord = {}): NotificationRule
     Enabled: boolValue(row.Enabled ?? row.enabled ?? row.EmailEnabled, false),
     WhatsAppEnabled: boolValue(row.WhatsAppEnabled ?? row.whatsAppEnabled ?? row.whatsappEnabled, false),
     Description: String(row.Description ?? row.description ?? ""),
+    WhatsAppContentSID: String(row.WhatsAppContentSID ?? row.whatsAppContentSID ?? row.contentSid ?? ""),
+  };
+}
+
+export function normalizeNotificationRecipient(row: AnyRecord = {}): NotificationRecipient {
+  return {
+    RecipientID: Number(row.RecipientID ?? row.recipientID ?? row.id ?? 0) || undefined,
+    RecipientName: String(row.RecipientName ?? row.recipientName ?? row.name ?? ""),
+    RecipientRole: String(row.RecipientRole ?? row.recipientRole ?? row.role ?? ""),
+    Email: String(row.Email ?? row.email ?? ""),
+    WhatsAppNumber: String(row.WhatsAppNumber ?? row.whatsAppNumber ?? row.whatsappNumber ?? row.phone ?? ""),
+    ReceiveIncidentCreated: boolValue(row.ReceiveIncidentCreated ?? row.receiveIncidentCreated, true),
+    ReceiveIncidentUpdated: boolValue(row.ReceiveIncidentUpdated ?? row.receiveIncidentUpdated, true),
+    ReceiveIncidentResolved: boolValue(row.ReceiveIncidentResolved ?? row.receiveIncidentResolved, true),
+    ReceiveSystemLicense: boolValue(row.ReceiveSystemLicense ?? row.receiveSystemLicense, true),
+    ReceiveLicenseExceeded: boolValue(row.ReceiveLicenseExceeded ?? row.receiveLicenseExceeded, false),
+    IsEnabled: boolValue(row.IsEnabled ?? row.isEnabled, true),
   };
 }
 
@@ -245,6 +280,7 @@ function localBundle(): NotificationSettingsBundle {
     whatsappSettings: normalizeWhatsappConfig(readLocal<NotificationWhatsappConfig>(STORAGE_KEYS.whatsapp, DEFAULT_WHATSAPP_SETTINGS)),
     whatsappUsage: currentUsageFallback(),
     rules: readLocal<NotificationRule[]>(STORAGE_KEYS.rules, DEFAULT_RULES).map(normalizeNotificationRule).filter((rule) => rule.RuleKey),
+    recipients: readLocal<NotificationRecipient[]>(STORAGE_KEYS.recipients, []).map(normalizeNotificationRecipient),
   };
 }
 
@@ -270,6 +306,7 @@ async function saveLegacyBundle(patch: NotificationSettingsBundle) {
     whatsappSettings: patch.whatsappSettings || current.whatsappSettings || DEFAULT_WHATSAPP_SETTINGS,
     whatsappUsage: patch.whatsappUsage || current.whatsappUsage || currentUsageFallback(),
     rules: patch.rules || patch.notificationRules || current.rules || DEFAULT_RULES,
+    recipients: patch.recipients || patch.notificationRecipients || current.recipients || [],
   };
   const result = unwrapData(await api.put("/api/settings/notifications", next));
   return { ...(typeof result === "object" && result ? result as AnyRecord : {}), saved: true, fallback: true };
@@ -446,6 +483,79 @@ export const notificationSettingsService = {
         }
       }
       throw userFacingError(error, "save notification rules");
+    }
+  },
+
+  async getRecipients() {
+    if (!USE_BACKEND_NOTIFICATION_API) {
+      return readLocal<NotificationRecipient[]>(STORAGE_KEYS.recipients, []).map(normalizeNotificationRecipient);
+    }
+    try {
+      const rows = unwrapArray<AnyRecord>(await api.get("/api/settings/notification-recipients", { forceRefresh: true, cacheTtlMs: 0 })).map(normalizeNotificationRecipient);
+      writeLocal(STORAGE_KEYS.recipients, rows);
+      return rows;
+    } catch (error) {
+      try {
+        const legacy = await getLegacyBundle();
+        const rows = (legacy.recipients || legacy.notificationRecipients || []).map(normalizeNotificationRecipient);
+        writeLocal(STORAGE_KEYS.recipients, rows);
+        return rows;
+      } catch {
+        if (isRouteMissing(error)) throw userFacingError(error, "load notification receivers");
+        return readLocal<NotificationRecipient[]>(STORAGE_KEYS.recipients, []).map(normalizeNotificationRecipient);
+      }
+    }
+  },
+
+  async saveRecipient(payload: NotificationRecipient) {
+    const normalized = normalizeNotificationRecipient(payload);
+    if (!String(normalized.RecipientName || "").trim()) throw new Error("Receiver name is required.");
+    if (!String(normalized.Email || "").trim() && !String(normalized.WhatsAppNumber || "").trim()) {
+      throw new Error("Add at least one Email or WhatsApp number for this receiver.");
+    }
+
+    const current = readLocal<NotificationRecipient[]>(STORAGE_KEYS.recipients, []).map(normalizeNotificationRecipient);
+    const next = current.filter((item) => item.RecipientID !== normalized.RecipientID);
+    next.push(normalized);
+    writeLocal(STORAGE_KEYS.recipients, next);
+
+    if (!USE_BACKEND_NOTIFICATION_API) return { saved: true, localOnly: true };
+
+    try {
+      const id = normalized.RecipientID;
+      return id
+        ? unwrapData(await api.put(`/api/settings/notification-recipients/${id}`, normalized))
+        : unwrapData(await api.post("/api/settings/notification-recipients", normalized));
+    } catch (error) {
+      if (!isAuthError(error) && !isNetworkDown(error) && !isRouteMissing(error)) {
+        try {
+          return await saveLegacyBundle({ recipients: next });
+        } catch (legacyError) {
+          throw userFacingError(legacyError, "save notification receiver");
+        }
+      }
+      throw userFacingError(error, "save notification receiver");
+    }
+  },
+
+  async deleteRecipient(recipientID: number) {
+    const current = readLocal<NotificationRecipient[]>(STORAGE_KEYS.recipients, []).map(normalizeNotificationRecipient);
+    const next = current.filter((item) => Number(item.RecipientID) !== Number(recipientID));
+    writeLocal(STORAGE_KEYS.recipients, next);
+
+    if (!USE_BACKEND_NOTIFICATION_API) return { deleted: true, localOnly: true };
+
+    try {
+      return unwrapData(await api.delete(`/api/settings/notification-recipients/${recipientID}`));
+    } catch (error) {
+      if (!isAuthError(error) && !isNetworkDown(error) && !isRouteMissing(error)) {
+        try {
+          return await saveLegacyBundle({ recipients: next });
+        } catch (legacyError) {
+          throw userFacingError(legacyError, "delete notification receiver");
+        }
+      }
+      throw userFacingError(error, "delete notification receiver");
     }
   },
 };
