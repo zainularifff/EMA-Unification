@@ -22,11 +22,6 @@ import "./styles/ema-layout.css";
 import "./styles/module-container.css";
 import "./styles/management-control-settings.css";
 import "./styles/notification-channels.css";
-import "./styles/notification-channels-fix.css";
-import "./styles/notification-channels-density.css";
-import "./styles/notification-channels-global-align.css";
-import "./styles/system-standard-overrides.css";
-import "./styles/page-shell-standard.css";
 import "./styles/ema-system-shell.css";
 
 import App from "./App";
