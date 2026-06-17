@@ -20,6 +20,7 @@ import "./styles/toast.css";
 import "./styles/settings-widgets.css";
 import "./styles/ema-layout.css";
 import "./styles/module-container.css";
+import "./styles/notification-channels-global-align.css";
 
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
