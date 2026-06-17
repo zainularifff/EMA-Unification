@@ -1,3 +1,183 @@
 :root {
   --ema-module-ui-fixes-loaded: 1;
 }
+
+/* Hardware device details must be a real centred popup, not a right-side drawer. */
+body .hardware-detail-drawer-overlay.hardware-detail-form-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  overflow: auto !important;
+  background: rgba(15, 23, 42, 0.46) !important;
+  backdrop-filter: blur(7px) !important;
+}
+
+body .hardware-detail-drawer.hardware-detail-form-modal {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: none !important;
+  margin: auto !important;
+  width: min(1040px, calc(100vw - 48px)) !important;
+  max-width: min(1040px, calc(100vw - 48px)) !important;
+  height: auto !important;
+  max-height: calc(100dvh - 48px) !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
+  overflow: hidden !important;
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.32) !important;
+}
+
+body .hardware-detail-drawer .hardware-detail-body {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-bottom: 18px !important;
+  scrollbar-gutter: stable !important;
+}
+
+body .hardware-detail-drawer .hardware-detail-section-grid {
+  min-width: 0 !important;
+  align-items: start !important;
+}
+
+body .hardware-detail-drawer .hardware-detail-card,
+body .hardware-detail-drawer .hardware-detail-summary-card,
+body .hardware-detail-drawer .hardware-detail-item {
+  min-width: 0 !important;
+}
+
+body .hardware-detail-drawer .hardware-detail-item strong,
+body .hardware-detail-drawer .hardware-detail-summary-card strong,
+body .hardware-detail-drawer .hardware-detail-title-wrap h2,
+body .hardware-detail-drawer .hardware-detail-title-wrap p {
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+@media (max-width: 900px) {
+  body .hardware-detail-drawer-overlay.hardware-detail-form-overlay {
+    padding: 14px !important;
+    align-items: flex-start !important;
+  }
+
+  body .hardware-detail-drawer.hardware-detail-form-modal {
+    width: calc(100vw - 28px) !important;
+    max-width: calc(100vw - 28px) !important;
+    max-height: calc(100dvh - 28px) !important;
+  }
+}
+
+/* Software statistic/dynamic tables: use available width and wrap long wording. */
+body .software-inventory-module .software-registry-card.software-registry-card--full,
+body .software-inventory-module .content-shell.software-registry-card.software-registry-card--full {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+body .software-inventory-module .software-device-table.software-standard-table {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  overflow: auto !important;
+  scrollbar-gutter: stable !important;
+}
+
+body .software-inventory-module .software-device-table-row.software-dynamic-row {
+  width: 100% !important;
+  min-width: 0 !important;
+  align-items: stretch !important;
+}
+
+/* Seven-column statistic tables such as Installed Software and License Status. */
+body .software-inventory-module .software-device-table-row.software-dynamic-row:has(> .user-cell:nth-child(8)) {
+  grid-template-columns:
+    3.8rem
+    minmax(13rem, 1.28fr)
+    minmax(8rem, 0.78fr)
+    minmax(5.5rem, 0.52fr)
+    minmax(9rem, 0.86fr)
+    minmax(7rem, 0.62fr)
+    minmax(13rem, 1.18fr)
+    minmax(8rem, 0.76fr) !important;
+}
+
+/* Small statistic tables such as file extension counts. */
+body .software-inventory-module .software-device-table-row.software-dynamic-row:not(:has(> .user-cell:nth-child(8))) {
+  grid-template-columns: 3.8rem minmax(0, 1fr) minmax(8rem, 0.3fr) !important;
+}
+
+body .software-inventory-module .software-device-table-row.software-dynamic-row .user-cell,
+body .software-inventory-module .software-device-table-row.software-dynamic-row .software-text-cell {
+  min-width: 0 !important;
+  height: auto !important;
+  min-height: 52px !important;
+  display: flex !important;
+  align-items: center !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  line-height: 1.25 !important;
+}
+
+body .software-inventory-module .software-device-table-row.software-dynamic-row .user-cell > *,
+body .software-inventory-module .software-device-table-row.software-dynamic-row .software-sort-btn,
+body .software-inventory-module .software-device-table-row.software-dynamic-row .software-sort-btn span {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  line-height: 1.18 !important;
+}
+
+body .software-inventory-module .software-device-table-row.software-dynamic-row.head {
+  min-height: 58px !important;
+  align-items: center !important;
+}
+
+body .software-inventory-module .software-device-table-row.software-dynamic-row:not(.head) {
+  min-height: 58px !important;
+}
+
+body .software-inventory-module .software-device-table-row.software-dynamic-row .software-row-no {
+  white-space: nowrap !important;
+}
+
+@media (max-width: 1180px) {
+  body .software-inventory-module .software-device-table-row.software-dynamic-row:has(> .user-cell:nth-child(8)) {
+    grid-template-columns:
+      3.8rem
+      minmax(11rem, 1.15fr)
+      minmax(7rem, 0.75fr)
+      minmax(5rem, 0.52fr)
+      minmax(8rem, 0.8fr)
+      minmax(6.5rem, 0.6fr)
+      minmax(11rem, 1.1fr)
+      minmax(7rem, 0.72fr) !important;
+  }
+}
