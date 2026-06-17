@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Bell, CheckCircle2, Loader2, Mail, MessageSquare, RefreshCw, Send, ShieldCheck, XCircle } from "lucide-react";
+import { Bell, Edit3, Loader2, Mail, MessageSquare, RefreshCw, Save, Send, ShieldCheck, Trash2, Users } from "lucide-react";
 import "../../styles/toast.css";
 import "../../styles/notification-channels.css";
 import "../../styles/notification-channels-fix.css";
@@ -8,6 +8,7 @@ import "../../styles/notification-channels-help.css";
 import notificationSettingsService, {
   type NotificationEmailConfig,
   type NotificationEmailProvider,
+  type NotificationRecipient,
   type NotificationRule,
   type NotificationWhatsappConfig,
   type WhatsappUsage,
@@ -18,6 +19,7 @@ const DEFAULT_WHATSAPP_LIMIT = 200;
 
 type ToastTone = "success" | "info" | "error";
 type ToastState = { id: number; tone: ToastTone; title: string; message: string } | null;
+type NotificationTab = "email" | "whatsapp" | "triggers" | "receivers";
 
 const emptyEmailConfigs: Record<NotificationEmailProvider, NotificationEmailConfig> = {
   SMTP: { provider: "SMTP", host: "", port: "587", user: "", pass: "", ssl: true, isActive: true },
@@ -26,8 +28,25 @@ const emptyEmailConfigs: Record<NotificationEmailProvider, NotificationEmailConf
   Gmail: { provider: "Gmail", gmailUser: "", gmailPass: "", isActive: false },
 };
 
+const emptyRecipient: NotificationRecipient = {
+  RecipientName: "",
+  RecipientRole: "",
+  Email: "",
+  WhatsAppNumber: "",
+  ReceiveIncidentCreated: true,
+  ReceiveIncidentUpdated: true,
+  ReceiveIncidentResolved: true,
+  ReceiveSystemLicense: true,
+  ReceiveLicenseExceeded: false,
+  IsEnabled: true,
+};
+
 function cloneEmailConfigs() {
   return JSON.parse(JSON.stringify(emptyEmailConfigs)) as Record<NotificationEmailProvider, NotificationEmailConfig>;
+}
+
+function cloneRecipient(row: Partial<NotificationRecipient> = {}) {
+  return { ...emptyRecipient, ...row } as NotificationRecipient;
 }
 
 function titleFromRule(ruleKey: string) {
@@ -69,12 +88,14 @@ function normalizeUsage(row?: Partial<WhatsappUsage>): WhatsappUsage {
 }
 
 export default function NotificationChannelsSettings() {
-  const [activeTab, setActiveTab] = useState<"email" | "whatsapp" | "triggers">("whatsapp");
+  const [activeTab, setActiveTab] = useState<NotificationTab>("whatsapp");
   const [provider, setProvider] = useState<NotificationEmailProvider>("SMTP");
   const [emailConfigs, setEmailConfigs] = useState<Record<NotificationEmailProvider, NotificationEmailConfig>>(cloneEmailConfigs);
   const [whatsapp, setWhatsapp] = useState<NotificationWhatsappConfig>({ accountSid: "", authToken: "", fromNumber: "", isEnabled: false });
   const [usage, setUsage] = useState<WhatsappUsage>({ count: 0, limit: DEFAULT_WHATSAPP_LIMIT, remaining: DEFAULT_WHATSAPP_LIMIT, activeProvider: "Twilio" });
   const [rules, setRules] = useState<NotificationRule[]>([]);
+  const [recipients, setRecipients] = useState<NotificationRecipient[]>([]);
+  const [recipientDraft, setRecipientDraft] = useState<NotificationRecipient>(cloneRecipient());
   const [testNumber, setTestNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -84,6 +105,7 @@ export default function NotificationChannelsSettings() {
 
   const activeEmail = emailConfigs[provider];
   const enabledRules = useMemo(() => rules.filter((rule) => rule.Enabled || rule.WhatsAppEnabled).length, [rules]);
+  const activeReceivers = useMemo(() => recipients.filter((row) => row.IsEnabled).length, [recipients]);
   const usedPercent = Math.min(100, Math.round((usage.count / Math.max(usage.limit, 1)) * 100));
 
   const notify = (tone: ToastTone, title: string, detail: string) => {
@@ -104,15 +126,20 @@ export default function NotificationChannelsSettings() {
     setEmailConfigs((current) => ({ ...current, [provider]: { ...current[provider], provider, ...patch } }));
   };
 
+  const patchRecipient = (patch: Partial<NotificationRecipient>) => {
+    setRecipientDraft((current) => ({ ...current, ...patch }));
+  };
+
   const load = async (silent = false) => {
     setLoading(true);
     if (!silent) setMessage(null);
     try {
-      const [emailRows, whatsappRow, usageRow, ruleRows] = await Promise.all([
+      const [emailRows, whatsappRow, usageRow, ruleRows, recipientRows] = await Promise.all([
         notificationSettingsService.getEmailSettings(),
         notificationSettingsService.getWhatsappSettings(),
         notificationSettingsService.getWhatsappUsage(),
         notificationSettingsService.getRules(),
+        notificationSettingsService.getRecipients(),
       ]);
       const next = cloneEmailConfigs();
       emailRows.forEach((row) => {
@@ -132,6 +159,7 @@ export default function NotificationChannelsSettings() {
       setWhatsapp((current) => ({ ...current, ...whatsappRow, authToken: current.authToken || whatsappRow.authToken || "" }));
       setUsage(normalizeUsage(usageRow));
       setRules(ruleRows);
+      setRecipients(recipientRows);
       if (!silent) notify("success", "Settings refreshed", "Latest notification settings loaded.");
     } catch (error) {
       const detail = cleanNotice(readError(error));
@@ -236,6 +264,54 @@ export default function NotificationChannelsSettings() {
     }
   };
 
+  const saveRecipient = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const result = await notificationSettingsService.saveRecipient(recipientDraft);
+      const isLocal = Boolean((result as any)?.localOnly);
+      const detail = isLocal ? "Receiver saved locally." : "Receiver saved.";
+      setMessage({ tone: isLocal ? "info" : "success", text: detail });
+      notify(isLocal ? "info" : "success", "Receiver saved", detail);
+      setRecipientDraft(cloneRecipient());
+      const nextRecipients = await notificationSettingsService.getRecipients();
+      setRecipients(nextRecipients);
+    } catch (error) {
+      const detail = cleanNotice(readError(error));
+      setMessage({ tone: "error", text: detail });
+      notify("error", "Save failed", detail);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editRecipient = (row: NotificationRecipient) => {
+    setRecipientDraft(cloneRecipient(row));
+    setActiveTab("receivers");
+  };
+
+  const deleteRecipient = async (row: NotificationRecipient) => {
+    if (!row.RecipientID) return;
+    if (typeof window !== "undefined" && !window.confirm(`Delete receiver ${row.RecipientName || row.WhatsAppNumber || row.Email}?`)) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      await notificationSettingsService.deleteRecipient(row.RecipientID);
+      const detail = "Receiver deleted.";
+      setMessage({ tone: "success", text: detail });
+      notify("success", "Receiver deleted", detail);
+      const nextRecipients = await notificationSettingsService.getRecipients();
+      setRecipients(nextRecipients);
+      if (recipientDraft.RecipientID === row.RecipientID) setRecipientDraft(cloneRecipient());
+    } catch (error) {
+      const detail = cleanNotice(readError(error));
+      setMessage({ tone: "error", text: detail });
+      notify("error", "Delete failed", detail);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const toggleRule = async (ruleKey: string, channel: "email" | "whatsapp") => {
     const next = rules.map((rule) => {
       if (rule.RuleKey !== ruleKey) return rule;
@@ -278,11 +354,12 @@ export default function NotificationChannelsSettings() {
       <div className="notification-topbar">
         <div>
           <h2>Notification Channels</h2>
-          <p>Email, WhatsApp and event trigger delivery settings for EMA alerts.</p>
+          <p>Email, WhatsApp, receivers and event trigger delivery settings for EMA alerts.</p>
         </div>
         <div className="notification-tabs">
           <button className={`notification-tab ${activeTab === "email" ? "active" : ""}`} onClick={() => setActiveTab("email")}><Mail size={15} /> Email</button>
           <button className={`notification-tab ${activeTab === "whatsapp" ? "active" : ""}`} onClick={() => setActiveTab("whatsapp")}><MessageSquare size={15} /> WhatsApp</button>
+          <button className={`notification-tab ${activeTab === "receivers" ? "active" : ""}`} onClick={() => setActiveTab("receivers")}><Users size={15} /> Receivers</button>
           <button className={`notification-tab ${activeTab === "triggers" ? "active" : ""}`} onClick={() => setActiveTab("triggers")}><Bell size={15} /> Triggers</button>
           <button className="notification-btn" onClick={() => load()} disabled={loading}><RefreshCw size={15} /> Refresh</button>
         </div>
@@ -337,13 +414,13 @@ export default function NotificationChannelsSettings() {
         ) : activeTab === "whatsapp" ? (
           <div className="notification-grid notification-whatsapp-grid">
             <section className="notification-panel">
-              <div className="notification-panel-head"><div><h3>WhatsApp Integration</h3><p>Connect WhatsApp Business/Twilio sender for incident, SLA and client alerts.</p></div><span className={`notification-status-pill ${whatsapp.isEnabled ? "enabled" : ""}`}>{whatsapp.isEnabled ? "Enabled" : "Disabled"}</span></div>
+              <div className="notification-panel-head"><div><h3>WhatsApp Integration</h3><p>Connect WhatsApp Business/Twilio sender for incident and system license alerts.</p></div><span className={`notification-status-pill ${whatsapp.isEnabled ? "enabled" : ""}`}>{whatsapp.isEnabled ? "Enabled" : "Disabled"}</span></div>
               <div className="notification-form">
                 <div className="notification-form-grid">
                   <Field label="Account SID" hint="Twilio Account SID. Saved in DB for WhatsApp delivery."><input value={whatsapp.accountSid} onChange={(e) => setWhatsapp({ ...whatsapp, accountSid: e.target.value })} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" /></Field>
                   <Field label="Auth Token" hint="Twilio Auth Token. Leave blank if you only want to keep existing token."><input type="password" value={whatsapp.authToken || ""} onChange={(e) => setWhatsapp({ ...whatsapp, authToken: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
-                  <Field label="From Number" hint="WhatsApp sender number from Twilio. This field is saved together with Account SID."><input value={whatsapp.fromNumber} onChange={(e) => setWhatsapp({ ...whatsapp, fromNumber: e.target.value })} placeholder="+14155238886" /></Field>
-                  <Field label="Test Recipient" hint="Recipient used only for Send Test. It is not saved as sender setting."><input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} placeholder="+60123456789" /></Field>
+                  <Field label="From Number" hint="WhatsApp sender number from Twilio. This is not the receiver number."><input value={whatsapp.fromNumber} onChange={(e) => setWhatsapp({ ...whatsapp, fromNumber: e.target.value })} placeholder="whatsapp:+14155238886" /></Field>
+                  <Field label="Test Recipient" hint="Manual test only. Real receivers are saved inside the Receivers tab."><input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} placeholder="whatsapp:+60123456789" /></Field>
                 </div>
                 <div className="notification-actions split">
                   <button type="button" className={`notification-toggle whatsapp ${whatsapp.isEnabled ? "on" : ""}`} onClick={() => setWhatsapp({ ...whatsapp, isEnabled: !whatsapp.isEnabled })}>{whatsapp.isEnabled ? "Disable Channel" : "Enable Channel"}</button>
@@ -369,12 +446,64 @@ export default function NotificationChannelsSettings() {
               </div>
             </aside>
           </div>
+        ) : activeTab === "receivers" ? (
+          <div className="notification-grid notification-receiver-grid">
+            <section className="notification-panel">
+              <div className="notification-panel-head"><div><h3>Notification Receivers</h3><p>Save the users or support numbers that should receive Email and WhatsApp alerts.</p></div><span className="notification-status-pill enabled">{activeReceivers} Active</span></div>
+              <div className="notification-form">
+                <div className="notification-form-grid">
+                  <Field label="Receiver Name" hint="Person, team or support group name."><input value={recipientDraft.RecipientName || ""} onChange={(e) => patchRecipient({ RecipientName: e.target.value })} placeholder="Support Admin" /></Field>
+                  <Field label="Role / Team" hint="Optional label shown in receiver list."><input value={recipientDraft.RecipientRole || ""} onChange={(e) => patchRecipient({ RecipientRole: e.target.value })} placeholder="Service Desk" /></Field>
+                  <Field label="Email" hint="Used when Email trigger is enabled."><input value={recipientDraft.Email || ""} onChange={(e) => patchRecipient({ Email: e.target.value })} placeholder="support@company.com" /></Field>
+                  <Field label="WhatsApp Number" hint="Receiver number. Use whatsapp:+60... or +60... format."><input value={recipientDraft.WhatsAppNumber || ""} onChange={(e) => patchRecipient({ WhatsAppNumber: e.target.value })} placeholder="whatsapp:+60123456789" /></Field>
+                </div>
+                <div className="notification-recipient-options">
+                  <label><input type="checkbox" checked={recipientDraft.ReceiveIncidentCreated} onChange={(e) => patchRecipient({ ReceiveIncidentCreated: e.target.checked })} /> Incident Created</label>
+                  <label><input type="checkbox" checked={recipientDraft.ReceiveIncidentUpdated} onChange={(e) => patchRecipient({ ReceiveIncidentUpdated: e.target.checked })} /> Incident Updated</label>
+                  <label><input type="checkbox" checked={recipientDraft.ReceiveIncidentResolved} onChange={(e) => patchRecipient({ ReceiveIncidentResolved: e.target.checked })} /> Incident Resolved</label>
+                  <label><input type="checkbox" checked={recipientDraft.ReceiveSystemLicense} onChange={(e) => patchRecipient({ ReceiveSystemLicense: e.target.checked })} /> System License</label>
+                  <label><input type="checkbox" checked={recipientDraft.ReceiveLicenseExceeded} onChange={(e) => patchRecipient({ ReceiveLicenseExceeded: e.target.checked })} /> License Exceeded</label>
+                  <label><input type="checkbox" checked={recipientDraft.IsEnabled} onChange={(e) => patchRecipient({ IsEnabled: e.target.checked })} /> Enabled</label>
+                </div>
+                <div className="notification-actions split">
+                  <button type="button" className="notification-btn" onClick={() => setRecipientDraft(cloneRecipient())} disabled={saving}>New Receiver</button>
+                  <span />
+                  <button type="button" className="notification-btn success" onClick={saveRecipient} disabled={saving}><Save size={15} /> {recipientDraft.RecipientID ? "Update Receiver" : "Save Receiver"}</button>
+                </div>
+              </div>
+            </section>
+            <aside className="notification-panel notification-recipient-list-panel">
+              <div className="notification-panel-head"><div><h3>Saved Receivers</h3><p>These receivers are used by backend ticket create, update and resolved notifications.</p></div></div>
+              <div className="notification-form notification-recipient-list">
+                {recipients.length === 0 && <div className="notification-alert">No receivers saved yet.</div>}
+                {recipients.map((row) => <div key={row.RecipientID || `${row.RecipientName}-${row.WhatsAppNumber}`} className="notification-recipient-card">
+                  <div>
+                    <strong>{row.RecipientName || "Unnamed Receiver"}</strong>
+                    <span>{row.RecipientRole || "No role"}</span>
+                    <small>{row.Email || "No email"} {row.WhatsAppNumber ? `• ${row.WhatsAppNumber}` : "• No WhatsApp"}</small>
+                  </div>
+                  <div className="notification-recipient-badges">
+                    {row.ReceiveIncidentCreated && <i>Created</i>}
+                    {row.ReceiveIncidentUpdated && <i>Updated</i>}
+                    {row.ReceiveIncidentResolved && <i>Resolved</i>}
+                    {row.ReceiveSystemLicense && <i>System License</i>}
+                    {row.ReceiveLicenseExceeded && <i>License Exceeded</i>}
+                    <b className={row.IsEnabled ? "enabled" : "disabled"}>{row.IsEnabled ? "Enabled" : "Disabled"}</b>
+                  </div>
+                  <div className="notification-recipient-actions">
+                    <button type="button" className="notification-btn" onClick={() => editRecipient(row)}><Edit3 size={14} /> Edit</button>
+                    <button type="button" className="notification-btn danger" onClick={() => deleteRecipient(row)} disabled={!row.RecipientID || saving}><Trash2 size={14} /> Delete</button>
+                  </div>
+                </div>)}
+              </div>
+            </aside>
+          </div>
         ) : (
           <section className="notification-panel">
             <div className="notification-panel-head"><div><h3>Notification Event Triggers</h3><p>Choose which system events send Email and/or WhatsApp notifications.</p></div><span className="notification-status-pill">{enabledRules} Active Rules</span></div>
             <div className="notification-form notification-rule-list">
               {rules.length === 0 && <div className="notification-alert">No notification rules returned.</div>}
-              {rules.map((rule) => <div key={rule.RuleKey} className="notification-rule-card"><div><div className="notification-rule-title">{titleFromRule(rule.RuleKey)}</div><div className="notification-rule-desc">{rule.Description}</div></div><div className="notification-toggle-group"><button className={`notification-toggle email ${rule.Enabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "email")}>Email {rule.Enabled ? "On" : "Off"}</button><button className={`notification-toggle whatsapp ${rule.WhatsAppEnabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "whatsapp")}>WhatsApp {rule.WhatsAppEnabled ? "On" : "Off"}</button></div></div>)}
+              {rules.map((rule) => <div key={rule.RuleKey} className="notification-rule-card"><div><div className="notification-rule-title">{titleFromRule(rule.RuleKey)}</div><div className="notification-rule-desc">{rule.Description}</div>{rule.WhatsAppContentSID ? <div className="notification-rule-template">Template: {rule.WhatsAppContentSID}</div> : null}</div><div className="notification-toggle-group"><button className={`notification-toggle email ${rule.Enabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "email")}>Email {rule.Enabled ? "On" : "Off"}</button><button className={`notification-toggle whatsapp ${rule.WhatsAppEnabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "whatsapp")}>WhatsApp {rule.WhatsAppEnabled ? "On" : "Off"}</button></div></div>)}
             </div>
           </section>
         )}
