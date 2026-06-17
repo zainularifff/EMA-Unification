@@ -32,6 +32,27 @@ export default function SettingsWithNotifications() {
   const [managementSection, setManagementSection] = useState<ManagementSection>(readManagementSection);
 
   useEffect(() => {
+    document.documentElement.classList.add("ema-settings-page-active");
+    document.body.classList.add("ema-settings-page-active");
+
+    return () => {
+      document.documentElement.classList.remove("ema-settings-page-active");
+      document.body.classList.remove("ema-settings-page-active");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.dataset.settingsView = view;
+    document.documentElement.dataset.settingsView = view;
+
+    return () => {
+      if (document.body.dataset.settingsView === view) delete document.body.dataset.settingsView;
+      if (document.documentElement.dataset.settingsView === view) delete document.documentElement.dataset.settingsView;
+    };
+  }, [view]);
+
+  useEffect(() => {
     const onHashChange = () => {
       setView(readInitialView());
       setManagementSection(readManagementSection());
