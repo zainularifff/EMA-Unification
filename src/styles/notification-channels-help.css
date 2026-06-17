@@ -1,5 +1,87 @@
 @import "./notification-channels-density.css";
 
+/* =========================================================
+   Notification Channels global module shell alignment
+   ---------------------------------------------------------
+   This module keeps its notification-* component classes, but the outer
+   page shell must follow the same global module container pattern as
+   inventory, metering, restriction, patch, task list and settings pages.
+========================================================= */
+.settings-notification-shell {
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: var(--ema-module-gap, 0.72rem) !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.settings-notification-shell .notification-topbar {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.9rem !important;
+  padding: 0.85rem 1.05rem !important;
+  border: 1px solid var(--ema-module-border, #dbe7fb) !important;
+  border-radius: var(--ema-module-radius, 20px) !important;
+  background: var(--ema-module-surface, #ffffff) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.045) !important;
+}
+
+.settings-notification-shell .notification-topbar h2 {
+  margin: 0 !important;
+  font-size: clamp(1.45rem, 1.75vw, 2rem) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.055em !important;
+}
+
+.settings-notification-shell .notification-topbar p {
+  margin: 0.2rem 0 0 !important;
+  font-size: 0.72rem !important;
+  line-height: 1.35 !important;
+  color: var(--ema-module-muted, #64748b) !important;
+}
+
+.settings-notification-shell .notification-tabs {
+  justify-content: flex-end !important;
+}
+
+.settings-notification-shell .notification-body {
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0.9rem 1rem 2.2rem !important;
+  border: 1px solid var(--ema-module-border, #dbe7fb) !important;
+  border-radius: var(--ema-module-radius, 20px) !important;
+  background: var(--ema-module-surface, #ffffff) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.045) !important;
+  scrollbar-gutter: stable !important;
+  overscroll-behavior: contain !important;
+}
+
+.settings-notification-shell .notification-grid {
+  gap: var(--ema-module-gap, 0.72rem) !important;
+}
+
+.settings-notification-shell .notification-panel,
+.settings-notification-shell .notification-card,
+.settings-notification-shell .notification-rule-card {
+  border-color: var(--ema-module-border, #dbe7fb) !important;
+  border-radius: var(--ema-module-radius-sm, 16px) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.045) !important;
+}
+
 .notification-field-hint {
   display: block;
   margin-top: -2px;
@@ -137,6 +219,10 @@
 }
 
 @media (max-width: 1100px) {
+  .settings-notification-shell .notification-topbar {
+    grid-template-columns: 1fr !important;
+  }
+
   .notification-receiver-grid {
     grid-template-columns: 1fr;
   }
