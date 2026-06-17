@@ -3458,14 +3458,18 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
             `);
 
         const incidentPayload = { id, title, description, priority, status: normalizeServiceDeskIncidentStatus(status, 'Awaiting'), requesterName, assignedTo };
+        let notificationResult = null;
         try {
-            const notifyResult = await triggerIncidentNotification(pool, 'INCIDENT_CREATED', incidentPayload, req);
-            if (notifyResult?.error) console.warn('INCIDENT_CREATED notification warning:', notifyResult.error);
+            notificationResult = await triggerIncidentNotification(pool, 'INCIDENT_CREATED', incidentPayload, req);
+            if (notificationResult?.error || notificationResult?.skipped || Number(notificationResult?.sent || 0) === 0) {
+                console.warn('INCIDENT_CREATED notification warning:', notificationResult?.error || notificationResult?.reason || notificationResult);
+            }
         } catch (notifyErr) {
+            notificationResult = { sent: 0, error: notifyErr.message };
             console.warn('INCIDENT_CREATED notification skipped:', notifyErr.message);
         }
 
-        res.json({ success: true, id, ...req.body });
+        res.json({ success: true, id, ...req.body, notification: notificationResult });
     } catch (err) {
         console.error('POST /api/incidents error:', err);
         res.status(500).json({ status: 'error', message: 'Failed to create incident', error: err.message });
@@ -3544,14 +3548,18 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
         const wasResolved = ['resolved', 'solved', 'closed'].includes(previousStatusText);
         const notificationRuleKey = resolvedNow && !wasResolved ? 'INCIDENT_RESOLVED' : 'INCIDENT_UPDATED';
         const incidentPayload = { id, title, description, priority, status: normalizedStatus, requesterName, assignedTo, rootCause, actionPlan };
+        let notificationResult = null;
         try {
-            const notifyResult = await triggerIncidentNotification(pool, notificationRuleKey, incidentPayload, req);
-            if (notifyResult?.error) console.warn(`${notificationRuleKey} notification warning:`, notifyResult.error);
+            notificationResult = await triggerIncidentNotification(pool, notificationRuleKey, incidentPayload, req);
+            if (notificationResult?.error || notificationResult?.skipped || Number(notificationResult?.sent || 0) === 0) {
+                console.warn(`${notificationRuleKey} notification warning:`, notificationResult?.error || notificationResult?.reason || notificationResult);
+            }
         } catch (notifyErr) {
+            notificationResult = { sent: 0, error: notifyErr.message };
             console.warn(`${notificationRuleKey} notification skipped:`, notifyErr.message);
         }
 
-        res.json({ success: true, id, ...req.body });
+        res.json({ success: true, id, ...req.body, notification: notificationResult });
     } catch (err) {
         console.error('PUT /api/incidents/:id error:', err);
         res.status(500).json({ status: 'error', message: 'Failed to update incident', error: err.message });
@@ -7732,28 +7740,47 @@ async function sendWhatsappTemplateMessage(pool, { setting, rule, recipientNumbe
 }
 
 async function sendNotificationByRule(pool, ruleKey, payload = {}, req = null) {
+    const normalizedRuleKey = String(ruleKey || "").trim().toUpperCase();
+    const skipNotification = (reason, extra = {}) => {
+        const result = { sent: 0, skipped: true, reason, ...extra };
+        console.warn(`[WhatsApp Notification] ${normalizedRuleKey} skipped: ${reason}`, extra);
+        return result;
+    };
+
     try {
         await ensureNotificationSettingsTables(pool);
-        const rule = await readNotificationRule(pool, ruleKey);
+        const rule = await readNotificationRule(pool, normalizedRuleKey);
         if (!rule || !notificationBool(rule.IsEnabled, true) || !notificationBool(rule.WhatsAppEnabled, false)) {
-            return { sent: 0, skipped: true, reason: "Notification rule is disabled." };
+            return skipNotification("Notification rule is disabled.", {
+                ruleFound: Boolean(rule),
+                isEnabled: rule?.IsEnabled,
+                whatsAppEnabled: rule?.WhatsAppEnabled
+            });
         }
 
         if (!String(rule.WhatsAppContentSID || "").trim()) {
-            return { sent: 0, skipped: true, reason: `WhatsAppContentSID is missing for ${ruleKey}.` };
+            return skipNotification(`WhatsAppContentSID is missing for ${normalizedRuleKey}.`, { ruleKey: normalizedRuleKey });
         }
 
         const setting = await readWhatsappSettingRow(pool);
         if (!setting || !notificationBool(setting.IsEnabled, false)) {
-            return { sent: 0, skipped: true, reason: "WhatsApp channel is disabled." };
+            return skipNotification("WhatsApp channel is disabled.", {
+                settingFound: Boolean(setting),
+                isEnabled: setting?.IsEnabled
+            });
         }
 
-        const recipients = await readNotificationRecipients(pool, ruleKey);
+        const usage = await readWhatsappUsage(pool);
+        if (Number(usage.limit || 0) > 0 && Number(usage.count || 0) >= Number(usage.limit || 0)) {
+            return skipNotification("WhatsApp monthly limit reached.", usage);
+        }
+
+        const recipients = await readNotificationRecipients(pool, normalizedRuleKey);
         if (recipients.length === 0) {
-            return { sent: 0, skipped: true, reason: "No enabled WhatsApp recipients configured." };
+            return skipNotification("No enabled WhatsApp recipients configured.", { ruleKey: normalizedRuleKey });
         }
 
-        const variables = buildNotificationContentVariables(ruleKey, payload);
+        const variables = buildNotificationContentVariables(normalizedRuleKey, payload);
         const results = [];
         for (const recipient of recipients) {
             try {
@@ -7766,23 +7793,25 @@ async function sendNotificationByRule(pool, ruleKey, payload = {}, req = null) {
                 results.push({ recipientID: recipient.RecipientID, recipientName: recipient.RecipientName, ...result });
             } catch (err) {
                 const message = getTwilioErrorMessage(err);
-                console.error(`WhatsApp notification failed for ${ruleKey}:`, message, err?.response?.data || "");
+                console.error(`WhatsApp notification failed for ${normalizedRuleKey}:`, message, err?.response?.data || "");
                 results.push({ recipientID: recipient.RecipientID, recipientName: recipient.RecipientName, sent: false, error: message });
             }
         }
 
         const sent = results.filter((item) => item.sent).length;
         if (req) {
-            await logEmaAudit(pool, req, `Triggered ${ruleKey} WhatsApp Notification`, "Notification Channels", sent ? "Success" : "Warning", {
-                ruleKey,
+            await logEmaAudit(pool, req, `Triggered ${normalizedRuleKey} WhatsApp Notification`, "Notification Channels", sent ? "Success" : "Warning", {
+                ruleKey: normalizedRuleKey,
                 sent,
                 totalRecipients: recipients.length
             });
         }
 
-        return { sent, recipients: recipients.length, results };
+        const finalResult = { sent, recipients: recipients.length, results, usage: await readWhatsappUsage(pool) };
+        console.log(`[WhatsApp Notification] ${normalizedRuleKey} completed: ${sent}/${recipients.length} sent`, finalResult);
+        return finalResult;
     } catch (err) {
-        console.error(`sendNotificationByRule(${ruleKey}) error:`, err.message);
+        console.error(`sendNotificationByRule(${normalizedRuleKey}) error:`, err.message);
         return { sent: 0, error: err.message };
     }
 }
@@ -8353,6 +8382,48 @@ app.delete("/api/settings/notification-recipients/:id", authenticateToken, async
         return res.json({ success: true, data: { recipientID: id } });
     } catch (err) {
         console.error("DELETE /api/settings/notification-recipients/:id error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.get("/api/settings/notification-diagnostics", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        const whatsapp = await readWhatsappSettingRow(pool);
+        const usage = await readWhatsappUsage(pool);
+        const rulesResult = await pool.request().query(`
+            SELECT RuleKey, RuleName, EmailEnabled, WhatsAppEnabled, IsEnabled, WhatsAppContentSID
+            FROM dbo.EMA_NotificationRules WITH (NOLOCK)
+            ORDER BY RuleID;
+        `);
+        const recipientsResult = await pool.request().query(`
+            SELECT RecipientID, RecipientName, RecipientRole, Email, WhatsAppNumber,
+                   ReceiveIncidentCreated, ReceiveIncidentUpdated, ReceiveIncidentResolved,
+                   ReceiveSystemLicense, ReceiveLicenseExceeded, IsEnabled
+            FROM dbo.EMA_NotificationRecipients WITH (NOLOCK)
+            ORDER BY RecipientID;
+        `);
+
+        return res.json({
+            success: true,
+            data: {
+                whatsapp: {
+                    configured: Boolean(whatsapp),
+                    provider: whatsapp?.Provider || "Twilio",
+                    accountSidConfigured: Boolean(String(whatsapp?.AccountSID || whatsapp?.AccountSid || "").trim()),
+                    authTokenConfigured: Boolean(String(whatsapp?.AuthToken || "").trim()),
+                    fromNumber: stripWhatsappPrefix(whatsapp?.FromNumber || ""),
+                    isEnabled: notificationBool(whatsapp?.IsEnabled, false),
+                    monthlyLimit: Number(whatsapp?.MonthlyLimit || NOTIFICATION_WHATSAPP_MONTHLY_LIMIT) || NOTIFICATION_WHATSAPP_MONTHLY_LIMIT
+                },
+                usage,
+                rules: rulesResult.recordset || [],
+                recipients: (recipientsResult.recordset || []).map(mapNotificationRecipient)
+            }
+        });
+    } catch (err) {
+        console.error("GET /api/settings/notification-diagnostics error:", err);
         return res.status(500).json({ success: false, message: err.message });
     }
 });
