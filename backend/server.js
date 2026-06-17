@@ -23757,7 +23757,7 @@ app.get("/api/settings/management-policy", authenticateToken, async (req, res) =
     }
 });
 
-app.post("/api/settings/management-policy", authenticateToken, async (req, res) => {
+async function saveManagementPolicyHandler(req, res) {
     let transaction;
     try {
         const pool = await sql.connect(dbConfig);
@@ -23846,7 +23846,14 @@ app.post("/api/settings/management-policy", authenticateToken, async (req, res) 
             error: err.message
         });
     }
-});
+
+}
+
+// Management Policy save route.
+// Frontend Settings.tsx uses PUT, while older backend exposed only POST.
+// Keep both methods mapped to the same handler so existing screens and saved clients work.
+app.post("/api/settings/management-policy", authenticateToken, saveManagementPolicyHandler);
+app.put("/api/settings/management-policy", authenticateToken, saveManagementPolicyHandler);
 
 // online_patching_apis_only.js
 // Extracted Online Patching API block for EMA backend.
