@@ -6,6 +6,14 @@
 ========================================================= */
 
 @media (min-width: 1101px) {
+  body.ema-settings-page-active .ema-main,
+  body.ema-settings-page-active .ema-page {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(79, 70, 229, 0.12), transparent 30rem),
+      radial-gradient(circle at 80% 10%, rgba(124, 58, 237, 0.1), transparent 26rem),
+      linear-gradient(135deg, #030712 0%, #071014 48%, #0f172a 100%) !important;
+  }
+
   body.ema-settings-page-active .ema-page {
     display: flex !important;
     flex-direction: column !important;
@@ -14,7 +22,6 @@
     max-height: calc(100dvh - 76px) !important;
     overflow: hidden !important;
     padding: 0.75rem !important;
-    background: transparent !important;
   }
 
   body.ema-settings-page-active .settings-module-root {
