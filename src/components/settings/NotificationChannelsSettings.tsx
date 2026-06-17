@@ -1,10 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Bell, Edit3, Loader2, Mail, MessageSquare, RefreshCw, Save, Send, ShieldCheck, Trash2, Users } from "lucide-react";
-import "../../styles/toast.css";
-import "../../styles/notification-channels.css";
-import "../../styles/notification-channels-fix.css";
-import "../../styles/notification-channels-help.css";
 import notificationSettingsService, {
   type NotificationEmailConfig,
   type NotificationEmailProvider,
@@ -449,61 +445,53 @@ export default function NotificationChannelsSettings() {
         ) : activeTab === "receivers" ? (
           <div className="notification-grid notification-receiver-grid">
             <section className="notification-panel">
-              <div className="notification-panel-head"><div><h3>Notification Receivers</h3><p>Save the users or support numbers that should receive Email and WhatsApp alerts.</p></div><span className="notification-status-pill enabled">{activeReceivers} Active</span></div>
+              <div className="notification-panel-head"><div><h3>Notification Receivers</h3><p>Save the users or support teams that should receive alert notifications.</p></div><span className="notification-status-pill enabled">{activeReceivers} Active</span></div>
               <div className="notification-form">
-                <div className="notification-form-grid">
-                  <Field label="Receiver Name" hint="Person, team or support group name."><input value={recipientDraft.RecipientName || ""} onChange={(e) => patchRecipient({ RecipientName: e.target.value })} placeholder="Support Admin" /></Field>
-                  <Field label="Role / Team" hint="Optional label shown in receiver list."><input value={recipientDraft.RecipientRole || ""} onChange={(e) => patchRecipient({ RecipientRole: e.target.value })} placeholder="Service Desk" /></Field>
-                  <Field label="Email" hint="Used when Email trigger is enabled."><input value={recipientDraft.Email || ""} onChange={(e) => patchRecipient({ Email: e.target.value })} placeholder="support@company.com" /></Field>
-                  <Field label="WhatsApp Number" hint="Receiver number. Use whatsapp:+60... or +60... format."><input value={recipientDraft.WhatsAppNumber || ""} onChange={(e) => patchRecipient({ WhatsAppNumber: e.target.value })} placeholder="whatsapp:+60123456789" /></Field>
+                <div className="notification-form-grid notification-recipient-form-grid">
+                  <Field label="Receiver Name" hint="Example: IT Support Team"><input value={recipientDraft.RecipientName || ""} onChange={(e) => patchRecipient({ RecipientName: e.target.value })} placeholder="IT Support Team" /></Field>
+                  <Field label="Role / Team" hint="Optional grouping"><input value={recipientDraft.RecipientRole || ""} onChange={(e) => patchRecipient({ RecipientRole: e.target.value })} placeholder="L1 Support" /></Field>
+                  <Field label="Email" hint="Used when Email trigger is on"><input value={recipientDraft.Email || ""} onChange={(e) => patchRecipient({ Email: e.target.value })} placeholder="support@company.com" /></Field>
+                  <Field label="WhatsApp Number" hint="Use country code. Example: +60123456789"><input value={recipientDraft.WhatsAppNumber || ""} onChange={(e) => patchRecipient({ WhatsAppNumber: e.target.value })} placeholder="+60123456789" /></Field>
                 </div>
                 <div className="notification-recipient-options">
-                  <label><input type="checkbox" checked={recipientDraft.ReceiveIncidentCreated} onChange={(e) => patchRecipient({ ReceiveIncidentCreated: e.target.checked })} /> Incident Created</label>
-                  <label><input type="checkbox" checked={recipientDraft.ReceiveIncidentUpdated} onChange={(e) => patchRecipient({ ReceiveIncidentUpdated: e.target.checked })} /> Incident Updated</label>
-                  <label><input type="checkbox" checked={recipientDraft.ReceiveIncidentResolved} onChange={(e) => patchRecipient({ ReceiveIncidentResolved: e.target.checked })} /> Incident Resolved</label>
-                  <label><input type="checkbox" checked={recipientDraft.ReceiveSystemLicense} onChange={(e) => patchRecipient({ ReceiveSystemLicense: e.target.checked })} /> System License</label>
-                  <label><input type="checkbox" checked={recipientDraft.ReceiveLicenseExceeded} onChange={(e) => patchRecipient({ ReceiveLicenseExceeded: e.target.checked })} /> License Exceeded</label>
-                  <label><input type="checkbox" checked={recipientDraft.IsEnabled} onChange={(e) => patchRecipient({ IsEnabled: e.target.checked })} /> Enabled</label>
+                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentCreated)} onChange={(e) => patchRecipient({ ReceiveIncidentCreated: e.target.checked })} /> Incident Created</label>
+                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentUpdated)} onChange={(e) => patchRecipient({ ReceiveIncidentUpdated: e.target.checked })} /> Incident Updated</label>
+                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentResolved)} onChange={(e) => patchRecipient({ ReceiveIncidentResolved: e.target.checked })} /> Incident Resolved</label>
+                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveSystemLicense)} onChange={(e) => patchRecipient({ ReceiveSystemLicense: e.target.checked })} /> System License</label>
+                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveLicenseExceeded)} onChange={(e) => patchRecipient({ ReceiveLicenseExceeded: e.target.checked })} /> License Exceeded</label>
+                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.IsEnabled)} onChange={(e) => patchRecipient({ IsEnabled: e.target.checked })} /> Enabled</label>
                 </div>
                 <div className="notification-actions split">
-                  <button type="button" className="notification-btn" onClick={() => setRecipientDraft(cloneRecipient())} disabled={saving}>New Receiver</button>
-                  <span />
+                  <button type="button" className="notification-btn" onClick={() => setRecipientDraft(cloneRecipient())} disabled={saving}>Clear</button>
                   <button type="button" className="notification-btn success" onClick={saveRecipient} disabled={saving}><Save size={15} /> {recipientDraft.RecipientID ? "Update Receiver" : "Save Receiver"}</button>
                 </div>
               </div>
             </section>
             <aside className="notification-panel notification-recipient-list-panel">
-              <div className="notification-panel-head"><div><h3>Saved Receivers</h3><p>These receivers are used by backend ticket create, update and resolved notifications.</p></div></div>
-              <div className="notification-form notification-recipient-list">
-                {recipients.length === 0 && <div className="notification-alert">No receivers saved yet.</div>}
-                {recipients.map((row) => <div key={row.RecipientID || `${row.RecipientName}-${row.WhatsAppNumber}`} className="notification-recipient-card">
-                  <div>
-                    <strong>{row.RecipientName || "Unnamed Receiver"}</strong>
-                    <span>{row.RecipientRole || "No role"}</span>
-                    <small>{row.Email || "No email"} {row.WhatsAppNumber ? `• ${row.WhatsAppNumber}` : "• No WhatsApp"}</small>
+              <div className="notification-panel-head compact"><div><h3>Saved Receivers</h3><p>Receivers used by incident and license notification events.</p></div></div>
+              <div className="notification-recipient-list">
+                {recipients.length === 0 ? <div className="notification-empty">No receivers saved yet.</div> : recipients.map((row) => (
+                  <div className="notification-recipient-row" key={row.RecipientID || `${row.RecipientName}-${row.WhatsAppNumber}`}>
+                    <div><strong>{row.RecipientName || row.RecipientRole || "Unnamed Receiver"}</strong><span>{row.RecipientRole || "General"}</span><small>{row.Email || "No email"} · {row.WhatsAppNumber || "No WhatsApp"}</small></div>
+                    <div className="notification-recipient-actions"><button className="notification-btn" onClick={() => editRecipient(row)}><Edit3 size={14} /></button><button className="notification-btn danger" onClick={() => deleteRecipient(row)}><Trash2 size={14} /></button></div>
                   </div>
-                  <div className="notification-recipient-badges">
-                    {row.ReceiveIncidentCreated && <i>Created</i>}
-                    {row.ReceiveIncidentUpdated && <i>Updated</i>}
-                    {row.ReceiveIncidentResolved && <i>Resolved</i>}
-                    {row.ReceiveSystemLicense && <i>System License</i>}
-                    {row.ReceiveLicenseExceeded && <i>License Exceeded</i>}
-                    <b className={row.IsEnabled ? "enabled" : "disabled"}>{row.IsEnabled ? "Enabled" : "Disabled"}</b>
-                  </div>
-                  <div className="notification-recipient-actions">
-                    <button type="button" className="notification-btn" onClick={() => editRecipient(row)}><Edit3 size={14} /> Edit</button>
-                    <button type="button" className="notification-btn danger" onClick={() => deleteRecipient(row)} disabled={!row.RecipientID || saving}><Trash2 size={14} /> Delete</button>
-                  </div>
-                </div>)}
+                ))}
               </div>
             </aside>
           </div>
         ) : (
           <section className="notification-panel">
-            <div className="notification-panel-head"><div><h3>Notification Event Triggers</h3><p>Choose which system events send Email and/or WhatsApp notifications.</p></div><span className="notification-status-pill">{enabledRules} Active Rules</span></div>
-            <div className="notification-form notification-rule-list">
-              {rules.length === 0 && <div className="notification-alert">No notification rules returned.</div>}
-              {rules.map((rule) => <div key={rule.RuleKey} className="notification-rule-card"><div><div className="notification-rule-title">{titleFromRule(rule.RuleKey)}</div><div className="notification-rule-desc">{rule.Description}</div>{rule.WhatsAppContentSID ? <div className="notification-rule-template">Template: {rule.WhatsAppContentSID}</div> : null}</div><div className="notification-toggle-group"><button className={`notification-toggle email ${rule.Enabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "email")}>Email {rule.Enabled ? "On" : "Off"}</button><button className={`notification-toggle whatsapp ${rule.WhatsAppEnabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "whatsapp")}>WhatsApp {rule.WhatsAppEnabled ? "On" : "Off"}</button></div></div>)}
+            <div className="notification-panel-head"><div><h3>Event Triggers</h3><p>Enable or disable delivery per event and channel. {enabledRules} rules are currently active.</p></div></div>
+            <div className="notification-form">
+              <div className="notification-rule-list">
+                {rules.map((rule) => <div className="notification-rule-card" key={rule.RuleKey}>
+                  <div><div className="notification-rule-title">{rule.RuleName || titleFromRule(rule.RuleKey)}</div><div className="notification-rule-desc">{rule.Description || titleFromRule(rule.RuleKey)}</div>{rule.WhatsAppContentSID ? <small className="notification-template-sid">Template: {rule.WhatsAppContentSID}</small> : null}</div>
+                  <div className="notification-toggle-group">
+                    <button className={`notification-toggle email ${rule.Enabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "email")}>Email {rule.Enabled ? "On" : "Off"}</button>
+                    <button className={`notification-toggle whatsapp ${rule.WhatsAppEnabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "whatsapp")}>WhatsApp {rule.WhatsAppEnabled ? "On" : "Off"}</button>
+                  </div>
+                </div>)}
+              </div>
             </div>
           </section>
         )}
