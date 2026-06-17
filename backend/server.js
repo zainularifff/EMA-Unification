@@ -3456,6 +3456,15 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
                     @firstResponseAt, @resolvedAt, @rootCause, @actionPlan, @additionalMemo
                 )
             `);
+
+        const incidentPayload = { id, title, description, priority, status: normalizeServiceDeskIncidentStatus(status, 'Awaiting'), requesterName, assignedTo };
+        try {
+            const notifyResult = await triggerIncidentNotification(pool, 'INCIDENT_CREATED', incidentPayload, req);
+            if (notifyResult?.error) console.warn('INCIDENT_CREATED notification warning:', notifyResult.error);
+        } catch (notifyErr) {
+            console.warn('INCIDENT_CREATED notification skipped:', notifyErr.message);
+        }
+
         res.json({ success: true, id, ...req.body });
     } catch (err) {
         console.error('POST /api/incidents error:', err);
@@ -3475,6 +3484,10 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
     
     try {
         const pool = await sql.connect(dbConfig);
+        const previousIncidentResult = await pool.request()
+            .input('id', sql.NVarChar, id)
+            .query(`SELECT TOP 1 Status, Title, Priority, AssignedTo, RequesterName FROM EMA_Incidents WITH (NOLOCK) WHERE IncidentID = @id;`);
+        const previousStatus = normalizeServiceDeskIncidentStatus(previousIncidentResult.recordset?.[0]?.Status || '', '');
         await pool.request()
             .input('id', sql.NVarChar, id)
             .input('title', sql.NVarChar, title || '')
@@ -3523,6 +3536,21 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
                     AdditionalMemo = @additionalMemo
                 WHERE IncidentID = @id
             `);
+
+        const normalizedStatus = normalizeServiceDeskIncidentStatus(status, 'Awaiting');
+        const previousStatusText = String(previousStatus || '').toLowerCase();
+        const currentStatusText = String(normalizedStatus || '').toLowerCase();
+        const resolvedNow = ['resolved', 'solved', 'closed'].includes(currentStatusText);
+        const wasResolved = ['resolved', 'solved', 'closed'].includes(previousStatusText);
+        const notificationRuleKey = resolvedNow && !wasResolved ? 'INCIDENT_RESOLVED' : 'INCIDENT_UPDATED';
+        const incidentPayload = { id, title, description, priority, status: normalizedStatus, requesterName, assignedTo, rootCause, actionPlan };
+        try {
+            const notifyResult = await triggerIncidentNotification(pool, notificationRuleKey, incidentPayload, req);
+            if (notifyResult?.error) console.warn(`${notificationRuleKey} notification warning:`, notifyResult.error);
+        } catch (notifyErr) {
+            console.warn(`${notificationRuleKey} notification skipped:`, notifyErr.message);
+        }
+
         res.json({ success: true, id, ...req.body });
     } catch (err) {
         console.error('PUT /api/incidents/:id error:', err);
@@ -7353,12 +7381,1194 @@ app.delete("/api/settings/incident-config/details/:id", authenticateToken, async
 });
 
 // NOTIFICATION CHANNELS
+const NOTIFICATION_WHATSAPP_MONTHLY_LIMIT = 200;
+
+const DEFAULT_NOTIFICATION_RULES = [
+    { RuleKey: "INCIDENT_CREATED", RuleName: "Incident Created", Enabled: true, WhatsAppEnabled: true, Description: "New incident ticket created" },
+    { RuleKey: "INCIDENT_UPDATED", RuleName: "Incident Updated", Enabled: true, WhatsAppEnabled: true, Description: "Incident ticket updated" },
+    { RuleKey: "INCIDENT_RESOLVED", RuleName: "Incident Resolved", Enabled: true, WhatsAppEnabled: true, Description: "Incident ticket resolved or closed" },
+    { RuleKey: "SYSTEM_LICENSE_EXPIRY_3M", RuleName: "System License Expiry 3m", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 3 months" },
+    { RuleKey: "SYSTEM_LICENSE_EXPIRY_1M", RuleName: "System License Expiry 1m", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 1 month" },
+    { RuleKey: "SYSTEM_LICENSE_EXPIRY_1W", RuleName: "System License Expiry 1w", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 1 week" },
+    { RuleKey: "SYSTEM_LICENSE_EXPIRED", RuleName: "System License Expired", Enabled: true, WhatsAppEnabled: true, Description: "System license has expired" },
+    { RuleKey: "LICENSE_EXCEEDED", RuleName: "License Exceeded", Enabled: true, WhatsAppEnabled: true, Description: "Installed assets exceed licensed count" }
+];
+
+const WHATSAPP_TEMPLATE_SAMPLE_VARIABLES = {
+    INCIDENT_CREATED: { 1: "INC-0001", 2: "Printer offline at HQ", 3: "High" },
+    INCIDENT_UPDATED: { 1: "INC-0001", 2: "In Progress", 3: "Support Admin" },
+    INCIDENT_RESOLVED: { 1: "INC-0001", 2: "Printer service restored", 3: "Support Admin" },
+    SYSTEM_LICENSE_EXPIRY_3M: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
+    SYSTEM_LICENSE_EXPIRY_1M: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
+    SYSTEM_LICENSE_EXPIRY_1W: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
+    SYSTEM_LICENSE_EXPIRED: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
+    LICENSE_EXCEEDED: { 1: "EMA System License", 2: "120", 3: "100" }
+};
+
+function notificationBool(value, fallback = false) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+    if (typeof value === "string") return ["true", "1", "yes", "on", "enabled"].includes(value.toLowerCase());
+    return fallback;
+}
+
+function notificationMonthKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
+}
+
+function notificationUserKey(req) {
+    return req.user?.userID || req.user?.UserID || req.user?.emaUserID || req.user?.console_Idn || "system";
+}
+
+function normalizeWhatsappAddress(value) {
+    let text = String(value || "").trim();
+    if (!text) return "";
+    if (text.toLowerCase().startsWith("whatsapp:")) return text;
+    text = text.replace(/[^0-9+]/g, "");
+    if (text.startsWith("00")) text = `+${text.slice(2)}`;
+    if (!text.startsWith("+")) text = `+${text}`;
+    return `whatsapp:${text}`;
+}
+
+function stripWhatsappPrefix(value) {
+    return String(value || "").replace(/^whatsapp:/i, "");
+}
+
+function getTwilioErrorMessage(err) {
+    return err?.response?.data?.message || err?.response?.data?.error_message || err?.message || "Twilio request failed";
+}
+
+async function normalizeNotificationRules(pool) {
+    await pool.request().query(`
+        DELETE FROM dbo.EMA_NotificationRules
+        WHERE RuleKey = 'CRM_CREATED';
+
+        IF EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = 'LEASE_EXPIRY_3M')
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = 'SYSTEM_LICENSE_EXPIRY_3M')
+                UPDATE dbo.EMA_NotificationRules
+                SET RuleKey = 'SYSTEM_LICENSE_EXPIRY_3M',
+                    RuleName = 'System License Expiry 3m',
+                    Description = 'System license expiring in 3 months',
+                    UpdatedAt = GETDATE()
+                WHERE RuleKey = 'LEASE_EXPIRY_3M';
+            ELSE
+            BEGIN
+                UPDATE target
+                SET WhatsAppContentSID = COALESCE(NULLIF(target.WhatsAppContentSID, ''), NULLIF(source.WhatsAppContentSID, '')),
+                    UpdatedAt = GETDATE()
+                FROM dbo.EMA_NotificationRules target
+                CROSS JOIN dbo.EMA_NotificationRules source
+                WHERE target.RuleKey = 'SYSTEM_LICENSE_EXPIRY_3M'
+                  AND source.RuleKey = 'LEASE_EXPIRY_3M';
+                DELETE FROM dbo.EMA_NotificationRules WHERE RuleKey = 'LEASE_EXPIRY_3M';
+            END
+        END;
+
+        IF EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = 'LEASE_EXPIRY_1M')
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = 'SYSTEM_LICENSE_EXPIRY_1M')
+                UPDATE dbo.EMA_NotificationRules
+                SET RuleKey = 'SYSTEM_LICENSE_EXPIRY_1M',
+                    RuleName = 'System License Expiry 1m',
+                    Description = 'System license expiring in 1 month',
+                    UpdatedAt = GETDATE()
+                WHERE RuleKey = 'LEASE_EXPIRY_1M';
+            ELSE
+            BEGIN
+                UPDATE target
+                SET WhatsAppContentSID = COALESCE(NULLIF(target.WhatsAppContentSID, ''), NULLIF(source.WhatsAppContentSID, '')),
+                    UpdatedAt = GETDATE()
+                FROM dbo.EMA_NotificationRules target
+                CROSS JOIN dbo.EMA_NotificationRules source
+                WHERE target.RuleKey = 'SYSTEM_LICENSE_EXPIRY_1M'
+                  AND source.RuleKey = 'LEASE_EXPIRY_1M';
+                DELETE FROM dbo.EMA_NotificationRules WHERE RuleKey = 'LEASE_EXPIRY_1M';
+            END
+        END;
+
+        IF EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = 'LEASE_EXPIRY_1W')
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = 'SYSTEM_LICENSE_EXPIRY_1W')
+                UPDATE dbo.EMA_NotificationRules
+                SET RuleKey = 'SYSTEM_LICENSE_EXPIRY_1W',
+                    RuleName = 'System License Expiry 1w',
+                    Description = 'System license expiring in 1 week',
+                    UpdatedAt = GETDATE()
+                WHERE RuleKey = 'LEASE_EXPIRY_1W';
+            ELSE
+            BEGIN
+                UPDATE target
+                SET WhatsAppContentSID = COALESCE(NULLIF(target.WhatsAppContentSID, ''), NULLIF(source.WhatsAppContentSID, '')),
+                    UpdatedAt = GETDATE()
+                FROM dbo.EMA_NotificationRules target
+                CROSS JOIN dbo.EMA_NotificationRules source
+                WHERE target.RuleKey = 'SYSTEM_LICENSE_EXPIRY_1W'
+                  AND source.RuleKey = 'LEASE_EXPIRY_1W';
+                DELETE FROM dbo.EMA_NotificationRules WHERE RuleKey = 'LEASE_EXPIRY_1W';
+            END
+        END;
+
+        UPDATE dbo.EMA_NotificationRules
+        SET RuleKey = 'SYSTEM_LICENSE_EXPIRY_3M',
+            RuleName = 'System License Expiry 3m',
+            Description = 'System license expiring in 3 months',
+            UpdatedAt = GETDATE()
+        WHERE RuleKey = 'LICENSE_EXPIRY_3M';
+
+        UPDATE dbo.EMA_NotificationRules
+        SET RuleKey = 'SYSTEM_LICENSE_EXPIRY_1M',
+            RuleName = 'System License Expiry 1m',
+            Description = 'System license expiring in 1 month',
+            UpdatedAt = GETDATE()
+        WHERE RuleKey = 'LICENSE_EXPIRY_1M';
+
+        UPDATE dbo.EMA_NotificationRules
+        SET RuleKey = 'SYSTEM_LICENSE_EXPIRY_1W',
+            RuleName = 'System License Expiry 1w',
+            Description = 'System license expiring in 1 week',
+            UpdatedAt = GETDATE()
+        WHERE RuleKey = 'LICENSE_EXPIRY_1W';
+
+        UPDATE dbo.EMA_NotificationRules
+        SET WhatsAppContentSID = NULL,
+            UpdatedAt = GETDATE()
+        WHERE WhatsAppContentSID IN (
+            'HX_INCIDENT_CREATED',
+            'HX_INCIDENT_UPDATED',
+            'HX_INCIDENT_RESOLVED',
+            'HX_LEASE_EXPIRY_3M',
+            'HX_LEASE_EXPIRY_1M',
+            'HX_LEASE_EXPIRY_1W',
+            'HX_LICENSE_EXCEEDED',
+            'HX_SYSTEM_LICENSE_EXPIRY_3M',
+            'HX_SYSTEM_LICENSE_EXPIRY_1M',
+            'HX_SYSTEM_LICENSE_EXPIRY_1W',
+            'HX_SYSTEM_LICENSE_EXPIRED'
+        );
+    `);
+}
+
+async function readNotificationRule(pool, ruleKey = "INCIDENT_CREATED") {
+    await ensureNotificationSettingsTables(pool);
+    const key = String(ruleKey || "INCIDENT_CREATED").trim().toUpperCase();
+    const result = await pool.request()
+        .input("RuleKey", sql.NVarChar(100), key)
+        .query(`
+            SELECT TOP 1
+                RuleKey,
+                COALESCE(NULLIF(RuleName, ''), RuleKey) AS RuleName,
+                Description,
+                EmailEnabled,
+                WhatsAppEnabled,
+                IsEnabled,
+                WhatsAppContentSID
+            FROM dbo.EMA_NotificationRules WITH (NOLOCK)
+            WHERE RuleKey = @RuleKey
+              AND ISNULL(IsEnabled, 1) = 1;
+        `);
+
+    return result.recordset?.[0] || null;
+}
+
+function normalizeWhatsappTemplateVariables(value, ruleKey = "INCIDENT_CREATED") {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+        const mapped = {};
+        Object.entries(value).forEach(([key, val]) => {
+            const cleanKey = String(key).replace(/[{}]/g, "").trim();
+            if (!cleanKey) return;
+            mapped[cleanKey] = String(val ?? "");
+        });
+        return mapped;
+    }
+
+    const key = String(ruleKey || "INCIDENT_CREATED").trim().toUpperCase();
+    return WHATSAPP_TEMPLATE_SAMPLE_VARIABLES[key] || WHATSAPP_TEMPLATE_SAMPLE_VARIABLES.INCIDENT_CREATED;
+}
+
+
+function mapNotificationRecipient(row = {}) {
+    return {
+        recipientID: row.RecipientID,
+        RecipientID: row.RecipientID,
+        recipientName: row.RecipientName || "",
+        RecipientName: row.RecipientName || "",
+        recipientRole: row.RecipientRole || "",
+        RecipientRole: row.RecipientRole || "",
+        email: row.Email || "",
+        Email: row.Email || "",
+        whatsAppNumber: stripWhatsappPrefix(row.WhatsAppNumber || ""),
+        WhatsAppNumber: stripWhatsappPrefix(row.WhatsAppNumber || ""),
+        receiveIncidentCreated: notificationBool(row.ReceiveIncidentCreated, true),
+        ReceiveIncidentCreated: notificationBool(row.ReceiveIncidentCreated, true),
+        receiveIncidentUpdated: notificationBool(row.ReceiveIncidentUpdated, true),
+        ReceiveIncidentUpdated: notificationBool(row.ReceiveIncidentUpdated, true),
+        receiveIncidentResolved: notificationBool(row.ReceiveIncidentResolved, true),
+        ReceiveIncidentResolved: notificationBool(row.ReceiveIncidentResolved, true),
+        receiveSystemLicense: notificationBool(row.ReceiveSystemLicense, true),
+        ReceiveSystemLicense: notificationBool(row.ReceiveSystemLicense, true),
+        receiveLicenseExceeded: notificationBool(row.ReceiveLicenseExceeded, true),
+        ReceiveLicenseExceeded: notificationBool(row.ReceiveLicenseExceeded, true),
+        isEnabled: notificationBool(row.IsEnabled, true),
+        IsEnabled: notificationBool(row.IsEnabled, true),
+        createdAt: row.CreatedAt || null,
+        updatedAt: row.UpdatedAt || null
+    };
+}
+
+function notificationRecipientFlagForRule(ruleKey = "") {
+    const key = String(ruleKey || "").trim().toUpperCase();
+    if (key === "INCIDENT_CREATED") return "ReceiveIncidentCreated";
+    if (key === "INCIDENT_UPDATED") return "ReceiveIncidentUpdated";
+    if (key === "INCIDENT_RESOLVED") return "ReceiveIncidentResolved";
+    if (key.startsWith("SYSTEM_LICENSE_")) return "ReceiveSystemLicense";
+    if (key === "LICENSE_EXCEEDED") return "ReceiveLicenseExceeded";
+    return "IsEnabled";
+}
+
+function notificationRecipientAllowed(row = {}, ruleKey = "") {
+    if (!notificationBool(row.IsEnabled, true)) return false;
+    if (!String(row.WhatsAppNumber || "").trim()) return false;
+    const flag = notificationRecipientFlagForRule(ruleKey);
+    return notificationBool(row[flag], true);
+}
+
+function buildNotificationContentVariables(ruleKey = "", payload = {}) {
+    const key = String(ruleKey || "").trim().toUpperCase();
+    const incidentId = String(payload.incidentId || payload.id || payload.IncidentID || payload.ticketNo || "INC-0001");
+    const title = String(payload.title || payload.Title || payload.description || payload.Description || "Incident notification");
+    const priority = String(payload.priority || payload.Priority || "Medium");
+    const status = String(payload.status || payload.Status || "Updated");
+    const actor = String(payload.updatedBy || payload.resolvedBy || payload.assignedTo || payload.requesterName || payload.user || "EMA System");
+    const resolution = String(payload.resolution || payload.actionPlan || payload.rootCause || payload.ActionPlan || payload.RootCause || status || "Resolved");
+
+    if (key === "INCIDENT_CREATED") {
+        return { 1: incidentId, 2: title, 3: priority };
+    }
+    if (key === "INCIDENT_UPDATED") {
+        return { 1: incidentId, 2: status, 3: actor };
+    }
+    if (key === "INCIDENT_RESOLVED") {
+        return { 1: incidentId, 2: resolution, 3: actor };
+    }
+    if (key.startsWith("SYSTEM_LICENSE_")) {
+        return {
+            1: String(payload.systemName || payload.product || "EMA System"),
+            2: String(payload.licenseType || payload.type || "Enterprise License"),
+            3: String(payload.expiryDate || payload.expiredOn || payload.date || "31 Aug 2026")
+        };
+    }
+    if (key === "LICENSE_EXCEEDED") {
+        return {
+            1: String(payload.licenseName || payload.product || "EMA System License"),
+            2: String(payload.used || payload.usedCount || "120"),
+            3: String(payload.licensed || payload.licensedCount || "100")
+        };
+    }
+
+    return normalizeWhatsappTemplateVariables(payload.contentVariables, key);
+}
+
+async function readNotificationRecipients(pool, ruleKey = "") {
+    await ensureNotificationSettingsTables(pool);
+    const result = await pool.request().query(`
+        SELECT
+            RecipientID,
+            RecipientName,
+            RecipientRole,
+            Email,
+            WhatsAppNumber,
+            ReceiveIncidentCreated,
+            ReceiveIncidentUpdated,
+            ReceiveIncidentResolved,
+            ReceiveSystemLicense,
+            ReceiveLicenseExceeded,
+            IsEnabled,
+            CreatedAt,
+            UpdatedAt
+        FROM dbo.EMA_NotificationRecipients WITH (NOLOCK)
+        WHERE ISNULL(IsEnabled, 1) = 1
+        ORDER BY RecipientName ASC, RecipientID ASC;
+    `);
+
+    return (result.recordset || []).filter((row) => notificationRecipientAllowed(row, ruleKey));
+}
+
+async function sendWhatsappTemplateMessage(pool, { setting, rule, recipientNumber, variables }) {
+    const accountSid = String(setting?.AccountSID || setting?.AccountSid || "").trim();
+    const authToken = String(setting?.AuthToken || "").trim();
+    const fromNumber = normalizeWhatsappAddress(setting?.FromNumber || "");
+    const toNumber = normalizeWhatsappAddress(recipientNumber || "");
+    const contentSid = String(rule?.WhatsAppContentSID || rule?.ContentSid || "").trim();
+
+    if (!accountSid || !authToken || !fromNumber || !toNumber || !contentSid) {
+        return { sent: false, skipped: true, reason: "Missing WhatsApp sender, recipient or template SID." };
+    }
+
+    const form = new URLSearchParams();
+    form.append("From", fromNumber);
+    form.append("To", toNumber);
+    form.append("ContentSid", contentSid);
+    form.append("ContentVariables", JSON.stringify(variables || {}));
+
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
+    const twilioResponse = await axios.post(twilioUrl, form.toString(), {
+        auth: { username: accountSid, password: authToken },
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 20000
+    });
+
+    await incrementWhatsappUsage(pool);
+
+    return {
+        sent: true,
+        sid: twilioResponse.data?.sid,
+        status: twilioResponse.data?.status,
+        to: stripWhatsappPrefix(toNumber),
+        contentSid
+    };
+}
+
+async function sendNotificationByRule(pool, ruleKey, payload = {}, req = null) {
+    try {
+        await ensureNotificationSettingsTables(pool);
+        const rule = await readNotificationRule(pool, ruleKey);
+        if (!rule || !notificationBool(rule.IsEnabled, true) || !notificationBool(rule.WhatsAppEnabled, false)) {
+            return { sent: 0, skipped: true, reason: "Notification rule is disabled." };
+        }
+
+        if (!String(rule.WhatsAppContentSID || "").trim()) {
+            return { sent: 0, skipped: true, reason: `WhatsAppContentSID is missing for ${ruleKey}.` };
+        }
+
+        const setting = await readWhatsappSettingRow(pool);
+        if (!setting || !notificationBool(setting.IsEnabled, false)) {
+            return { sent: 0, skipped: true, reason: "WhatsApp channel is disabled." };
+        }
+
+        const recipients = await readNotificationRecipients(pool, ruleKey);
+        if (recipients.length === 0) {
+            return { sent: 0, skipped: true, reason: "No enabled WhatsApp recipients configured." };
+        }
+
+        const variables = buildNotificationContentVariables(ruleKey, payload);
+        const results = [];
+        for (const recipient of recipients) {
+            try {
+                const result = await sendWhatsappTemplateMessage(pool, {
+                    setting,
+                    rule,
+                    recipientNumber: recipient.WhatsAppNumber,
+                    variables
+                });
+                results.push({ recipientID: recipient.RecipientID, recipientName: recipient.RecipientName, ...result });
+            } catch (err) {
+                const message = getTwilioErrorMessage(err);
+                console.error(`WhatsApp notification failed for ${ruleKey}:`, message, err?.response?.data || "");
+                results.push({ recipientID: recipient.RecipientID, recipientName: recipient.RecipientName, sent: false, error: message });
+            }
+        }
+
+        const sent = results.filter((item) => item.sent).length;
+        if (req) {
+            await logEmaAudit(pool, req, `Triggered ${ruleKey} WhatsApp Notification`, "Notification Channels", sent ? "Success" : "Warning", {
+                ruleKey,
+                sent,
+                totalRecipients: recipients.length
+            });
+        }
+
+        return { sent, recipients: recipients.length, results };
+    } catch (err) {
+        console.error(`sendNotificationByRule(${ruleKey}) error:`, err.message);
+        return { sent: 0, error: err.message };
+    }
+}
+
+async function triggerIncidentNotification(pool, ruleKey, incident = {}, req = null) {
+    return sendNotificationByRule(pool, ruleKey, {
+        incidentId: incident.id || incident.IncidentID || incident.incidentId,
+        title: incident.title || incident.Title,
+        description: incident.description || incident.Description,
+        priority: incident.priority || incident.Priority,
+        status: normalizeServiceDeskIncidentStatus(incident.status || incident.Status || "Updated"),
+        requesterName: incident.requesterName || incident.RequesterName,
+        assignedTo: incident.assignedTo || incident.AssignedTo,
+        updatedBy: notificationUserKey(req || {}),
+        rootCause: incident.rootCause || incident.RootCause,
+        actionPlan: incident.actionPlan || incident.ActionPlan
+    }, req);
+}
+
+async function ensureNotificationSettingsTables(pool) {
+    await pool.request().query(`
+        IF OBJECT_ID('dbo.EMA_EmailSettings', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_EmailSettings (
+                SettingID INT IDENTITY(1,1) PRIMARY KEY,
+                Provider NVARCHAR(50) NOT NULL DEFAULT 'SMTP',
+                SmtpHost NVARCHAR(255) NULL,
+                SmtpPort INT NULL,
+                SmtpUser NVARCHAR(255) NULL,
+                SmtpPassword NVARCHAR(MAX) NULL,
+                FromEmail NVARCHAR(255) NULL,
+                FromName NVARCHAR(255) NULL,
+                UseTLS BIT NOT NULL DEFAULT 1,
+                IsEnabled BIT NOT NULL DEFAULT 1,
+                CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+                UpdatedAt DATETIME NULL
+            );
+        END;
+
+        IF COL_LENGTH('dbo.EMA_EmailSettings', 'FromEmail') IS NULL
+            ALTER TABLE dbo.EMA_EmailSettings ADD FromEmail NVARCHAR(255) NULL;
+        IF COL_LENGTH('dbo.EMA_EmailSettings', 'FromName') IS NULL
+            ALTER TABLE dbo.EMA_EmailSettings ADD FromName NVARCHAR(255) NULL;
+        IF COL_LENGTH('dbo.EMA_EmailSettings', 'UseTLS') IS NULL
+            ALTER TABLE dbo.EMA_EmailSettings ADD UseTLS BIT NOT NULL CONSTRAINT DF_EMA_EmailSettings_UseTLS DEFAULT 1;
+        IF COL_LENGTH('dbo.EMA_EmailSettings', 'IsEnabled') IS NULL
+            ALTER TABLE dbo.EMA_EmailSettings ADD IsEnabled BIT NOT NULL CONSTRAINT DF_EMA_EmailSettings_IsEnabled DEFAULT 1;
+
+        IF OBJECT_ID('dbo.EMA_WhatsAppSettings', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_WhatsAppSettings (
+                SettingID INT IDENTITY(1,1) PRIMARY KEY,
+                Provider NVARCHAR(50) NOT NULL DEFAULT 'Twilio',
+                AccountSID NVARCHAR(255) NULL,
+                AuthToken NVARCHAR(MAX) NULL,
+                FromNumber NVARCHAR(100) NULL,
+                IsEnabled BIT NOT NULL DEFAULT 0,
+                MonthlyLimit INT NOT NULL DEFAULT 200,
+                CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+                UpdatedAt DATETIME NULL
+            );
+        END;
+
+        IF COL_LENGTH('dbo.EMA_WhatsAppSettings', 'AccountSID') IS NULL
+            ALTER TABLE dbo.EMA_WhatsAppSettings ADD AccountSID NVARCHAR(255) NULL;
+        IF COL_LENGTH('dbo.EMA_WhatsAppSettings', 'MonthlyLimit') IS NULL
+            ALTER TABLE dbo.EMA_WhatsAppSettings ADD MonthlyLimit INT NOT NULL CONSTRAINT DF_EMA_WhatsAppSettings_MonthlyLimit DEFAULT 200;
+
+        IF OBJECT_ID('dbo.EMA_NotificationRules', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_NotificationRules (
+                RuleID INT IDENTITY(1,1) PRIMARY KEY,
+                RuleKey NVARCHAR(100) NOT NULL UNIQUE,
+                RuleName NVARCHAR(150) NULL,
+                Description NVARCHAR(500) NULL,
+                EmailEnabled BIT NOT NULL DEFAULT 0,
+                WhatsAppEnabled BIT NOT NULL DEFAULT 0,
+                WhatsAppContentSID NVARCHAR(80) NULL,
+                IsEnabled BIT NOT NULL DEFAULT 1,
+                CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+                UpdatedAt DATETIME NULL
+            );
+        END;
+
+        IF COL_LENGTH('dbo.EMA_NotificationRules', 'RuleName') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRules ADD RuleName NVARCHAR(150) NULL;
+        IF COL_LENGTH('dbo.EMA_NotificationRules', 'EmailEnabled') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRules ADD EmailEnabled BIT NOT NULL CONSTRAINT DF_EMA_NotificationRules_EmailEnabled DEFAULT 0;
+        IF COL_LENGTH('dbo.EMA_NotificationRules', 'WhatsAppEnabled') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRules ADD WhatsAppEnabled BIT NOT NULL CONSTRAINT DF_EMA_NotificationRules_WhatsAppEnabled DEFAULT 0;
+        IF COL_LENGTH('dbo.EMA_NotificationRules', 'WhatsAppContentSID') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRules ADD WhatsAppContentSID NVARCHAR(80) NULL;
+        IF COL_LENGTH('dbo.EMA_NotificationRules', 'IsEnabled') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRules ADD IsEnabled BIT NOT NULL CONSTRAINT DF_EMA_NotificationRules_IsEnabled DEFAULT 1;
+
+        IF OBJECT_ID('dbo.EMA_NotificationStats', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_NotificationStats (
+                StatID INT IDENTITY(1,1) PRIMARY KEY,
+                Channel NVARCHAR(50) NOT NULL,
+                PeriodKey NVARCHAR(20) NOT NULL,
+                SentCount INT NOT NULL DEFAULT 0,
+                CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+                UpdatedAt DATETIME NULL
+            );
+        END;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM sys.indexes
+            WHERE name = 'UQ_EMA_NotificationStats_Channel_Period'
+              AND object_id = OBJECT_ID('dbo.EMA_NotificationStats')
+        )
+        BEGIN
+            CREATE UNIQUE INDEX UQ_EMA_NotificationStats_Channel_Period
+                ON dbo.EMA_NotificationStats (Channel, PeriodKey);
+        END;
+
+
+        IF OBJECT_ID('dbo.EMA_NotificationRecipients', 'U') IS NULL
+        BEGIN
+            CREATE TABLE dbo.EMA_NotificationRecipients (
+                RecipientID INT IDENTITY(1,1) PRIMARY KEY,
+                RecipientName NVARCHAR(150) NULL,
+                RecipientRole NVARCHAR(100) NULL,
+                Email NVARCHAR(255) NULL,
+                WhatsAppNumber NVARCHAR(50) NULL,
+                ReceiveIncidentCreated BIT NOT NULL DEFAULT 1,
+                ReceiveIncidentUpdated BIT NOT NULL DEFAULT 1,
+                ReceiveIncidentResolved BIT NOT NULL DEFAULT 1,
+                ReceiveSystemLicense BIT NOT NULL DEFAULT 1,
+                ReceiveLicenseExceeded BIT NOT NULL DEFAULT 1,
+                IsEnabled BIT NOT NULL DEFAULT 1,
+                CreatedAt DATETIME NOT NULL DEFAULT GETDATE(),
+                UpdatedAt DATETIME NULL
+            );
+        END;
+
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'RecipientName') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD RecipientName NVARCHAR(150) NULL;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'RecipientRole') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD RecipientRole NVARCHAR(100) NULL;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'Email') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD Email NVARCHAR(255) NULL;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'WhatsAppNumber') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD WhatsAppNumber NVARCHAR(50) NULL;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'ReceiveIncidentCreated') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD ReceiveIncidentCreated BIT NOT NULL CONSTRAINT DF_EMA_NotificationRecipients_ReceiveIncidentCreated DEFAULT 1;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'ReceiveIncidentUpdated') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD ReceiveIncidentUpdated BIT NOT NULL CONSTRAINT DF_EMA_NotificationRecipients_ReceiveIncidentUpdated DEFAULT 1;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'ReceiveIncidentResolved') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD ReceiveIncidentResolved BIT NOT NULL CONSTRAINT DF_EMA_NotificationRecipients_ReceiveIncidentResolved DEFAULT 1;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'ReceiveSystemLicense') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD ReceiveSystemLicense BIT NOT NULL CONSTRAINT DF_EMA_NotificationRecipients_ReceiveSystemLicense DEFAULT 1;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'ReceiveLicenseExceeded') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD ReceiveLicenseExceeded BIT NOT NULL CONSTRAINT DF_EMA_NotificationRecipients_ReceiveLicenseExceeded DEFAULT 1;
+        IF COL_LENGTH('dbo.EMA_NotificationRecipients', 'IsEnabled') IS NULL
+            ALTER TABLE dbo.EMA_NotificationRecipients ADD IsEnabled BIT NOT NULL CONSTRAINT DF_EMA_NotificationRecipients_IsEnabled DEFAULT 1;
+    `);
+
+    await normalizeNotificationRules(pool);
+
+    for (const rule of DEFAULT_NOTIFICATION_RULES) {
+        const ruleName = rule.RuleName || String(rule.RuleKey || "")
+            .toLowerCase()
+            .split("_")
+            .filter(Boolean)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ");
+
+        await pool.request()
+            .input("RuleKey", sql.NVarChar(100), rule.RuleKey)
+            .input("RuleName", sql.NVarChar(150), ruleName)
+            .input("EmailEnabled", sql.Bit, notificationBool(rule.Enabled))
+            .input("WhatsAppEnabled", sql.Bit, notificationBool(rule.WhatsAppEnabled))
+            .input("Description", sql.NVarChar(500), rule.Description)
+            .query(`
+                IF NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = @RuleKey)
+                BEGIN
+                    INSERT INTO dbo.EMA_NotificationRules
+                        (RuleKey, RuleName, Description, EmailEnabled, WhatsAppEnabled, IsEnabled)
+                    VALUES
+                        (@RuleKey, @RuleName, @Description, @EmailEnabled, @WhatsAppEnabled, 1);
+                END
+                ELSE
+                BEGIN
+                    UPDATE dbo.EMA_NotificationRules
+                    SET RuleName = @RuleName,
+                        Description = @Description,
+                        UpdatedAt = GETDATE()
+                    WHERE RuleKey = @RuleKey;
+                END;
+            `);
+    }
+}
+
+function mapEmailSetting(row = {}) {
+    return {
+        provider: row.Provider || "SMTP",
+        host: row.SmtpHost || "",
+        port: row.SmtpPort || 587,
+        user: row.SmtpUser || row.FromEmail || "",
+        pass: "",
+        ssl: notificationBool(row.UseTLS ?? row.SslTls, true),
+        isActive: notificationBool(row.IsEnabled ?? row.IsActive, false),
+        fromEmail: row.FromEmail || row.SmtpUser || "",
+        fromName: row.FromName || ""
+    };
+}
+
+function mapWhatsappSetting(row = {}) {
+    return {
+        accountSid: row.AccountSID || row.AccountSid || "",
+        authToken: "",
+        fromNumber: stripWhatsappPrefix(row.FromNumber || ""),
+        isEnabled: notificationBool(row.IsEnabled, false)
+    };
+}
+
+async function readWhatsappSettingRow(pool) {
+    await ensureNotificationSettingsTables(pool);
+    const result = await pool.request().query(`SELECT TOP 1 * FROM dbo.EMA_WhatsAppSettings ORDER BY SettingID DESC;`);
+    return result.recordset?.[0] || null;
+}
+
+async function readWhatsappUsage(pool) {
+    await ensureNotificationSettingsTables(pool);
+    const periodKey = notificationMonthKey();
+    const statResult = await pool.request()
+        .input("Channel", sql.NVarChar(50), "whatsapp")
+        .input("PeriodKey", sql.NVarChar(20), periodKey)
+        .query(`SELECT TOP 1 SentCount FROM dbo.EMA_NotificationStats WHERE Channel = @Channel AND PeriodKey = @PeriodKey;`);
+
+    const setting = await readWhatsappSettingRow(pool);
+    const limit = Number(setting?.MonthlyLimit || NOTIFICATION_WHATSAPP_MONTHLY_LIMIT) || NOTIFICATION_WHATSAPP_MONTHLY_LIMIT;
+    const count = Number(statResult.recordset?.[0]?.SentCount || 0);
+    return {
+        count,
+        limit,
+        remaining: Math.max(0, limit - count),
+        activeProvider: setting?.Provider || "Twilio"
+    };
+}
+
+async function incrementWhatsappUsage(pool) {
+    await ensureNotificationSettingsTables(pool);
+    const periodKey = notificationMonthKey();
+    await pool.request()
+        .input("Channel", sql.NVarChar(50), "whatsapp")
+        .input("PeriodKey", sql.NVarChar(20), periodKey)
+        .query(`
+            MERGE dbo.EMA_NotificationStats AS target
+            USING (SELECT @Channel AS Channel, @PeriodKey AS PeriodKey) AS source
+            ON target.Channel = source.Channel AND target.PeriodKey = source.PeriodKey
+            WHEN MATCHED THEN
+                UPDATE SET SentCount = ISNULL(SentCount, 0) + 1, UpdatedAt = GETDATE()
+            WHEN NOT MATCHED THEN
+                INSERT (Channel, PeriodKey, SentCount) VALUES (@Channel, @PeriodKey, 1);
+        `);
+    return readWhatsappUsage(pool);
+}
+
+app.get("/api/settings/email", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        const result = await pool.request().query(`SELECT * FROM dbo.EMA_EmailSettings ORDER BY Provider ASC, SettingID ASC;`);
+        const rows = result.recordset?.length ? result.recordset.map(mapEmailSetting) : [{ provider: "SMTP", host: "", port: 587, user: "", pass: "", ssl: true, isActive: true }];
+        return res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error("GET /api/settings/email error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+async function saveEmailSetting(pool, body = {}, req) {
+    await ensureNotificationSettingsTables(pool);
+    const provider = String(body.provider || body.Provider || "SMTP").trim() || "SMTP";
+    const existing = await pool.request()
+        .input("Provider", sql.NVarChar(50), provider)
+        .query(`SELECT TOP 1 * FROM dbo.EMA_EmailSettings WHERE Provider = @Provider ORDER BY SettingID DESC;`);
+    const existingRow = existing.recordset?.[0] || {};
+
+    const smtpUser = String(body.user ?? body.SmtpUser ?? existingRow.SmtpUser ?? "").trim();
+    const fromEmail = String(body.fromEmail ?? body.FromEmail ?? existingRow.FromEmail ?? smtpUser).trim();
+    const fromName = String(body.fromName ?? body.FromName ?? existingRow.FromName ?? "").trim();
+
+    await pool.request()
+        .input("Provider", sql.NVarChar(50), provider)
+        .input("SmtpHost", sql.NVarChar(255), body.host ?? body.SmtpHost ?? existingRow.SmtpHost ?? "")
+        .input("SmtpPort", sql.Int, parseInt(body.port ?? body.SmtpPort ?? existingRow.SmtpPort ?? 587, 10) || 587)
+        .input("SmtpUser", sql.NVarChar(255), smtpUser)
+        .input("SmtpPassword", sql.NVarChar(sql.MAX), body.pass || body.SmtpPassword || existingRow.SmtpPassword || "")
+        .input("FromEmail", sql.NVarChar(255), fromEmail)
+        .input("FromName", sql.NVarChar(255), fromName)
+        .input("UseTLS", sql.Bit, notificationBool(body.ssl ?? body.UseTLS ?? body.SslTls, notificationBool(existingRow.UseTLS ?? existingRow.SslTls, true)))
+        .input("IsEnabled", sql.Bit, notificationBool(body.isActive ?? body.isEnabled ?? body.IsEnabled ?? body.IsActive, notificationBool(existingRow.IsEnabled ?? existingRow.IsActive, true)))
+        .query(`
+            IF EXISTS (SELECT 1 FROM dbo.EMA_EmailSettings WHERE Provider = @Provider)
+            BEGIN
+                UPDATE dbo.EMA_EmailSettings
+                SET SmtpHost = @SmtpHost,
+                    SmtpPort = @SmtpPort,
+                    SmtpUser = @SmtpUser,
+                    SmtpPassword = CASE WHEN @SmtpPassword = '' THEN SmtpPassword ELSE @SmtpPassword END,
+                    FromEmail = @FromEmail,
+                    FromName = @FromName,
+                    UseTLS = @UseTLS,
+                    IsEnabled = @IsEnabled,
+                    UpdatedAt = GETDATE()
+                WHERE Provider = @Provider;
+            END
+            ELSE
+            BEGIN
+                INSERT INTO dbo.EMA_EmailSettings
+                    (Provider, SmtpHost, SmtpPort, SmtpUser, SmtpPassword, FromEmail, FromName, UseTLS, IsEnabled)
+                VALUES
+                    (@Provider, @SmtpHost, @SmtpPort, @SmtpUser, @SmtpPassword, @FromEmail, @FromName, @UseTLS, @IsEnabled);
+            END;
+        `);
+
+    await logEmaAudit(pool, req, "Saved Email Notification Settings", "Notification Channels", "Success", { provider, fromEmail });
+    return { saved: true, provider, fromEmail, fromName };
+}
+
+app.post("/api/settings/email", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const data = await saveEmailSetting(pool, req.body || {}, req);
+        return res.json({ success: true, data });
+    } catch (err) {
+        console.error("POST /api/settings/email error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.put("/api/settings/email", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const data = await saveEmailSetting(pool, req.body || {}, req);
+        return res.json({ success: true, data });
+    } catch (err) {
+        console.error("PUT /api/settings/email error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.post("/api/settings/email/test", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        await logEmaAudit(pool, req, "Tested Email Notification", "Notification Channels", "Info", { provider: req.body?.provider || "SMTP" });
+        return res.json({ success: true, data: { simulated: true, provider: req.body?.provider || "SMTP" }, message: "Email test simulated successfully" });
+    } catch (err) {
+        console.error("POST /api/settings/email/test error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.get("/api/settings/whatsapp", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const row = await readWhatsappSettingRow(pool);
+        return res.json({ success: true, data: mapWhatsappSetting(row || {}) });
+    } catch (err) {
+        console.error("GET /api/settings/whatsapp error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+async function saveWhatsappSetting(pool, body = {}, req) {
+    await ensureNotificationSettingsTables(pool);
+    const existing = await readWhatsappSettingRow(pool);
+    const accountSid = String(body.accountSid ?? body.AccountSID ?? body.AccountSid ?? existing?.AccountSID ?? existing?.AccountSid ?? "").trim();
+    const authToken = String(body.authToken || body.AuthToken || existing?.AuthToken || "").trim();
+    const fromNumber = stripWhatsappPrefix(body.fromNumber ?? body.FromNumber ?? existing?.FromNumber ?? "").trim();
+    const isEnabled = notificationBool(body.isEnabled ?? body.IsEnabled, notificationBool(existing?.IsEnabled, false));
+    const monthlyLimit = Number(existing?.MonthlyLimit || NOTIFICATION_WHATSAPP_MONTHLY_LIMIT) || NOTIFICATION_WHATSAPP_MONTHLY_LIMIT;
+
+    await pool.request()
+        .input("AccountSID", sql.NVarChar(255), accountSid)
+        .input("AuthToken", sql.NVarChar(sql.MAX), authToken)
+        .input("FromNumber", sql.NVarChar(100), fromNumber)
+        .input("IsEnabled", sql.Bit, isEnabled)
+        .input("MonthlyLimit", sql.Int, monthlyLimit)
+        .query(`
+            IF EXISTS (SELECT 1 FROM dbo.EMA_WhatsAppSettings)
+            BEGIN
+                UPDATE dbo.EMA_WhatsAppSettings
+                SET AccountSID = @AccountSID,
+                    AuthToken = CASE WHEN @AuthToken = '' THEN AuthToken ELSE @AuthToken END,
+                    FromNumber = @FromNumber,
+                    IsEnabled = @IsEnabled,
+                    MonthlyLimit = @MonthlyLimit,
+                    UpdatedAt = GETDATE();
+            END
+            ELSE
+            BEGIN
+                INSERT INTO dbo.EMA_WhatsAppSettings (Provider, AccountSID, AuthToken, FromNumber, IsEnabled, MonthlyLimit)
+                VALUES ('Twilio', @AccountSID, @AuthToken, @FromNumber, @IsEnabled, @MonthlyLimit);
+            END;
+        `);
+
+    await logEmaAudit(pool, req, "Saved WhatsApp Notification Settings", "Notification Channels", "Success", { accountSid, fromNumber, isEnabled });
+    return { saved: true, accountSid, fromNumber, isEnabled };
+}
+
+app.post("/api/settings/whatsapp", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const data = await saveWhatsappSetting(pool, req.body || {}, req);
+        return res.json({ success: true, data });
+    } catch (err) {
+        console.error("POST /api/settings/whatsapp error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.put("/api/settings/whatsapp", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const data = await saveWhatsappSetting(pool, req.body || {}, req);
+        return res.json({ success: true, data });
+    } catch (err) {
+        console.error("PUT /api/settings/whatsapp error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.get("/api/settings/whatsapp/usage", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const usage = await readWhatsappUsage(pool);
+        return res.json({ success: true, data: usage });
+    } catch (err) {
+        console.error("GET /api/settings/whatsapp/usage error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+
+app.get("/api/settings/notification-recipients", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        const result = await pool.request().query(`
+            SELECT
+                RecipientID,
+                RecipientName,
+                RecipientRole,
+                Email,
+                WhatsAppNumber,
+                ReceiveIncidentCreated,
+                ReceiveIncidentUpdated,
+                ReceiveIncidentResolved,
+                ReceiveSystemLicense,
+                ReceiveLicenseExceeded,
+                IsEnabled,
+                CreatedAt,
+                UpdatedAt
+            FROM dbo.EMA_NotificationRecipients WITH (NOLOCK)
+            ORDER BY ISNULL(IsEnabled, 1) DESC, RecipientName ASC, RecipientID ASC;
+        `);
+        return res.json({ success: true, data: (result.recordset || []).map(mapNotificationRecipient) });
+    } catch (err) {
+        console.error("GET /api/settings/notification-recipients error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+async function saveNotificationRecipient(pool, body = {}, recipientId = 0) {
+    await ensureNotificationSettingsTables(pool);
+    const id = Number(recipientId || body.recipientID || body.RecipientID || 0) || 0;
+    const recipientName = String(body.recipientName || body.RecipientName || body.name || "").trim();
+    const recipientRole = String(body.recipientRole || body.RecipientRole || body.role || "").trim();
+    const email = String(body.email || body.Email || "").trim();
+    const whatsAppNumber = stripWhatsappPrefix(body.whatsAppNumber || body.WhatsAppNumber || body.phone || body.phoneNo || "").trim();
+
+    if (!recipientName) {
+        const error = new Error("Recipient name is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+    if (!whatsAppNumber && !email) {
+        const error = new Error("WhatsApp number or email is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const request = pool.request()
+        .input("RecipientID", sql.Int, id)
+        .input("RecipientName", sql.NVarChar(150), recipientName)
+        .input("RecipientRole", sql.NVarChar(100), recipientRole)
+        .input("Email", sql.NVarChar(255), email)
+        .input("WhatsAppNumber", sql.NVarChar(50), whatsAppNumber)
+        .input("ReceiveIncidentCreated", sql.Bit, notificationBool(body.receiveIncidentCreated ?? body.ReceiveIncidentCreated, true))
+        .input("ReceiveIncidentUpdated", sql.Bit, notificationBool(body.receiveIncidentUpdated ?? body.ReceiveIncidentUpdated, true))
+        .input("ReceiveIncidentResolved", sql.Bit, notificationBool(body.receiveIncidentResolved ?? body.ReceiveIncidentResolved, true))
+        .input("ReceiveSystemLicense", sql.Bit, notificationBool(body.receiveSystemLicense ?? body.ReceiveSystemLicense, true))
+        .input("ReceiveLicenseExceeded", sql.Bit, notificationBool(body.receiveLicenseExceeded ?? body.ReceiveLicenseExceeded, true))
+        .input("IsEnabled", sql.Bit, notificationBool(body.isEnabled ?? body.IsEnabled, true));
+
+    const result = await request.query(`
+        IF @RecipientID > 0 AND EXISTS (SELECT 1 FROM dbo.EMA_NotificationRecipients WHERE RecipientID = @RecipientID)
+        BEGIN
+            UPDATE dbo.EMA_NotificationRecipients
+            SET RecipientName = @RecipientName,
+                RecipientRole = @RecipientRole,
+                Email = @Email,
+                WhatsAppNumber = @WhatsAppNumber,
+                ReceiveIncidentCreated = @ReceiveIncidentCreated,
+                ReceiveIncidentUpdated = @ReceiveIncidentUpdated,
+                ReceiveIncidentResolved = @ReceiveIncidentResolved,
+                ReceiveSystemLicense = @ReceiveSystemLicense,
+                ReceiveLicenseExceeded = @ReceiveLicenseExceeded,
+                IsEnabled = @IsEnabled,
+                UpdatedAt = GETDATE()
+            WHERE RecipientID = @RecipientID;
+
+            SELECT TOP 1 * FROM dbo.EMA_NotificationRecipients WHERE RecipientID = @RecipientID;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO dbo.EMA_NotificationRecipients
+                (RecipientName, RecipientRole, Email, WhatsAppNumber, ReceiveIncidentCreated, ReceiveIncidentUpdated, ReceiveIncidentResolved, ReceiveSystemLicense, ReceiveLicenseExceeded, IsEnabled)
+            OUTPUT INSERTED.*
+            VALUES
+                (@RecipientName, @RecipientRole, @Email, @WhatsAppNumber, @ReceiveIncidentCreated, @ReceiveIncidentUpdated, @ReceiveIncidentResolved, @ReceiveSystemLicense, @ReceiveLicenseExceeded, @IsEnabled);
+        END;
+    `);
+
+    return mapNotificationRecipient(result.recordset?.[0] || {});
+}
+
+app.post("/api/settings/notification-recipients", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const data = await saveNotificationRecipient(pool, req.body || {}, 0);
+        await logEmaAudit(pool, req, "Added Notification Recipient", "Notification Channels", "Success", { recipientID: data.RecipientID, recipientName: data.RecipientName });
+        return res.json({ success: true, data });
+    } catch (err) {
+        console.error("POST /api/settings/notification-recipients error:", err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    }
+});
+
+app.put("/api/settings/notification-recipients/:id", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const data = await saveNotificationRecipient(pool, req.body || {}, req.params.id);
+        await logEmaAudit(pool, req, "Updated Notification Recipient", "Notification Channels", "Success", { recipientID: data.RecipientID, recipientName: data.RecipientName });
+        return res.json({ success: true, data });
+    } catch (err) {
+        console.error("PUT /api/settings/notification-recipients/:id error:", err);
+        return res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    }
+});
+
+app.delete("/api/settings/notification-recipients/:id", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        const id = Number(req.params.id || 0) || 0;
+        await pool.request()
+            .input("RecipientID", sql.Int, id)
+            .query(`DELETE FROM dbo.EMA_NotificationRecipients WHERE RecipientID = @RecipientID;`);
+        await logEmaAudit(pool, req, "Deleted Notification Recipient", "Notification Channels", "Warning", { recipientID: id });
+        return res.json({ success: true, data: { recipientID: id } });
+    } catch (err) {
+        console.error("DELETE /api/settings/notification-recipients/:id error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.post("/api/settings/whatsapp/test", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        if (req.body?.accountSid || req.body?.fromNumber || req.body?.authToken) {
+            await saveWhatsappSetting(pool, req.body || {}, req);
+        }
+
+        const stored = await readWhatsappSettingRow(pool);
+        const accountSid = String(req.body?.accountSid || stored?.AccountSID || stored?.AccountSid || "").trim();
+        const authToken = String(req.body?.authToken || stored?.AuthToken || "").trim();
+        const fromNumber = normalizeWhatsappAddress(req.body?.fromNumber || stored?.FromNumber || "");
+        const toNumber = normalizeWhatsappAddress(req.body?.testNumber || req.body?.to || req.body?.recipient || "");
+        const ruleKey = String(req.body?.ruleKey || req.body?.RuleKey || req.body?.templateRuleKey || "INCIDENT_CREATED").trim().toUpperCase();
+        const rule = await readNotificationRule(pool, ruleKey);
+        const contentSid = String(
+            req.body?.contentSid ||
+            req.body?.ContentSid ||
+            req.body?.WhatsAppContentSID ||
+            req.body?.whatsAppContentSID ||
+            rule?.WhatsAppContentSID ||
+            ""
+        ).trim();
+        const contentVariables = normalizeWhatsappTemplateVariables(req.body?.contentVariables || req.body?.variables, ruleKey);
+
+        if (!accountSid || !authToken || !fromNumber || !toNumber) {
+            return res.status(400).json({
+                success: false,
+                message: "Account SID, Auth Token, From Number and Test Recipient are required."
+            });
+        }
+
+        if (!contentSid) {
+            return res.status(400).json({
+                success: false,
+                message: `WhatsApp template SID is not configured for ${ruleKey}. Please update WhatsAppContentSID in Notification Rules.`
+            });
+        }
+
+        const form = new URLSearchParams();
+        form.append("From", fromNumber);
+        form.append("To", toNumber);
+        form.append("ContentSid", contentSid);
+        form.append("ContentVariables", JSON.stringify(contentVariables));
+
+        const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
+        const twilioResponse = await axios.post(twilioUrl, form.toString(), {
+            auth: { username: accountSid, password: authToken },
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            timeout: 20000
+        });
+
+        const usage = await incrementWhatsappUsage(pool);
+        await logEmaAudit(pool, req, "Sent WhatsApp Template Test Notification", "Notification Channels", "Success", {
+            toNumber: stripWhatsappPrefix(toNumber),
+            sid: twilioResponse.data?.sid,
+            ruleKey,
+            contentSid
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                sent: true,
+                provider: "Twilio",
+                sid: twilioResponse.data?.sid,
+                status: twilioResponse.data?.status,
+                to: stripWhatsappPrefix(toNumber),
+                ruleKey,
+                contentSid,
+                usage
+            },
+            message: "WhatsApp template test sent successfully"
+        });
+    } catch (err) {
+        const message = getTwilioErrorMessage(err);
+        console.error("POST /api/settings/whatsapp/test error:", message, err?.response?.data || "");
+        return res.status(err?.response?.status || 500).json({
+            success: false,
+            message,
+            error: message,
+            detail: err?.response?.data || null
+        });
+    }
+});
+
+app.get("/api/settings/notification-rules", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        const result = await pool.request().query(`
+            SELECT
+                RuleKey,
+                COALESCE(NULLIF(RuleName, ''), RuleKey) AS RuleName,
+                Description,
+                EmailEnabled AS Enabled,
+                EmailEnabled,
+                WhatsAppEnabled,
+                IsEnabled,
+                WhatsAppContentSID
+            FROM dbo.EMA_NotificationRules
+            WHERE ISNULL(IsEnabled, 1) = 1
+            ORDER BY RuleID ASC;
+        `);
+        return res.json({ success: true, data: result.recordset || [] });
+    } catch (err) {
+        console.error("GET /api/settings/notification-rules error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.put("/api/settings/notification-rules", authenticateToken, async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        await ensureNotificationSettingsTables(pool);
+        const rules = Array.isArray(req.body) ? req.body : Array.isArray(req.body?.rules) ? req.body.rules : [];
+
+        for (const rule of rules) {
+            const ruleKey = String(rule.RuleKey || rule.ruleKey || "").trim();
+            if (!ruleKey) continue;
+
+            const ruleName = String(rule.RuleName || rule.ruleName || "")
+                || ruleKey.toLowerCase().split("_").filter(Boolean).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+
+            await pool.request()
+                .input("RuleKey", sql.NVarChar(100), ruleKey)
+                .input("RuleName", sql.NVarChar(150), ruleName)
+                .input("Description", sql.NVarChar(500), rule.Description || rule.description || "")
+                .input("EmailEnabled", sql.Bit, notificationBool(rule.EmailEnabled ?? rule.Enabled ?? rule.enabled, false))
+                .input("WhatsAppEnabled", sql.Bit, notificationBool(rule.WhatsAppEnabled ?? rule.whatsAppEnabled ?? rule.whatsappEnabled, false))
+                .input("WhatsAppContentSID", sql.NVarChar(80), String(rule.WhatsAppContentSID || rule.whatsAppContentSID || rule.contentSid || "").trim() || null)
+                .input("IsEnabled", sql.Bit, notificationBool(rule.IsEnabled ?? rule.isEnabled, true))
+                .query(`
+                    MERGE dbo.EMA_NotificationRules AS target
+                    USING (SELECT @RuleKey AS RuleKey) AS source
+                    ON target.RuleKey = source.RuleKey
+                    WHEN MATCHED THEN
+                        UPDATE SET
+                            RuleName = @RuleName,
+                            Description = @Description,
+                            EmailEnabled = @EmailEnabled,
+                            WhatsAppEnabled = @WhatsAppEnabled,
+                            WhatsAppContentSID = CASE WHEN @WhatsAppContentSID IS NULL THEN WhatsAppContentSID ELSE @WhatsAppContentSID END,
+                            IsEnabled = @IsEnabled,
+                            UpdatedAt = GETDATE()
+                    WHEN NOT MATCHED THEN
+                        INSERT (RuleKey, RuleName, Description, EmailEnabled, WhatsAppEnabled, WhatsAppContentSID, IsEnabled)
+                        VALUES (@RuleKey, @RuleName, @Description, @EmailEnabled, @WhatsAppEnabled, @WhatsAppContentSID, @IsEnabled);
+                `);
+        }
+
+        await logEmaAudit(pool, req, "Updated Notification Rules", "Notification Channels", "Success", { count: rules.length });
+
+        const result = await pool.request().query(`
+            SELECT
+                RuleKey,
+                COALESCE(NULLIF(RuleName, ''), RuleKey) AS RuleName,
+                Description,
+                EmailEnabled AS Enabled,
+                EmailEnabled,
+                WhatsAppEnabled,
+                IsEnabled,
+                WhatsAppContentSID
+            FROM dbo.EMA_NotificationRules
+            WHERE ISNULL(IsEnabled, 1) = 1
+            ORDER BY RuleID ASC;
+        `);
+
+        return res.json({ success: true, data: result.recordset || [] });
+    } catch (err) {
+        console.error("PUT /api/settings/notification-rules error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// Legacy combined settings endpoint kept for compatibility with older Settings pages.
 app.get("/api/settings/notifications", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        const jsonValue = await getSettingValue(pool, "notificationSettings", "{}");
-        const data = safeJsonParse(jsonValue, {});
-        return res.json({ success: true, data });
+        const [emailResult, whatsappRow, usage, rulesResult] = await Promise.all([
+            (async () => {
+                await ensureNotificationSettingsTables(pool);
+                return pool.request().query(`SELECT * FROM dbo.EMA_EmailSettings ORDER BY Provider ASC, SettingID ASC;`);
+            })(),
+            readWhatsappSettingRow(pool),
+            readWhatsappUsage(pool),
+            (async () => {
+                await ensureNotificationSettingsTables(pool);
+                return pool.request().query(`
+                    SELECT
+                        RuleKey,
+                        COALESCE(NULLIF(RuleName, ''), RuleKey) AS RuleName,
+                        Description,
+                        EmailEnabled AS Enabled,
+                        EmailEnabled,
+                        WhatsAppEnabled,
+                        IsEnabled
+                    FROM dbo.EMA_NotificationRules
+                    WHERE ISNULL(IsEnabled, 1) = 1
+                    ORDER BY RuleID ASC;
+                `);
+            })()
+        ]);
+        return res.json({
+            success: true,
+            data: {
+                email: (emailResult.recordset || []).map(mapEmailSetting),
+                whatsapp: mapWhatsappSetting(whatsappRow || {}),
+                usage,
+                rules: rulesResult.recordset || []
+            }
+        });
     } catch (err) {
         console.error("GET /api/settings/notifications error:", err);
         return res.status(500).json({ success: false, message: err.message });
@@ -7368,7 +8578,7 @@ app.get("/api/settings/notifications", authenticateToken, async (req, res) => {
 app.put("/api/settings/notifications", authenticateToken, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        await upsertSettingValue(pool, "notificationSettings", JSON.stringify(req.body || {}), req.user?.userID);
+        await upsertSettingValue(pool, "notificationSettings", JSON.stringify(req.body || {}), notificationUserKey(req));
         await logEmaAudit(pool, req, "Updated Notification Settings", "Notification Channels", "Success", req.body);
         return res.json({ success: true, data: req.body });
     } catch (err) {
@@ -7379,10 +8589,14 @@ app.put("/api/settings/notifications", authenticateToken, async (req, res) => {
 
 app.post("/api/settings/notifications/test", authenticateToken, async (req, res) => {
     try {
+        const channel = String(req.body?.channel || "email").toLowerCase();
+        if (channel === "whatsapp") {
+            req.body = { ...(req.body || {}), testNumber: req.body?.testNumber || req.body?.to || req.body?.recipient };
+            return res.redirect(307, "/api/settings/whatsapp/test");
+        }
         const pool = await sql.connect(dbConfig);
-        const channel = req.body.channel || "email";
         await logEmaAudit(pool, req, `Tested ${channel} Notification`, "Notification Channels", "Info", req.body);
-        return res.json({ success: true, message: `${channel} test simulated successfully` });
+        return res.json({ success: true, data: { simulated: true, channel }, message: `${channel} test simulated successfully` });
     } catch (err) {
         console.error("POST /api/settings/notifications/test error:", err);
         return res.status(500).json({ success: false, message: err.message });
