@@ -1,0 +1,37 @@
+/* =========================================================
+   EMA Shared Page Shell Standard
+   ---------------------------------------------------------
+   Keep app shell / top navbar visual treatment consistent when
+   a routed module renders different internal views.
+   This file is intentionally generic: do not put module UI details here.
+========================================================= */
+
+:root {
+  --ema-standard-topbar-bg: rgba(51, 65, 85, 0.94);
+  --ema-standard-topbar-border: rgba(203, 213, 225, 0.18);
+}
+
+/*
+   Settings renders three internal views under one /settings route.
+   Legacy Settings views were visually muting the app topbar because their
+   light module canvas sits under the semi-transparent navbar. Notification
+   Channels was not doing that, so the same topbar looked darker.
+   Force the app shell tone once for the whole /settings routed module so
+   Settings Console, Management Control and Notification Channels match.
+*/
+.ema-main:has(.settings-with-notifications) .ema-topbar {
+  background: var(--ema-standard-topbar-bg) !important;
+  border-bottom-color: var(--ema-standard-topbar-border) !important;
+  backdrop-filter: blur(18px) !important;
+}
+
+.ema-main:has(.settings-with-notifications) .ema-topbar .ema-global-search {
+  background: rgba(15, 23, 42, 0.42) !important;
+  border-color: rgba(203, 213, 225, 0.14) !important;
+}
+
+.ema-main:has(.settings-with-notifications) .ema-topbar .ema-icon-btn,
+.ema-main:has(.settings-with-notifications) .ema-topbar .ema-admin-topbar-btn {
+  background: rgba(15, 23, 42, 0.38) !important;
+  border-color: rgba(203, 213, 225, 0.14) !important;
+}
