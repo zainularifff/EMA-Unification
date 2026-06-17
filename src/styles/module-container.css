@@ -29,6 +29,7 @@
   --ema-module-surface-soft: #f8fafc;
   --ema-module-text: #0f2746;
   --ema-module-muted: #64748b;
+  --ema-module-canvas: #eef6ff;
   --ema-module-dark-bg:
     radial-gradient(circle at 20% 0%, rgba(79, 70, 229, 0.12), transparent 30rem),
     radial-gradient(circle at 80% 10%, rgba(124, 58, 237, 0.1), transparent 26rem),
@@ -308,31 +309,159 @@
   min-height: 2.25rem;
 }
 
-/* Notification module uses its own markup but shares the same page height/dark canvas. */
-.settings-notification-shell {
+/* Notification Channels uses existing markup, mapped here to the same Settings module shell. */
+.settings-with-notifications.settings-view-notifications .settings-view-host {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  padding: var(--ema-module-gap) !important;
   border: 1px solid var(--ema-module-border) !important;
   border-radius: var(--ema-module-radius) !important;
-  background: var(--ema-module-surface-soft) !important;
+  background: var(--ema-module-canvas) !important;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.045) !important;
 }
 
-.settings-notification-shell .notification-body {
+.settings-with-notifications.settings-view-notifications .settings-notification-shell {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
   min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(248px, 292px) minmax(0, 1fr) !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: var(--ema-module-gap) !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-topbar {
+  display: contents !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-topbar > div:first-child {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 0.85rem 1.05rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: var(--ema-module-radius) !important;
+  background: var(--ema-module-surface) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.045) !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-topbar h2 {
+  margin: 0 !important;
+  font-size: clamp(1.45rem, 1.75vw, 2rem) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -0.055em !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-topbar p {
+  margin: 0.2rem 0 0 !important;
+  font-size: 0.72rem !important;
+  line-height: 1.35 !important;
+  color: var(--ema-module-muted) !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-tabs {
+  grid-column: 1 !important;
+  grid-row: 1 / span 2 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  padding-bottom: 2.6rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.72rem !important;
+  padding: 0.95rem 0.75rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: var(--ema-module-radius) !important;
+  background: var(--ema-module-surface) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.045) !important;
+  scrollbar-gutter: stable !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-tabs::before {
+  content: "NOTIFICATION CENTER\AChannel Area\AEmail, WhatsApp and alert routing";
+  white-space: pre-line;
+  display: block;
+  margin: -0.1rem -0.75rem 0.25rem;
+  padding: 0 0.95rem 0.85rem;
+  border-bottom: 1px solid #e2eaf7;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.35;
+  letter-spacing: 0.08em;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-tabs::first-line {
+  color: #2563eb;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-tabs .notification-tab,
+.settings-with-notifications.settings-view-notifications .notification-tabs .notification-btn {
+  width: 100% !important;
+  min-height: 3.2rem !important;
+  justify-content: flex-start !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.7rem !important;
+  padding: 0.65rem 0.75rem !important;
+  border-radius: 0.95rem !important;
+  text-align: left !important;
+  background: #ffffff !important;
+  border: 0 !important;
+  color: #0f2746 !important;
+  box-shadow: none !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-tabs .notification-tab.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18) !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-tabs .notification-btn {
+  margin-top: auto !important;
+  border: 1px solid #cbdaf4 !important;
+  color: #2563eb !important;
+  background: #f8fbff !important;
+}
+
+.settings-with-notifications.settings-view-notifications .notification-body {
+  grid-column: 2 !important;
+  grid-row: 2 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0.9rem 1rem 2.2rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: var(--ema-module-radius) !important;
+  background: var(--ema-module-surface) !important;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.045) !important;
   scrollbar-gutter: stable !important;
   overscroll-behavior: contain !important;
 }
 
-.settings-notification-shell .notification-grid {
+.settings-with-notifications.settings-view-notifications .notification-grid {
   grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.65fr) !important;
   gap: var(--ema-module-gap) !important;
 }
 
-.settings-notification-shell .notification-panel,
-.settings-notification-shell .notification-card,
-.settings-notification-shell .notification-rule-card {
+.settings-with-notifications.settings-view-notifications .notification-panel,
+.settings-with-notifications.settings-view-notifications .notification-card,
+.settings-with-notifications.settings-view-notifications .notification-rule-card {
   border-radius: var(--ema-module-radius-sm) !important;
 }
 
@@ -395,7 +524,38 @@
     max-height: none !important;
   }
 
-  .settings-notification-shell .notification-grid {
+  .settings-with-notifications.settings-view-notifications .settings-notification-shell {
+    height: auto !important;
+    max-height: none !important;
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto auto !important;
+    overflow: visible !important;
+  }
+
+  .settings-with-notifications.settings-view-notifications .notification-topbar > div:first-child,
+  .settings-with-notifications.settings-view-notifications .notification-tabs,
+  .settings-with-notifications.settings-view-notifications .notification-body {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .settings-with-notifications.settings-view-notifications .notification-tabs {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+  }
+
+  .settings-with-notifications.settings-view-notifications .notification-tabs::before {
+    width: 100% !important;
+  }
+
+  .settings-with-notifications.settings-view-notifications .notification-tabs .notification-tab,
+  .settings-with-notifications.settings-view-notifications .notification-tabs .notification-btn {
+    width: auto !important;
+  }
+
+  .settings-with-notifications.settings-view-notifications .notification-grid {
     grid-template-columns: 1fr !important;
   }
 }
