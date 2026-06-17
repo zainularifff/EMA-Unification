@@ -1,3 +1,1 @@
-@import "./notification-channels-density.css";
-@import "./system-standard-overrides.css";
-@import "./ema-system-shell.css";
+/* Deprecated: notification helper imports removed to keep CSS order deterministic. */
