@@ -109,6 +109,7 @@
 
 .ema-page .settings-with-notifications.settings-view-notifications .settings-notification-shell {
   display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
   grid-template-rows: auto minmax(0, 1fr) !important;
   gap: var(--ema-shell-gap) !important;
 }
@@ -209,6 +210,38 @@
 .ema-page .settings-with-notifications .notification-panel,
 .ema-page .settings-with-notifications .notification-card {
   border-color: var(--ema-shell-border) !important;
+}
+
+/* Safety reset: prevents old Notification sidebar/layout rules from breaking the page. */
+.ema-page .settings-with-notifications.settings-view-notifications .settings-notification-shell,
+.ema-page .settings-with-notifications.settings-view-notifications .notification-topbar,
+.ema-page .settings-with-notifications.settings-view-notifications .notification-body {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  transform: none !important;
+}
+
+.ema-page .settings-with-notifications.settings-view-notifications .notification-topbar,
+.ema-page .settings-with-notifications.settings-view-notifications .notification-tabs,
+.ema-page .settings-with-notifications.settings-view-notifications .notification-tab,
+.ema-page .settings-with-notifications.settings-view-notifications .notification-btn {
+  position: static !important;
+  inset: auto !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+.ema-page .settings-with-notifications.settings-view-notifications .notification-tabs,
+.ema-page .settings-with-notifications.settings-view-notifications .notification-provider-tabs {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.ema-page .settings-with-notifications.settings-view-notifications .notification-tab,
+.ema-page .settings-with-notifications.settings-view-notifications .notification-btn {
+  width: auto !important;
+  max-width: none !important;
 }
 
 @media (max-width: 1100px) {
