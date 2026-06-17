@@ -1,8 +1,9 @@
 .settings-notification-shell {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 96px);
-  min-height: 620px;
+  height: calc(100dvh - 155px);
+  max-height: calc(100dvh - 155px);
+  min-height: 0;
   background: #f8fafc;
   border: 1px solid #dbe7fb;
   border-radius: 24px;
@@ -17,6 +18,7 @@
   padding: 18px 22px;
   background: #ffffff;
   border-bottom: 1px solid #dbe7fb;
+  flex: 0 0 auto;
 }
 
 .notification-topbar h2,
@@ -67,8 +69,10 @@
 .notification-body {
   flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
-  padding: 22px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 22px 22px 96px;
+  scrollbar-gutter: stable;
 }
 
 .notification-grid {
@@ -225,6 +229,7 @@
 .notification-rule-list {
   display: grid;
   gap: 12px;
+  padding-bottom: 28px;
 }
 
 .notification-rule-card {
