@@ -18,10 +18,20 @@
   margin: 0 !important;
   padding: 0 !important;
   overflow: hidden !important;
-  background: transparent !important;
+  background: var(--ema-module-surface-soft, #f8fafc) !important;
   border: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
+}
+
+/* Notification sits inside Settings, so its canvas must stay light like the
+   other Settings pages. Do not inherit the dark inventory canvas here. */
+.ema-page:has(> .settings-notification-shell) {
+  background: var(--ema-module-surface-soft, #f8fafc) !important;
+}
+
+.ema-page > .settings-notification-shell {
+  background: var(--ema-module-surface-soft, #f8fafc) !important;
 }
 
 .settings-notification-shell .notification-topbar {
