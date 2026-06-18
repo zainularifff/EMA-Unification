@@ -25050,6 +25050,173 @@ function itopsRiskSeverityCount(count, criticalThreshold, highThreshold) {
 }
 
 
+
+const ITOPS_APP_LIFECYCLE_PRODUCTS = [
+    {
+        key: "microsoft-office",
+        name: "Microsoft Office",
+        vendor: "Microsoft",
+        candidates: ["microsoft-office", "office", "microsoft-office-ltsc", "office-2019", "office-2021"],
+        keywords: ["microsoft office", "office", "word", "excel", "powerpoint", "outlook", "visio", "project"]
+    },
+    {
+        key: "microsoft-365",
+        name: "Microsoft 365",
+        vendor: "Microsoft",
+        candidates: ["microsoft-365-apps", "microsoft-365", "office-365"],
+        keywords: ["microsoft 365", "office 365", "m365", "teams", "onedrive"]
+    },
+    {
+        key: "adobe",
+        name: "Adobe",
+        vendor: "Adobe",
+        candidates: ["adobe-acrobat-reader", "adobe-acrobat", "adobe-commerce", "adobe-coldfusion"],
+        keywords: ["adobe", "acrobat", "photoshop", "illustrator", "creative cloud", "premiere", "lightroom"]
+    },
+    {
+        key: "google-chrome",
+        name: "Google Chrome",
+        vendor: "Google",
+        candidates: ["google-chrome", "chrome"],
+        keywords: ["google chrome", "chrome"]
+    },
+    {
+        key: "firefox",
+        name: "Mozilla Firefox",
+        vendor: "Mozilla",
+        candidates: ["firefox", "mozilla-firefox"],
+        keywords: ["mozilla firefox", "firefox"]
+    }
+];
+
+let itopsAppLifecycleCache = { createdAt: 0, rows: {} };
+const ITOPS_APP_EOL_CACHE_TTL_MS = Number(process.env.ITOPS_APP_EOL_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
+
+function itopsDaysUntilDate(value) {
+    if (!value || value === true || value === false) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+    return Math.ceil((date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function itopsFormatDateOnly(value) {
+    if (!value || value === true || value === false) return "";
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value || "");
+    return date.toISOString().slice(0, 10);
+}
+
+async function itopsFetchLifecycleProduct(slug) {
+    const now = Date.now();
+    if (itopsAppLifecycleCache.rows[slug] && now - itopsAppLifecycleCache.createdAt < ITOPS_APP_EOL_CACHE_TTL_MS) {
+        return itopsAppLifecycleCache.rows[slug];
+    }
+
+    try {
+        const response = await axios.get(`https://endoflife.date/api/${slug}.json`, { timeout: 12000 });
+        const rows = Array.isArray(response.data) ? response.data : [];
+        itopsAppLifecycleCache.rows[slug] = rows;
+        itopsAppLifecycleCache.createdAt = now;
+        return rows;
+    } catch (err) {
+        itopsAppLifecycleCache.rows[slug] = [];
+        itopsAppLifecycleCache.createdAt = now;
+        return [];
+    }
+}
+
+function itopsSummarizeLifecycleRows(rows = [], product = {}) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const normalized = (Array.isArray(rows) ? rows : [])
+        .map((row) => {
+            const eolRaw = row.eol === false ? "" : row.eol;
+            const supportRaw = row.support === false ? "" : row.support;
+            const eolDays = itopsDaysUntilDate(eolRaw);
+            const supportDays = itopsDaysUntilDate(supportRaw);
+            return {
+                cycle: row.cycle || row.latest || row.release || "",
+                latest: row.latest || row.latestRelease || "",
+                eolDate: itopsFormatDateOnly(eolRaw),
+                eosDate: itopsFormatDateOnly(supportRaw),
+                eolDays,
+                supportDays,
+                isEol: typeof eolDays === "number" && eolDays < 0,
+                isNearEol: typeof eolDays === "number" && eolDays >= 0 && eolDays <= 365
+            };
+        })
+        .filter((row) => row.cycle || row.eolDate || row.eosDate);
+
+    const future = normalized
+        .filter((row) => typeof row.eolDays === "number" && row.eolDays >= 0)
+        .sort((a, b) => a.eolDays - b.eolDays);
+
+    const nearest = future[0] || normalized.find((row) => !row.isEol) || normalized[0] || null;
+    const eolRows = normalized.filter((row) => row.isEol);
+    const nearRows = normalized.filter((row) => row.isNearEol);
+
+    if (!nearest) {
+        return {
+            lifecycleStatus: "Lifecycle Not Found",
+            supportStatus: "Not Mapped",
+            latestCycle: "",
+            eolDate: "",
+            eosDate: "",
+            daysToEol: null,
+            eolReleaseCount: 0,
+            nearEolReleaseCount: 0,
+            source: ""
+        };
+    }
+
+    const days = typeof nearest.eolDays === "number" ? nearest.eolDays : null;
+    const lifecycleStatus = days !== null && days < 0
+        ? "EOL/EOS Passed"
+        : days !== null && days <= 365
+            ? "Near EOL/EOS"
+            : "Supported";
+
+    return {
+        lifecycleStatus,
+        supportStatus: lifecycleStatus === "Supported" ? "Active support" : lifecycleStatus,
+        latestCycle: nearest.cycle || nearest.latest || "",
+        eolDate: nearest.eolDate || "",
+        eosDate: nearest.eosDate || "",
+        daysToEol: days,
+        eolReleaseCount: eolRows.length,
+        nearEolReleaseCount: nearRows.length,
+        source: product.source || "endoflife.date"
+    };
+}
+
+async function itopsResolveProductLifecycle(product) {
+    for (const slug of product.candidates || []) {
+        const rows = await itopsFetchLifecycleProduct(slug);
+        if (Array.isArray(rows) && rows.length) {
+            return {
+                slug,
+                ...itopsSummarizeLifecycleRows(rows, { source: `endoflife.date/${slug}` })
+            };
+        }
+    }
+
+    return {
+        slug: "",
+        ...itopsSummarizeLifecycleRows([], product)
+    };
+}
+
+function itopsNormalizeProductKey(value) {
+    return String(value || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
 async function getItOpsSoftwareSummary(pool) {
     const hasSoftware = await itopsTableExists(pool, "TSMDM_SW_LIST");
     const hasAsset = await itopsTableExists(pool, "TSMDM_ASSET");
@@ -25062,7 +25229,18 @@ async function getItOpsSoftwareSummary(pool) {
             devicesWithSoftware: 0,
             unclassifiedSoftware: 0,
             latestScan: "-",
-            topCategories: []
+            topCategories: [],
+            classificationBreakdown: [],
+            lifecycleWatch: [],
+            softwareRows: [],
+            businessSoftware: 0,
+            remoteControlSoftware: 0,
+            antivirusSoftware: 0,
+            browserSoftware: 0,
+            gamingSoftware: 0,
+            eolApplications: 0,
+            eosApplications: 0,
+            unsupportedApplications: 0
         };
     }
 
@@ -25078,8 +25256,12 @@ async function getItOpsSoftwareSummary(pool) {
         ? "ISNULL(NULLIF(LTRIM(RTRIM(cat.CategoryName)), ''), 'Unclassified')"
         : "'Unclassified'";
 
-    const result = await pool.request().query(`
-        ;WITH SoftwareBase AS (
+    const deviceNameExpression = hasAsset
+        ? "ISNULL(NULLIF(LTRIM(RTRIM(CAST(asset.DeviceName AS NVARCHAR(255)))), ''), CAST(sw.DeviceID AS NVARCHAR(255)))"
+        : "CAST(sw.DeviceID AS NVARCHAR(255))";
+
+    const baseCte = `
+        ;WITH SoftwareRaw AS (
             SELECT
                 CASE
                     WHEN TRY_CONVERT(uniqueidentifier, NULLIF(LTRIM(RTRIM(CAST(sw.Name AS NVARCHAR(255)))), '')) IS NOT NULL
@@ -25091,31 +25273,106 @@ async function getItOpsSoftwareSummary(pool) {
                         THEN LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255))))
                     ELSE '-'
                 END AS SoftwareName,
-                sw.DeviceID,
+                CAST(sw.DeviceID AS NVARCHAR(255)) AS DeviceID,
+                ${deviceNameExpression} AS DeviceName,
                 ${categoryExpression} AS CategoryName,
                 TRY_CONVERT(datetime, sw.SearchDate) AS SearchDate
             FROM TSMDM_SW_LIST sw WITH (NOLOCK)
             ${assetJoin}
             ${categoryJoin}
+        ),
+        SoftwareBase AS (
+            SELECT
+                *,
+                CASE
+                    WHEN LOWER(SoftwareName) LIKE '%teamviewer%'
+                      OR LOWER(SoftwareName) LIKE '%anydesk%'
+                      OR LOWER(SoftwareName) LIKE '%vnc%'
+                      OR LOWER(SoftwareName) LIKE '%radmin%'
+                      OR LOWER(SoftwareName) LIKE '%remote desktop%'
+                      OR LOWER(SoftwareName) LIKE '%remote control%'
+                      OR LOWER(SoftwareName) LIKE '%splashtop%'
+                      OR LOWER(SoftwareName) LIKE '%rustdesk%'
+                      OR LOWER(CategoryName) LIKE '%remote%' THEN 'Remote Control'
+                    WHEN LOWER(SoftwareName) LIKE '%kaspersky%'
+                      OR LOWER(SoftwareName) LIKE '%symantec%'
+                      OR LOWER(SoftwareName) LIKE '%trend micro%'
+                      OR LOWER(SoftwareName) LIKE '%mcafee%'
+                      OR LOWER(SoftwareName) LIKE '%defender%'
+                      OR LOWER(SoftwareName) LIKE '%sentinelone%'
+                      OR LOWER(SoftwareName) LIKE '%crowdstrike%'
+                      OR LOWER(SoftwareName) LIKE '%antivirus%'
+                      OR LOWER(CategoryName) LIKE '%antivirus%' THEN 'Antivirus'
+                    WHEN LOWER(SoftwareName) LIKE '%chrome%'
+                      OR LOWER(SoftwareName) LIKE '%firefox%'
+                      OR LOWER(SoftwareName) LIKE '%microsoft edge%'
+                      OR LOWER(SoftwareName) LIKE '%internet explorer%'
+                      OR LOWER(SoftwareName) LIKE '%browser%'
+                      OR LOWER(CategoryName) LIKE '%browser%' THEN 'Web Browser'
+                    WHEN LOWER(SoftwareName) LIKE '%steam%'
+                      OR LOWER(SoftwareName) LIKE '%epic games%'
+                      OR LOWER(SoftwareName) LIKE '%riot%'
+                      OR LOWER(SoftwareName) LIKE '%roblox%'
+                      OR LOWER(SoftwareName) LIKE '%minecraft%'
+                      OR LOWER(SoftwareName) LIKE '%game%'
+                      OR LOWER(CategoryName) LIKE '%game%' THEN 'Gaming Software'
+                    WHEN LOWER(SoftwareName) LIKE '%microsoft office%'
+                      OR LOWER(SoftwareName) LIKE '%microsoft 365%'
+                      OR LOWER(SoftwareName) LIKE '%office 365%'
+                      OR LOWER(SoftwareName) LIKE '%word%'
+                      OR LOWER(SoftwareName) LIKE '%excel%'
+                      OR LOWER(SoftwareName) LIKE '%powerpoint%'
+                      OR LOWER(SoftwareName) LIKE '%outlook%'
+                      OR LOWER(SoftwareName) LIKE '%adobe%'
+                      OR LOWER(SoftwareName) LIKE '%acrobat%'
+                      OR LOWER(CategoryName) LIKE '%business%' THEN 'Business Software'
+                    WHEN CategoryName = 'Unclassified' THEN 'Unclassified'
+                    ELSE 'Other Software'
+                END AS Classification,
+                CASE
+                    WHEN LOWER(SoftwareName) LIKE '%microsoft office%'
+                      OR LOWER(SoftwareName) LIKE '%word%'
+                      OR LOWER(SoftwareName) LIKE '%excel%'
+                      OR LOWER(SoftwareName) LIKE '%powerpoint%'
+                      OR LOWER(SoftwareName) LIKE '%outlook%'
+                      OR LOWER(SoftwareName) LIKE '%visio%'
+                      OR LOWER(SoftwareName) LIKE '%project%' THEN 'Microsoft Office'
+                    WHEN LOWER(SoftwareName) LIKE '%microsoft 365%'
+                      OR LOWER(SoftwareName) LIKE '%office 365%'
+                      OR LOWER(SoftwareName) LIKE '%teams%'
+                      OR LOWER(SoftwareName) LIKE '%onedrive%' THEN 'Microsoft 365'
+                    WHEN LOWER(SoftwareName) LIKE '%adobe%'
+                      OR LOWER(SoftwareName) LIKE '%acrobat%'
+                      OR LOWER(SoftwareName) LIKE '%photoshop%'
+                      OR LOWER(SoftwareName) LIKE '%illustrator%'
+                      OR LOWER(SoftwareName) LIKE '%creative cloud%' THEN 'Adobe'
+                    WHEN LOWER(SoftwareName) LIKE '%chrome%' THEN 'Google Chrome'
+                    WHEN LOWER(SoftwareName) LIKE '%firefox%' THEN 'Mozilla Firefox'
+                    ELSE ''
+                END AS ProductGroup
+            FROM SoftwareRaw
         )
+    `;
+
+    const result = await pool.request().query(`
+        ${baseCte}
         SELECT
             COUNT(1) AS TotalInstallations,
             COUNT(DISTINCT SoftwareName) AS UniqueSoftware,
             COUNT(DISTINCT DeviceID) AS DevicesWithSoftware,
             SUM(CASE WHEN CategoryName = 'Unclassified' THEN 1 ELSE 0 END) AS UnclassifiedSoftware,
+            SUM(CASE WHEN Classification = 'Business Software' THEN 1 ELSE 0 END) AS BusinessSoftware,
+            SUM(CASE WHEN Classification = 'Remote Control' THEN 1 ELSE 0 END) AS RemoteControlSoftware,
+            SUM(CASE WHEN Classification = 'Antivirus' THEN 1 ELSE 0 END) AS AntivirusSoftware,
+            SUM(CASE WHEN Classification = 'Web Browser' THEN 1 ELSE 0 END) AS BrowserSoftware,
+            SUM(CASE WHEN Classification = 'Gaming Software' THEN 1 ELSE 0 END) AS GamingSoftware,
             MAX(SearchDate) AS LatestScan
         FROM SoftwareBase;
     `);
 
     const categoryResult = await pool.request().query(`
-        ;WITH SoftwareBase AS (
-            SELECT
-                ${categoryExpression} AS CategoryName
-            FROM TSMDM_SW_LIST sw WITH (NOLOCK)
-            ${assetJoin}
-            ${categoryJoin}
-        )
-        SELECT TOP 6
+        ${baseCte}
+        SELECT TOP 8
             CategoryName AS Name,
             COUNT(1) AS Value
         FROM SoftwareBase
@@ -25123,8 +25380,122 @@ async function getItOpsSoftwareSummary(pool) {
         ORDER BY COUNT(1) DESC;
     `);
 
+    const classificationResult = await pool.request().query(`
+        ${baseCte}
+        SELECT
+            Classification AS Name,
+            COUNT(1) AS Value
+        FROM SoftwareBase
+        GROUP BY Classification
+        ORDER BY COUNT(1) DESC;
+    `);
+
+    const productResult = await pool.request().query(`
+        ${baseCte}
+        SELECT
+            ProductGroup,
+            COUNT(1) AS Installs,
+            COUNT(DISTINCT SoftwareName) AS UniqueTitles
+        FROM SoftwareBase
+        WHERE ProductGroup <> ''
+        GROUP BY ProductGroup;
+    `);
+
+    const rowsResult = await pool.request().query(`
+        ${baseCte}
+        SELECT TOP 1500
+            SoftwareName,
+            CategoryName,
+            Classification,
+            ProductGroup,
+            DeviceID,
+            DeviceName,
+            CAST('' AS NVARCHAR(255)) AS Branch,
+            CAST('' AS NVARCHAR(255)) AS Version,
+            CAST('' AS NVARCHAR(255)) AS Publisher,
+            SearchDate
+        FROM SoftwareBase
+        ORDER BY
+            CASE WHEN ProductGroup <> '' THEN 0 ELSE 1 END,
+            Classification,
+            SoftwareName;
+    `);
+
     const row = result.recordset?.[0] || {};
     const totalInstallations = itopsToNumber(row.TotalInstallations);
+    const productCounts = new Map((productResult.recordset || []).map((productRow) => [
+        String(productRow.ProductGroup || ''),
+        {
+            installs: itopsToNumber(productRow.Installs),
+            uniqueTitles: itopsToNumber(productRow.UniqueTitles)
+        }
+    ]));
+
+    const lifecycleWatch = [];
+    for (const product of ITOPS_APP_LIFECYCLE_PRODUCTS) {
+        const counts = productCounts.get(product.name) || { installs: 0, uniqueTitles: 0 };
+        const lifecycle = await itopsResolveProductLifecycle(product);
+
+        lifecycleWatch.push({
+            name: product.name,
+            vendor: product.vendor,
+            productKey: product.key,
+            installs: counts.installs,
+            uniqueTitles: counts.uniqueTitles,
+            lifecycleStatus: lifecycle.lifecycleStatus,
+            supportStatus: lifecycle.supportStatus,
+            latestCycle: lifecycle.latestCycle,
+            eolDate: lifecycle.eolDate,
+            eosDate: lifecycle.eosDate,
+            daysToEol: lifecycle.daysToEol,
+            source: lifecycle.source || (lifecycle.slug ? `endoflife.date/${lifecycle.slug}` : "Lifecycle Not Found")
+        });
+    }
+
+    const lifecycleByName = new Map(lifecycleWatch.map((item) => [String(item.name).toLowerCase(), item]));
+    const softwareRows = (rowsResult.recordset || []).map((item) => {
+        const groupName = String(item.ProductGroup || '');
+        const lifecycle = lifecycleByName.get(groupName.toLowerCase());
+        const classification = item.Classification || item.CategoryName || "Unclassified";
+        const lifecycleStatus = lifecycle?.lifecycleStatus || (groupName ? "Lifecycle Not Found" : "Not Checked");
+        const daysToEol = lifecycle?.daysToEol;
+        const riskLevel = lifecycleStatus.includes("Passed") || lifecycleStatus.includes("EOL")
+            ? "High"
+            : typeof daysToEol === "number" && daysToEol >= 0 && daysToEol <= 365
+                ? "Medium"
+                : classification === "Remote Control"
+                    ? "High"
+                    : classification === "Gaming Software" || classification === "Unclassified"
+                        ? "Medium"
+                        : "Low";
+
+        return {
+            softwareName: item.SoftwareName || "-",
+            category: item.CategoryName || "Unclassified",
+            classification,
+            productGroup: groupName || classification,
+            deviceId: item.DeviceID || "",
+            deviceName: item.DeviceName || item.DeviceID || "",
+            branch: item.Branch || "",
+            version: item.Version || "",
+            publisher: item.Publisher || "",
+            lastScan: itopsDateLabel(item.SearchDate),
+            lifecycleStatus,
+            supportStatus: lifecycle?.supportStatus || "",
+            eolDate: lifecycle?.eolDate || "",
+            eosDate: lifecycle?.eosDate || "",
+            riskLevel,
+            recommendation: riskLevel === "High"
+                ? "Review approval, lifecycle support and remediation plan."
+                : riskLevel === "Medium"
+                    ? "Classify and confirm business owner."
+                    : "Maintain software inventory baseline."
+        };
+    });
+
+    const eolApplications = lifecycleWatch.filter((item) => String(item.lifecycleStatus || '').toLowerCase().includes('passed') || String(item.lifecycleStatus || '').toLowerCase().includes('eol')).length;
+    const eosApplications = lifecycleWatch.filter((item) => typeof item.daysToEol === 'number' && item.daysToEol >= 0 && item.daysToEol <= 365).length;
+    const unsupportedApplications = softwareRows.filter((item) => item.riskLevel === "High" || item.riskLevel === "Medium").length;
 
     return {
         totalInstallations,
@@ -25136,7 +25507,22 @@ async function getItOpsSoftwareSummary(pool) {
             name: item.Name || "Unclassified",
             value: itopsToNumber(item.Value),
             percent: itopsPercent(item.Value, totalInstallations)
-        }))
+        })),
+        classificationBreakdown: (classificationResult.recordset || []).map(item => ({
+            name: item.Name || "Other Software",
+            value: itopsToNumber(item.Value),
+            percent: itopsPercent(item.Value, totalInstallations)
+        })),
+        lifecycleWatch,
+        softwareRows,
+        businessSoftware: itopsToNumber(row.BusinessSoftware),
+        remoteControlSoftware: itopsToNumber(row.RemoteControlSoftware),
+        antivirusSoftware: itopsToNumber(row.AntivirusSoftware),
+        browserSoftware: itopsToNumber(row.BrowserSoftware),
+        gamingSoftware: itopsToNumber(row.GamingSoftware),
+        eolApplications,
+        eosApplications,
+        unsupportedApplications
     };
 }
 
