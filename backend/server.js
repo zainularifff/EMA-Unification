@@ -26407,13 +26407,14 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
                     tone: "amber"
                 },
                 {
-                    title: "Running Tasks",
-                    value: itopsFormatInt(tasks.runningTasks),
-                    caption: "Active inventory / remote jobs",
-                    trend: `${itopsFormatInt(tasks.failedTasks)} stopped or cancelled`,
-                    trendDirection: tasks.failedTasks > 0 ? "down" : "up",
-                    icon: "Wrench",
-                    tone: "purple"
+                    title: "Software Inventory",
+                    value: itopsFormatInt(software.uniqueSoftware),
+                    caption: "Unique software discovered from inventory",
+                    trend: `${itopsFormatInt(software.unclassifiedSoftware)} unclassified / ${itopsFormatInt(software.totalInstallations)} installs`,
+                    trendDirection: software.unclassifiedSoftware > 0 ? "down" : "up",
+                    icon: "Database",
+                    tone: "purple",
+                    progress: itopsPercent(Math.max(0, software.uniqueSoftware - software.unclassifiedSoftware), software.uniqueSoftware, 0)
                 },
                 {
                     title: "Patch Compliance",
@@ -26494,6 +26495,13 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
         });
     }
 });
+
+/*
+|--------------------------------------------------------------------------
+| END OF IT OPERATIONS DASHBOARD APIs
+|--------------------------------------------------------------------------
+*/
+
 
 // ============================================================
 // HARDWARE INVENTORY STATISTICS / REPORTS / SCAN APIs

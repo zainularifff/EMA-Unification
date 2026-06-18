@@ -1800,15 +1800,15 @@ export default function ITOperationsDashboard() {
       view: 'patch',
     },
     {
-      id: 'tasks',
-      label: 'Automation Jobs',
-      value: formatNumber(tasks.runningTasks),
-      note: `${formatNumber(tasks.failedTasks)} failed/cancelled • ${tasks.latestTaskTime || '-'}`,
-      icon: Wrench,
+      id: 'software',
+      label: 'Software',
+      value: formatNumber(software.uniqueSoftware),
+      note: `${formatNumber(software.unclassifiedSoftware)} unclassified • ${formatNumber(software.totalInstallations)} installs`,
+      icon: Database,
       tone: 'amber',
-      progress: taskCompletionPercent,
-      status: riskStatus(tasks.failedTasks, 1, 3),
-      view: 'tasks',
+      progress: softwareMappingPercent,
+      status: healthStatus(softwareMappingPercent),
+      view: 'software',
     },
     {
       id: 'risk',
@@ -1821,7 +1821,7 @@ export default function ITOperationsDashboard() {
       status: riskStatus(deviceRiskCount, 1, 6),
       view: 'risk',
     },
-  ], [endpointOnlinePercent, geolocation.staleLocations, geolocation.trackedDevices, geolocation.unknownLocations, risk.missingGeoDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, locationFreshPercent, patchComplianceAverage, deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskScore, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices, security.criticalVulnerabilities, serviceDesk.overdueTickets, serviceDesk.pendingTickets, serviceDesk.slaAchievement, taskCompletionPercent, tasks.failedTasks, tasks.latestTaskTime, tasks.runningTasks]);
+  ], [endpointOnlinePercent, geolocation.staleLocations, geolocation.trackedDevices, geolocation.unknownLocations, risk.missingGeoDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, locationFreshPercent, patchComplianceAverage, deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskScore, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices, security.criticalVulnerabilities, serviceDesk.overdueTickets, serviceDesk.pendingTickets, serviceDesk.slaAchievement, softwareMappingPercent, software.totalInstallations, software.uniqueSoftware, software.unclassifiedSoftware]);
 
 
   const overviewHealthRows = useMemo<BreakdownItem[]>(() => [
@@ -1829,9 +1829,9 @@ export default function ITOperationsDashboard() {
     { name: 'Updates Done', value: hasSecurityUpdateScore ? securityUpdateScore : 0, percent: hasSecurityUpdateScore ? securityUpdateScore : 0 },
     { name: 'Tickets On Track', value: onTrackTicketPercent, percent: onTrackTicketPercent },
     { name: 'Location Ready', value: locationFreshPercent, percent: locationFreshPercent },
-    { name: 'Jobs Completed', value: taskCompletionPercent, percent: taskCompletionPercent },
+    { name: 'Software Mapped', value: softwareMappingPercent, percent: softwareMappingPercent },
     { name: 'Network Mapped', value: networkRegistrationPercent, percent: networkRegistrationPercent },
-  ], [endpointOnlinePercent, hasSecurityUpdateScore, locationFreshPercent, networkRegistrationPercent, onTrackTicketPercent, securityUpdateScore, taskCompletionPercent]);
+  ], [endpointOnlinePercent, hasSecurityUpdateScore, locationFreshPercent, networkRegistrationPercent, onTrackTicketPercent, securityUpdateScore, softwareMappingPercent]);
 
 
 
@@ -1951,16 +1951,16 @@ export default function ITOperationsDashboard() {
       item: 'Not Mapped',
     },
     {
-      id: 'failed-jobs',
-      label: 'Failed Jobs',
-      value: tasks.failedTasks,
-      note: tasks.failedTasks > 0 ? 'Check automation job result' : 'No failed job found',
-      tone: tasks.failedTasks > 0 ? 'amber' : 'green',
-      icon: Wrench,
-      view: 'tasks',
-      item: 'Failed',
+      id: 'software-review',
+      label: 'Software Review',
+      value: software.unclassifiedSoftware,
+      note: software.unclassifiedSoftware > 0 ? 'Classify software inventory items' : 'Software inventory looks classified',
+      tone: software.unclassifiedSoftware > 0 ? 'amber' : 'green',
+      icon: Database,
+      view: 'software',
+      item: 'Unclassified',
     },
-  ], [deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, hasSecurityUpdateScore, overdueTicketCount, risk.missingGeoDevices, securityNeedUpdateDevices, tasks.failedTasks]);
+  ], [deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, hasSecurityUpdateScore, overdueTicketCount, risk.missingGeoDevices, securityNeedUpdateDevices, software.unclassifiedSoftware]);
 
   const riskCategoryRows = useMemo<BreakdownItem[]>(() => {
     const apiCategoryRows = Array.isArray(risk.categoryBreakdown)
@@ -2425,8 +2425,8 @@ export default function ITOperationsDashboard() {
             <button type="button" className="itops-main-decision-card amber" onClick={() => openLevel2('serviceDesk')}>
               <span>Open Tickets</span><strong>{formatNumber(openTicketCount)}</strong><small>{formatNumber(overdueTicketCount)} overdue</small>
             </button>
-            <button type="button" className="itops-main-decision-card green" onClick={() => openLevel2('tasks')}>
-              <span>Job Completion</span><strong>{formatPercent(taskCompletionPercent, 0)}</strong><small>{formatNumber(tasks.failedTasks)} failed jobs</small>
+            <button type="button" className="itops-main-decision-card green" onClick={() => openLevel2('software')}>
+              <span>Software Mapped</span><strong>{formatPercent(softwareMappingPercent, 0)}</strong><small>{formatNumber(software.uniqueSoftware)} software • {formatNumber(software.unclassifiedSoftware)} unclassified</small>
             </button>
           </div>
         </Panel>
@@ -4232,9 +4232,6 @@ export default function ITOperationsDashboard() {
         </div>
 
         <div className="itops-pro-hero-actions">
-          <button type="button" className="itops-pro-outline-btn" onClick={() => exportJsonFile('itops-dashboard-snapshot.json', dashboardData)}>
-            <Download size={16} /> Export
-          </button>
           <button type="button" className="itops-pro-primary-btn" onClick={() => void loadDashboard(true)} disabled={isLoading}>
             {isLoading ? <Loader2 size={16} className="itops-pro-spin" /> : <RefreshCw size={16} />} Refresh
           </button>
