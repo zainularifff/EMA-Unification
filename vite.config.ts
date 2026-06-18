@@ -4,7 +4,19 @@ import { itopsSoftwareDrilldownTransform } from './src/utils/itopsSoftwareDrilld
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [itopsSoftwareDrilldownTransform(), react()],
+  plugins: [
+    itopsSoftwareDrilldownTransform(),
+    {
+      name: 'itops-software-template-output-fix',
+      enforce: 'pre',
+      transform(code, id) {
+        if (!id.replace(/\\/g, '/').endsWith('/src/pages/Dashboard.tsx')) return null;
+        const next = code.replace(/\\\$\{/g, '${');
+        return next === code ? null : { code: next, map: null };
+      },
+    },
+    react(),
+  ],
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
