@@ -18,6 +18,7 @@ function dashboardUiPatch() {
         next = code.slice(0, exportStart) + code.slice(exportEnd + '          </button>'.length);
       }
 
+      next = next.split('const hasSummaryCountWithoutRows = expectedCount > 0 && selectedRows.length === 0;').join('const hasSummaryCountWithoutRows = false;');
       next = next.split("tone: 'amber',\n      progress: softwareMappingPercent,").join("tone: 'purple',\n      progress: softwareMappingPercent,");
       return next === code ? null : { code: next, map: null };
     },
