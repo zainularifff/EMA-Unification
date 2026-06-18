@@ -635,7 +635,7 @@ function enforceSessionTimeoutAccessControl(user, accessRows) {
 
     const timeoutMinutes = parseAccessControlDurationMinutes(policy, ACCESS_CONTROL_SESSION_TIMEOUT_MINUTES);
     const ageMs = Date.now() - issuedAtSeconds * 1000;
-    if (ageMs <= timeoutMinutes * 60 * 1000) return { ok: true };
+    if (ageMs <= timeoutMinutes * 1000 * 1000) return { ok: true };
 
     return {
         ok: false,
@@ -7433,10 +7433,38 @@ function notificationUserKey(req) {
 function normalizeWhatsappAddress(value) {
     let text = String(value || "").trim();
     if (!text) return "";
-    if (text.toLowerCase().startsWith("whatsapp:")) return text;
+
+    // Twilio WhatsApp API requires the E.164 address with whatsapp: prefix.
+    // Keep valid international numbers as-is, but convert Malaysia local
+    // numbers such as 0132316367 into whatsapp:+60132316367.
+    if (/^whatsapp:/i.test(text)) {
+        text = text.replace(/^whatsapp:/i, "").trim();
+    }
+
     text = text.replace(/[^0-9+]/g, "");
-    if (text.startsWith("00")) text = `+${text.slice(2)}`;
-    if (!text.startsWith("+")) text = `+${text}`;
+    if (!text) return "";
+
+    // Remove accidental extra + signs after the first character.
+    text = text.replace(/(?!^)\+/g, "");
+
+    if (text.startsWith("00")) {
+        text = `+${text.slice(2)}`;
+    }
+
+    const defaultCountryCode = String(
+        process.env.WHATSAPP_DEFAULT_COUNTRY_CODE ||
+        process.env.DEFAULT_PHONE_COUNTRY_CODE ||
+        "60"
+    ).replace(/\D/g, "") || "60";
+
+    if (text.startsWith("+0")) {
+        text = `+${defaultCountryCode}${text.slice(2)}`;
+    } else if (text.startsWith("0")) {
+        text = `+${defaultCountryCode}${text.slice(1)}`;
+    } else if (!text.startsWith("+")) {
+        text = `+${text}`;
+    }
+
     return `whatsapp:${text}`;
 }
 
