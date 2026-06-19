@@ -155,6 +155,11 @@ function getSidebarRoleLabel(user: AccessUser | null) {
   return `${roles[0]} +${roles.length - 1}`;
 }
 
+const sidebarLinkBase =
+  "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white";
+const sidebarLinkActive = "bg-white text-slate-950 shadow-lg hover:bg-white hover:text-slate-950";
+const sidebarLinkMuted = "opacity-50";
+
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -195,40 +200,21 @@ export function Sidebar() {
   const fullRoleLabel = getUserRoles(accessUser).join(" • ") || roleLabel;
 
   return (
-    <>
-      <style>{`
-        .ema-sidebar-scrollless {
-          overflow-y: auto;
-          overflow-x: hidden;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-
-        .ema-sidebar-scrollless::-webkit-scrollbar {
-          width: 0;
-          height: 0;
-          display: none;
-        }
-      `}</style>
-
-      <aside
-        className="ema-sidebar ema-sidebar-scrollless"
-        style={{ overscrollBehavior: "contain" }}
-      >
-      <div className="ema-sidebar-brand">
-        <div className="ema-logo">
+    <aside className="sticky top-0 flex h-screen w-72 shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-950 px-4 py-5 text-slate-100 shadow-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mb-6 flex items-center gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
           <Box size={23} />
         </div>
 
-        <div>
-          <div className="ema-sidebar-title">EMA System</div>
-          <div className="ema-sidebar-subtitle">Operations Console</div>
+        <div className="min-w-0">
+          <div className="truncate text-base font-extrabold tracking-tight text-white">EMA System</div>
+          <div className="truncate text-xs font-semibold uppercase tracking-wide text-slate-400">Operations Console</div>
         </div>
       </div>
 
-      <div className="ema-sidebar-section">Main Category</div>
+      <div className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Main Category</div>
 
-      <nav className="ema-nav">
+      <nav className="flex flex-1 flex-col gap-1">
         {navSections.map((section) => {
           const SectionIcon = section.icon;
           const isOpen = openSection === section.title;
@@ -245,12 +231,14 @@ export function Sidebar() {
               return (
                 <div
                   key={section.title}
-                  className="ema-nav-link opacity-50"
+                  className={`${sidebarLinkBase} ${sidebarLinkMuted}`}
                   title={item.comingSoon ? "Coming soon" : "Access restricted"}
                 >
                   <Icon size={17} />
-                  <span className="flex-grow-1">{section.title}</span>
-                  <span className="ema-nav-soon">{item.comingSoon ? "Soon" : "Locked"}</span>
+                  <span className="min-w-0 flex-1 truncate">{section.title}</span>
+                  <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300">
+                    {item.comingSoon ? "Soon" : "Locked"}
+                  </span>
                 </div>
               );
             }
@@ -259,33 +247,32 @@ export function Sidebar() {
               <NavLink
                 key={section.title}
                 to={item.path}
-                className={`ema-nav-link ${isActive ? "active" : ""}`}
+                className={`${sidebarLinkBase} ${isActive ? sidebarLinkActive : ""}`}
               >
                 <Icon size={17} />
-                <span>{section.title}</span>
+                <span className="min-w-0 truncate">{section.title}</span>
               </NavLink>
             );
           }
 
           return (
-            <div key={section.title} className="d-grid gap-1">
+            <div key={section.title} className="grid gap-1">
               <button
                 type="button"
-                className={`ema-nav-link w-100 border-0 ${hasActiveItem && !isOpen ? "active" : ""}`}
-                style={!hasActiveItem || isOpen ? { background: "transparent" } : undefined}
+                className={`${sidebarLinkBase} border-0 ${hasActiveItem && !isOpen ? sidebarLinkActive : ""}`}
                 onClick={() => toggleSection(section.title)}
                 aria-expanded={isOpen}
                 aria-controls={`sidebar-section-${section.title.replace(/\s+/g, "-").toLowerCase()}`}
               >
                 <SectionIcon size={17} />
-                <span className="flex-grow-1 text-start">{section.title}</span>
+                <span className="min-w-0 flex-1 truncate text-left">{section.title}</span>
                 {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
               </button>
 
               {isOpen && (
                 <div
                   id={`sidebar-section-${section.title.replace(/\s+/g, "-").toLowerCase()}`}
-                  className="d-grid gap-1 ps-4 mb-1"
+                  className="mb-1 grid gap-1 pl-4"
                 >
                   {section.items.map((item) => {
                     const Icon = item.icon;
@@ -297,12 +284,12 @@ export function Sidebar() {
                       return (
                         <div
                           key={item.path}
-                          className="ema-nav-link opacity-50"
+                          className={`${sidebarLinkBase} ${sidebarLinkMuted}`}
                           title={item.comingSoon ? "Coming soon" : "Access restricted"}
                         >
                           <Icon size={16} />
-                          <span className="flex-grow-1">{item.label}</span>
-                          <span className="ema-nav-soon">
+                          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                          <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300">
                             {item.comingSoon ? "Soon" : "Locked"}
                           </span>
                         </div>
@@ -313,10 +300,10 @@ export function Sidebar() {
                       <NavLink
                         key={item.path}
                         to={item.path}
-                        className={`ema-nav-link ${isActive ? "active" : ""}`}
+                        className={`${sidebarLinkBase} ${isActive ? sidebarLinkActive : ""}`}
                       >
                         <Icon size={16} />
-                        <span>{item.label}</span>
+                        <span className="min-w-0 truncate">{item.label}</span>
                       </NavLink>
                     );
                   })}
@@ -327,30 +314,27 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="ema-sidebar-footer">
-        <div className="ema-user-card" title={`${displayName} • ${fullRoleLabel}`}>
-          <div className="ema-user-avatar">
+      <div className="mt-6 space-y-3 border-t border-white/10 pt-4">
+        <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/10 p-3 ring-1 ring-white/10" title={`${displayName} • ${fullRoleLabel}`}>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
             <ShieldCheck size={18} />
           </div>
 
           <div className="min-w-0">
-            <div className="fw-bold text-white lh-sm text-truncate">
-              {displayName}
-            </div>
-            <div className="small text-muted text-truncate ema-user-role-label">{roleLabel}</div>
+            <div className="truncate font-bold leading-tight text-white">{displayName}</div>
+            <div className="truncate text-xs text-slate-400">{roleLabel}</div>
           </div>
         </div>
 
         <button
           type="button"
           onClick={handleLogout}
-          className="btn btn-light w-100 d-flex align-items-center justify-content-center gap-2"
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white text-sm font-bold text-slate-950 transition hover:bg-slate-100"
         >
           <LogOut size={17} />
           Logout
         </button>
       </div>
-      </aside>
-    </>
+    </aside>
   );
 }
