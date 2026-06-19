@@ -88,7 +88,7 @@ export function itopsSoftwareDetailFetchTransform(): Plugin {
       let next = code;
       next = next.replace('  const [softwareDetailPage, setSoftwareDetailPage] = useState(1);', SOFTWARE_DETAIL_FETCH_STATE);
       next = next.replace(/  useEffect\(\(\) => \{\n    setEndpointDetailPage\(1\);\n    setGeoDetailPage\(1\);\n    setTicketDetailPage\(1\);\n    setSecurityUpdateDetailPage\(1\);\n    setRiskDetailPage\(1\);\n    setSoftwareDetailPage\(1\);\n  \}, \[activeView\]\);/, SOFTWARE_DETAIL_FETCH_EFFECT);
-      next = next.replace('const rows = getSoftwareEvidenceRows();', 'const rows = [...getSoftwareEvidenceRows(), ...softwareExtraRows];');
+      next = next.replace('const rows = getSoftwareEvidenceRows();\n\n    if (!selected', 'const rows = [...getSoftwareEvidenceRows(), ...softwareExtraRows];\n\n    if (!selected');
       next = next.replace('Matched Rows" value={formatNumber(selectedRows.length)}', 'Matched Rows" value={softwareExtraLoading ? \'Loading...\' : formatNumber(selectedRows.length)}');
       return next === code ? null : { code: next, map: null };
     },
