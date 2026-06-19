@@ -1,5 +1,535 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    @apply h-full bg-slate-100;
+  }
+
+  body,
+  #root {
+    @apply min-h-full;
+  }
+
+  body {
+    @apply m-0 bg-slate-100 text-slate-900 antialiased;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    @apply cursor-pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  a {
+    @apply text-inherit no-underline;
+  }
+
+  table {
+    @apply w-full border-collapse text-left text-sm;
+  }
+
+  thead th {
+    @apply border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-600;
+  }
+
+  tbody td {
+    @apply border-b border-slate-100 px-4 py-3 align-middle text-sm text-slate-700;
+  }
+
+  tbody tr:hover td {
+    @apply bg-slate-50;
+  }
+}
+
+@layer components {
+  .ema-shell {
+    @apply flex min-h-screen bg-slate-100 text-slate-900;
+  }
+
+  .ema-main {
+    @apply flex min-w-0 flex-1 flex-col;
+  }
+
+  .ema-page {
+    @apply min-w-0 flex-1 overflow-auto p-4 md:p-6;
+  }
+
+  .ema-sidebar {
+    @apply sticky top-0 flex h-screen w-72 shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-950 px-4 py-5 text-slate-100 shadow-2xl;
+  }
+
+  .ema-sidebar-brand {
+    @apply mb-6 flex items-center gap-3;
+  }
+
+  .ema-logo,
+  .ema-user-avatar {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10;
+  }
+
+  .ema-sidebar-title {
+    @apply text-base font-extrabold tracking-tight text-white;
+  }
+
+  .ema-sidebar-subtitle,
+  .ema-sidebar-section {
+    @apply text-xs font-semibold uppercase tracking-wide text-slate-400;
+  }
+
+  .ema-sidebar-section {
+    @apply mb-3 mt-2;
+  }
+
+  .ema-nav {
+    @apply flex flex-1 flex-col gap-1;
+  }
+
+  .ema-nav-link {
+    @apply flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white;
+  }
+
+  .ema-nav-link.active,
+  .ema-nav-link[aria-current="page"] {
+    @apply bg-white text-slate-950 shadow-lg;
+  }
+
+  .ema-nav-soon {
+    @apply ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300;
+  }
+
+  .ema-sidebar-footer {
+    @apply mt-6 space-y-3 border-t border-white/10 pt-4;
+  }
+
+  .ema-user-card {
+    @apply flex min-w-0 items-center gap-3 rounded-2xl bg-white/10 p-3 ring-1 ring-white/10;
+  }
+
+  .ema-topbar {
+    @apply sticky top-0 z-30 flex min-h-[76px] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:px-6;
+  }
+
+  .ema-topbar-title {
+    @apply min-w-0 flex-1;
+  }
+
+  .ema-topbar-title h1 {
+    @apply m-0 truncate text-xl font-extrabold tracking-tight text-slate-900;
+  }
+
+  .ema-topbar-title p {
+    @apply m-0 truncate text-sm font-medium text-slate-500;
+  }
+
+  .ema-global-search {
+    @apply hidden h-11 min-w-[280px] items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-slate-600 shadow-inner lg:flex;
+  }
+
+  .ema-global-search input {
+    @apply min-w-0 flex-1 border-0 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400;
+  }
+
+  .ema-global-search-submit,
+  .ema-global-search-clear,
+  .ema-icon-btn {
+    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900;
+  }
+
+  .ema-global-search-submit,
+  .ema-global-search-clear {
+    @apply h-8 w-8 border-0 bg-transparent hover:bg-slate-200;
+  }
+
+  .btn,
+  .ema-btn,
+  .primary-btn,
+  .soft-btn,
+  .danger-btn,
+  .hardware-btn,
+  .settings-action-btn,
+  .module-action-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 hover:text-slate-900;
+  }
+
+  .btn-primary,
+  .primary-btn,
+  .ema-btn-primary,
+  .hardware-btn.primary {
+    @apply border-slate-900 bg-slate-900 text-white hover:bg-slate-800 hover:text-white;
+  }
+
+  .btn-light,
+  .soft-btn,
+  .ema-btn-soft,
+  .hardware-btn.link {
+    @apply border-slate-200 bg-white text-slate-700 hover:bg-slate-50;
+  }
+
+  .danger-btn,
+  .ema-btn-danger,
+  .hardware-btn.danger {
+    @apply border-red-200 bg-red-50 text-red-700 hover:bg-red-100;
+  }
+
+  .ema-card,
+  .settings-card,
+  .settings-panel,
+  .hardware-registry-card,
+  .software-registry-card,
+  .module-card,
+  .registry-card,
+  .content-card,
+  .ema-notification-card {
+    @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+
+  .settings-layout,
+  .hardware-settings-layout,
+  .software-settings-layout,
+  .module-layout {
+    @apply grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)];
+  }
+
+  .settings-content,
+  .hardware-settings-content,
+  .software-settings-content,
+  .module-content {
+    @apply min-w-0 space-y-4;
+  }
+
+  .settings-sidebar,
+  .hardware-left-panel,
+  .software-left-panel,
+  .module-left-panel {
+    @apply min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+
+  .ema-kpi-card,
+  .hardware-kpi-card,
+  .software-kpi-card,
+  .metric-card,
+  .stat-card {
+    @apply rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  .ema-kpi-label,
+  .hardware-kpi-label,
+  .software-kpi-label,
+  .metric-label {
+    @apply text-xs font-bold uppercase tracking-wide text-slate-500;
+  }
+
+  .ema-kpi-value,
+  .hardware-kpi-value,
+  .software-kpi-value,
+  .metric-value {
+    @apply mt-1 text-2xl font-extrabold tracking-tight text-slate-900;
+  }
+
+  .ema-kpi-note,
+  .hardware-kpi-note,
+  .software-kpi-note,
+  .metric-note {
+    @apply mt-1 text-xs font-medium text-slate-500;
+  }
+
+  .form-field,
+  .settings-field,
+  .ema-field,
+  .hardware-form-group,
+  .ema-notification-field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .form-field label,
+  .settings-field label,
+  .ema-field label,
+  .hardware-form-group label,
+  .ema-notification-field label,
+  .ema-notification-label {
+    @apply text-xs font-bold uppercase tracking-wide text-slate-500;
+  }
+
+  .form-field input,
+  .form-field select,
+  .form-field textarea,
+  .settings-field input,
+  .settings-field select,
+  .settings-field textarea,
+  .ema-field input,
+  .ema-field select,
+  .ema-field textarea,
+  .hardware-form-group input,
+  .hardware-form-group select,
+  .hardware-form-group textarea,
+  .ema-notification-field input,
+  .ema-notification-field select,
+  .ema-notification-field textarea {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-4 focus:ring-slate-100;
+  }
+
+  .table-container,
+  .settings-table-wrap,
+  .hardware-table-container,
+  .software-table-container,
+  .ema-table-wrap,
+  .data-table-wrap {
+    @apply w-full overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
+
+  .data-table,
+  .settings-table,
+  .ema-table,
+  .hardware-standard-table,
+  .software-standard-table {
+    @apply w-full min-w-full border-collapse text-left text-sm;
+  }
+
+  .table-pagination,
+  .pagination,
+  .uam-pagination,
+  .hardware-pagination,
+  .ema-pagination {
+    @apply mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600;
+  }
+
+  .page-btn,
+  .pagination button,
+  .uam-page-icon,
+  .ema-page-icon {
+    @apply inline-flex h-9 min-w-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40;
+  }
+
+  .page-btn.active,
+  .pagination .active,
+  .uam-page-current,
+  .ema-page-current {
+    @apply border-slate-900 bg-slate-900 text-white;
+  }
+
+  .modal-overlay,
+  .ema-modal-overlay,
+  .hardware-modal-overlay,
+  .hardware-detail-drawer-overlay,
+  .settings-modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm;
+  }
+
+  .modal,
+  .ema-modal,
+  .hardware-modal,
+  .hardware-detail-drawer,
+  .settings-modal {
+    @apply max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl;
+  }
+
+  .modal-header,
+  .ema-modal-header,
+  .hardware-modal-header,
+  .settings-modal-header {
+    @apply flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4;
+  }
+
+  .modal-body,
+  .ema-modal-body,
+  .hardware-modal-body,
+  .settings-modal-body,
+  .hardware-detail-body {
+    @apply max-h-[70vh] overflow-auto px-5 py-4;
+  }
+
+  .modal-footer,
+  .ema-modal-footer,
+  .hardware-modal-footer,
+  .settings-modal-footer {
+    @apply flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 px-5 py-4;
+  }
+
+  .toast-container,
+  .ema-toast-layer,
+  .settings-toast-layer,
+  .hardware-toast-layer,
+  .module-toast-layer {
+    @apply fixed right-5 top-5 z-[80] flex max-w-sm flex-col gap-3;
+  }
+
+  .toast,
+  .ema-toast,
+  .settings-toast,
+  .hardware-toast,
+  .module-toast,
+  .toast-message,
+  .toast-card {
+    @apply flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-2xl;
+  }
+
+  .toast-success,
+  .ema-toast-success,
+  .settings-toast-success,
+  .hardware-toast-success {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-800;
+  }
+
+  .toast-error,
+  .toast-delete,
+  .ema-toast-error,
+  .ema-toast-delete,
+  .settings-toast-error,
+  .hardware-toast-error {
+    @apply border-red-200 bg-red-50 text-red-800;
+  }
+
+  .toast-warning,
+  .ema-toast-warning {
+    @apply border-amber-200 bg-amber-50 text-amber-800;
+  }
+
+  .toast-info,
+  .ema-toast-info {
+    @apply border-sky-200 bg-sky-50 text-sky-800;
+  }
+
+  .ema-notification-shell {
+    @apply w-full space-y-4;
+  }
+
+  .ema-notification-topbar {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+
+  .ema-notification-title {
+    @apply m-0 text-lg font-extrabold text-slate-900;
+  }
+
+  .ema-notification-subtitle {
+    @apply m-0 text-sm font-medium text-slate-500;
+  }
+
+  .ema-notification-actions,
+  .ema-notification-tabs,
+  .ema-notification-form-row {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .ema-notification-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50;
+  }
+
+  .ema-notification-btn-primary {
+    @apply border-slate-900 bg-slate-900 text-white hover:bg-slate-800;
+  }
+
+  .ema-notification-btn-danger {
+    @apply border-red-200 bg-red-50 text-red-700 hover:bg-red-100;
+  }
+
+  .ema-notification-tab {
+    @apply rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50;
+  }
+
+  .ema-notification-tab-active {
+    @apply border-slate-900 bg-slate-900 text-white;
+  }
+
+  .ema-notification-body,
+  .ema-notification-section {
+    @apply space-y-4;
+  }
+
+  .ema-notification-grid {
+    @apply grid gap-4 md:grid-cols-2;
+  }
+
+  .ema-notification-alert {
+    @apply flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-700;
+  }
+
+  .ema-notification-alert-success {
+    @apply border-emerald-200 bg-emerald-50 text-emerald-800;
+  }
+
+  .ema-notification-alert-error {
+    @apply border-red-200 bg-red-50 text-red-800;
+  }
+
+  .ema-notification-alert-info {
+    @apply border-sky-200 bg-sky-50 text-sky-800;
+  }
+
+  .ema-notification-spin,
+  .animate-spin-slow {
+    @apply animate-spin;
+  }
+
+  .settings-with-notifications,
+  .settings-module-root,
+  .hardware-module-root,
+  .software-module-root,
+  .network-module-root,
+  .dashboard-page,
+  .report-page {
+    @apply min-w-0 space-y-4;
+  }
+
+  .settings-notification-page-tabs {
+    @apply flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm;
+  }
+
+  .settings-notification-page-tab {
+    @apply rounded-xl px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-50;
+  }
+
+  .settings-notification-page-tab.active {
+    @apply bg-slate-900 text-white;
+  }
+
+  .canvas-wrap {
+    @apply w-full overflow-auto;
+  }
+}
+
+@layer utilities {
+  .d-flex { @apply flex; }
+  .d-grid { @apply grid; }
+  .align-items-center { @apply items-center; }
+  .justify-content-center { @apply justify-center; }
+  .justify-content-between { @apply justify-between; }
+  .gap-1 { @apply gap-1; }
+  .gap-2 { @apply gap-2; }
+  .gap-3 { @apply gap-3; }
+  .w-100 { @apply w-full; }
+  .border-0 { @apply border-0; }
+  .text-start { @apply text-left; }
+  .flex-grow-1 { @apply flex-1; }
+  .ps-4 { @apply pl-4; }
+  .mb-1 { @apply mb-1; }
+  .opacity-50 { @apply opacity-50; }
+  .fw-bold { @apply font-bold; }
+  .text-white { @apply text-white; }
+  .lh-sm { @apply leading-tight; }
+  .text-truncate { @apply truncate; }
+  .small { @apply text-xs; }
+  .text-muted { @apply text-slate-400; }
+  .min-w-0 { @apply min-w-0; }
+}
