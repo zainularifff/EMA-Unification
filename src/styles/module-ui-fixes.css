@@ -38,10 +38,6 @@ body .hardware-detail-drawer-overlay.hardware-detail-form-overlay {
 body .hardware-detail-drawer.hardware-detail-form-modal {
   position: relative !important;
   inset: auto !important;
-  top: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: auto !important;
   transform: none !important;
   margin: auto !important;
   width: min(1040px, calc(100vw - 48px)) !important;
@@ -105,7 +101,7 @@ body .hardware-detail-drawer .hardware-detail-title-wrap p {
   overscroll-behavior: contain !important;
 }
 
-/* Unified table readability: long wording wraps everywhere instead of ellipsis/nowrap. */
+/* Unified table readability. */
 table,
 .standard-table,
 .user-access-table,
@@ -199,7 +195,7 @@ th, td,
   overflow-wrap: anywhere !important;
 }
 
-/* Software statistic/dynamic tables: use available width and wrap long wording. */
+/* Software statistic/dynamic tables. */
 body .software-inventory-module .software-registry-card.software-registry-card--full,
 body .software-inventory-module .content-shell.software-registry-card.software-registry-card--full {
   height: 100% !important;
@@ -321,60 +317,6 @@ body .software-inventory-module .software-device-table-row.software-dynamic-row 
   color: var(--ema-standard-blue);
   font-weight: 900;
 }
-
-/* Toast standard. */
-.settings-toast-layer,
-.toast-layer,
-[class*="toast-layer"] {
-  position: fixed !important;
-  top: 88px !important;
-  right: 24px !important;
-  z-index: 2147483200 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-end !important;
-  gap: 0.75rem !important;
-  pointer-events: none !important;
-}
-
-.settings-toast,
-.ema-toast,
-.module-toast,
-[class*="-toast"] {
-  pointer-events: auto !important;
-  min-width: min(360px, calc(100vw - 48px)) !important;
-  max-width: min(440px, calc(100vw - 48px)) !important;
-  border-radius: 16px !important;
-  border: 1px solid #dce8f8 !important;
-  background: #ffffff !important;
-  color: var(--ema-standard-text) !important;
-  box-shadow: 0 20px 46px rgba(15, 23, 42, 0.16) !important;
-  font-weight: 800 !important;
-}
-
-.settings-toast.success,
-.settings-toast--success,
-[class*="toast"].success,
-[class*="toast--success"] { border-left: 5px solid var(--ema-standard-green) !important; }
-
-.settings-toast.error,
-.settings-toast.delete,
-.settings-toast--error,
-.settings-toast--delete,
-[class*="toast"].error,
-[class*="toast"].delete,
-[class*="toast--error"],
-[class*="toast--delete"] { border-left: 5px solid var(--ema-standard-red) !important; }
-
-.settings-toast.warning,
-.settings-toast--warning,
-[class*="toast"].warning,
-[class*="toast--warning"] { border-left: 5px solid var(--ema-standard-amber) !important; }
-
-.settings-toast.info,
-.settings-toast--info,
-[class*="toast"].info,
-[class*="toast--info"] { border-left: 5px solid var(--ema-standard-blue) !important; }
 
 /* Action buttons standard. */
 .table-action-btn,
@@ -506,20 +448,4 @@ body .software-inventory-module .software-device-table-row.software-dynamic-row 
   .pagination-footer,
   .table-pagination,
   [class*="pagination"] { align-items: stretch; }
-
-  .settings-toast-layer,
-  .toast-layer,
-  [class*="toast-layer"] {
-    left: 16px !important;
-    right: 16px !important;
-    align-items: stretch !important;
-  }
-
-  .settings-toast,
-  .ema-toast,
-  .module-toast,
-  [class*="-toast"] {
-    min-width: 0 !important;
-    max-width: none !important;
-  }
 }
