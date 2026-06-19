@@ -113,7 +113,7 @@ function normalizeItOpsLocationPatch(raw: unknown): ItOpsLocationPatch | null {
 async function fetchItOpsLocationPatch(forceRefresh = false): Promise<ItOpsLocationPatch | null> {
   const token = getStoredAccessToken();
   const headers = new Headers({ Accept: 'application/json' });
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (token) headers.set('Authorization', 'Bearer ' + token);
 
   const locationUrl = buildApiUrl(ITOPS_LOCATION_OVERVIEW_API_PATH, { refresh: forceRefresh ? 1 : undefined });
   const response = await fetch(locationUrl, {
@@ -123,7 +123,7 @@ async function fetchItOpsLocationPatch(forceRefresh = false): Promise<ItOpsLocat
 
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || payload?.message || `Location data failed: ${response.status} (${locationUrl})`);
+    throw new Error(payload?.error || payload?.message || 'Location data failed: ' + response.status + ' (' + locationUrl + ')');
   }
 
   return normalizeItOpsLocationPatch(payload?.data ?? payload);
