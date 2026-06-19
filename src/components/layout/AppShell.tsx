@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 
 import { installDisplayCopyStandardizer } from "../../utils/displayCopy";
-import "../../styles/report-builder-scope-fix.css";
 import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
 
@@ -10,13 +9,13 @@ export function AppShell() {
   useEffect(() => installDisplayCopyStandardizer(), []);
 
   return (
-    <div className="ema-shell">
+    <div className="flex min-h-screen bg-slate-100 text-slate-900">
       <Sidebar />
 
-      <div className="ema-main">
+      <div className="flex min-w-0 flex-1 flex-col">
         <TopNavbar />
 
-        <main className="ema-page">
+        <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>
