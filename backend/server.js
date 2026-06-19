@@ -357,6 +357,171 @@ function generateRefreshToken() {
     return crypto.randomBytes(64).toString("hex");
 }
 
+function getRefreshTokenSecret() {
+    return REFRESH_TOKEN_SECRET || ACCESS_TOKEN_SECRET;
+}
+
+function getRefreshTokenExpiryDays() {
+    const parsed = Number(REFRESH_TOKEN_EXPIRY_DAYS || 7);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
+}
+
+function buildRefreshCookieOptions() {
+    return {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: getRefreshTokenExpiryDays() * 24 * 60 * 60 * 1000
+    };
+}
+
+function setRefreshTokenCookie(res, refreshToken) {
+    if (!res || !refreshToken) return;
+    res.cookie("refreshToken", refreshToken, buildRefreshCookieOptions());
+}
+
+function clearRefreshTokenCookie(res) {
+    if (!res) return;
+    const options = buildRefreshCookieOptions();
+    delete options.maxAge;
+    res.clearCookie("refreshToken", options);
+}
+
+function generateEmaRefreshToken(user = {}) {
+    const secret = getRefreshTokenSecret();
+    if (!secret) return "";
+
+    const emaUserID = user.UserID || user.EmaUserID || user.EMAUserID || user.emaUserID || user.id || null;
+    const userID = user.Username || user.Email || user.userID || user.username || user.email || String(emaUserID || "");
+
+    return jwt.sign(
+        {
+            tokenType: "refresh",
+            authSource: "EMA",
+            emaUserID,
+            userID
+        },
+        secret,
+        {
+            expiresIn: `${getRefreshTokenExpiryDays()}d`,
+            issuer: "ema-node-api",
+            audience: "ema-react-app"
+        }
+    );
+}
+
+function buildAccessUserFromRefreshPayload(payload = {}) {
+    const authSource = payload.authSource || "EMA";
+    if (authSource === "EMA" || payload.emaUserID) {
+        return {
+            Console_Idn: 0,
+            UserID: payload.userID || payload.username || payload.email || `ema-${payload.emaUserID || "user"}`,
+            MenuIndex: null,
+            AuthSource: "EMA",
+            EmaUserID: payload.emaUserID || payload.EmaUserID || payload.EMAUserID || null
+        };
+    }
+
+    return {
+        Console_Idn: payload.console_Idn || payload.Console_Idn || 0,
+        UserID: payload.userID || payload.UserID || "",
+        MenuIndex: payload.menuIndex || payload.MenuIndex || null,
+        AuthSource: "LEGACY",
+        EmaUserID: null
+    };
+}
+
+function withTimeout(promise, timeoutMs, fallbackValue) {
+    return Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
+    ]);
+}
+
+async function tryRefreshAccessTokenFromCookie(req, res) {
+    const refreshToken = req?.cookies?.refreshToken;
+    if (!refreshToken) return null;
+
+    const refreshSecret = getRefreshTokenSecret();
+
+    // EMA refresh tokens are signed JWT cookies. They do not need a DB hit,
+    // so an expired access token will not freeze the UI while many requests run.
+    if (refreshSecret && String(refreshToken).split('.').length === 3) {
+        try {
+            const payload = jwt.verify(refreshToken, refreshSecret, {
+                issuer: "ema-node-api",
+                audience: "ema-react-app"
+            });
+
+            if (payload?.tokenType === "refresh" && (payload.authSource === "EMA" || payload.emaUserID)) {
+                const accessUserSource = buildAccessUserFromRefreshPayload(payload);
+                const accessToken = generateAccessToken(accessUserSource);
+                const decodedAccess = jwt.verify(accessToken, ACCESS_TOKEN_SECRET, {
+                    issuer: "ema-node-api",
+                    audience: "ema-react-app"
+                });
+
+                if (res) {
+                    res.setHeader("x-access-token", accessToken);
+                    res.setHeader("x-token-refreshed", "1");
+                    setRefreshTokenCookie(res, refreshToken);
+                }
+
+                return { user: decodedAccess, token: accessToken };
+            }
+        } catch (err) {
+            return null;
+        }
+    }
+
+    // Legacy refresh tokens are stored in UserRefreshTokens. Keep this path for
+    // old TS_CONSOLE users, but guard it with timeout so auth cannot hang the UI.
+    try {
+        const legacyResult = await withTimeout((async () => {
+            const pool = await sql.connect(dbConfig);
+            const result = await pool.request()
+                .input("RefreshToken", sql.VarChar(sql.MAX), refreshToken)
+                .query(`
+                    SELECT
+                        a.Console_Idn,
+                        a.ExpiryDate,
+                        b.UserID,
+                        b.MenuIndex
+                    FROM UserRefreshTokens a
+                    INNER JOIN TS_CONSOLE b
+                        ON a.Console_Idn = b.Console_Idn
+                    WHERE a.RefreshToken = @RefreshToken
+                `);
+
+            const tokenData = result.recordset?.[0];
+            if (!tokenData || new Date() > new Date(tokenData.ExpiryDate)) return null;
+
+            const accessToken = generateAccessToken({
+                UserID: tokenData.UserID,
+                MenuIndex: tokenData.MenuIndex,
+                Console_Idn: tokenData.Console_Idn,
+                AuthSource: "LEGACY"
+            });
+
+            const decodedAccess = jwt.verify(accessToken, ACCESS_TOKEN_SECRET, {
+                issuer: "ema-node-api",
+                audience: "ema-react-app"
+            });
+
+            if (res) {
+                res.setHeader("x-access-token", accessToken);
+                res.setHeader("x-token-refreshed", "1");
+            }
+
+            return { user: decodedAccess, token: accessToken };
+        })(), Number(process.env.AUTH_REFRESH_DB_TIMEOUT_MS || 1500), null);
+
+        return legacyResult || null;
+    } catch (err) {
+        return null;
+    }
+}
+
 function buildPermissionsByRole(role) {
     const normalizedRole = (role || "").toLowerCase();
 
@@ -1091,6 +1256,7 @@ app.post("/api/auth/login", async (req, res) => {
             }
 
             const loginPayload = await issueEmaLoginPayload(pool, emaUser);
+            setRefreshTokenCookie(res, generateEmaRefreshToken(emaUser));
 
             await logEmaAudit(pool, req, "Successful EMA login", "Security & Auth", "Success", {
                 username: emaUser.Username || emaUser.Email || username,
@@ -1187,12 +1353,7 @@ app.post("/api/auth/login", async (req, res) => {
                 )
             `);
 
-        res.cookie("refreshToken", refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
-            maxAge: Number(REFRESH_TOKEN_EXPIRY_DAYS || 7) * 24 * 60 * 60 * 1000
-        });
+        setRefreshTokenCookie(res, refreshToken);
 
         const role = user.HdRole || "Admin";
         const displayName = user.HdUsername || user.UserID;
@@ -1439,6 +1600,7 @@ app.post("/api/auth/2fa/verify", async (req, res) => {
 
         const refreshedUser = refreshedResult.recordset?.[0] || emaUser;
         const loginPayload = await issueEmaLoginPayload(pool, refreshedUser);
+        setRefreshTokenCookie(res, generateEmaRefreshToken(refreshedUser));
 
         await logEmaAudit(pool, {
             ...req,
@@ -1467,64 +1629,28 @@ app.post("/api/auth/2fa/verify", async (req, res) => {
 // POST /api/refresh-token
 app.post("/api/refresh-token", async (req, res) => {
     try {
-        const refreshToken = req.cookies.refreshToken;
+        const refreshed = await tryRefreshAccessTokenFromCookie(req, res);
 
-        if (!refreshToken) {
+        if (!refreshed?.token) {
+            clearRefreshTokenCookie(res);
             return res.status(401).json({
                 success: false,
-                message: "Refresh token missing"
+                message: "Refresh token missing, invalid or expired",
+                code: "REFRESH_TOKEN_INVALID"
             });
         }
-
-        const pool = await sql.connect(dbConfig);
-
-        const result = await pool.request()
-            .input("RefreshToken", sql.VarChar(sql.MAX), refreshToken)
-            .query(`
-                SELECT
-                    a.Console_Idn,
-                    a.ExpiryDate,
-                    b.UserID,
-                    b.MenuIndex
-                FROM UserRefreshTokens a
-                INNER JOIN TS_CONSOLE b
-                    ON a.Console_Idn = b.Console_Idn
-                WHERE a.RefreshToken = @RefreshToken
-            `);
-
-        if (result.recordset.length === 0) {
-            return res.status(403).json({
-                success: false,
-                message: "Invalid refresh token"
-            });
-        }
-
-        const tokenData = result.recordset[0];
-
-        if (new Date() > new Date(tokenData.ExpiryDate)) {
-
-            return res.status(403).json({
-                success: false,
-                message: "Refresh token expired"
-            });
-        }
-
-        const newAccessToken = generateAccessToken({
-            UserID: tokenData.UserID,
-            MenuIndex: tokenData.MenuIndex,
-            Console_Idn: tokenData.Console_Idn
-        });
 
         return res.json({
             success: true,
             data: {
-                token: newAccessToken
-            }
+                token: refreshed.token
+            },
+            token: refreshed.token
         });
 
     } catch (err) {
 
-        console.error(err);
+        console.error("POST /api/refresh-token error:", err);
 
         return res.status(500).json({
             success: false,
@@ -1534,53 +1660,78 @@ app.post("/api/refresh-token", async (req, res) => {
 });
 
 // AUTH MIDDLEWARE
-function authenticateToken(req, res, next) {
-    const authHeader = req.headers.authorization;
+async function completeAuthenticatedRequest(req, res, next, user, refreshedToken = "") {
+    req.user = user;
 
-    if (!authHeader) {
-        return res.status(401).json({
-            success: false,
-            message: "Authorization token missing"
-        });
+    if (refreshedToken) {
+        res.setHeader("x-access-token", refreshedToken);
+        res.setHeader("x-token-refreshed", "1");
     }
 
-    const token = authHeader.split(" ")[1];
+    try {
+        const enforcement = await withTimeout(
+            enforceAccessControlsForRequest(req, user),
+            Number(process.env.ACCESS_CONTROL_AUTH_TIMEOUT_MS || 1500),
+            { ok: true, timeout: true }
+        );
 
-    jwt.verify(
-        token,
-        ACCESS_TOKEN_SECRET,
-        {
-            issuer: "ema-node-api",
-            audience: "ema-react-app"
-        },
-        async (err, user) => {
-
-            if (err) {
-                return res.status(403).json({
-                    success: false,
-                    message: "Invalid or expired token"
-                });
-            }
-
-            try {
-                const enforcement = await enforceAccessControlsForRequest(req, user);
-                if (!enforcement.ok) {
-                    return res.status(enforcement.status || 403).json({
-                        success: false,
-                        message: enforcement.message,
-                        code: enforcement.code,
-                        detail: enforcement.detail
-                    });
-                }
-            } catch (accessErr) {
-                // Fail open for availability; log clearly so it can be fixed without taking down the app.
-                console.warn("Access control enforcement skipped:", accessErr.message);
-            }
-
-            req.user = user;
-            next();
+        if (enforcement?.timeout) {
+            console.warn("Access control enforcement skipped: timeout");
         }
-    );
+
+        if (enforcement && !enforcement.ok) {
+            return res.status(enforcement.status || 403).json({
+                success: false,
+                message: enforcement.message,
+                code: enforcement.code,
+                detail: enforcement.detail
+            });
+        }
+    } catch (accessErr) {
+        // Fail open for availability; log clearly so it can be fixed without taking down the app.
+        console.warn("Access control enforcement skipped:", accessErr.message);
+    }
+
+    return next();
+}
+
+async function authenticateToken(req, res, next) {
+    const authHeader = req.headers.authorization || "";
+    const parts = String(authHeader).split(" ");
+    const token = parts.length === 2 && /^Bearer$/i.test(parts[0]) ? parts[1] : "";
+
+    if (token) {
+        try {
+            const user = jwt.verify(token, ACCESS_TOKEN_SECRET, {
+                issuer: "ema-node-api",
+                audience: "ema-react-app"
+            });
+            return completeAuthenticatedRequest(req, res, next, user);
+        } catch (err) {
+            const refreshed = await tryRefreshAccessTokenFromCookie(req, res);
+            if (refreshed?.user) {
+                return completeAuthenticatedRequest(req, res, next, refreshed.user, refreshed.token);
+            }
+
+            clearRefreshTokenCookie(res);
+            return res.status(401).json({
+                success: false,
+                message: err?.name === "TokenExpiredError" ? "Session expired. Please sign in again." : "Invalid session. Please sign in again.",
+                code: err?.name === "TokenExpiredError" ? "TOKEN_EXPIRED" : "TOKEN_INVALID"
+            });
+        }
+    }
+
+    const refreshed = await tryRefreshAccessTokenFromCookie(req, res);
+    if (refreshed?.user) {
+        return completeAuthenticatedRequest(req, res, next, refreshed.user, refreshed.token);
+    }
+
+    return res.status(401).json({
+        success: false,
+        message: "Authorization token missing",
+        code: "TOKEN_MISSING"
+    });
 }
 
 // GET /api/auth/me
@@ -1707,12 +1858,12 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
 });
 
 app.post("/api/auth/logout", (req, res) => {
-    res.clearCookie("refreshToken");
+    clearRefreshTokenCookie(res);
     return res.json({ success: true, message: "Logged out successfully" });
 });
 
 app.get("/api/auth/logout", (req, res) => {
-    res.clearCookie("refreshToken");
+    clearRefreshTokenCookie(res);
     return res.json({ success: true, message: "Logged out successfully" });
 });
 
@@ -3212,7 +3363,11 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
                 )
             `);
 
-        const incidentPayload = { id, title, description, priority, status: normalizeServiceDeskIncidentStatus(status, 'Awaiting'), requesterName, assignedTo };
+        const savedIncidentPayload = await readIncidentNotificationPayload(pool, id);
+        const incidentPayload = {
+            ...savedIncidentPayload,
+            status: normalizeServiceDeskIncidentStatus(savedIncidentPayload.status || status, 'Awaiting')
+        };
         let notificationResult = null;
         try {
             notificationResult = await triggerIncidentNotification(pool, 'INCIDENT_CREATED', incidentPayload, req);
@@ -3302,7 +3457,13 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
         const resolvedNow = ['resolved', 'solved', 'closed'].includes(currentStatusText);
         const wasResolved = ['resolved', 'solved', 'closed'].includes(previousStatusText);
         const notificationRuleKey = resolvedNow && !wasResolved ? 'INCIDENT_RESOLVED' : 'INCIDENT_UPDATED';
-        const incidentPayload = { id, title, description, priority, status: normalizedStatus, requesterName, assignedTo, rootCause, actionPlan };
+        const savedIncidentPayload = await readIncidentNotificationPayload(pool, id);
+        const incidentPayload = {
+            ...savedIncidentPayload,
+            status: normalizedStatus,
+            rootCause: savedIncidentPayload.rootCause || rootCause,
+            actionPlan: savedIncidentPayload.actionPlan || actionPlan
+        };
         let notificationResult = null;
         try {
             notificationResult = await triggerIncidentNotification(pool, notificationRuleKey, incidentPayload, req);
@@ -7148,25 +7309,41 @@ app.delete("/api/settings/incident-config/details/:id", authenticateToken, async
 const NOTIFICATION_WHATSAPP_MONTHLY_LIMIT = 250;
 
 const DEFAULT_NOTIFICATION_RULES = [
-    { RuleKey: "INCIDENT_CREATED", RuleName: "Incident Created", Enabled: true, WhatsAppEnabled: true, Description: "New incident ticket created" },
-    { RuleKey: "INCIDENT_UPDATED", RuleName: "Incident Updated", Enabled: true, WhatsAppEnabled: true, Description: "Incident ticket updated" },
-    { RuleKey: "INCIDENT_RESOLVED", RuleName: "Incident Resolved", Enabled: true, WhatsAppEnabled: true, Description: "Incident ticket resolved or closed" },
-    { RuleKey: "SYSTEM_LICENSE_EXPIRY_3M", RuleName: "System License Expiry 3m", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 3 months" },
-    { RuleKey: "SYSTEM_LICENSE_EXPIRY_1M", RuleName: "System License Expiry 1m", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 1 month" },
-    { RuleKey: "SYSTEM_LICENSE_EXPIRY_1W", RuleName: "System License Expiry 1w", Enabled: true, WhatsAppEnabled: true, Description: "System license expiring in 1 week" },
+    { RuleKey: "INCIDENT_CREATED", RuleName: "Incident Created", Enabled: true, WhatsAppEnabled: true, WhatsAppContentSID: "HXc5c3d41b27fb3da0182c817cc0fb8260", Description: "New incident ticket created" },
+    { RuleKey: "INCIDENT_UPDATED", RuleName: "Incident Updated", Enabled: true, WhatsAppEnabled: true, WhatsAppContentSID: "HX326d949ef0f9923374ad428e26bf9b2d", Description: "Incident ticket updated" },
+    { RuleKey: "INCIDENT_RESOLVED", RuleName: "Incident Resolved", Enabled: true, WhatsAppEnabled: true, WhatsAppContentSID: "HX9b349dc77ff28c834218e3bae06c3b5e", Description: "Incident ticket resolved or closed" },
+    { RuleKey: "SYSTEM_LICENSE_EXPIRY_3M", RuleName: "System License Expiry 3m", Enabled: true, WhatsAppEnabled: true, WhatsAppContentSID: "HX8a69845c001cde14b3880c42de5c4975", Description: "System license expiring in 3 months" },
+    { RuleKey: "SYSTEM_LICENSE_EXPIRY_1M", RuleName: "System License Expiry 1m", Enabled: true, WhatsAppEnabled: true, WhatsAppContentSID: "HXcd690c14d00c81601c92f779681c93d2", Description: "System license expiring in 1 month" },
+    { RuleKey: "SYSTEM_LICENSE_EXPIRY_1W", RuleName: "System License Expiry 1w", Enabled: true, WhatsAppEnabled: true, WhatsAppContentSID: "HXbda95db7ad4c6ff78fb9692f55db57a0", Description: "System license expiring in 1 week" },
     { RuleKey: "SYSTEM_LICENSE_EXPIRED", RuleName: "System License Expired", Enabled: true, WhatsAppEnabled: true, Description: "System license has expired" },
     { RuleKey: "LICENSE_EXCEEDED", RuleName: "License Exceeded", Enabled: true, WhatsAppEnabled: true, Description: "Installed assets exceed licensed count" }
 ];
 
-const WHATSAPP_TEMPLATE_SAMPLE_VARIABLES = {
-    INCIDENT_CREATED: { 1: "INC-0001", 2: "Printer offline at HQ", 3: "High" },
-    INCIDENT_UPDATED: { 1: "INC-0001", 2: "In Progress", 3: "Support Admin" },
-    INCIDENT_RESOLVED: { 1: "INC-0001", 2: "Printer service restored", 3: "Support Admin" },
-    SYSTEM_LICENSE_EXPIRY_3M: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
-    SYSTEM_LICENSE_EXPIRY_1M: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
-    SYSTEM_LICENSE_EXPIRY_1W: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
-    SYSTEM_LICENSE_EXPIRED: { 1: "EMA System", 2: "Enterprise License", 3: "31 Aug 2026" },
-    LICENSE_EXCEEDED: { 1: "EMA System License", 2: "120", 3: "100" }
+const WHATSAPP_TEMPLATE_VARIABLE_RULES = {
+    INCIDENT_CREATED: {
+        required: ["1", "2", "3"],
+        labels: { "1": "IncidentID", "2": "Title", "3": "Priority" }
+    },
+    INCIDENT_UPDATED: {
+        required: ["1", "2", "3"],
+        labels: { "1": "IncidentID", "2": "Status", "3": "UpdatedBy" }
+    },
+    INCIDENT_RESOLVED: {
+        required: ["1", "2", "3"],
+        labels: { "1": "IncidentID", "2": "Resolution", "3": "ResolvedBy" }
+    },
+    SYSTEM_LICENSE_EXPIRY_3M: {
+        required: ["1", "2", "3"],
+        labels: { "1": "SystemName", "2": "LicenseType", "3": "ExpiryDate" }
+    },
+    SYSTEM_LICENSE_EXPIRY_1M: {
+        required: ["1", "2", "3"],
+        labels: { "1": "SystemName", "2": "LicenseType", "3": "ExpiryDate" }
+    },
+    SYSTEM_LICENSE_EXPIRY_1W: {
+        required: ["1", "2", "3"],
+        labels: { "1": "SystemName", "2": "LicenseType", "3": "ExpiryDate" }
+    }
 };
 
 function notificationBool(value, fallback = false) {
@@ -7186,13 +7363,21 @@ function notificationUserKey(req) {
     return req.user?.userID || req.user?.UserID || req.user?.emaUserID || req.user?.console_Idn || "system";
 }
 
+function getDefaultWhatsappCountryCode() {
+    return String(
+        process.env.WHATSAPP_DEFAULT_COUNTRY_CODE ||
+        process.env.DEFAULT_PHONE_COUNTRY_CODE ||
+        "60"
+    ).replace(/\D/g, "") || "60";
+}
+
 function normalizeWhatsappAddress(value) {
     let text = String(value || "").trim();
     if (!text) return "";
 
-    // Twilio WhatsApp API requires the E.164 address with whatsapp: prefix.
-    // Keep valid international numbers as-is, but convert Malaysia local
-    // numbers such as 0131234567 into whatsapp:+60131234567.
+    // Twilio WhatsApp API requires: whatsapp:+[country code][number].
+    // Default country code is Malaysia (+60), unless WHATSAPP_DEFAULT_COUNTRY_CODE
+    // or DEFAULT_PHONE_COUNTRY_CODE is configured in .env.
     if (/^whatsapp:/i.test(text)) {
         text = text.replace(/^whatsapp:/i, "").trim();
     }
@@ -7203,33 +7388,225 @@ function normalizeWhatsappAddress(value) {
     // Remove accidental extra + signs after the first character.
     text = text.replace(/(?!^)\+/g, "");
 
+    const defaultCountryCode = getDefaultWhatsappCountryCode();
+
     if (text.startsWith("00")) {
+        // 0060123456789 -> +60123456789
         text = `+${text.slice(2)}`;
-    }
-
-    const defaultCountryCode = String(
-        process.env.WHATSAPP_DEFAULT_COUNTRY_CODE ||
-        process.env.DEFAULT_PHONE_COUNTRY_CODE ||
-        "60"
-    ).replace(/\D/g, "") || "60";
-
-    if (text.startsWith("+0")) {
+    } else if (text.startsWith("+0")) {
+        // +0123456789 -> +60123456789
         text = `+${defaultCountryCode}${text.slice(2)}`;
     } else if (text.startsWith("0")) {
+        // 0123456789 -> +60123456789
         text = `+${defaultCountryCode}${text.slice(1)}`;
-    } else if (!text.startsWith("+")) {
+    } else if (text.startsWith("+")) {
+        // Already in international E.164 format.
+        text = `+${text.slice(1).replace(/\D/g, "")}`;
+    } else if (text.startsWith(defaultCountryCode)) {
+        // 60123456789 -> +60123456789
         text = `+${text}`;
+    } else {
+        // 123456789 -> +60123456789, so local numbers without leading 0
+        // do not accidentally become whatsapp:+123456789.
+        text = `+${defaultCountryCode}${text}`;
     }
+
+    // E.164 allows up to 15 digits. Return empty so the caller can show a
+    // clear validation error instead of sending a malformed Twilio request.
+    if (!/^\+\d{8,15}$/.test(text)) return "";
 
     return `whatsapp:${text}`;
 }
 
 function stripWhatsappPrefix(value) {
-    return String(value || "").replace(/^whatsapp:/i, "");
+    const normalized = normalizeWhatsappAddress(value);
+    return normalized ? normalized.replace(/^whatsapp:/i, "") : "";
 }
 
 function getTwilioErrorMessage(err) {
-    return err?.response?.data?.message || err?.response?.data?.error_message || err?.message || "Twilio request failed";
+    return err?.response?.data?.message ||
+        err?.response?.data?.error_message ||
+        err?.message ||
+        err?.msg ||
+        "Twilio request failed";
+}
+
+function getTwilioErrorStatus(err, fallback = 500) {
+    const status = Number(err?.response?.status || err?.status || err?.statusCode || fallback);
+    return Number.isFinite(status) && status >= 400 ? status : fallback;
+}
+
+
+function stringifyTwilioContentVariables(value) {
+    if (value === undefined || value === null || value === "") return "";
+
+    let parsedValue = value;
+
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return "";
+        try {
+            parsedValue = JSON.parse(trimmed);
+        } catch (_) {
+            const err = new Error("ContentVariables must be a valid JSON object string, for example {\"1\":\"value1\"}.");
+            err.statusCode = 400;
+            throw err;
+        }
+    }
+
+    if (!parsedValue || typeof parsedValue !== "object" || Array.isArray(parsedValue)) {
+        const err = new Error("ContentVariables must be an object with numeric template variable keys.");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    const mapped = {};
+    const emptyKeys = [];
+
+    Object.entries(parsedValue).forEach(([key, val]) => {
+        const cleanKey = String(key).replace(/[{}]/g, "").trim();
+        if (!cleanKey) return;
+
+        const cleanValue = String(val ?? "").trim();
+        if (!cleanValue) {
+            emptyKeys.push(cleanKey);
+            return;
+        }
+
+        mapped[cleanKey] = cleanValue;
+    });
+
+    if (emptyKeys.length > 0) {
+        const err = new Error(`ContentVariables has empty value(s) for placeholder(s): ${emptyKeys.join(", ")}. Fill all template variables or remove contentVariables if the template has no variables.`);
+        err.statusCode = 400;
+        throw err;
+    }
+
+    return Object.keys(mapped).length ? JSON.stringify(mapped) : "";
+}
+
+function isValidTwilioContentSid(value) {
+    const sid = String(value || "").trim();
+    return /^HX[0-9a-fA-F]{32}$/.test(sid);
+}
+
+function readWhatsappContentSid(source = {}) {
+    return String(
+        source.content_sid ||
+        source.contentSid ||
+        source.ContentSid ||
+        source.ContentSID ||
+        source.WhatsAppContentSID ||
+        source.whatsAppContentSID ||
+        source.whatsappContentSid ||
+        ""
+    ).trim();
+}
+
+function readWhatsappContentVariables(source = {}) {
+    if (!source || typeof source !== "object") return undefined;
+    if (source.content_variables !== undefined) return source.content_variables;
+    if (source.contentVariables !== undefined) return source.contentVariables;
+    if (source.ContentVariables !== undefined) return source.ContentVariables;
+    if (source.contentVariablesJson !== undefined) return source.contentVariablesJson;
+    if (source.ContentVariablesJson !== undefined) return source.ContentVariablesJson;
+    if (source.WhatsAppVariablesJson !== undefined) return source.WhatsAppVariablesJson;
+    if (source.whatsAppVariablesJson !== undefined) return source.whatsAppVariablesJson;
+    if (source.variables !== undefined) return source.variables;
+    return undefined;
+}
+
+async function sendTwilioWhatsappMessage({ accountSid, authToken, from, to, contentSid, contentVariables }) {
+    const sid = String(accountSid || "").trim();
+    const token = String(authToken || "").trim();
+    const fromNumber = normalizeWhatsappAddress(from || "");
+    const toNumber = normalizeWhatsappAddress(to || "");
+    const templateSid = String(contentSid || "").trim();
+
+    if (!sid || !token || !fromNumber || !toNumber) {
+        const err = new Error("Account SID, Auth Token, From Number and Recipient Number are required.");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (!templateSid) {
+        const err = new Error("WhatsApp template Content SID is required. Backend will not send WhatsApp template requests with Body or MediaUrl.");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (!isValidTwilioContentSid(templateSid)) {
+        const err = new Error("Invalid Twilio Content SID. Use the approved HX... Content SID from Twilio Console > Messaging > Content Templates.");
+        err.statusCode = 400;
+        throw err;
+    }
+
+    const form = new URLSearchParams();
+    form.append("From", fromNumber);
+    form.append("To", toNumber);
+    // Twilio's HTTP API expects these form field names exactly as shown in the
+    // cURL sample: ContentSid and optional ContentVariables. The frontend/test
+    // payload may use content_sid/content_variables, but the outbound Twilio
+    // request must be form-url-encoded with ContentSid/ContentVariables.
+    form.append("ContentSid", templateSid);
+
+    const variablesPayload = stringifyTwilioContentVariables(contentVariables);
+    if (variablesPayload) {
+        form.append("ContentVariables", variablesPayload);
+    }
+
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(sid)}/Messages.json`;
+
+    const safeDebugPayload = {
+        from: fromNumber,
+        to: toNumber,
+        content_sid: templateSid,
+        content_variables: variablesPayload || undefined,
+        has_body: false,
+        has_media_url: false
+    };
+
+    if (String(process.env.TWILIO_DEBUG_PAYLOAD || "").toLowerCase() === "1") {
+        console.log("[TWILIO WHATSAPP TEMPLATE REQUEST]", {
+            endpoint: twilioUrl.replace(sid, "AC***"),
+            supportPayload: safeDebugPayload,
+            formFields: {
+                From: form.get("From"),
+                To: form.get("To"),
+                ContentSid: form.get("ContentSid"),
+                ContentVariables: form.has("ContentVariables") ? form.get("ContentVariables") : null,
+                hasBody: form.has("Body"),
+                hasMediaUrl: form.has("MediaUrl")
+            }
+        });
+    }
+
+    const twilioResponse = await axios.post(twilioUrl, form.toString(), {
+        auth: {
+            username: sid,
+            password: token
+        },
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        timeout: Number(process.env.TWILIO_HTTP_TIMEOUT_MS || 30000)
+    });
+
+    const message = twilioResponse.data || {};
+
+    return {
+        message,
+        fromNumber,
+        toNumber,
+        contentSid: templateSid,
+        contentVariables: variablesPayload || null,
+        requestPayload: {
+            ...safeDebugPayload,
+            hasContentSid: form.has("ContentSid"),
+            hasContentVariables: form.has("ContentVariables"),
+            hasBody: false
+        }
+    };
 }
 
 async function normalizeNotificationRules(pool) {
@@ -7365,7 +7742,23 @@ async function readNotificationRule(pool, ruleKey = "INCIDENT_CREATED") {
     return result.recordset?.[0] || null;
 }
 
-function normalizeWhatsappTemplateVariables(value, ruleKey = "INCIDENT_CREATED") {
+function normalizeWhatsappTemplateVariables(value) {
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return {};
+
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                return normalizeWhatsappTemplateVariables(parsed);
+            }
+        } catch (_) {
+            // Plain strings are not valid Twilio contentVariables payloads.
+        }
+
+        return {};
+    }
+
     if (value && typeof value === "object" && !Array.isArray(value)) {
         const mapped = {};
         Object.entries(value).forEach(([key, val]) => {
@@ -7376,8 +7769,103 @@ function normalizeWhatsappTemplateVariables(value, ruleKey = "INCIDENT_CREATED")
         return mapped;
     }
 
-    const key = String(ruleKey || "INCIDENT_CREATED").trim().toUpperCase();
-    return WHATSAPP_TEMPLATE_SAMPLE_VARIABLES[key] || WHATSAPP_TEMPLATE_SAMPLE_VARIABLES.INCIDENT_CREATED;
+    // Do not send contentVariables unless the caller/database supplies them
+    // or the notification payload contains real values. No sample variables.
+    return {};
+}
+
+function firstNotificationValue(...values) {
+    for (const value of values) {
+        if (value === undefined || value === null) continue;
+        const text = String(value).trim();
+        if (text) return text;
+    }
+    return "";
+}
+
+function hasAnyNotificationVariableValue(variables = {}) {
+    return Object.values(variables || {}).some((value) => String(value ?? "").trim() !== "");
+}
+
+function validateWhatsappTemplateVariablesForRule(ruleKey = "", variables = {}) {
+    const key = String(ruleKey || "").trim().toUpperCase();
+    const config = WHATSAPP_TEMPLATE_VARIABLE_RULES[key];
+    if (!config || !Array.isArray(config.required) || config.required.length === 0) {
+        return normalizeWhatsappTemplateVariables(variables);
+    }
+
+    const normalized = normalizeWhatsappTemplateVariables(variables);
+    const missing = config.required.filter((placeholder) => !String(normalized[placeholder] ?? "").trim());
+
+    if (missing.length > 0) {
+        const labels = missing.map((placeholder) => `${placeholder} (${config.labels?.[placeholder] || `{{${placeholder}}}`})`);
+        const err = new Error(`WhatsApp template ${key} requires ContentVariables: ${labels.join(", ")}. Backend will not send an incomplete template request.`);
+        err.statusCode = 400;
+        err.code = "WHATSAPP_TEMPLATE_VARIABLES_MISSING";
+        err.missingVariables = missing;
+        throw err;
+    }
+
+    const output = {};
+    config.required.forEach((placeholder) => {
+        output[placeholder] = String(normalized[placeholder] ?? "").trim();
+    });
+    return output;
+}
+
+async function readIncidentNotificationPayload(pool, incidentId = "") {
+    const id = String(incidentId || "").trim();
+    const request = pool.request();
+    let whereClause = "";
+
+    if (id) {
+        request.input("IncidentID", sql.NVarChar, id);
+        whereClause = "WHERE IncidentID = @IncidentID";
+    }
+
+    const result = await request.query(`
+        SELECT TOP 1
+            IncidentID,
+            Title,
+            Description,
+            Priority,
+            Status,
+            RequesterName,
+            AssignedTo,
+            RootCause,
+            ActionPlan,
+            CreatedAt,
+            ResolvedAt
+        FROM dbo.EMA_Incidents WITH (NOLOCK)
+        ${whereClause}
+        ORDER BY CreatedAt DESC, IncidentID DESC;
+    `);
+
+    const row = result.recordset?.[0];
+    if (!row) return {};
+
+    return {
+        incidentId: row.IncidentID,
+        IncidentID: row.IncidentID,
+        title: row.Title,
+        Title: row.Title,
+        description: row.Description,
+        Description: row.Description,
+        priority: row.Priority,
+        Priority: row.Priority,
+        status: row.Status,
+        Status: row.Status,
+        requesterName: row.RequesterName,
+        RequesterName: row.RequesterName,
+        assignedTo: row.AssignedTo,
+        AssignedTo: row.AssignedTo,
+        rootCause: row.RootCause,
+        RootCause: row.RootCause,
+        actionPlan: row.ActionPlan,
+        ActionPlan: row.ActionPlan,
+        createdAt: row.CreatedAt,
+        resolvedAt: row.ResolvedAt
+    };
 }
 
 
@@ -7429,38 +7917,40 @@ function notificationRecipientAllowed(row = {}, ruleKey = "") {
 
 function buildNotificationContentVariables(ruleKey = "", payload = {}) {
     const key = String(ruleKey || "").trim().toUpperCase();
-    const incidentId = String(payload.incidentId || payload.id || payload.IncidentID || payload.ticketNo || "INC-0001");
-    const title = String(payload.title || payload.Title || payload.description || payload.Description || "Incident notification");
-    const priority = String(payload.priority || payload.Priority || "Medium");
-    const status = String(payload.status || payload.Status || "Updated");
-    const actor = String(payload.updatedBy || payload.resolvedBy || payload.assignedTo || payload.requesterName || payload.user || "EMA System");
-    const resolution = String(payload.resolution || payload.actionPlan || payload.rootCause || payload.ActionPlan || payload.RootCause || status || "Resolved");
+
+    const explicitVariables = normalizeWhatsappTemplateVariables(readWhatsappContentVariables(payload));
+    if (Object.keys(explicitVariables).length > 0) return explicitVariables;
+
+    const incidentId = firstNotificationValue(payload.incidentId, payload.id, payload.IncidentID, payload.ticketNo);
+    const title = firstNotificationValue(payload.title, payload.Title, payload.description, payload.Description);
+    const priority = firstNotificationValue(payload.priority, payload.Priority);
+    const status = firstNotificationValue(payload.status, payload.Status);
+    const actor = firstNotificationValue(payload.updatedBy, payload.resolvedBy, payload.assignedTo, payload.requesterName, payload.user);
+    const resolution = firstNotificationValue(payload.resolution, payload.actionPlan, payload.rootCause, payload.ActionPlan, payload.RootCause, status);
+
+    let variables = {};
 
     if (key === "INCIDENT_CREATED") {
-        return { 1: incidentId, 2: title, 3: priority };
-    }
-    if (key === "INCIDENT_UPDATED") {
-        return { 1: incidentId, 2: status, 3: actor };
-    }
-    if (key === "INCIDENT_RESOLVED") {
-        return { 1: incidentId, 2: resolution, 3: actor };
-    }
-    if (key.startsWith("SYSTEM_LICENSE_")) {
-        return {
-            1: String(payload.systemName || payload.product || "EMA System"),
-            2: String(payload.licenseType || payload.type || "Enterprise License"),
-            3: String(payload.expiryDate || payload.expiredOn || payload.date || "31 Aug 2026")
+        variables = { 1: incidentId, 2: title, 3: priority };
+    } else if (key === "INCIDENT_UPDATED") {
+        variables = { 1: incidentId, 2: status, 3: actor };
+    } else if (key === "INCIDENT_RESOLVED") {
+        variables = { 1: incidentId, 2: resolution, 3: actor };
+    } else if (key.startsWith("SYSTEM_LICENSE_")) {
+        variables = {
+            1: firstNotificationValue(payload.systemName, payload.product),
+            2: firstNotificationValue(payload.licenseType, payload.type),
+            3: firstNotificationValue(payload.expiryDate, payload.expiredOn, payload.date)
         };
-    }
-    if (key === "LICENSE_EXCEEDED") {
-        return {
-            1: String(payload.licenseName || payload.product || "EMA System License"),
-            2: String(payload.used || payload.usedCount || "120"),
-            3: String(payload.licensed || payload.licensedCount || "100")
+    } else if (key === "LICENSE_EXCEEDED") {
+        variables = {
+            1: firstNotificationValue(payload.licenseName, payload.product),
+            2: firstNotificationValue(payload.used, payload.usedCount),
+            3: firstNotificationValue(payload.licensed, payload.licensedCount)
         };
     }
 
-    return normalizeWhatsappTemplateVariables(payload.contentVariables, key);
+    return hasAnyNotificationVariableValue(variables) ? variables : {};
 }
 
 async function readNotificationRecipients(pool, ruleKey = "") {
@@ -7494,32 +7984,33 @@ async function sendWhatsappTemplateMessage(pool, { setting, rule, recipientNumbe
     const fromNumber = normalizeWhatsappAddress(setting?.FromNumber || "");
     const toNumber = normalizeWhatsappAddress(recipientNumber || "");
     const contentSid = String(rule?.WhatsAppContentSID || rule?.ContentSid || "").trim();
+    const ruleKey = String(rule?.RuleKey || "").trim().toUpperCase();
 
     if (!accountSid || !authToken || !fromNumber || !toNumber || !contentSid) {
         return { sent: false, skipped: true, reason: "Missing WhatsApp sender, recipient or template SID." };
     }
 
-    const form = new URLSearchParams();
-    form.append("From", fromNumber);
-    form.append("To", toNumber);
-    form.append("ContentSid", contentSid);
-    form.append("ContentVariables", JSON.stringify(variables || {}));
+    const validatedVariables = validateWhatsappTemplateVariablesForRule(ruleKey, variables || {});
 
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
-    const twilioResponse = await axios.post(twilioUrl, form.toString(), {
-        auth: { username: accountSid, password: authToken },
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        timeout: 20000
+    const { message, requestPayload } = await sendTwilioWhatsappMessage({
+        accountSid,
+        authToken,
+        from: fromNumber,
+        to: toNumber,
+        contentSid,
+        contentVariables: validatedVariables
     });
 
     await incrementWhatsappUsage(pool);
 
     return {
         sent: true,
-        sid: twilioResponse.data?.sid,
-        status: twilioResponse.data?.status,
+        sid: message?.sid,
+        status: message?.status,
         to: stripWhatsappPrefix(toNumber),
-        contentSid
+        contentSid,
+        contentVariables: validatedVariables,
+        requestPayload
     };
 }
 
@@ -7772,19 +8263,21 @@ async function ensureNotificationSettingsTables(pool) {
             .input("EmailEnabled", sql.Bit, notificationBool(rule.Enabled))
             .input("WhatsAppEnabled", sql.Bit, notificationBool(rule.WhatsAppEnabled))
             .input("Description", sql.NVarChar(500), rule.Description)
+            .input("WhatsAppContentSID", sql.NVarChar(80), rule.WhatsAppContentSID || "")
             .query(`
                 IF NOT EXISTS (SELECT 1 FROM dbo.EMA_NotificationRules WHERE RuleKey = @RuleKey)
                 BEGIN
                     INSERT INTO dbo.EMA_NotificationRules
-                        (RuleKey, RuleName, Description, EmailEnabled, WhatsAppEnabled, IsEnabled)
+                        (RuleKey, RuleName, Description, EmailEnabled, WhatsAppEnabled, WhatsAppContentSID, IsEnabled)
                     VALUES
-                        (@RuleKey, @RuleName, @Description, @EmailEnabled, @WhatsAppEnabled, 1);
+                        (@RuleKey, @RuleName, @Description, @EmailEnabled, @WhatsAppEnabled, NULLIF(@WhatsAppContentSID, ''), 1);
                 END
                 ELSE
                 BEGIN
                     UPDATE dbo.EMA_NotificationRules
                     SET RuleName = @RuleName,
                         Description = @Description,
+                        WhatsAppContentSID = COALESCE(NULLIF(WhatsAppContentSID, ''), NULLIF(@WhatsAppContentSID, '')),
                         UpdatedAt = GETDATE()
                     WHERE RuleKey = @RuleKey;
                 END;
@@ -8227,15 +8720,24 @@ app.post("/api/settings/whatsapp/test", authenticateToken, async (req, res) => {
         const toNumber = normalizeWhatsappAddress(req.body?.testNumber || req.body?.to || req.body?.recipient || "");
         const ruleKey = String(req.body?.ruleKey || req.body?.RuleKey || req.body?.templateRuleKey || "INCIDENT_CREATED").trim().toUpperCase();
         const rule = await readNotificationRule(pool, ruleKey);
-        const contentSid = String(
-            req.body?.contentSid ||
-            req.body?.ContentSid ||
-            req.body?.WhatsAppContentSID ||
-            req.body?.whatsAppContentSID ||
-            rule?.WhatsAppContentSID ||
-            ""
-        ).trim();
-        const contentVariables = normalizeWhatsappTemplateVariables(req.body?.contentVariables || req.body?.variables, ruleKey);
+        const explicitContentSid = readWhatsappContentSid(req.body || {});
+        // Twilio WhatsApp template messages must be sent using the approved
+        // Content SID from EMA_NotificationRules. Do not fall back to a free-text
+        // body here, because Twilio will treat it as a normal WhatsApp message
+        // instead of the approved template.
+        const contentSid = String(explicitContentSid || rule?.WhatsAppContentSID || rule?.ContentSid || "").trim();
+        let contentVariables = normalizeWhatsappTemplateVariables(readWhatsappContentVariables(req.body || {}));
+
+        if (Object.keys(contentVariables).length === 0 && ruleKey.startsWith("INCIDENT_")) {
+            const latestIncidentPayload = await readIncidentNotificationPayload(pool, req.body?.incidentId || req.body?.IncidentID || req.body?.id || "");
+            contentVariables = buildNotificationContentVariables(ruleKey, {
+                ...latestIncidentPayload,
+                updatedBy: notificationUserKey(req || {}),
+                resolvedBy: notificationUserKey(req || {})
+            });
+        }
+
+        contentVariables = validateWhatsappTemplateVariablesForRule(ruleKey, contentVariables);
 
         if (!accountSid || !authToken || !fromNumber || !toNumber) {
             return res.status(400).json({
@@ -8247,27 +8749,27 @@ app.post("/api/settings/whatsapp/test", authenticateToken, async (req, res) => {
         if (!contentSid) {
             return res.status(400).json({
                 success: false,
-                message: `WhatsApp template SID is not configured for ${ruleKey}. Please update WhatsAppContentSID in Notification Rules.`
+                message: `WhatsApp template Content SID is missing for rule ${ruleKey}. Please set EMA_NotificationRules.WhatsAppContentSID with the approved Twilio HX... Content SID before testing.`,
+                data: {
+                    ruleKey,
+                    requiredColumn: "EMA_NotificationRules.WhatsAppContentSID"
+                }
             });
         }
 
-        const form = new URLSearchParams();
-        form.append("From", fromNumber);
-        form.append("To", toNumber);
-        form.append("ContentSid", contentSid);
-        form.append("ContentVariables", JSON.stringify(contentVariables));
-
-        const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
-        const twilioResponse = await axios.post(twilioUrl, form.toString(), {
-            auth: { username: accountSid, password: authToken },
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            timeout: 20000
+        const { message, requestPayload } = await sendTwilioWhatsappMessage({
+            accountSid,
+            authToken,
+            from: fromNumber,
+            to: toNumber,
+            contentSid,
+            contentVariables
         });
 
         const usage = await incrementWhatsappUsage(pool);
-        await logEmaAudit(pool, req, "Sent WhatsApp Template Test Notification", "Notification Channels", "Success", {
+        await logEmaAudit(pool, req, "Sent WhatsApp Test Notification", "Notification Channels", "Success", {
             toNumber: stripWhatsappPrefix(toNumber),
-            sid: twilioResponse.data?.sid,
+            sid: message?.sid,
             ruleKey,
             contentSid
         });
@@ -8277,23 +8779,29 @@ app.post("/api/settings/whatsapp/test", authenticateToken, async (req, res) => {
             data: {
                 sent: true,
                 provider: "Twilio",
-                sid: twilioResponse.data?.sid,
-                status: twilioResponse.data?.status,
+                sid: message?.sid,
+                status: message?.status,
+                from: stripWhatsappPrefix(fromNumber),
                 to: stripWhatsappPrefix(toNumber),
                 ruleKey,
                 contentSid,
+                requestPayload,
                 usage
             },
-            message: "WhatsApp template test sent successfully"
+            message: "WhatsApp test sent successfully"
         });
     } catch (err) {
         const message = getTwilioErrorMessage(err);
         console.error("POST /api/settings/whatsapp/test error:", message, err?.response?.data || "");
-        return res.status(err?.response?.status || 500).json({
+        return res.status(getTwilioErrorStatus(err)).json({
             success: false,
             message,
             error: message,
-            detail: err?.response?.data || null
+            detail: err?.response?.data || {
+                code: err?.code || null,
+                status: err?.status || err?.statusCode || null,
+                moreInfo: err?.moreInfo || null
+            }
         });
     }
 });
@@ -8342,7 +8850,7 @@ app.put("/api/settings/notification-rules", authenticateToken, async (req, res) 
                 .input("Description", sql.NVarChar(500), rule.Description || rule.description || "")
                 .input("EmailEnabled", sql.Bit, notificationBool(rule.EmailEnabled ?? rule.Enabled ?? rule.enabled, false))
                 .input("WhatsAppEnabled", sql.Bit, notificationBool(rule.WhatsAppEnabled ?? rule.whatsAppEnabled ?? rule.whatsappEnabled, false))
-                .input("WhatsAppContentSID", sql.NVarChar(80), String(rule.WhatsAppContentSID || rule.whatsAppContentSID || rule.contentSid || "").trim() || null)
+                .input("WhatsAppContentSID", sql.NVarChar(80), String(rule.WhatsAppContentSID || rule.whatsAppContentSID || rule.whatsappContentSid || rule.contentSid || rule.content_sid || rule.ContentSid || "").trim() || null)
                 .input("IsEnabled", sql.Bit, notificationBool(rule.IsEnabled ?? rule.isEnabled, true))
                 .query(`
                     MERGE dbo.EMA_NotificationRules AS target
