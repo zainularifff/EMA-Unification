@@ -15,7 +15,6 @@ import "./styles/form.css";
 import "./styles/filter.css";
 import "./styles/table.css";
 import "./styles/modal.css";
-import "./styles/pagination.css";
 import "./styles/toast.css";
 import "./styles/settings-widgets.css";
 import "./styles/ema-layout.css";
