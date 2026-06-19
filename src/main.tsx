@@ -3,22 +3,6 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import "./index.css";
-import "./styles/theme.css";
-import "./styles/app-global.css";
-
-import "./styles/typography.css";
-import "./styles/button.css";
-import "./styles/form.css";
-import "./styles/filter.css";
-import "./styles/table.css";
-import "./styles/modal.css";
-import "./styles/toast.css";
-import "./styles/settings-widgets.css";
-import "./styles/ema-layout.css";
-import "./styles/management-control-settings.css";
-import "./styles/notification-channels.css";
-import "./styles/ema-system-shell.css";
-import "./styles/ema-table-system.css";
 
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
