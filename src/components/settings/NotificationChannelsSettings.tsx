@@ -36,6 +36,10 @@ const emptyRecipient: NotificationRecipient = {
   IsEnabled: true,
 };
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
 function cloneEmailConfigs() {
   return JSON.parse(JSON.stringify(emptyEmailConfigs)) as Record<NotificationEmailProvider, NotificationEmailConfig>;
 }
@@ -67,8 +71,14 @@ function cleanNotice(text: string) {
   return message.replace(/\.+$/, ".");
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return <label className="notification-field"><span>{label}</span>{children}{hint ? <small className="notification-field-hint">{hint}</small> : null}</label>;
+function EmaField({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="ema-notification-field">
+      <span>{label}</span>
+      {children}
+      {hint ? <small className="ema-notification-field-hint">{hint}</small> : null}
+    </label>
+  );
 }
 
 function normalizeUsage(row?: Partial<WhatsappUsage>): WhatsappUsage {
@@ -156,7 +166,7 @@ export default function NotificationChannelsSettings() {
     }
   };
 
-  useEffect(() => { load(true); }, []);
+  useEffect(() => { void load(true); }, []);
 
   const saveEmail = async () => {
     setSaving(true);
@@ -287,108 +297,108 @@ export default function NotificationChannelsSettings() {
   };
 
   return (
-    <div className="settings-notification-shell">
-      <div className="notification-topbar">
+    <div className="ema-notification-shell">
+      <div className="ema-notification-topbar">
         <div>
           <h2>Notification Channels</h2>
           <p>Email, WhatsApp, receivers and event trigger delivery settings for EMA alerts.</p>
         </div>
-        <div className="notification-tabs">
-          <button className={`notification-tab ${activeTab === "email" ? "active" : ""}`} onClick={() => setActiveTab("email")}><Mail size={15} /> Email</button>
-          <button className={`notification-tab ${activeTab === "whatsapp" ? "active" : ""}`} onClick={() => setActiveTab("whatsapp")}><MessageSquare size={15} /> WhatsApp</button>
-          <button className={`notification-tab ${activeTab === "receivers" ? "active" : ""}`} onClick={() => setActiveTab("receivers")}><Users size={15} /> Receivers</button>
-          <button className={`notification-tab ${activeTab === "triggers" ? "active" : ""}`} onClick={() => setActiveTab("triggers")}><Bell size={15} /> Triggers</button>
-          <button className="notification-btn" onClick={() => load()} disabled={loading}><RefreshCw className={loading ? "spin" : ""} size={15} /> {loading ? "Syncing" : "Refresh"}</button>
+        <div className="ema-notification-tabs">
+          <button type="button" className={cx("ema-notification-tab", activeTab === "email" && "ema-is-active")} onClick={() => setActiveTab("email")}><Mail size={15} /> Email</button>
+          <button type="button" className={cx("ema-notification-tab", activeTab === "whatsapp" && "ema-is-active")} onClick={() => setActiveTab("whatsapp")}><MessageSquare size={15} /> WhatsApp</button>
+          <button type="button" className={cx("ema-notification-tab", activeTab === "receivers" && "ema-is-active")} onClick={() => setActiveTab("receivers")}><Users size={15} /> Receivers</button>
+          <button type="button" className={cx("ema-notification-tab", activeTab === "triggers" && "ema-is-active")} onClick={() => setActiveTab("triggers")}><Bell size={15} /> Triggers</button>
+          <button type="button" className="ema-notification-btn" onClick={() => load()} disabled={loading}><RefreshCw className={loading ? "ema-spin" : ""} size={15} /> {loading ? "Syncing" : "Refresh"}</button>
         </div>
       </div>
 
-      <div className="notification-body">
-        {loading && <div className="notification-alert info"><RefreshCw className="spin" size={14} /> Syncing notification settings in background. You can continue editing.</div>}
-        {message && !loading && <div className={`notification-alert ${message.tone}`}>{message.text}</div>}
+      <div className="ema-notification-body">
+        {loading && <div className="ema-notification-alert ema-notification-alert-info"><RefreshCw className="ema-spin" size={14} /> Syncing settings in background. You can continue editing.</div>}
+        {message && !loading && <div className={cx("ema-notification-alert", `ema-notification-alert-${message.tone}`)}>{message.text}</div>}
 
         {activeTab === "email" ? (
-          <div className="notification-grid">
-            <section className="notification-panel">
-              <div className="notification-panel-head">
+          <div className="ema-notification-grid">
+            <section className="ema-notification-panel">
+              <div className="ema-notification-panel-head">
                 <div><h3>Email Provider</h3><p>Configure the system email sender.</p></div>
-                <div className="notification-provider-tabs">
-                  {PROVIDERS.map((item) => <button key={item} className={`notification-provider-tab ${provider === item ? "active" : ""}`} onClick={() => setProvider(item)}>{item}</button>)}
+                <div className="ema-notification-provider-tabs">
+                  {PROVIDERS.map((item) => <button type="button" key={item} className={cx("ema-notification-provider-tab", provider === item && "ema-is-active")} onClick={() => setProvider(item)}>{item}</button>)}
                 </div>
               </div>
-              <div className="notification-form">
-                <div className="notification-form-grid">
-                  <Field label="Server / Host"><input value={activeEmail.host || ""} onChange={(e) => patchEmail({ host: e.target.value })} placeholder="smtp.office365.com" /></Field>
-                  <Field label="Port"><input value={String(activeEmail.port || "587")} onChange={(e) => patchEmail({ port: e.target.value })} placeholder="587" /></Field>
-                  <Field label="Sender Email"><input value={activeEmail.user || ""} onChange={(e) => patchEmail({ user: e.target.value })} placeholder="alerts@company.com" /></Field>
-                  <Field label="Credential" hint="Leave blank to keep existing value."><input type="password" value={activeEmail.pass || ""} onChange={(e) => patchEmail({ pass: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
+              <div className="ema-notification-form">
+                <div className="ema-notification-form-grid">
+                  <EmaField label="Server / Host"><input value={activeEmail.host || ""} onChange={(e) => patchEmail({ host: e.target.value })} placeholder="smtp.office365.com" /></EmaField>
+                  <EmaField label="Port"><input value={String(activeEmail.port || "587")} onChange={(e) => patchEmail({ port: e.target.value })} placeholder="587" /></EmaField>
+                  <EmaField label="Sender Email"><input value={activeEmail.user || ""} onChange={(e) => patchEmail({ user: e.target.value })} placeholder="alerts@company.com" /></EmaField>
+                  <EmaField label="Credential" hint="Leave blank to keep existing value."><input type="password" value={activeEmail.pass || ""} onChange={(e) => patchEmail({ pass: e.target.value })} placeholder="Leave blank to keep existing" /></EmaField>
                 </div>
-                <label className="notification-toggle on email"><input type="checkbox" checked={Boolean(activeEmail.isActive)} onChange={(e) => patchEmail({ isActive: e.target.checked })} /> Set as active email provider</label>
-                <div className="notification-actions">
-                  <button className="notification-btn" onClick={testEmail} disabled={saving}><Send size={15} /> Test Email</button>
-                  <button className="notification-btn primary" onClick={saveEmail} disabled={saving}>Save Email Provider</button>
+                <label className="ema-notification-toggle ema-is-on ema-notification-toggle-email"><input type="checkbox" checked={Boolean(activeEmail.isActive)} onChange={(e) => patchEmail({ isActive: e.target.checked })} /> Set as active email provider</label>
+                <div className="ema-notification-actions">
+                  <button type="button" className="ema-notification-btn" onClick={testEmail} disabled={saving}><Send size={15} /> Test Email</button>
+                  <button type="button" className="ema-notification-btn ema-notification-btn-primary" onClick={saveEmail} disabled={saving}>Save Email Provider</button>
                 </div>
               </div>
             </section>
-            <aside className="notification-card notification-status-card"><span className={`notification-status-pill ${activeEmail.isActive ? "enabled" : ""}`}><ShieldCheck size={14} /> {activeEmail.isActive ? "Active Provider" : "Inactive Provider"}</span><p>Only one email provider should be active for system alerts.</p></aside>
+            <aside className="ema-notification-card ema-notification-status-card"><span className={cx("ema-notification-status-pill", activeEmail.isActive && "ema-is-enabled")}><ShieldCheck size={14} /> {activeEmail.isActive ? "Active Provider" : "Inactive Provider"}</span><p>Only one email provider should be active for system alerts.</p></aside>
           </div>
         ) : activeTab === "whatsapp" ? (
-          <div className="notification-grid notification-whatsapp-grid">
-            <section className="notification-panel">
-              <div className="notification-panel-head"><div><h3>WhatsApp Integration</h3><p>Connect the WhatsApp sender for incident and system alerts.</p></div><span className={`notification-status-pill ${whatsapp.isEnabled ? "enabled" : ""}`}>{whatsapp.isEnabled ? "Enabled" : "Disabled"}</span></div>
-              <div className="notification-form">
-                <div className="notification-form-grid">
-                  <Field label="Account SID"><input value={whatsapp.accountSid || ""} onChange={(e) => patchWhatsapp({ accountSid: e.target.value })} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" /></Field>
-                  <Field label="Credential" hint="Leave blank to keep existing value."><input type="password" value={getText(whatsapp as any, WHATSAPP_AUTH_FIELD)} onChange={(e) => patchWhatsapp({ [WHATSAPP_AUTH_FIELD]: e.target.value })} placeholder="Leave blank to keep existing" /></Field>
-                  <Field label="From Number"><input value={whatsapp.fromNumber || ""} onChange={(e) => patchWhatsapp({ fromNumber: e.target.value })} placeholder="whatsapp:+14155238886" /></Field>
-                  <Field label="Test Receiver"><input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} placeholder="whatsapp:+60123456789" /></Field>
+          <div className="ema-notification-grid ema-notification-whatsapp-grid">
+            <section className="ema-notification-panel">
+              <div className="ema-notification-panel-head"><div><h3>WhatsApp Integration</h3><p>Connect the WhatsApp sender for incident and system alerts.</p></div><span className={cx("ema-notification-status-pill", whatsapp.isEnabled && "ema-is-enabled")}>{whatsapp.isEnabled ? "Enabled" : "Disabled"}</span></div>
+              <div className="ema-notification-form">
+                <div className="ema-notification-form-grid">
+                  <EmaField label="Account SID"><input value={whatsapp.accountSid || ""} onChange={(e) => patchWhatsapp({ accountSid: e.target.value })} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" /></EmaField>
+                  <EmaField label="Credential" hint="Leave blank to keep existing value."><input type="password" value={getText(whatsapp as any, WHATSAPP_AUTH_FIELD)} onChange={(e) => patchWhatsapp({ [WHATSAPP_AUTH_FIELD]: e.target.value })} placeholder="Leave blank to keep existing" /></EmaField>
+                  <EmaField label="From Number"><input value={whatsapp.fromNumber || ""} onChange={(e) => patchWhatsapp({ fromNumber: e.target.value })} placeholder="whatsapp:+14155238886" /></EmaField>
+                  <EmaField label="Test Receiver"><input value={testNumber} onChange={(e) => setTestNumber(e.target.value)} placeholder="whatsapp:+60123456789" /></EmaField>
                 </div>
-                <div className="notification-actions split">
-                  <button type="button" className={`notification-toggle whatsapp ${whatsapp.isEnabled ? "on" : ""}`} onClick={() => patchWhatsapp({ isEnabled: !whatsapp.isEnabled })}>{whatsapp.isEnabled ? "Disable Channel" : "Enable Channel"}</button>
+                <div className="ema-notification-actions ema-notification-actions-split">
+                  <button type="button" className={cx("ema-notification-toggle", "ema-notification-toggle-whatsapp", whatsapp.isEnabled && "ema-is-on")} onClick={() => patchWhatsapp({ isEnabled: !whatsapp.isEnabled })}>{whatsapp.isEnabled ? "Disable Channel" : "Enable Channel"}</button>
                   <span />
-                  <button className="notification-btn" onClick={testWhatsapp} disabled={saving || !whatsapp.isEnabled}><Send size={15} /> {whatsapp.isEnabled ? "Send Test" : "Send Test Disabled"}</button>
-                  <button className="notification-btn success" onClick={saveWhatsapp} disabled={saving}>Save WhatsApp</button>
+                  <button type="button" className="ema-notification-btn" onClick={testWhatsapp} disabled={saving || !whatsapp.isEnabled}><Send size={15} /> {whatsapp.isEnabled ? "Send Test" : "Send Test Disabled"}</button>
+                  <button type="button" className="ema-notification-btn ema-notification-btn-success" onClick={saveWhatsapp} disabled={saving}>Save WhatsApp</button>
                 </div>
               </div>
             </section>
-            <aside className="notification-card notification-status-card notification-usage-card">
-              <div className="notification-usage-head"><span className="notification-status-pill enabled">{usage.activeProvider || "Twilio"}</span><div><h4>WhatsApp Monthly Usage</h4><p>Working limit is fixed at <b>{DEFAULT_WHATSAPP_LIMIT}</b> messages.</p></div></div>
-              <div className="notification-usage-meter"><i style={{ width: `${usedPercent}%` }} /></div>
-              <div className="notification-usage"><div><span>Sent</span><strong>{usage.count}</strong></div><div><span>Limit</span><strong>{usage.limit}</strong></div><div><span>Remaining</span><strong>{usage.remaining}</strong></div></div>
+            <aside className="ema-notification-card ema-notification-status-card ema-notification-usage-card">
+              <div className="ema-notification-usage-head"><span className="ema-notification-status-pill ema-is-enabled">{usage.activeProvider || "Twilio"}</span><div><h4>WhatsApp Monthly Usage</h4><p>Working limit is fixed at <b>{DEFAULT_WHATSAPP_LIMIT}</b> messages.</p></div></div>
+              <div className="ema-notification-usage-meter"><i style={{ width: `${usedPercent}%` }} /></div>
+              <div className="ema-notification-usage"><div><span>Sent</span><strong>{usage.count}</strong></div><div><span>Limit</span><strong>{usage.limit}</strong></div><div><span>Remaining</span><strong>{usage.remaining}</strong></div></div>
             </aside>
           </div>
         ) : activeTab === "receivers" ? (
-          <div className="notification-grid notification-receiver-grid">
-            <section className="notification-panel">
-              <div className="notification-panel-head"><div><h3>Notification Receivers</h3><p>Save the users or support teams that should receive alert notifications.</p></div><span className="notification-status-pill enabled">{activeReceivers} Active</span></div>
-              <div className="notification-form">
-                <div className="notification-form-grid notification-recipient-form-grid">
-                  <Field label="Receiver Name"><input value={recipientDraft.RecipientName || ""} onChange={(e) => patchRecipient({ RecipientName: e.target.value })} placeholder="IT Support Team" /></Field>
-                  <Field label="Role / Team"><input value={recipientDraft.RecipientRole || ""} onChange={(e) => patchRecipient({ RecipientRole: e.target.value })} placeholder="L1 Support" /></Field>
-                  <Field label="Email"><input value={recipientDraft.Email || ""} onChange={(e) => patchRecipient({ Email: e.target.value })} placeholder="support@company.com" /></Field>
-                  <Field label="WhatsApp Number"><input value={recipientDraft.WhatsAppNumber || ""} onChange={(e) => patchRecipient({ WhatsAppNumber: e.target.value })} placeholder="+60123456789" /></Field>
+          <div className="ema-notification-grid ema-notification-receiver-grid">
+            <section className="ema-notification-panel">
+              <div className="ema-notification-panel-head"><div><h3>Notification Receivers</h3><p>Save the users or support teams that should receive alert notifications.</p></div><span className="ema-notification-status-pill ema-is-enabled">{activeReceivers} Active</span></div>
+              <div className="ema-notification-form">
+                <div className="ema-notification-form-grid ema-notification-recipient-form-grid">
+                  <EmaField label="Receiver Name"><input value={recipientDraft.RecipientName || ""} onChange={(e) => patchRecipient({ RecipientName: e.target.value })} placeholder="IT Support Team" /></EmaField>
+                  <EmaField label="Role / Team"><input value={recipientDraft.RecipientRole || ""} onChange={(e) => patchRecipient({ RecipientRole: e.target.value })} placeholder="L1 Support" /></EmaField>
+                  <EmaField label="Email"><input value={recipientDraft.Email || ""} onChange={(e) => patchRecipient({ Email: e.target.value })} placeholder="support@company.com" /></EmaField>
+                  <EmaField label="WhatsApp Number"><input value={recipientDraft.WhatsAppNumber || ""} onChange={(e) => patchRecipient({ WhatsAppNumber: e.target.value })} placeholder="+60123456789" /></EmaField>
                 </div>
-                <div className="notification-recipient-options">
-                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentCreated)} onChange={(e) => patchRecipient({ ReceiveIncidentCreated: e.target.checked })} /> Incident Created</label>
-                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentUpdated)} onChange={(e) => patchRecipient({ ReceiveIncidentUpdated: e.target.checked })} /> Incident Updated</label>
-                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentResolved)} onChange={(e) => patchRecipient({ ReceiveIncidentResolved: e.target.checked })} /> Incident Resolved</label>
-                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveSystemLicense)} onChange={(e) => patchRecipient({ ReceiveSystemLicense: e.target.checked })} /> System License</label>
-                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveLicenseExceeded)} onChange={(e) => patchRecipient({ ReceiveLicenseExceeded: e.target.checked })} /> License Exceeded</label>
-                  <label className="notification-toggle on"><input type="checkbox" checked={Boolean(recipientDraft.IsEnabled)} onChange={(e) => patchRecipient({ IsEnabled: e.target.checked })} /> Enabled</label>
+                <div className="ema-notification-recipient-options">
+                  <label className="ema-notification-toggle ema-is-on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentCreated)} onChange={(e) => patchRecipient({ ReceiveIncidentCreated: e.target.checked })} /> Incident Created</label>
+                  <label className="ema-notification-toggle ema-is-on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentUpdated)} onChange={(e) => patchRecipient({ ReceiveIncidentUpdated: e.target.checked })} /> Incident Updated</label>
+                  <label className="ema-notification-toggle ema-is-on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveIncidentResolved)} onChange={(e) => patchRecipient({ ReceiveIncidentResolved: e.target.checked })} /> Incident Resolved</label>
+                  <label className="ema-notification-toggle ema-is-on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveSystemLicense)} onChange={(e) => patchRecipient({ ReceiveSystemLicense: e.target.checked })} /> System License</label>
+                  <label className="ema-notification-toggle ema-is-on"><input type="checkbox" checked={Boolean(recipientDraft.ReceiveLicenseExceeded)} onChange={(e) => patchRecipient({ ReceiveLicenseExceeded: e.target.checked })} /> License Exceeded</label>
+                  <label className="ema-notification-toggle ema-is-on"><input type="checkbox" checked={Boolean(recipientDraft.IsEnabled)} onChange={(e) => patchRecipient({ IsEnabled: e.target.checked })} /> Enabled</label>
                 </div>
-                <div className="notification-actions split"><button type="button" className="notification-btn" onClick={() => setRecipientDraft(cloneRecipient())} disabled={saving}>Clear</button><button type="button" className="notification-btn success" onClick={saveRecipient} disabled={saving}><Save size={15} /> {recipientDraft.RecipientID ? "Update Receiver" : "Save Receiver"}</button></div>
+                <div className="ema-notification-actions ema-notification-actions-split"><button type="button" className="ema-notification-btn" onClick={() => setRecipientDraft(cloneRecipient())} disabled={saving}>Clear</button><button type="button" className="ema-notification-btn ema-notification-btn-success" onClick={saveRecipient} disabled={saving}><Save size={15} /> {recipientDraft.RecipientID ? "Update Receiver" : "Save Receiver"}</button></div>
               </div>
             </section>
-            <aside className="notification-panel notification-recipient-list-panel">
-              <div className="notification-panel-head compact"><div><h3>Saved Receivers</h3><p>Receivers used by incident and license notification events.</p></div></div>
-              <div className="notification-recipient-list">
-                {recipients.length === 0 ? <div className="notification-empty">No receivers saved yet.</div> : recipients.map((row) => <div className="notification-recipient-row" key={row.RecipientID || `${row.RecipientName}-${row.WhatsAppNumber}`}><div><strong>{row.RecipientName || row.RecipientRole || "Unnamed Receiver"}</strong><span>{row.RecipientRole || "General"}</span><small>{row.Email || "No email"} · {row.WhatsAppNumber || "No WhatsApp"}</small></div><div className="notification-recipient-actions"><button className="notification-btn" onClick={() => editRecipient(row)}><Edit3 size={14} /></button><button className="notification-btn danger" onClick={() => deleteRecipient(row)}><Trash2 size={14} /></button></div></div>)}
+            <aside className="ema-notification-panel ema-notification-recipient-list-panel">
+              <div className="ema-notification-panel-head ema-notification-panel-head-compact"><div><h3>Saved Receivers</h3><p>Receivers used by incident and license notification events.</p></div></div>
+              <div className="ema-notification-recipient-list">
+                {recipients.length === 0 ? <div className="ema-notification-empty">No receivers saved yet.</div> : recipients.map((row) => <div className="ema-notification-recipient-row" key={row.RecipientID || `${row.RecipientName}-${row.WhatsAppNumber}`}><div><strong>{row.RecipientName || row.RecipientRole || "Unnamed Receiver"}</strong><span>{row.RecipientRole || "General"}</span><small>{row.Email || "No email"} · {row.WhatsAppNumber || "No WhatsApp"}</small></div><div className="ema-notification-recipient-actions"><button type="button" className="ema-notification-btn" onClick={() => editRecipient(row)}><Edit3 size={14} /></button><button type="button" className="ema-notification-btn ema-notification-btn-danger" onClick={() => deleteRecipient(row)}><Trash2 size={14} /></button></div></div>)}
               </div>
             </aside>
           </div>
         ) : (
-          <section className="notification-panel">
-            <div className="notification-panel-head"><div><h3>Event Triggers</h3><p>Enable or disable delivery per event and channel. {enabledRules} rules are currently active.</p></div></div>
-            <div className="notification-form"><div className="notification-rule-list">{rules.length === 0 ? <div className="notification-empty">No trigger rules loaded yet.</div> : rules.map((rule) => <div className="notification-rule-card" key={rule.RuleKey}><div><div className="notification-rule-title">{(rule as any).RuleName || titleFromRule(rule.RuleKey)}</div><div className="notification-rule-desc">{rule.Description || titleFromRule(rule.RuleKey)}</div>{rule.WhatsAppContentSID ? <small className="notification-template-sid">Template: {rule.WhatsAppContentSID}</small> : null}</div><div className="notification-toggle-group"><button className={`notification-toggle email ${rule.Enabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "email")}>Email {rule.Enabled ? "On" : "Off"}</button><button className={`notification-toggle whatsapp ${rule.WhatsAppEnabled ? "on" : ""}`} onClick={() => toggleRule(rule.RuleKey, "whatsapp")}>WhatsApp {rule.WhatsAppEnabled ? "On" : "Off"}</button></div></div>)}</div></div>
+          <section className="ema-notification-panel">
+            <div className="ema-notification-panel-head"><div><h3>Event Triggers</h3><p>Enable or disable delivery per event and channel. {enabledRules} rules are currently active.</p></div></div>
+            <div className="ema-notification-form"><div className="ema-notification-rule-list">{rules.length === 0 ? <div className="ema-notification-empty">No trigger rules loaded yet.</div> : rules.map((rule) => <div className="ema-notification-rule-card" key={rule.RuleKey}><div><div className="ema-notification-rule-title">{(rule as any).RuleName || titleFromRule(rule.RuleKey)}</div><div className="ema-notification-rule-desc">{rule.Description || titleFromRule(rule.RuleKey)}</div>{rule.WhatsAppContentSID ? <small className="ema-notification-template-sid">Template: {rule.WhatsAppContentSID}</small> : null}</div><div className="ema-notification-toggle-group"><button type="button" className={cx("ema-notification-toggle", "ema-notification-toggle-email", rule.Enabled && "ema-is-on")} onClick={() => toggleRule(rule.RuleKey, "email")}>Email {rule.Enabled ? "On" : "Off"}</button><button type="button" className={cx("ema-notification-toggle", "ema-notification-toggle-whatsapp", rule.WhatsAppEnabled && "ema-is-on")} onClick={() => toggleRule(rule.RuleKey, "whatsapp")}>WhatsApp {rule.WhatsAppEnabled ? "On" : "Off"}</button></div></div>)}</div></div>
           </section>
         )}
       </div>
