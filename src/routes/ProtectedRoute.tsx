@@ -92,7 +92,6 @@ function isTokenExpired(token: string): boolean {
 
   if (!Number.isFinite(exp) || exp <= 0) return false;
 
-  // 30 second buffer avoids rendering protected pages with a token that is about to expire.
   return exp * 1000 <= Date.now() + 30_000;
 }
 
@@ -139,31 +138,11 @@ function getStoredToken(): string {
   return "";
 }
 
-function LoadingAccess() {
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background: "#edf5ff",
-        color: "#14315f",
-        fontSize: 14,
-        fontWeight: 800,
-        fontFamily:
-          'Aptos, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      }}
-    >
-      Loading access profile...
-    </div>
-  );
-}
-
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation();
   const token = useMemo(() => getStoredToken(), [location.pathname]);
   const [user, setUser] = useState<AccessUser | null>(() => getStoredAccessUser());
-  const [loading, setLoading] = useState(Boolean(token));
+  const [, setLoading] = useState(Boolean(token));
   const [authFailed, setAuthFailed] = useState(false);
   const path = cleanPath(location.pathname);
 
@@ -233,10 +212,6 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!token || authFailed) {
     return <Navigate to="/login" replace state={{ from: location }} />;
-  }
-
-  if (loading) {
-    return <LoadingAccess />;
   }
 
   if (!canViewPath(user, path)) {
