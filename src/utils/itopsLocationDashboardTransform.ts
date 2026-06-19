@@ -63,11 +63,10 @@ function normalizeLocationBreakdownRows(value: unknown): BreakdownItem[] {
 
 function pickLocationOverviewRecord(raw: unknown): Record<string, unknown> {
   const root = getObjectRecord(raw);
-  const data = getObjectRecord(root.data) || root;
-  return getObjectRecord(data.geolocation)
-    || getObjectRecord(data.location)
-    || getObjectRecord(data.summary)
-    || data;
+  const rootData = getObjectRecord(root.data);
+  const data = Object.keys(rootData).length ? rootData : root;
+  const candidates = [data.geolocation, data.location, data.summary, data].map(getObjectRecord);
+  return candidates.find((candidate) => Object.keys(candidate).length > 0) || {};
 }
 
 function normalizeItOpsLocationPatch(raw: unknown): ItOpsLocationPatch | null {
