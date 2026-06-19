@@ -1,20 +1,20 @@
 /* =========================================================
    EMA Unified Table System
    ---------------------------------------------------------
-   One table look for every module/page.
-   Keep this file imported last so older module CSS cannot override it.
+   One neutral table look for every module/page.
+   Imported last from main.tsx so older module CSS cannot win.
 ========================================================= */
 
 :root {
   --ema-table-bg: #ffffff;
-  --ema-table-border: rgba(148, 163, 184, 0.28);
-  --ema-table-border-strong: rgba(125, 148, 176, 0.36);
+  --ema-table-border: rgba(148, 163, 184, 0.30);
+  --ema-table-border-strong: rgba(125, 148, 176, 0.40);
   --ema-table-header-bg: #f4f7fb;
-  --ema-table-header-text: #475569;
+  --ema-table-header-text: #334155;
+  --ema-table-header-muted: #64748b;
   --ema-table-text: #10233f;
   --ema-table-muted: #64748b;
   --ema-table-row-hover: #f8fbff;
-  --ema-table-selected: rgba(37, 99, 235, 0.08);
   --ema-table-radius: 16px;
   --ema-table-shadow: 0 14px 34px rgba(15, 23, 42, 0.055);
   --ema-table-cell-y: 12px;
@@ -54,7 +54,6 @@
   overscroll-behavior: contain !important;
 }
 
-/* If a table already sits inside a card, avoid double heavy visuals */
 :where(.card, .ema-card, .ema-panel, .module-card, .content-card, .settings-card) :where(
   .table-responsive,
   .table-container,
@@ -128,14 +127,23 @@
   background: var(--ema-table-header-bg) !important;
 }
 
+/* Neutral table headers: no blue/module color anywhere in header */
+:where(#root) table thead,
+:where(#root) table thead tr,
+:where(#root) table th,
+.ema-table thead,
+.ema-table thead tr,
+.ema-table th {
+  color: var(--ema-table-header-text) !important;
+  background: var(--ema-table-header-bg) !important;
+}
+
 :where(#root) table th,
 .ema-table th {
   height: 44px !important;
   padding: 0 var(--ema-table-cell-x) !important;
   border: 0 !important;
   border-bottom: 1px solid var(--ema-table-border-strong) !important;
-  color: var(--ema-table-header-text) !important;
-  background: var(--ema-table-header-bg) !important;
   font-size: var(--ema-table-header-font) !important;
   font-weight: 900 !important;
   letter-spacing: 0.055em !important;
@@ -143,6 +151,55 @@
   text-transform: uppercase !important;
   white-space: nowrap !important;
   vertical-align: middle !important;
+}
+
+:where(#root) table thead *,
+:where(#root) table th *,
+.ema-table thead *,
+.ema-table th * {
+  color: var(--ema-table-header-text) !important;
+  fill: currentColor !important;
+  stroke: currentColor !important;
+  text-shadow: none !important;
+}
+
+:where(#root) table th a,
+:where(#root) table th button,
+:where(#root) table th span,
+:where(#root) table th strong,
+:where(#root) table th small,
+:where(#root) table th svg,
+:where(#root) table th i,
+:where(#root) table th em,
+:where(#root) table th [class*='sort'],
+:where(#root) table th [class*='Sort'],
+:where(#root) table th [class*='arrow'],
+:where(#root) table th [class*='Arrow'],
+.ema-table th a,
+.ema-table th button,
+.ema-table th span,
+.ema-table th strong,
+.ema-table th small,
+.ema-table th svg,
+.ema-table th i,
+.ema-table th em,
+.ema-table th [class*='sort'],
+.ema-table th [class*='Sort'],
+.ema-table th [class*='arrow'],
+.ema-table th [class*='Arrow'] {
+  color: var(--ema-table-header-text) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  -webkit-text-fill-color: var(--ema-table-header-text) !important;
+}
+
+:where(#root) table th a:hover,
+:where(#root) table th button:hover,
+.ema-table th a:hover,
+.ema-table th button:hover {
+  color: #0f172a !important;
+  background: transparent !important;
 }
 
 :where(#root) table td,
@@ -283,7 +340,7 @@
   height: 34px !important;
   border: 1px solid var(--ema-table-border) !important;
   border-radius: 10px !important;
-  color: #16427b !important;
+  color: #334155 !important;
   background: #fff !important;
   font-size: 12px !important;
   font-weight: 850 !important;
@@ -307,9 +364,9 @@
   .itops-pro-table-pagination,
   .ema-pagination
 ) button[aria-current='page'] {
-  color: #fff !important;
-  border-color: #2563eb !important;
-  background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
+  color: #0f172a !important;
+  border-color: var(--ema-table-border-strong) !important;
+  background: #e8eef7 !important;
 }
 
 :where(
@@ -351,6 +408,13 @@
 :where(.user-row.head, .role-control-row.head, .audit-row.head, .pricing-head-row, .module-control-row.head) {
   background: var(--ema-table-header-bg) !important;
   color: var(--ema-table-header-text) !important;
+}
+
+:where(.user-row.head, .role-control-row.head, .audit-row.head, .pricing-head-row, .module-control-row.head) *,
+:where(.user-cell.head, .audit-cell.head, .matrix-cell.head) {
+  color: var(--ema-table-header-text) !important;
+  background: transparent !important;
+  -webkit-text-fill-color: var(--ema-table-header-text) !important;
 }
 
 :where(.user-cell, .audit-cell, .matrix-cell, .role-control-row > div, .pricing-row > div) {
