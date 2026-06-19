@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { itopsSoftwareDrilldownTransform } from './src/utils/itopsSoftwareDrilldownTransform';
 import { hardwarePaginationFixTransform } from './src/utils/hardwarePaginationFixTransform';
+import { itopsLocationDashboardTransform } from './src/utils/itopsLocationDashboardTransform';
 
 function dashboardUiPatch() {
   return {
@@ -27,7 +28,7 @@ function dashboardUiPatch() {
 }
 
 export default defineConfig({
-  plugins: [itopsSoftwareDrilldownTransform(), hardwarePaginationFixTransform(), dashboardUiPatch(), react()],
+  plugins: [itopsSoftwareDrilldownTransform(), hardwarePaginationFixTransform(), itopsLocationDashboardTransform(), dashboardUiPatch(), react()],
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
