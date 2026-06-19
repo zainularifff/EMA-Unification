@@ -18,7 +18,7 @@ const defaultPageMeta: PageMeta = {
 
 const pageMeta: Record<string, PageMeta> = {
   "/dashboard": {
-    title: "IT OperationDashboard",
+    title: "IT Operation Dashboard",
     subtitle: "Overview of your EMA workspace.",
     searchPlaceholder: "Search assets, users, devices...",
   },
@@ -57,6 +57,11 @@ const pageMeta: Record<string, PageMeta> = {
     subtitle: "Manage and review application restriction policies.",
     searchPlaceholder: "Search applications, users, devices or restriction rules...",
   },
+  "/web-restriction": {
+    title: "Web Restriction",
+    subtitle: "Manage and review web restriction policies.",
+    searchPlaceholder: "Search websites, users, devices or restriction rules...",
+  },
   "/patch-management": {
     title: "Patch Management",
     subtitle: "Manage and deploy software updates and patches.",
@@ -77,12 +82,12 @@ const pageMeta: Record<string, PageMeta> = {
     subtitle: "Monitor command jobs and endpoint execution.",
     searchPlaceholder: "Search task ID, command, state or ordered by...",
   },
-    "/settings": {
+  "/settings": {
     title: "Settings",
     subtitle: "Control access, rules and system configuration.",
     searchPlaceholder: "Search settings, roles, users or clients...",
   },
-    "/report": {
+  "/report": {
     title: "Report",
     subtitle: "Generate and review EMA operational reports.",
     searchPlaceholder: "Search reports, modules, users or assets...",
@@ -274,40 +279,63 @@ export function TopNavbar() {
 
   return (
     <>
-      <header className="ema-topbar">
-        <div className="ema-topbar-title">
-          <h1>{current.title}</h1>
-          <p>{current.subtitle}</p>
+      <header className="sticky top-0 z-30 flex min-h-[76px] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:px-6">
+        <div className="min-w-0 flex-1">
+          <h1 className="m-0 truncate text-xl font-extrabold tracking-tight text-slate-900">{current.title}</h1>
+          <p className="m-0 truncate text-sm font-medium text-slate-500">{current.subtitle}</p>
         </div>
 
-        <form className="ema-global-search ema-global-search-form" role="search" onSubmit={submitSearch}>
-          <button type="submit" className="ema-global-search-submit" aria-label="Search">
+        <form
+          className="hidden h-11 min-w-[280px] items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-slate-600 shadow-inner lg:flex"
+          role="search"
+          onSubmit={submitSearch}
+        >
+          <button
+            type="submit"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+            aria-label="Search"
+          >
             <Search size={17} />
           </button>
           <input
+            className="min-w-0 flex-1 border-0 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
             value={searchTerm}
             onChange={(event) => handleSearchChange(event.target.value)}
             placeholder={current.searchPlaceholder}
             aria-label="Global search"
           />
           {searchTerm ? (
-            <button type="button" className="ema-global-search-clear" onClick={clearSearch} aria-label="Clear search">
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+              onClick={clearSearch}
+              aria-label="Clear search"
+            >
               <X size={15} />
             </button>
           ) : null}
         </form>
 
-        <button type="button" className="ema-icon-btn" onClick={toggleTheme} aria-label="Toggle theme">
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+        >
           {isDark ? <Sun size={17} /> : <Moon size={17} />}
         </button>
 
-        <button type="button" className="ema-icon-btn" aria-label="Notifications">
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+          aria-label="Notifications"
+        >
           <Bell size={17} />
         </button>
 
         <button
           type="button"
-          className="btn btn-primary d-flex align-items-center gap-2 ema-ai-topbar-btn"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-900 bg-slate-900 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
           onClick={openEmaAssistant}
         >
           <Sparkles size={17} />
@@ -316,11 +344,11 @@ export function TopNavbar() {
 
         <button
           type="button"
-          className="btn btn-light d-flex align-items-center gap-2 ema-admin-topbar-btn"
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
           title={roleTitle}
         >
           <UserCircle size={18} />
-          <span className="ema-topbar-role-label">{roleLabel}</span>
+          <span>{roleLabel}</span>
         </button>
       </header>
 
