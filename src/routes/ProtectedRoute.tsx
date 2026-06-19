@@ -73,28 +73,6 @@ function clearStoredAuth() {
   [...TOKEN_KEYS, ...USER_KEYS].forEach(removeStorageValue);
 }
 
-function parseJwtPayload(token: string): Record<string, any> | null {
-  try {
-    const [, payload] = token.split(".");
-    if (!payload) return null;
-
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
-    return JSON.parse(window.atob(padded));
-  } catch {
-    return null;
-  }
-}
-
-function isTokenExpired(token: string): boolean {
-  const payload = parseJwtPayload(token);
-  const exp = Number(payload?.exp);
-
-  if (!Number.isFinite(exp) || exp <= 0) return false;
-
-  return exp * 1000 <= Date.now() + 30_000;
-}
-
 function extractToken(payload: any): string {
   if (!payload || typeof payload !== "object") return "";
 
@@ -143,26 +121,15 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const token = useMemo(() => getStoredToken(), [location.pathname]);
   const [user, setUser] = useState<AccessUser | null>(() => getStoredAccessUser());
   const [, setLoading] = useState(Boolean(token));
-  const [authFailed, setAuthFailed] = useState(false);
   const path = cleanPath(location.pathname);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadCurrentUser() {
-      setAuthFailed(false);
-
       if (!token) {
         clearStoredAuth();
         setUser(null);
-        setLoading(false);
-        return;
-      }
-
-      if (isTokenExpired(token)) {
-        clearStoredAuth();
-        setUser(null);
-        setAuthFailed(true);
         setLoading(false);
         return;
       }
@@ -176,14 +143,9 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           cache: "no-store",
         });
 
-        if (response.status === 401 || response.status === 403) {
-          clearStoredAuth();
-          if (!cancelled) {
-            setUser(null);
-            setAuthFailed(true);
-          }
-          return;
-        }
+        // Do not auto logout on 401/403/expired token. Keep the current screen and
+        // existing stored user context. Manual logout still clears auth normally.
+        if (response.status === 401 || response.status === 403) return;
 
         if (!response.ok) return;
 
@@ -210,7 +172,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return children ? <>{children}</> : <Outlet />;
   }
 
-  if (!token || authFailed) {
+  if (!token) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
