@@ -153,10 +153,10 @@ function exportJsonFile`);
       }
 
       const loadMarker = `      const data = await fetchItOpsDashboardData(forceRefresh);\n      setDashboardData(data);`;
-      if (next.includes(loadMarker) && !next.includes('const [data, locationPatch] = await Promise.all')) {
+      if (next.includes(loadMarker) && !next.includes('fetchItOpsLocationPatch(forceRefresh).then')) {
         next = next.replace(
           loadMarker,
-          `      const [data, locationPatch] = await Promise.all([\n        fetchItOpsDashboardData(forceRefresh),\n        fetchItOpsLocationPatch(forceRefresh).catch((locationError) => {\n          console.warn('IT Operations location API skipped:', locationError);\n          return null;\n        }),\n      ]);\n      setDashboardData(applyItOpsLocationPatch(data, locationPatch));`
+          `      const data = await fetchItOpsDashboardData(forceRefresh);\n      setDashboardData(data);\n\n      void fetchItOpsLocationPatch(forceRefresh)\n        .then((locationPatch) => {\n          if (!locationPatch) return;\n          setDashboardData((currentData) => applyItOpsLocationPatch(currentData, locationPatch));\n        })\n        .catch((locationError) => {\n          console.warn('IT Operations location API skipped:', locationError);\n        });`
         );
       }
 
