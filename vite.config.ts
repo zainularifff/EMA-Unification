@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { itopsSoftwareDrilldownTransform } from './src/utils/itopsSoftwareDrilldownTransform';
-import { itopsSoftwareDetailFetchTransform } from './src/utils/itopsSoftwareDetailFetchTransform';
 
 function dashboardUiPatch() {
   return {
@@ -26,9 +25,8 @@ function dashboardUiPatch() {
   };
 }
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [itopsSoftwareDrilldownTransform(), itopsSoftwareDetailFetchTransform(), dashboardUiPatch(), react()],
+  plugins: [itopsSoftwareDrilldownTransform(), dashboardUiPatch(), react()],
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
