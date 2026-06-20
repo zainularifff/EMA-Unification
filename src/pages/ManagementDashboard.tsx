@@ -1,238 +1,218 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as Icons from "lucide-react";
-
 import managementDashboardService from "../services/managementDashboardService";
-
 type IconComponent = React.ComponentType<{
-  size?: number | string;
-  strokeWidth?: number | string;
-  className?: string;
+    size?: number | string;
+    strokeWidth?: number | string;
 }>;
-
 const getIcon = (...names: string[]): IconComponent => {
-  const iconSet = Icons as unknown as Record<string, IconComponent | undefined>;
-  for (const name of names) {
-    if (iconSet[name]) return iconSet[name] as IconComponent;
-  }
-  return (iconSet.Activity || iconSet.Circle || (() => null)) as IconComponent;
+    const iconSet = Icons as unknown as Record<string, IconComponent | undefined>;
+    for (const name of names) {
+        if (iconSet[name])
+            return iconSet[name] as IconComponent;
+    }
+    return (iconSet.Activity || iconSet.Circle || (() => null)) as IconComponent;
 };
-
 const IconSet = {
-  dashboard: getIcon("LayoutDashboard", "Gauge", "BarChart3"),
-  health: getIcon("ShieldCheck", "Shield"),
-  money: getIcon("WalletCards", "Wallet", "CreditCard"),
-  risk: getIcon("AlertTriangle", "AlertCircle", "ShieldAlert"),
-  audit: getIcon("ClipboardCheck", "ClipboardList", "CheckSquare"),
-  saving: getIcon("CircleDollarSign", "DollarSign", "BadgeDollarSign"),
-  endpoint: getIcon("Monitor", "Laptop", "Computer"),
-  users: getIcon("Users", "UsersRound"),
-  trend: getIcon("TrendingUp", "LineChart", "BarChart3"),
-  calendar: getIcon("CalendarDays", "Calendar"),
-  refresh: getIcon("RefreshCw", "RotateCw"),
-  download: getIcon("Download", "ArrowDownToLine"),
-  filter: getIcon("Filter", "SlidersHorizontal"),
-  search: getIcon("Search", "ScanLine"),
-  back: getIcon("ArrowLeft", "ChevronLeft"),
-  next: getIcon("ChevronRight", "ArrowRight"),
-  package: getIcon("Package", "Box"),
-  server: getIcon("Server", "Database"),
-  activity: getIcon("Activity", "Pulse"),
-  sparkles: getIcon("Sparkles", "WandSparkles", "Stars"),
-  list: getIcon("ListChecks", "ListTodo"),
-  target: getIcon("Target", "Crosshair"),
-  clock: getIcon("Clock3", "Clock"),
-  table: getIcon("Table2", "Table"),
+    dashboard: getIcon("LayoutDashboard", "Gauge", "BarChart3"),
+    health: getIcon("ShieldCheck", "Shield"),
+    money: getIcon("WalletCards", "Wallet", "CreditCard"),
+    risk: getIcon("AlertTriangle", "AlertCircle", "ShieldAlert"),
+    audit: getIcon("ClipboardCheck", "ClipboardList", "CheckSquare"),
+    saving: getIcon("CircleDollarSign", "DollarSign", "BadgeDollarSign"),
+    endpoint: getIcon("Monitor", "Laptop", "Computer"),
+    users: getIcon("Users", "UsersRound"),
+    trend: getIcon("TrendingUp", "LineChart", "BarChart3"),
+    calendar: getIcon("CalendarDays", "Calendar"),
+    refresh: getIcon("RefreshCw", "RotateCw"),
+    download: getIcon("Download", "ArrowDownToLine"),
+    filter: getIcon("Filter", "SlidersHorizontal"),
+    search: getIcon("Search", "ScanLine"),
+    back: getIcon("ArrowLeft", "ChevronLeft"),
+    next: getIcon("ChevronRight", "ArrowRight"),
+    package: getIcon("Package", "Box"),
+    server: getIcon("Server", "Database"),
+    activity: getIcon("Activity", "Pulse"),
+    sparkles: getIcon("Sparkles", "WandSparkles", "Stars"),
+    list: getIcon("ListChecks", "ListTodo"),
+    target: getIcon("Target", "Crosshair"),
+    clock: getIcon("Clock3", "Clock"),
+    table: getIcon("Table2", "Table"),
 };
-
 type Tone = "blue" | "green" | "red" | "amber" | "purple" | "cyan" | "pink" | "orange" | "slate";
 type DrillLevel = 1 | 2 | 3;
-
 type KpiItem = {
-  title: string;
-  value: string;
-  subValue?: string;
-  note?: string;
-  trend?: string;
-  tone?: Tone;
-  icon?: keyof typeof IconSet;
-  area?: string;
-  key?: string;
-};
-
-type DetailItem = {
-  label: string;
-  value: string;
-  tone?: Tone;
-  key?: string;
-};
-
-type PillarItem = {
-  id: string;
-  title: string;
-  scoreTitle?: string;
-  scoreValue?: string;
-  scoreUnit?: string;
-  scoreStatus?: string;
-  statusTone?: Tone;
-  secondTitle?: string;
-  secondValue?: string;
-  secondNote?: string;
-  details?: DetailItem[];
-  tone?: Tone;
-  icon?: keyof typeof IconSet;
-  area: string;
-};
-
-type BoardAction = {
-  area: string;
-  key: string;
-  issue: string;
-  impact: string;
-  decision: string;
-  priority: "High" | "Medium" | "Low" | string;
-};
-
-type TrendPoint = {
-  month: string;
-  label?: string;
-  financialExposure?: number;
-  riskExposure?: number;
-  serviceRisk?: number;
-  signals?: number;
-  capex?: number;
-  opex?: number;
-};
-
-type FinanceData = {
-  capexOpex?: TrendPoint[];
-  tangibleCost?: number;
-  intangibleCost?: number;
-  totalCost?: number;
-  capexYtd?: number;
-  opexYtd?: number;
-  riskCost?: number;
-  avgMonthlyCost?: number;
-  potentialSavings?: number | null;
-  actualSavingsRecorded?: boolean;
-};
-
-type AnalysisData = {
-  headline?: string;
-  trend?: TrendPoint[];
-  mix?: {
-    risk?: number;
-    control?: number;
-    savings?: number;
-  };
-  signals?: Array<{
-    id?: string;
     title: string;
-    subtitle?: string;
-    value?: string;
-    area?: string;
-    key?: string;
+    value: string;
+    subValue?: string;
+    note?: string;
+    trend?: string;
     tone?: Tone;
     icon?: keyof typeof IconSet;
-  }>;
+    area?: string;
+    key?: string;
 };
-
+type DetailItem = {
+    label: string;
+    value: string;
+    tone?: Tone;
+    key?: string;
+};
+type PillarItem = {
+    id: string;
+    title: string;
+    scoreTitle?: string;
+    scoreValue?: string;
+    scoreUnit?: string;
+    scoreStatus?: string;
+    statusTone?: Tone;
+    secondTitle?: string;
+    secondValue?: string;
+    secondNote?: string;
+    details?: DetailItem[];
+    tone?: Tone;
+    icon?: keyof typeof IconSet;
+    area: string;
+};
+type BoardAction = {
+    area: string;
+    key: string;
+    issue: string;
+    impact: string;
+    decision: string;
+    priority: "High" | "Medium" | "Low" | string;
+};
+type TrendPoint = {
+    month: string;
+    label?: string;
+    financialExposure?: number;
+    riskExposure?: number;
+    serviceRisk?: number;
+    signals?: number;
+    capex?: number;
+    opex?: number;
+};
+type FinanceData = {
+    capexOpex?: TrendPoint[];
+    tangibleCost?: number;
+    intangibleCost?: number;
+    totalCost?: number;
+    capexYtd?: number;
+    opexYtd?: number;
+    riskCost?: number;
+    avgMonthlyCost?: number;
+    potentialSavings?: number | null;
+    actualSavingsRecorded?: boolean;
+};
+type AnalysisData = {
+    headline?: string;
+    trend?: TrendPoint[];
+    mix?: {
+        risk?: number;
+        control?: number;
+        savings?: number;
+    };
+    signals?: Array<{
+        id?: string;
+        title: string;
+        subtitle?: string;
+        value?: string;
+        area?: string;
+        key?: string;
+        tone?: Tone;
+        icon?: keyof typeof IconSet;
+    }>;
+};
 type DrillRow = {
-  key: string;
-  label: string;
-  count?: number;
-  value?: number;
-  valueFmt?: string;
-  sample?: string[];
-  level3Area?: string;
-  level3Key?: string;
-  tone?: Tone;
-  impactType?: string;
-  riskType?: string;
-  costType?: string;
-  decision?: string;
-  insight?: string;
-  confidence?: string;
-  metricLabel?: string;
+    key: string;
+    label: string;
+    count?: number;
+    value?: number;
+    valueFmt?: string;
+    sample?: string[];
+    level3Area?: string;
+    level3Key?: string;
+    tone?: Tone;
+    impactType?: string;
+    riskType?: string;
+    costType?: string;
+    decision?: string;
+    insight?: string;
+    confidence?: string;
+    metricLabel?: string;
 };
-
 type EvidenceRow = {
-  assetKey?: string;
-  objectAgent?: string;
-  assetId?: string;
-  deviceName?: string;
-  department?: string;
-  category?: string;
-  brand?: string;
-  model?: string;
-  platform?: string;
-  status?: string;
-  lastSeen?: string;
-  age?: string;
-  ipAddress?: string;
-  riskScore?: number | string;
-  riskSeverity?: string;
-  replacementCost?: string;
-  [key: string]: unknown;
+    assetKey?: string;
+    objectAgent?: string;
+    assetId?: string;
+    deviceName?: string;
+    department?: string;
+    category?: string;
+    brand?: string;
+    model?: string;
+    platform?: string;
+    status?: string;
+    lastSeen?: string;
+    age?: string;
+    ipAddress?: string;
+    riskScore?: number | string;
+    riskSeverity?: string;
+    replacementCost?: string;
+    [key: string]: unknown;
 };
-
 type ExecutiveStory = {
-  status?: string;
-  tone?: "green" | "amber" | "red" | "blue" | "purple";
-  headline?: string;
-  summary?: string;
-  narrative?: string;
-  keySignals?: string[];
-  boardRecommendation?: string;
-  actionItems?: string[];
-  source?: "gemini" | "local" | string;
-  generatedAt?: string;
+    status?: string;
+    tone?: "green" | "amber" | "red" | "blue" | "purple";
+    headline?: string;
+    summary?: string;
+    narrative?: string;
+    keySignals?: string[];
+    boardRecommendation?: string;
+    actionItems?: string[];
+    source?: "gemini" | "local" | string;
+    generatedAt?: string;
 };
-
 type PolicyUsed = {
-  profileID?: number | string;
-  profileKey?: string;
-  profileName?: string;
-  scopeType?: string;
-  scopeKey?: string;
-  isDefault?: boolean;
-  updatedAt?: string | null;
+    profileID?: number | string;
+    profileKey?: string;
+    profileName?: string;
+    scopeType?: string;
+    scopeKey?: string;
+    isDefault?: boolean;
+    updatedAt?: string | null;
 };
-
 type DashboardData = {
-  generatedAt?: string;
-  executiveKpis: KpiItem[];
-  pillars: PillarItem[];
-  boardActions: BoardAction[];
-  finance: FinanceData;
-  analysis?: AnalysisData;
-  level2: Record<string, DrillRow[]>;
-  metrics?: Record<string, number | string | boolean>;
-  policyUsed?: PolicyUsed | null;
-  assumptionValues?: Record<string, number>;
+    generatedAt?: string;
+    executiveKpis: KpiItem[];
+    pillars: PillarItem[];
+    boardActions: BoardAction[];
+    finance: FinanceData;
+    analysis?: AnalysisData;
+    level2: Record<string, DrillRow[]>;
+    metrics?: Record<string, number | string | boolean>;
+    policyUsed?: PolicyUsed | null;
+    assumptionValues?: Record<string, number>;
 };
-
 type DrillState = {
-  level: DrillLevel;
-  area?: string;
-  key?: string;
-  title?: string;
-  rows?: DrillRow[] | EvidenceRow[];
-  total?: number;
-  loading?: boolean;
-  parent?: DrillState;
+    level: DrillLevel;
+    area?: string;
+    key?: string;
+    title?: string;
+    rows?: DrillRow[] | EvidenceRow[];
+    total?: number;
+    loading?: boolean;
+    parent?: DrillState;
 };
-
 const EMPTY_DASHBOARD: DashboardData = {
-  generatedAt: "",
-  executiveKpis: [],
-  pillars: [],
-  boardActions: [],
-  finance: {},
-  analysis: { trend: [], signals: [], mix: { risk: 0, control: 0, savings: 0 } },
-  level2: {},
-  metrics: {},
+    generatedAt: "",
+    executiveKpis: [],
+    pillars: [],
+    boardActions: [],
+    finance: {},
+    analysis: { trend: [], signals: [], mix: { risk: 0, control: 0, savings: 0 } },
+    level2: {},
+    metrics: {},
 };
-
 const MANAGEMENT_DASHBOARD_INLINE_CSS = `
 :root {
   --md-font: var(--ema-font-sans, var(--ema-font-body, "Aptos", "Inter", "Manrope", "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif));
@@ -3519,1357 +3499,1304 @@ body.md-dashboard-page-active .content-area {
 }
 
 `;
-
-function Icon({ name, className = "" }: { name: keyof typeof IconSet; className?: string }) {
-  const Cmp = IconSet[name] || IconSet.activity;
-  return <Cmp className={`md-icon ${className}`} strokeWidth={2.1} aria-hidden="true" />;
+function Icon({ name }: {
+    name: keyof typeof IconSet;
+}) {
+    const Cmp = IconSet[name] || IconSet.activity;
+    return <Cmp strokeWidth={2.1} aria-hidden="true"/>;
 }
-
 function moneyValue(value: unknown) {
-  const n = Number(value || 0);
-  if (!Number.isFinite(n)) return 0;
-  return n;
+    const n = Number(value || 0);
+    if (!Number.isFinite(n))
+        return 0;
+    return n;
 }
-
 function formatMoney(value: unknown) {
-  const n = moneyValue(value);
-  if (Math.abs(n) >= 1000000) return `RM ${(n / 1000000).toFixed(2)}M`;
-  if (Math.abs(n) >= 1000) return `RM ${Math.round(n / 1000).toLocaleString()}K`;
-  return `RM ${Math.round(n).toLocaleString()}`;
+    const n = moneyValue(value);
+    if (Math.abs(n) >= 1000000)
+        return `RM ${(n / 1000000).toFixed(2)}M`;
+    if (Math.abs(n) >= 1000)
+        return `RM ${Math.round(n / 1000).toLocaleString()}K`;
+    return `RM ${Math.round(n).toLocaleString()}`;
 }
-
 function parseNumberFromText(value: unknown, fallback = 0) {
-  const matched = String(value ?? "").replace(/,/g, "").match(/-?\d+(\.\d+)?/);
-  return matched ? Number(matched[0]) : fallback;
+    const matched = String(value ?? "").replace(/,/g, "").match(/-?\d+(\.\d+)?/);
+    return matched ? Number(matched[0]) : fallback;
 }
-
 function clampPercent(value: unknown) {
-  const n = Math.round(moneyValue(value));
-  return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
+    const n = Math.round(moneyValue(value));
+    return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
 }
-
 const TABLE_PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
-
 function normalizeTableSearchText(...values: unknown[]) {
-  return values
-    .map((value) => String(value ?? "").toLowerCase().trim())
-    .filter(Boolean)
-    .join(" ");
+    return values
+        .map((value) => String(value ?? "").toLowerCase().trim())
+        .filter(Boolean)
+        .join(" ");
 }
-
 function clampPage(page: number, totalPages: number) {
-  return Math.max(1, Math.min(Math.max(1, totalPages), page));
+    return Math.max(1, Math.min(Math.max(1, totalPages), page));
 }
-
 function getPageInfo(totalRows: number, page: number, pageSize: number) {
-  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
-  const safePage = clampPage(page, totalPages);
-  const start = (safePage - 1) * pageSize;
-  const end = Math.min(start + pageSize, totalRows);
-  return { totalPages, safePage, start, end };
+    const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+    const safePage = clampPage(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+    const end = Math.min(start + pageSize, totalRows);
+    return { totalPages, safePage, start, end };
 }
-
 function normalizeTone(value?: string): Tone {
-  const text = String(value || "blue").toLowerCase();
-  if (["blue", "green", "red", "amber", "purple", "cyan", "pink", "orange", "slate"].includes(text)) return text as Tone;
-  return "blue";
+    const text = String(value || "blue").toLowerCase();
+    if (["blue", "green", "red", "amber", "purple", "cyan", "pink", "orange", "slate"].includes(text))
+        return text as Tone;
+    return "blue";
 }
-
-
 function getKpiSemanticClass(kpi: KpiItem, index = 0) {
-  const title = String(kpi.title || "").toLowerCase();
-
-  if (title.includes("health")) return "kpi-health";
-  if (title.includes("financial") || title.includes("exposure")) {
-    if (title.includes("risk")) return "kpi-risk";
-    return "kpi-financial";
-  }
-  if (title.includes("risk")) return "kpi-risk";
-  if (title.includes("compliance") || title.includes("audit")) return "kpi-compliance";
-  if (title.includes("saving") || title.includes("opportunity")) return "kpi-savings";
-  if (title.includes("board") || title.includes("attention") || title.includes("decision")) return "kpi-board";
-
-  const fallback = ["kpi-health", "kpi-financial", "kpi-risk", "kpi-compliance", "kpi-savings", "kpi-board"];
-  return fallback[index % fallback.length] || "kpi-default";
+    const title = String(kpi.title || "").toLowerCase();
+    if (title.includes("health"))
+        return "kpi-health";
+    if (title.includes("financial") || title.includes("exposure")) {
+        if (title.includes("risk"))
+            return "kpi-risk";
+        return "kpi-financial";
+    }
+    if (title.includes("risk"))
+        return "kpi-risk";
+    if (title.includes("compliance") || title.includes("audit"))
+        return "kpi-compliance";
+    if (title.includes("saving") || title.includes("opportunity"))
+        return "kpi-savings";
+    if (title.includes("board") || title.includes("attention") || title.includes("decision"))
+        return "kpi-board";
+    const fallback = ["kpi-health", "kpi-financial", "kpi-risk", "kpi-compliance", "kpi-savings", "kpi-board"];
+    return fallback[index % fallback.length] || "kpi-default";
 }
-
 function normalizeIcon(value?: string): keyof typeof IconSet {
-  const key = String(value || "dashboard") as keyof typeof IconSet;
-  return IconSet[key] ? key : "dashboard";
+    const key = String(value || "dashboard") as keyof typeof IconSet;
+    return IconSet[key] ? key : "dashboard";
 }
-
 function normalizeDashboard(payload: Partial<DashboardData> | null | undefined): DashboardData {
-  return {
-    generatedAt: payload?.generatedAt || "",
-    executiveKpis: Array.isArray(payload?.executiveKpis) ? payload.executiveKpis : [],
-    pillars: Array.isArray(payload?.pillars) ? payload.pillars : [],
-    boardActions: Array.isArray(payload?.boardActions) ? payload.boardActions : [],
-    finance: payload?.finance || {},
-    analysis: {
-      ...(payload?.analysis || {}),
-      trend: Array.isArray(payload?.analysis?.trend) ? payload.analysis?.trend : [],
-      signals: Array.isArray(payload?.analysis?.signals) ? payload.analysis?.signals : [],
-      mix: payload?.analysis?.mix || { risk: 0, control: 0, savings: 0 },
-    },
-    level2: payload?.level2 || {},
-    metrics: payload?.metrics || {},
-  };
+    return {
+        generatedAt: payload?.generatedAt || "",
+        executiveKpis: Array.isArray(payload?.executiveKpis) ? payload.executiveKpis : [],
+        pillars: Array.isArray(payload?.pillars) ? payload.pillars : [],
+        boardActions: Array.isArray(payload?.boardActions) ? payload.boardActions : [],
+        finance: payload?.finance || {},
+        analysis: {
+            ...(payload?.analysis || {}),
+            trend: Array.isArray(payload?.analysis?.trend) ? payload.analysis?.trend : [],
+            signals: Array.isArray(payload?.analysis?.signals) ? payload.analysis?.signals : [],
+            mix: payload?.analysis?.mix || { risk: 0, control: 0, savings: 0 },
+        },
+        level2: payload?.level2 || {},
+        metrics: payload?.metrics || {},
+    };
 }
-
 function getKpiTarget(kpi: KpiItem) {
-  const title = String(kpi.title || "").toLowerCase();
-  if (kpi.area) return { area: kpi.area, key: kpi.key || "", title: kpi.title };
-  if (title.includes("financial")) return { area: "capex", key: "", title: kpi.title };
-  if (title.includes("risk")) return { area: "risk", key: "", title: kpi.title };
-  if (title.includes("compliance")) return { area: "compliance", key: "", title: kpi.title };
-  if (title.includes("saving")) return { area: "saving", key: "", title: kpi.title };
-  if (title.includes("board") || title.includes("attention")) return { area: "actions", key: "", title: "Board Action Queue" };
-  return { area: "resources", key: "", title: kpi.title || "Management Insight" };
+    const title = String(kpi.title || "").toLowerCase();
+    if (kpi.area)
+        return { area: kpi.area, key: kpi.key || "", title: kpi.title };
+    if (title.includes("financial"))
+        return { area: "capex", key: "", title: kpi.title };
+    if (title.includes("risk"))
+        return { area: "risk", key: "", title: kpi.title };
+    if (title.includes("compliance"))
+        return { area: "compliance", key: "", title: kpi.title };
+    if (title.includes("saving"))
+        return { area: "saving", key: "", title: kpi.title };
+    if (title.includes("board") || title.includes("attention"))
+        return { area: "actions", key: "", title: "Board Action Queue" };
+    return { area: "resources", key: "", title: kpi.title || "Management Insight" };
 }
-
 function parseActionTarget(action: BoardAction) {
-  const raw = String(action.key || "");
-  const [prefix, ...rest] = raw.split(":");
-  let area = String(action.area || prefix || "risk").toLowerCase();
-  let key = rest.join(":") || raw;
-  if (area === "capex-category" || area === "capex-department") area = "capex";
-  if (area === "data-quality") area = "compliance";
-  if (!area || area === "actions") area = "risk";
-  return { area, key };
+    const raw = String(action.key || "");
+    const [prefix, ...rest] = raw.split(":");
+    let area = String(action.area || prefix || "risk").toLowerCase();
+    let key = rest.join(":") || raw;
+    if (area === "capex-category" || area === "capex-department")
+        area = "capex";
+    if (area === "data-quality")
+        area = "compliance";
+    if (!area || area === "actions")
+        area = "risk";
+    return { area, key };
 }
-
 function getDrillValue(row: DrillRow, area?: string) {
-  const areaKey = String(area || "").toLowerCase();
-  const rowValue = getRowValue(row);
-  if (isEvidenceOnlyArea(areaKey)) {
-    if (row.valueFmt && !/^RM\s/i.test(row.valueFmt)) return row.valueFmt;
-    return formatEvidenceCount(row, "evidence record(s)");
-  }
-  if (row.valueFmt && !isZeroMoneyText(row.valueFmt)) return row.valueFmt;
-  if (areaKey === "resources") return `${Number(row.count || 0).toLocaleString()} endpoint(s)`;
-  if (areaKey === "compliance") return row.key === "pricing-coverage" ? `${Number(row.value || 0)}%` : `${Number(row.count || 0).toLocaleString()} record(s)`;
-  if (areaKey === "actions") return rowValue > 0 ? formatMoney(rowValue) : "Decision item";
-  return rowValue > 0 ? formatMoney(rowValue) : `${Number(row.count || 0).toLocaleString()} record(s)`;
+    const areaKey = String(area || "").toLowerCase();
+    const rowValue = getRowValue(row);
+    if (isEvidenceOnlyArea(areaKey)) {
+        if (row.valueFmt && !/^RM\s/i.test(row.valueFmt))
+            return row.valueFmt;
+        return formatEvidenceCount(row, "evidence record(s)");
+    }
+    if (row.valueFmt && !isZeroMoneyText(row.valueFmt))
+        return row.valueFmt;
+    if (areaKey === "resources")
+        return `${Number(row.count || 0).toLocaleString()} endpoint(s)`;
+    if (areaKey === "compliance")
+        return row.key === "pricing-coverage" ? `${Number(row.value || 0)}%` : `${Number(row.count || 0).toLocaleString()} record(s)`;
+    if (areaKey === "actions")
+        return rowValue > 0 ? formatMoney(rowValue) : "Decision item";
+    return rowValue > 0 ? formatMoney(rowValue) : `${Number(row.count || 0).toLocaleString()} record(s)`;
 }
-
 function drillNumber(value: unknown) {
-  const n = Number(value || 0);
-  return Number.isFinite(n) ? n : 0;
+    const n = Number(value || 0);
+    return Number.isFinite(n) ? n : 0;
 }
-
 function drillMoneyFromText(value: unknown) {
-  const text = String(value || "");
-  const match = text.replace(/,/g, "").match(/RM\s*([0-9.]+)\s*([MK])?/i);
-  if (!match) return 0;
-  const base = Number(match[1] || 0);
-  const suffix = String(match[2] || "").toUpperCase();
-  if (suffix === "M") return base * 1000000;
-  if (suffix === "K") return base * 1000;
-  return base;
+    const text = String(value || "");
+    const match = text.replace(/,/g, "").match(/RM\s*([0-9.]+)\s*([MK])?/i);
+    if (!match)
+        return 0;
+    const base = Number(match[1] || 0);
+    const suffix = String(match[2] || "").toUpperCase();
+    if (suffix === "M")
+        return base * 1000000;
+    if (suffix === "K")
+        return base * 1000;
+    return base;
 }
-
 function getRowValue(row: DrillRow) {
-  const rawValue = drillNumber(row.value);
-  const moneyTextValue = drillMoneyFromText(row.valueFmt);
-  if (rawValue > 0) return rawValue;
-  if (moneyTextValue > 0) return moneyTextValue;
-  return 0;
+    const rawValue = drillNumber(row.value);
+    const moneyTextValue = drillMoneyFromText(row.valueFmt);
+    if (rawValue > 0)
+        return rawValue;
+    if (moneyTextValue > 0)
+        return moneyTextValue;
+    return 0;
 }
-
 function isEvidenceOnlyArea(area?: string) {
-  return ["software", "network", "geolocation", "service", "servicedesk", "service-desk"].includes(String(area || "").toLowerCase());
+    return ["software", "network", "geolocation", "service", "servicedesk", "service-desk"].includes(String(area || "").toLowerCase());
 }
-
 function isZeroMoneyText(value?: string) {
-  return /^RM\s*0(?:\.00)?$/i.test(String(value || "").trim());
+    return /^RM\s*0(?:\.00)?$/i.test(String(value || "").trim());
 }
-
 function formatEvidenceCount(row: DrillRow, unit = "record(s)") {
-  return `${Number(row.count || 0).toLocaleString()} ${unit}`;
+    return `${Number(row.count || 0).toLocaleString()} ${unit}`;
 }
-
-
 type BreakdownVisualItem = {
-  row: DrillRow;
-  label: string;
-  shortLabel: string;
-  value: number;
-  display: string;
-  percent: number;
-  tone: Tone;
-  color: string;
+    row: DrillRow;
+    label: string;
+    shortLabel: string;
+    value: number;
+    display: string;
+    percent: number;
+    tone: Tone;
+    color: string;
 };
-
 type BreakdownVisualModel = {
-  type: "donut" | "bar";
-  modeLabel: string;
-  title: string;
-  description: string;
-  headline: string;
-  guidance: string;
-  totalLabel: string;
-  totalCaption: string;
-  gradient: string;
-  items: BreakdownVisualItem[];
+    type: "donut" | "bar";
+    modeLabel: string;
+    title: string;
+    description: string;
+    headline: string;
+    guidance: string;
+    totalLabel: string;
+    totalCaption: string;
+    gradient: string;
+    items: BreakdownVisualItem[];
 };
-
 function shortVisualLabel(value: unknown, max = 34) {
-  const text = String(value || "-").trim();
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    const text = String(value || "-").trim();
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
-
 function getToneHex(tone?: string, index = 0) {
-  const palette: Record<string, string> = {
-    blue: "#2563eb",
-    cyan: "#06b6d4",
-    green: "#059669",
-    red: "#e11d48",
-    amber: "#d97706",
-    purple: "#7c3aed",
-    pink: "#db2777",
-    orange: "#f97316",
-    slate: "#475569",
-  };
-  const fallback = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#e11d48", "#06b6d4"];
-  return palette[String(tone || "").toLowerCase()] || fallback[index % fallback.length];
+    const palette: Record<string, string> = {
+        blue: "#2563eb",
+        cyan: "#06b6d4",
+        green: "#059669",
+        red: "#e11d48",
+        amber: "#d97706",
+        purple: "#7c3aed",
+        pink: "#db2777",
+        orange: "#f97316",
+        slate: "#475569",
+    };
+    const fallback = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#e11d48", "#06b6d4"];
+    return palette[String(tone || "").toLowerCase()] || fallback[index % fallback.length];
 }
-
 function getVisualMeasure(row: DrillRow, area?: string) {
-  const areaKey = String(area || "").toLowerCase();
-  const rowKey = String(row.key || "").toLowerCase();
-  const valueFmt = String(row.valueFmt || "");
-  const rowValue = getRowValue(row);
-  const rowCount = drillNumber(row.count);
-
-  if (areaKey === "resources" || areaKey === "actions") {
-    return { value: rowCount || rowValue, mode: "count" as const };
-  }
-
-  if (areaKey === "compliance" && (valueFmt.includes("%") || /coverage|identity|telemetry|sla/.test(rowKey))) {
-    return { value: rowCount || rowValue, mode: "count" as const };
-  }
-
-  if (rowValue > 0 && !valueFmt.includes("%")) return { value: rowValue, mode: "money" as const };
-  return { value: rowCount || rowValue, mode: rowValue > 0 ? "value" as const : "count" as const };
+    const areaKey = String(area || "").toLowerCase();
+    const rowKey = String(row.key || "").toLowerCase();
+    const valueFmt = String(row.valueFmt || "");
+    const rowValue = getRowValue(row);
+    const rowCount = drillNumber(row.count);
+    if (areaKey === "resources" || areaKey === "actions") {
+        return { value: rowCount || rowValue, mode: "count" as const };
+    }
+    if (areaKey === "compliance" && (valueFmt.includes("%") || /coverage|identity|telemetry|sla/.test(rowKey))) {
+        return { value: rowCount || rowValue, mode: "count" as const };
+    }
+    if (rowValue > 0 && !valueFmt.includes("%"))
+        return { value: rowValue, mode: "money" as const };
+    return { value: rowCount || rowValue, mode: rowValue > 0 ? "value" as const : "count" as const };
 }
-
 function formatVisualMeasure(row: DrillRow, area?: string) {
-  const measure = getVisualMeasure(row, area);
-  if (isEvidenceOnlyArea(area)) {
-    if (row.valueFmt && !/^RM\s/i.test(row.valueFmt)) return row.valueFmt;
-    return formatEvidenceCount(row, "evidence record(s)");
-  }
-  if (measure.mode === "money") return row.valueFmt && !isZeroMoneyText(row.valueFmt) ? row.valueFmt : formatMoney(measure.value);
-  if (row.valueFmt && !/^RM\s/i.test(row.valueFmt)) return row.valueFmt;
-  return `${Math.round(measure.value).toLocaleString()} record(s)`;
+    const measure = getVisualMeasure(row, area);
+    if (isEvidenceOnlyArea(area)) {
+        if (row.valueFmt && !/^RM\s/i.test(row.valueFmt))
+            return row.valueFmt;
+        return formatEvidenceCount(row, "evidence record(s)");
+    }
+    if (measure.mode === "money")
+        return row.valueFmt && !isZeroMoneyText(row.valueFmt) ? row.valueFmt : formatMoney(measure.value);
+    if (row.valueFmt && !/^RM\s/i.test(row.valueFmt))
+        return row.valueFmt;
+    return `${Math.round(measure.value).toLocaleString()} record(s)`;
 }
-
 function buildBreakdownVisual(rows: DrillRow[], area?: string, lens?: ReturnType<typeof getBreakdownLens>): BreakdownVisualModel | null {
-  if (!rows.length) return null;
-
-  const areaKey = String(area || "").toLowerCase();
-  const rawItems = rows
-    .map((row, index) => {
-      const measure = getVisualMeasure(row, area);
-      return {
-        row,
-        label: row.label || row.key || `Item ${index + 1}`,
-        shortLabel: shortVisualLabel(row.label || row.key || `Item ${index + 1}`),
-        value: measure.value,
-        display: formatVisualMeasure(row, area),
-        tone: normalizeTone(row.tone),
-        color: getToneHex(row.tone, index),
-      };
-    })
-    .filter((item) => item.value > 0)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 6);
-
-  if (!rawItems.length) return null;
-
-  const total = rawItems.reduce((sum, item) => sum + item.value, 0) || 1;
-  const items = rawItems.map((item) => ({
-    ...item,
-    percent: Math.max(1, Math.round((item.value / total) * 100)),
-  }));
-
-  let cursor = 0;
-  const gradient = items.map((item, index) => {
-    const start = index === 0 ? 0 : cursor;
-    const end = index === items.length - 1 ? 100 : Math.min(100, cursor + (item.value / total) * 100);
-    cursor = end;
-    return `${item.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
-  }).join(", ");
-
-  const pricedComposition = ["capex", "risk", "saving"].includes(areaKey) && rows.filter((row) => getVisualMeasure(row, area).mode === "money").length >= 2;
-  const type: "donut" | "bar" = pricedComposition ? "donut" : "bar";
-  const hasMoney = items.some((item) => getVisualMeasure(item.row, area).mode === "money");
-
-  const titles: Record<string, { title: string; barTitle: string; headline: string; guidance: string }> = {
-    capex: {
-      title: "Financial exposure composition",
-      barTitle: "Financial exposure ranking",
-      headline: "Read this as budget shape, not just a count.",
-      guidance: "Large slices show where immediate spend, reserve, risk-adjusted cost or pricing cleanup is driving management exposure.",
-    },
-    risk: {
-      title: "Risk exposure composition",
-      barTitle: "Risk pressure ranking",
-      headline: "Risk is split by source and business consequence.",
-      guidance: "Use the distribution to separate financial risk, PC lifecycle risk, visibility risk and auditor evidence risk before assigning owners.",
-    },
-    saving: {
-      title: "Optimization evidence mix",
-      barTitle: "Optimization evidence ranking",
-      headline: "Optimization is shown only where live evidence exists.",
-      guidance: "Rows without an approved cost or savings source are shown as evidence counts, not invented RM values.",
-    },
-    compliance: {
-      title: "Audit evidence distribution",
-      barTitle: "Audit gap ranking",
-      headline: "Audit compliance is an evidence problem before it is a score problem.",
-      guidance: "Prioritise the tallest bars because they show pricing, identity, telemetry or SLA proof gaps that auditors can challenge.",
-    },
-    resources: {
-      title: "Endpoint visibility distribution",
-      barTitle: "Endpoint pressure ranking",
-      headline: "Resource view should show usable fleet, blind spots and ownership pressure.",
-      guidance: "This chart turns endpoint counts into operational planning: online capacity, offline pressure, stale telemetry and ownership gaps.",
-    },
-    actions: {
-      title: "Decision queue distribution",
-      barTitle: "Decision queue pressure",
-      headline: "This is the board queue, ranked by evidence pressure.",
-      guidance: "Use the chart to identify which decision needs evidence review first, then open the linked evidence detail.",
-    },
-  };
-
-  const copy = titles[areaKey] || {
-    title: `${lens?.label || "Executive"} composition`,
-    barTitle: `${lens?.label || "Executive"} ranking`,
-    headline: "Use this visual to decide what needs attention first.",
-    guidance: "The chart translates the second-level data into a ranking or composition so the cards below are easier to interpret.",
-  };
-
-  return {
-    type,
-    modeLabel: type === "donut" ? "Donut composition" : "Ranked bar chart",
-    title: type === "donut" ? copy.title : copy.barTitle,
-    description: type === "donut"
-      ? "Auto-selected because this breakdown contains comparable priced exposure buckets."
-      : "Auto-selected because this breakdown is better read as ranked operational or evidence pressure.",
-    headline: copy.headline,
-    guidance: copy.guidance,
-    totalLabel: hasMoney ? formatMoney(total) : Math.round(total).toLocaleString(),
-    totalCaption: hasMoney ? "visualised exposure" : "visualised records",
-    gradient,
-    items,
-  };
-}
-
-function getBreakdownLens(area?: string, title?: string) {
-  const key = String(area || "").toLowerCase();
-  const copy: Record<string, { label: string; title: string; description: string; valueLabel: string; recordLabel: string; evidenceLabel: string }> = {
-    capex: {
-      label: "Financial lens",
-      title: "Exposure split by tangible cost, intangible confidence gap and risk-adjusted spend.",
-      description: "This view should help management decide what must be bought, what can be deferred, and what needs evidence cleanup before budget approval.",
-      valueLabel: "Exposure value",
-      recordLabel: "Endpoint scope",
-      evidenceLabel: "Decision confidence",
-    },
-    risk: {
-      label: "Risk lens",
-      title: "Risk is separated into financial, PC lifecycle, operational visibility and audit evidence exposure.",
-      description: "Not every risk is the same. The cards below separate replacement money, stale telemetry, offline control loss and audit weakness so ownership is clearer.",
-      valueLabel: "Risk value",
-      recordLabel: "Risk records",
-      evidenceLabel: "Control pressure",
-    },
-    saving: {
-      label: "Optimization lens",
-      title: "Optimization uses actual cost evidence only; uncosted items remain evidence counts.",
-      description: "This avoids displaying fake savings. Reuse, deferral, cleanup and productivity items only become RM values when a live cost or approved savings source exists.",
-      valueLabel: "Recorded value",
-      recordLabel: "Opportunity scope",
-      evidenceLabel: "Actionability",
-    },
-    compliance: {
-      label: "Audit lens",
-      title: "Audit compliance is based on pricing evidence, identity quality, telemetry recency and SLA governance.",
-      description: "This translates evidence gaps into audit risk so teams know what needs proof, not just what has a missing field.",
-      valueLabel: "Evidence value",
-      recordLabel: "Evidence records",
-      evidenceLabel: "Audit readiness",
-    },
-    resources: {
-      label: "Resource lens",
-      title: "Endpoint visibility is split by usable fleet, offline pressure, stale telemetry and ownership gaps.",
-      description: "This makes the second level useful for resource planning instead of showing department counts only.",
-      valueLabel: "Resource value",
-      recordLabel: "Endpoint scope",
-      evidenceLabel: "Operational coverage",
-    },
-    actions: {
-      label: "Decision lens",
-      title: "Board actions are grouped by management decision, business impact and evidence target.",
-      description: "Use this view to move from dashboard signal to owner, decision and next evidence check.",
-      valueLabel: "Impact",
-      recordLabel: "Decision items",
-      evidenceLabel: "Execution focus",
-    },
-  };
-  return copy[key] || {
-    label: "Executive lens",
-    title: title || "Management breakdown",
-    description: "Review the business impact, evidence and next decision for each item below.",
-    valueLabel: "Value",
-    recordLabel: "Records",
-    evidenceLabel: "Confidence",
-  };
-}
-
-function getRowLens(row: DrillRow, area?: string, maxValue = 1, totalCount = 0) {
-  const key = String(row.key || "").toLowerCase();
-  const label = String(row.label || "").toLowerCase();
-  const rowValue = getRowValue(row);
-  const rowCount = drillNumber(row.count);
-  const evidenceOnly = isEvidenceOnlyArea(area) || /evidence only|not costed|not priced/i.test(`${row.costType || ""} ${row.confidence || ""} ${row.valueFmt || ""}`);
-  const progress = Math.max(6, Math.min(100, Math.round(((rowValue || rowCount) / Math.max(1, rowValue ? maxValue : totalCount)) * 100)));
-  const tone = normalizeTone(row.tone || (rowValue > 0 ? "blue" : rowCount > 0 ? "purple" : "slate"));
-
-  const base = {
-    tone,
-    progress,
-    impactType: row.impactType || "Operational",
-    costType: row.costType || (rowValue > 0 && !evidenceOnly ? "Recorded cost" : "Evidence only"),
-    riskType: row.riskType || "Management signal",
-    confidence: row.confidence || (rowValue > 0 && rowCount > 0 && !evidenceOnly ? "Costed evidence" : rowCount > 0 ? "Evidence gap" : "Monitor"),
-    decision: row.decision || "Open evidence and assign owner",
-    insight: row.insight || "This item needs evidence review before management can decide confidently.",
-    metricLabel: row.metricLabel || (rowValue > 0 && !evidenceOnly ? "Recorded value" : "Evidence records"),
-  };
-
-  if (/financial|capex|replacement|cost/.test(`${area} ${key} ${label}`)) {
-    return { ...base, tone: row.tone || "pink", impactType: row.impactType || "Financial", costType: row.costType || "Tangible + risk-adjusted", riskType: row.riskType || "Budget exposure", decision: row.decision || "Prioritise budget, deferment or pricing cleanup", insight: row.insight || "Exposure is not a single cost bucket; separate immediate replacement, risk-adjusted refresh and confidence gaps." };
-  }
-  if (/risk|stale|offline|aging|visibility|control/.test(`${area} ${key} ${label}`)) {
-    return { ...base, tone: row.tone || "red", impactType: row.impactType || "Risk", costType: row.costType || (rowValue > 0 ? "Financial risk" : "Control risk"), riskType: row.riskType || "PC / operational risk", decision: row.decision || "Validate ownership and remediation path", insight: row.insight || "This separates PC lifecycle, telemetry and control risk instead of mixing all risk into one number." };
-  }
-  if (/saving|reuse|defer|cleanup|recover|optimization/.test(`${area} ${key} ${label}`)) {
-    return { ...base, tone: row.tone || "green", impactType: row.impactType || "Cost optimization", costType: row.costType || (rowValue > 0 ? "Recorded cost" : "Evidence only - no saving source"), riskType: row.riskType || "Optimization", decision: row.decision || "Review reuse, recovery or deferral policy", insight: row.insight || "No savings value is shown unless it comes from live cost evidence or an approved savings source." };
-  }
-  if (/compliance|audit|pricing|identity|sla|evidence/.test(`${area} ${key} ${label}`)) {
-    return { ...base, tone: row.tone || "purple", impactType: row.impactType || "Audit compliance", costType: row.costType || "Intangible exposure", riskType: row.riskType || "Auditor / evidence risk", decision: row.decision || "Close evidence gap and keep audit trail", insight: row.insight || "Compliance value comes from real evidence quality: pricing, ownership, telemetry and SLA proof." };
-  }
-  if (/resource|endpoint|online|owner|department/.test(`${area} ${key} ${label}`)) {
-    return { ...base, tone: row.tone || "blue", impactType: row.impactType || "Resource", costType: row.costType || "Capacity", riskType: row.riskType || "Resource control", decision: row.decision || "Validate capacity, owner and endpoint state", insight: row.insight || "Resource visibility should show usability, ownership and operational pressure, not department counts alone." };
-  }
-  return base;
-}
-
-function readText(value: unknown, fallback = "-") {
-  if (value === undefined || value === null || value === "") return fallback;
-  return String(value);
-}
-
-
-function evidenceCellValue(row: EvidenceRow, keys: string | string[], fallback = "-") {
-  const list = Array.isArray(keys) ? keys : [keys];
-  for (const key of list) {
-    const value = row[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return String(value);
-  }
-  return fallback;
-}
-
-function evidenceDomain(row: EvidenceRow) {
-  return evidenceCellValue(row, ["evidenceDomain", "category", "platform", "objectAgent"], "Uncategorised");
-}
-
-function evidenceKind(area?: string, key?: string, rows: EvidenceRow[] = []) {
-  const a = String(area || "").toLowerCase();
-  const k = String(key || "").toLowerCase();
-  const sample = rows[0] || {};
-  const agent = String(sample.evidenceType || sample.objectAgent || sample.platform || sample.category || "").toLowerCase();
-  if (/software/.test(`${a} ${k} ${agent}`)) return "software";
-  if (/network/.test(`${a} ${k} ${agent}`)) return "network";
-  if (/geo|location/.test(`${a} ${k} ${agent}`)) return "geolocation";
-  if (/service|ticket|incident|sla/.test(`${a} ${k} ${agent}`)) return "service";
-  return "hardware";
-}
-
-function evidenceRiskText(row: EvidenceRow) {
-  const severity = evidenceCellValue(row, ["riskSeverity", "severity"], "-");
-  const score = evidenceCellValue(row, ["riskScore", "score"], "");
-  return score ? `${severity} (${score})` : severity;
-}
-
-function evidenceCostText(row: EvidenceRow) {
-  const raw = evidenceCellValue(row, ["replacementCost", "replacementCostFmt", "cost", "costSource"], "");
-  if (!raw) return "Not priced";
-  if (/^(0|rm\s*0)$/i.test(raw.trim())) return "Not priced";
-  if (/not priced|not costed|evidence only|no cost/i.test(raw)) return "Not priced";
-  return raw;
-}
-
-function getEvidenceColumns(kind: string) {
-  if (kind === "software") {
-    return [
-      { label: "Software", render: (row: EvidenceRow) => evidenceCellValue(row, ["deviceName", "softwareName"]) },
-      { label: "Device / scope", render: (row: EvidenceRow) => evidenceCellValue(row, ["assetId", "department"], "Unmapped device") },
-      { label: "Publisher", render: (row: EvidenceRow) => evidenceCellValue(row, ["brand", "publisher"], "-") },
-      { label: "Version", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "version"], "-") },
-      { label: "Classification", render: (row: EvidenceRow) => evidenceDomain(row).replace(/^Software\s*\/\s*/i, "") },
-      { label: "Inventory status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
-      { label: "Last scan", render: (row: EvidenceRow) => evidenceCellValue(row, ["lastSeen", "age"], "-") },
-      { label: "Risk", render: evidenceRiskText }
-    ];
-  }
-
-  if (kind === "network") {
-    return [
-      { label: "IP / network item", render: (row: EvidenceRow) => evidenceCellValue(row, ["ipAddress", "assetId", "deviceName"]) },
-      { label: "Host / owner", render: (row: EvidenceRow) => evidenceCellValue(row, ["deviceName", "department"], "-") },
-      { label: "Owner / scope", render: (row: EvidenceRow) => evidenceCellValue(row, ["department", "owner"], "Unmapped network") },
-      { label: "Network evidence", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "brand", "platform"], "-") },
-      { label: "Mapping status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
-      { label: "Freshness", render: (row: EvidenceRow) => evidenceCellValue(row, ["lastSeen", "age"], "-") },
-      { label: "Risk", render: evidenceRiskText }
-    ];
-  }
-
-  if (kind === "geolocation") {
-    return [
-      { label: "Device", render: (row: EvidenceRow) => evidenceCellValue(row, ["assetId", "deviceName"]) },
-      { label: "Location / address", render: (row: EvidenceRow) => evidenceCellValue(row, ["department", "locationName"], "Unknown location") },
-      { label: "Coordinates", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "coordinates"], "No coordinates") },
-      { label: "Telemetry time", render: (row: EvidenceRow) => evidenceCellValue(row, ["lastSeen", "locationTime"], "-") },
-      { label: "Location state", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
-      { label: "Evidence issue", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "issue"], "-") },
-      { label: "Risk", render: evidenceRiskText }
-    ];
-  }
-
-  if (kind === "service") {
-    return [
-      { label: "Ticket", render: (row: EvidenceRow) => evidenceCellValue(row, ["assetId", "assetKey"]) },
-      { label: "Summary", render: (row: EvidenceRow) => evidenceCellValue(row, "deviceName") },
-      { label: "Customer / owner", render: (row: EvidenceRow) => evidenceCellValue(row, ["department", "owner"], "Service Desk") },
-      { label: "Priority", render: (row: EvidenceRow) => evidenceCellValue(row, "brand", "-") },
-      { label: "Queue / asset", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "ipAddress"], "-") },
-      { label: "Status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
-      { label: "SLA / due", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "lastSeen"], "-") },
-      { label: "Risk", render: evidenceRiskText }
-    ];
-  }
-
-  return [
-    { label: "Device", render: (row: EvidenceRow) => evidenceCellValue(row, ["deviceName", "assetId"]) },
-    { label: "Owner / department", render: (row: EvidenceRow) => evidenceCellValue(row, "department", "Unassigned") },
-    { label: "Asset type", render: (row: EvidenceRow) => evidenceCellValue(row, "category") },
-    { label: "Brand / model", render: (row: EvidenceRow) => `${evidenceCellValue(row, "brand", "")} ${evidenceCellValue(row, "model", "")}`.trim() || "-" },
-    { label: "Status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
-    { label: "Last seen / age", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "lastSeen"], "-") },
-    { label: "Risk", render: evidenceRiskText },
-    { label: "Cost source", render: evidenceCostText }
-  ];
-}
-
-function normalizeStoryTone(value?: string): "green" | "amber" | "red" | "blue" | "purple" {
-  const tone = String(value || "blue").toLowerCase();
-  if (["green", "amber", "red", "blue", "purple"].includes(tone)) return tone as any;
-  return "blue";
-}
-
-function buildLocalExecutiveStory(dashboard: DashboardData): ExecutiveStory {
-  const metrics = dashboard.metrics || {};
-  const riskSignals = Number(metrics.riskCandidates || 0);
-  const boardItems = Number(metrics.boardItems || dashboard.boardActions.length || 0);
-  const health = clampPercent(parseNumberFromText(dashboard.executiveKpis.find((item) => /health/i.test(item.title))?.value, Number(metrics.healthScore || 0)));
-  const exposure = formatMoney(dashboard.finance.totalCost || 0);
-  const compliance = clampPercent(metrics.pricingCoverage || parseNumberFromText(dashboard.executiveKpis.find((item) => /compliance/i.test(item.title))?.value, 0));
-  const tone = health < 50 || riskSignals > 20 ? "red" : health < 75 || boardItems > 0 ? "amber" : "green";
-  const status = tone === "red" ? "Needs attention" : tone === "amber" ? "Watch closely" : "Healthy posture";
-  const riskLabel = riskSignals === 1 ? "risk signal" : "risk signals";
-  const boardLabel = boardItems === 1 ? "board action" : "board actions";
-  const headline = `${status}: ${exposure} exposure across ${riskSignals.toLocaleString()} ${riskLabel}`;
-  return {
-    status,
-    tone,
-    headline,
-    narrative: `Health is at ${health || 0}% with ${compliance}% evidence coverage. Prioritise recorded high-exposure endpoints, refresh ownership and pricing cleanup before the next management review.`,
-    keySignals: [
-      `${riskSignals.toLocaleString()} ${riskLabel}`,
-      `${boardItems.toLocaleString()} ${boardLabel}`,
-      `${compliance}% evidence coverage`,
-    ],
-    boardRecommendation: boardItems > 0
-      ? "Confirm ownership for risk remediation and refresh planning."
-      : "Maintain weekly monitoring for risk, compliance and lifecycle evidence.",
-    actionItems: [
-      "Review the endpoint groups with the highest exposure.",
-      "Assign accountable owner for remediation or refresh approval.",
-      "Close pricing and compliance gaps before the next review cycle.",
-    ],
-    source: "local",
-  };
-}
-
-function buildChartRows(dashboard: DashboardData): TrendPoint[] {
-  const hasSignal = (row: TrendPoint) =>
-    moneyValue(row.financialExposure) > 0 ||
-    moneyValue(row.riskExposure) > 0 ||
-    moneyValue(row.capex) > 0 ||
-    moneyValue(row.opex) > 0 ||
-    Number(row.signals || row.serviceRisk || 0) > 0;
-
-  const direct = dashboard.analysis?.trend || [];
-  if (direct.length) {
-    const rows = direct.slice(-6);
-    return rows.some(hasSignal) ? rows : [];
-  }
-
-  const financeRows = dashboard.finance.capexOpex || [];
-  if (financeRows.length) {
-    const rows = financeRows.slice(-6).map((row) => ({
-      month: row.month,
-      label: row.label || row.month,
-      financialExposure: moneyValue(row.financialExposure ?? row.capex),
-      riskExposure: moneyValue(row.riskExposure ?? row.opex),
-      signals: Number(row.signals || 0),
-    }));
-    return rows.some(hasSignal) ? rows : [];
-  }
-
-  return [];
-}
-
-export default function ManagementDashboard() {
-  const [dashboard, setDashboard] = useState<DashboardData>(EMPTY_DASHBOARD);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [drill, setDrill] = useState<DrillState>({ level: 1 });
-  const [chartHover, setChartHover] = useState<number | null>(null);
-  const [story, setStory] = useState<ExecutiveStory | null>(null);
-  const [storyLoading, setStoryLoading] = useState(false);
-  const [tableSearch, setTableSearch] = useState("");
-  const [tableFilter, setTableFilter] = useState("all");
-  const [tablePage, setTablePage] = useState(1);
-  const [tablePageSize, setTablePageSize] = useState(10);
-
-  const resetDrillTableState = () => {
-    setTableSearch("");
-    setTableFilter("all");
-    setTablePage(1);
-  };
-
-  useEffect(() => {
-    setTableSearch("");
-    setTableFilter("all");
-    setTablePage(1);
-  }, [drill.level, drill.area, drill.key]);
-
-  async function loadExecutiveStory() {
-    setStoryLoading(true);
-    try {
-      const data = await managementDashboardService.getStorytelling();
-      setStory((data || null) as ExecutiveStory | null);
-    } catch {
-      setStory(null);
-    } finally {
-      setStoryLoading(false);
-    }
-  }
-
-  async function loadDashboard() {
-    setLoading(true);
-    setError("");
-    try {
-      const overview = await managementDashboardService.getOverview();
-      setDashboard(normalizeDashboard(overview));
-      const scheduleStoryLoad = () => void loadExecutiveStory();
-      const idleCallback = (window as any).requestIdleCallback;
-      if (typeof idleCallback === "function") {
-        idleCallback(scheduleStoryLoad, { timeout: 2500 });
-      } else {
-        window.setTimeout(scheduleStoryLoad, 800);
-      }
-    } catch (err) {
-      setDashboard(EMPTY_DASHBOARD);
-      setError(err instanceof Error ? err.message : "Management dashboard failed to load.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { loadDashboard(); }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.add("md-dashboard-page-active");
-    document.body.classList.add("md-dashboard-page-active");
-    document.documentElement.classList.remove("md-management-dashboard-active");
-    document.body.classList.remove("md-management-dashboard-active");
-
-    return () => {
-      document.documentElement.classList.remove("md-dashboard-page-active");
-      document.body.classList.remove("md-dashboard-page-active");
-    };
-  }, []);
-
-  useEffect(() => {
-    const root = document.querySelector(".management-center-page") as HTMLElement | null;
-    if (root) root.scrollTo({ top: 0, behavior: "smooth" });
-  }, [drill.level, drill.title]);
-
-  const topKpis = useMemo(() => dashboard.executiveKpis.slice(0, 6), [dashboard.executiveKpis]);
-  const pillars = useMemo(() => dashboard.pillars.slice(0, 4), [dashboard.pillars]);
-  const actions = useMemo(() => dashboard.boardActions.slice(0, 8), [dashboard.boardActions]);
-  const signals = useMemo(() => {
-    const serviceSignals = dashboard.analysis?.signals || [];
-    if (serviceSignals.length) return serviceSignals.slice(0, 5);
-    return pillars.flatMap((pillar) => (pillar.details || []).slice(0, 1).map((detail) => ({
-      title: detail.label,
-      subtitle: `${detail.value} from ${pillar.title}`,
-      value: detail.value,
-      area: pillar.area,
-      key: detail.key || "",
-      tone: detail.tone || pillar.tone,
-      icon: normalizeIcon(pillar.icon),
-    }))).slice(0, 5);
-  }, [dashboard.analysis?.signals, pillars]);
-
-  const chartRows = useMemo(() => buildChartRows(dashboard), [dashboard]);
-  const chartMode = useMemo(() => {
-    if (chartRows.some((row) => moneyValue(row.financialExposure) > 0 || moneyValue(row.riskExposure) > 0)) return "money" as const;
-    if (chartRows.some((row) => Number(row.signals || row.serviceRisk || 0) > 0)) return "signals" as const;
-    return "empty" as const;
-  }, [chartRows]);
-
-  const policyLabel = dashboard.policyUsed?.profileName || "Default EMA Management Policy";
-  const policyScope = dashboard.policyUsed?.scopeType || dashboard.policyUsed?.scopeKey || "GLOBAL";
-  const chartMax = useMemo(() => Math.max(1, ...chartRows.flatMap((row) => chartMode === "money"
-    ? [moneyValue(row.financialExposure), moneyValue(row.riskExposure)]
-    : [Number(row.signals || row.serviceRisk || 0)]
-  )), [chartRows, chartMode]);
-  const mix = dashboard.analysis?.mix || { risk: 0, control: 0, savings: 0 };
-  const healthValue = parseNumberFromText(topKpis.find((item) => /health/i.test(item.title))?.value, moneyValue(mix.control));
-  const ringHealth = clampPercent(healthValue || moneyValue(mix.control));
-  const ringRisk = clampPercent(moneyValue(mix.risk));
-  const ringCircumference = 2 * Math.PI * 78;
-  const ringControlDash = (ringHealth / 100) * ringCircumference;
-  const ringRiskDash = (Math.min(100, ringRisk) / 100) * ringCircumference;
-
-  function openLevel2(area: string, title: string, key = "") {
-    resetDrillTableState();
-    if (area === "actions") {
-      const rows: DrillRow[] = dashboard.boardActions.map((action) => {
-        const target = parseActionTarget(action);
+    if (!rows.length)
+        return null;
+    const areaKey = String(area || "").toLowerCase();
+    const rawItems = rows
+        .map((row, index) => {
+        const measure = getVisualMeasure(row, area);
         return {
-          key: action.key || `${target.area}:${target.key}`,
-          label: action.issue,
-          count: 1,
-          valueFmt: action.impact,
-          level3Area: target.area,
-          level3Key: target.key,
+            row,
+            label: row.label || row.key || `Item ${index + 1}`,
+            shortLabel: shortVisualLabel(row.label || row.key || `Item ${index + 1}`),
+            value: measure.value,
+            display: formatVisualMeasure(row, area),
+            tone: normalizeTone(row.tone),
+            color: getToneHex(row.tone, index),
         };
-      });
-      setDrill({ level: 2, area, key, title, rows, total: rows.length });
-      return;
+    })
+        .filter((item) => item.value > 0)
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6);
+    if (!rawItems.length)
+        return null;
+    const total = rawItems.reduce((sum, item) => sum + item.value, 0) || 1;
+    const items = rawItems.map((item) => ({
+        ...item,
+        percent: Math.max(1, Math.round((item.value / total) * 100)),
+    }));
+    let cursor = 0;
+    const gradient = items.map((item, index) => {
+        const start = index === 0 ? 0 : cursor;
+        const end = index === items.length - 1 ? 100 : Math.min(100, cursor + (item.value / total) * 100);
+        cursor = end;
+        return `${item.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+    }).join(", ");
+    const pricedComposition = ["capex", "risk", "saving"].includes(areaKey) && rows.filter((row) => getVisualMeasure(row, area).mode === "money").length >= 2;
+    const type: "donut" | "bar" = pricedComposition ? "donut" : "bar";
+    const hasMoney = items.some((item) => getVisualMeasure(item.row, area).mode === "money");
+    const titles: Record<string, {
+        title: string;
+        barTitle: string;
+        headline: string;
+        guidance: string;
+    }> = {
+        capex: {
+            title: "Financial exposure composition",
+            barTitle: "Financial exposure ranking",
+            headline: "Read this as budget shape, not just a count.",
+            guidance: "Large slices show where immediate spend, reserve, risk-adjusted cost or pricing cleanup is driving management exposure.",
+        },
+        risk: {
+            title: "Risk exposure composition",
+            barTitle: "Risk pressure ranking",
+            headline: "Risk is split by source and business consequence.",
+            guidance: "Use the distribution to separate financial risk, PC lifecycle risk, visibility risk and auditor evidence risk before assigning owners.",
+        },
+        saving: {
+            title: "Optimization evidence mix",
+            barTitle: "Optimization evidence ranking",
+            headline: "Optimization is shown only where live evidence exists.",
+            guidance: "Rows without an approved cost or savings source are shown as evidence counts, not invented RM values.",
+        },
+        compliance: {
+            title: "Audit evidence distribution",
+            barTitle: "Audit gap ranking",
+            headline: "Audit compliance is an evidence problem before it is a score problem.",
+            guidance: "Prioritise the tallest bars because they show pricing, identity, telemetry or SLA proof gaps that auditors can challenge.",
+        },
+        resources: {
+            title: "Endpoint visibility distribution",
+            barTitle: "Endpoint pressure ranking",
+            headline: "Resource view should show usable fleet, blind spots and ownership pressure.",
+            guidance: "This chart turns endpoint counts into operational planning: online capacity, offline pressure, stale telemetry and ownership gaps.",
+        },
+        actions: {
+            title: "Decision queue distribution",
+            barTitle: "Decision queue pressure",
+            headline: "This is the board queue, ranked by evidence pressure.",
+            guidance: "Use the chart to identify which decision needs evidence review first, then open the linked evidence detail.",
+        },
+    };
+    const copy = titles[areaKey] || {
+        title: `${lens?.label || "Executive"} composition`,
+        barTitle: `${lens?.label || "Executive"} ranking`,
+        headline: "Use this visual to decide what needs attention first.",
+        guidance: "The chart translates the second-level data into a ranking or composition so the cards below are easier to interpret.",
+    };
+    return {
+        type,
+        modeLabel: type === "donut" ? "Donut composition" : "Ranked bar chart",
+        title: type === "donut" ? copy.title : copy.barTitle,
+        description: type === "donut"
+            ? "Auto-selected because this breakdown contains comparable priced exposure buckets."
+            : "Auto-selected because this breakdown is better read as ranked operational or evidence pressure.",
+        headline: copy.headline,
+        guidance: copy.guidance,
+        totalLabel: hasMoney ? formatMoney(total) : Math.round(total).toLocaleString(),
+        totalCaption: hasMoney ? "visualised exposure" : "visualised records",
+        gradient,
+        items,
+    };
+}
+function getBreakdownLens(area?: string, title?: string) {
+    const key = String(area || "").toLowerCase();
+    const copy: Record<string, {
+        label: string;
+        title: string;
+        description: string;
+        valueLabel: string;
+        recordLabel: string;
+        evidenceLabel: string;
+    }> = {
+        capex: {
+            label: "Financial lens",
+            title: "Exposure split by tangible cost, intangible confidence gap and risk-adjusted spend.",
+            description: "This view should help management decide what must be bought, what can be deferred, and what needs evidence cleanup before budget approval.",
+            valueLabel: "Exposure value",
+            recordLabel: "Endpoint scope",
+            evidenceLabel: "Decision confidence",
+        },
+        risk: {
+            label: "Risk lens",
+            title: "Risk is separated into financial, PC lifecycle, operational visibility and audit evidence exposure.",
+            description: "Not every risk is the same. The cards below separate replacement money, stale telemetry, offline control loss and audit weakness so ownership is clearer.",
+            valueLabel: "Risk value",
+            recordLabel: "Risk records",
+            evidenceLabel: "Control pressure",
+        },
+        saving: {
+            label: "Optimization lens",
+            title: "Optimization uses actual cost evidence only; uncosted items remain evidence counts.",
+            description: "This avoids displaying fake savings. Reuse, deferral, cleanup and productivity items only become RM values when a live cost or approved savings source exists.",
+            valueLabel: "Recorded value",
+            recordLabel: "Opportunity scope",
+            evidenceLabel: "Actionability",
+        },
+        compliance: {
+            label: "Audit lens",
+            title: "Audit compliance is based on pricing evidence, identity quality, telemetry recency and SLA governance.",
+            description: "This translates evidence gaps into audit risk so teams know what needs proof, not just what has a missing field.",
+            valueLabel: "Evidence value",
+            recordLabel: "Evidence records",
+            evidenceLabel: "Audit readiness",
+        },
+        resources: {
+            label: "Resource lens",
+            title: "Endpoint visibility is split by usable fleet, offline pressure, stale telemetry and ownership gaps.",
+            description: "This makes the second level useful for resource planning instead of showing department counts only.",
+            valueLabel: "Resource value",
+            recordLabel: "Endpoint scope",
+            evidenceLabel: "Operational coverage",
+        },
+        actions: {
+            label: "Decision lens",
+            title: "Board actions are grouped by management decision, business impact and evidence target.",
+            description: "Use this view to move from dashboard signal to owner, decision and next evidence check.",
+            valueLabel: "Impact",
+            recordLabel: "Decision items",
+            evidenceLabel: "Execution focus",
+        },
+    };
+    return copy[key] || {
+        label: "Executive lens",
+        title: title || "Management breakdown",
+        description: "Review the business impact, evidence and next decision for each item below.",
+        valueLabel: "Value",
+        recordLabel: "Records",
+        evidenceLabel: "Confidence",
+    };
+}
+function getRowLens(row: DrillRow, area?: string, maxValue = 1, totalCount = 0) {
+    const key = String(row.key || "").toLowerCase();
+    const label = String(row.label || "").toLowerCase();
+    const rowValue = getRowValue(row);
+    const rowCount = drillNumber(row.count);
+    const evidenceOnly = isEvidenceOnlyArea(area) || /evidence only|not costed|not priced/i.test(`${row.costType || ""} ${row.confidence || ""} ${row.valueFmt || ""}`);
+    const progress = Math.max(6, Math.min(100, Math.round(((rowValue || rowCount) / Math.max(1, rowValue ? maxValue : totalCount)) * 100)));
+    const tone = normalizeTone(row.tone || (rowValue > 0 ? "blue" : rowCount > 0 ? "purple" : "slate"));
+    const base = {
+        tone,
+        progress,
+        impactType: row.impactType || "Operational",
+        costType: row.costType || (rowValue > 0 && !evidenceOnly ? "Recorded cost" : "Evidence only"),
+        riskType: row.riskType || "Management signal",
+        confidence: row.confidence || (rowValue > 0 && rowCount > 0 && !evidenceOnly ? "Costed evidence" : rowCount > 0 ? "Evidence gap" : "Monitor"),
+        decision: row.decision || "Open evidence and assign owner",
+        insight: row.insight || "This item needs evidence review before management can decide confidently.",
+        metricLabel: row.metricLabel || (rowValue > 0 && !evidenceOnly ? "Recorded value" : "Evidence records"),
+    };
+    if (/financial|capex|replacement|cost/.test(`${area} ${key} ${label}`)) {
+        return { ...base, tone: row.tone || "pink", impactType: row.impactType || "Financial", costType: row.costType || "Tangible + risk-adjusted", riskType: row.riskType || "Budget exposure", decision: row.decision || "Prioritise budget, deferment or pricing cleanup", insight: row.insight || "Exposure is not a single cost bucket; separate immediate replacement, risk-adjusted refresh and confidence gaps." };
     }
-
-    if (!key) {
-      const rows = dashboard.level2[area] || [];
-      if (rows.length) {
-        setDrill({ level: 2, area, key, title, rows, total: rows.length });
-        return;
-      }
-      // If the overview did not include a local breakdown, load the live domain breakdown.
+    if (/risk|stale|offline|aging|visibility|control/.test(`${area} ${key} ${label}`)) {
+        return { ...base, tone: row.tone || "red", impactType: row.impactType || "Risk", costType: row.costType || (rowValue > 0 ? "Financial risk" : "Control risk"), riskType: row.riskType || "PC / operational risk", decision: row.decision || "Validate ownership and remediation path", insight: row.insight || "This separates PC lifecycle, telemetry and control risk instead of mixing all risk into one number." };
     }
-
-    setDrill({ level: 2, area, key, title, rows: [], total: 0, loading: true });
-    managementDashboardService.getDrilldown({ area, key, level: "2" })
-      .then((data) => {
-        const result = (data || {}) as { title?: string; rows?: DrillRow[]; total?: number };
-        setDrill({ level: 2, area, key, title: title || result.title || "Management Breakdown", rows: result.rows || [], total: result.total || 0 });
-      })
-      .catch(() => setDrill({ level: 2, area, key, title, rows: [], total: 0 }));
-  }
-
-  function openLevel3(area: string, key: string, title: string) {
-    resetDrillTableState();
-    const parent = drill.level === 2 ? { ...drill, loading: false } : undefined;
-    const evidenceTitle = title || key || "Evidence Detail";
-    setDrill({ level: 3, area, key, title: evidenceTitle, rows: [], total: 0, loading: true, parent });
-    managementDashboardService.getDrilldown({ area, key, level: "3" })
-      .then((data) => {
-        const result = (data || {}) as { rows?: EvidenceRow[]; total?: number };
-        setDrill({ level: 3, area, key, title: evidenceTitle, rows: result.rows || [], total: result.total || 0, parent });
-      })
-      .catch(() => setDrill({ level: 3, area, key, title: evidenceTitle, rows: [], total: 0, parent }));
-  }
-
-  function closeDrilldown() { resetDrillTableState(); setDrill({ level: 1 }); }
-  function backDrilldown() { resetDrillTableState(); drill.level === 3 && drill.parent ? setDrill({ ...drill.parent, level: 2 }) : closeDrilldown(); }
-  function refreshDashboard() { closeDrilldown(); loadDashboard(); }
-  function printDashboard() { window.print(); }
-
-  function renderOverview() {
+    if (/saving|reuse|defer|cleanup|recover|optimization/.test(`${area} ${key} ${label}`)) {
+        return { ...base, tone: row.tone || "green", impactType: row.impactType || "Cost optimization", costType: row.costType || (rowValue > 0 ? "Recorded cost" : "Evidence only - no saving source"), riskType: row.riskType || "Optimization", decision: row.decision || "Review reuse, recovery or deferral policy", insight: row.insight || "No savings value is shown unless it comes from live cost evidence or an approved savings source." };
+    }
+    if (/compliance|audit|pricing|identity|sla|evidence/.test(`${area} ${key} ${label}`)) {
+        return { ...base, tone: row.tone || "purple", impactType: row.impactType || "Audit compliance", costType: row.costType || "Intangible exposure", riskType: row.riskType || "Auditor / evidence risk", decision: row.decision || "Close evidence gap and keep audit trail", insight: row.insight || "Compliance value comes from real evidence quality: pricing, ownership, telemetry and SLA proof." };
+    }
+    if (/resource|endpoint|online|owner|department/.test(`${area} ${key} ${label}`)) {
+        return { ...base, tone: row.tone || "blue", impactType: row.impactType || "Resource", costType: row.costType || "Capacity", riskType: row.riskType || "Resource control", decision: row.decision || "Validate capacity, owner and endpoint state", insight: row.insight || "Resource visibility should show usability, ownership and operational pressure, not department counts alone." };
+    }
+    return base;
+}
+function readText(value: unknown, fallback = "-") {
+    if (value === undefined || value === null || value === "")
+        return fallback;
+    return String(value);
+}
+function evidenceCellValue(row: EvidenceRow, keys: string | string[], fallback = "-") {
+    const list = Array.isArray(keys) ? keys : [keys];
+    for (const key of list) {
+        const value = row[key];
+        if (value !== undefined && value !== null && String(value).trim() !== "")
+            return String(value);
+    }
+    return fallback;
+}
+function evidenceDomain(row: EvidenceRow) {
+    return evidenceCellValue(row, ["evidenceDomain", "category", "platform", "objectAgent"], "Uncategorised");
+}
+function evidenceKind(area?: string, key?: string, rows: EvidenceRow[] = []) {
+    const a = String(area || "").toLowerCase();
+    const k = String(key || "").toLowerCase();
+    const sample = rows[0] || {};
+    const agent = String(sample.evidenceType || sample.objectAgent || sample.platform || sample.category || "").toLowerCase();
+    if (/software/.test(`${a} ${k} ${agent}`))
+        return "software";
+    if (/network/.test(`${a} ${k} ${agent}`))
+        return "network";
+    if (/geo|location/.test(`${a} ${k} ${agent}`))
+        return "geolocation";
+    if (/service|ticket|incident|sla/.test(`${a} ${k} ${agent}`))
+        return "service";
+    return "hardware";
+}
+function evidenceRiskText(row: EvidenceRow) {
+    const severity = evidenceCellValue(row, ["riskSeverity", "severity"], "-");
+    const score = evidenceCellValue(row, ["riskScore", "score"], "");
+    return score ? `${severity} (${score})` : severity;
+}
+function evidenceCostText(row: EvidenceRow) {
+    const raw = evidenceCellValue(row, ["replacementCost", "replacementCostFmt", "cost", "costSource"], "");
+    if (!raw)
+        return "Not priced";
+    if (/^(0|rm\s*0)$/i.test(raw.trim()))
+        return "Not priced";
+    if (/not priced|not costed|evidence only|no cost/i.test(raw))
+        return "Not priced";
+    return raw;
+}
+function getEvidenceColumns(kind: string) {
+    if (kind === "software") {
+        return [
+            { label: "Software", render: (row: EvidenceRow) => evidenceCellValue(row, ["deviceName", "softwareName"]) },
+            { label: "Device / scope", render: (row: EvidenceRow) => evidenceCellValue(row, ["assetId", "department"], "Unmapped device") },
+            { label: "Publisher", render: (row: EvidenceRow) => evidenceCellValue(row, ["brand", "publisher"], "-") },
+            { label: "Version", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "version"], "-") },
+            { label: "Classification", render: (row: EvidenceRow) => evidenceDomain(row).replace(/^Software\s*\/\s*/i, "") },
+            { label: "Inventory status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
+            { label: "Last scan", render: (row: EvidenceRow) => evidenceCellValue(row, ["lastSeen", "age"], "-") },
+            { label: "Risk", render: evidenceRiskText }
+        ];
+    }
+    if (kind === "network") {
+        return [
+            { label: "IP / network item", render: (row: EvidenceRow) => evidenceCellValue(row, ["ipAddress", "assetId", "deviceName"]) },
+            { label: "Host / owner", render: (row: EvidenceRow) => evidenceCellValue(row, ["deviceName", "department"], "-") },
+            { label: "Owner / scope", render: (row: EvidenceRow) => evidenceCellValue(row, ["department", "owner"], "Unmapped network") },
+            { label: "Network evidence", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "brand", "platform"], "-") },
+            { label: "Mapping status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
+            { label: "Freshness", render: (row: EvidenceRow) => evidenceCellValue(row, ["lastSeen", "age"], "-") },
+            { label: "Risk", render: evidenceRiskText }
+        ];
+    }
+    if (kind === "geolocation") {
+        return [
+            { label: "Device", render: (row: EvidenceRow) => evidenceCellValue(row, ["assetId", "deviceName"]) },
+            { label: "Location / address", render: (row: EvidenceRow) => evidenceCellValue(row, ["department", "locationName"], "Unknown location") },
+            { label: "Coordinates", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "coordinates"], "No coordinates") },
+            { label: "Telemetry time", render: (row: EvidenceRow) => evidenceCellValue(row, ["lastSeen", "locationTime"], "-") },
+            { label: "Location state", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
+            { label: "Evidence issue", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "issue"], "-") },
+            { label: "Risk", render: evidenceRiskText }
+        ];
+    }
+    if (kind === "service") {
+        return [
+            { label: "Ticket", render: (row: EvidenceRow) => evidenceCellValue(row, ["assetId", "assetKey"]) },
+            { label: "Summary", render: (row: EvidenceRow) => evidenceCellValue(row, "deviceName") },
+            { label: "Customer / owner", render: (row: EvidenceRow) => evidenceCellValue(row, ["department", "owner"], "Service Desk") },
+            { label: "Priority", render: (row: EvidenceRow) => evidenceCellValue(row, "brand", "-") },
+            { label: "Queue / asset", render: (row: EvidenceRow) => evidenceCellValue(row, ["model", "ipAddress"], "-") },
+            { label: "Status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
+            { label: "SLA / due", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "lastSeen"], "-") },
+            { label: "Risk", render: evidenceRiskText }
+        ];
+    }
+    return [
+        { label: "Device", render: (row: EvidenceRow) => evidenceCellValue(row, ["deviceName", "assetId"]) },
+        { label: "Owner / department", render: (row: EvidenceRow) => evidenceCellValue(row, "department", "Unassigned") },
+        { label: "Asset type", render: (row: EvidenceRow) => evidenceCellValue(row, "category") },
+        { label: "Brand / model", render: (row: EvidenceRow) => `${evidenceCellValue(row, "brand", "")} ${evidenceCellValue(row, "model", "")}`.trim() || "-" },
+        { label: "Status", render: (row: EvidenceRow) => evidenceCellValue(row, "status") },
+        { label: "Last seen / age", render: (row: EvidenceRow) => evidenceCellValue(row, ["age", "lastSeen"], "-") },
+        { label: "Risk", render: evidenceRiskText },
+        { label: "Cost source", render: evidenceCostText }
+    ];
+}
+function normalizeStoryTone(value?: string): "green" | "amber" | "red" | "blue" | "purple" {
+    const tone = String(value || "blue").toLowerCase();
+    if (["green", "amber", "red", "blue", "purple"].includes(tone))
+        return tone as any;
+    return "blue";
+}
+function buildLocalExecutiveStory(dashboard: DashboardData): ExecutiveStory {
     const metrics = dashboard.metrics || {};
-    const metricNumber = (key: string): number | null => {
-      const raw = metrics[key];
-      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-      if (typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw))) return Number(raw);
-      return null;
+    const riskSignals = Number(metrics.riskCandidates || 0);
+    const boardItems = Number(metrics.boardItems || dashboard.boardActions.length || 0);
+    const health = clampPercent(parseNumberFromText(dashboard.executiveKpis.find((item) => /health/i.test(item.title))?.value, Number(metrics.healthScore || 0)));
+    const exposure = formatMoney(dashboard.finance.totalCost || 0);
+    const compliance = clampPercent(metrics.pricingCoverage || parseNumberFromText(dashboard.executiveKpis.find((item) => /compliance/i.test(item.title))?.value, 0));
+    const tone = health < 50 || riskSignals > 20 ? "red" : health < 75 || boardItems > 0 ? "amber" : "green";
+    const status = tone === "red" ? "Needs attention" : tone === "amber" ? "Watch closely" : "Healthy posture";
+    const riskLabel = riskSignals === 1 ? "risk signal" : "risk signals";
+    const boardLabel = boardItems === 1 ? "board action" : "board actions";
+    const headline = `${status}: ${exposure} exposure across ${riskSignals.toLocaleString()} ${riskLabel}`;
+    return {
+        status,
+        tone,
+        headline,
+        narrative: `Health is at ${health || 0}% with ${compliance}% evidence coverage. Prioritise recorded high-exposure endpoints, refresh ownership and pricing cleanup before the next management review.`,
+        keySignals: [
+            `${riskSignals.toLocaleString()} ${riskLabel}`,
+            `${boardItems.toLocaleString()} ${boardLabel}`,
+            `${compliance}% evidence coverage`,
+        ],
+        boardRecommendation: boardItems > 0
+            ? "Confirm ownership for risk remediation and refresh planning."
+            : "Maintain weekly monitoring for risk, compliance and lifecycle evidence.",
+        actionItems: [
+            "Review the endpoint groups with the highest exposure.",
+            "Assign accountable owner for remediation or refresh approval.",
+            "Close pricing and compliance gaps before the next review cycle.",
+        ],
+        source: "local",
     };
-    const metricBoolean = (key: string): boolean | null => {
-      const raw = metrics[key];
-      if (raw === undefined || raw === null || raw === "") return null;
-      if (typeof raw === "boolean") return raw;
-      if (typeof raw === "number") return raw === 1;
-      const text = String(raw).trim().toLowerCase();
-      if (["true", "1", "yes", "y", "on", "enabled"].includes(text)) return true;
-      if (["false", "0", "no", "n", "off", "disabled"].includes(text)) return false;
-      return null;
+}
+function buildChartRows(dashboard: DashboardData): TrendPoint[] {
+    const hasSignal = (row: TrendPoint) => moneyValue(row.financialExposure) > 0 ||
+        moneyValue(row.riskExposure) > 0 ||
+        moneyValue(row.capex) > 0 ||
+        moneyValue(row.opex) > 0 ||
+        Number(row.signals || row.serviceRisk || 0) > 0;
+    const direct = dashboard.analysis?.trend || [];
+    if (direct.length) {
+        const rows = direct.slice(-6);
+        return rows.some(hasSignal) ? rows : [];
+    }
+    const financeRows = dashboard.finance.capexOpex || [];
+    if (financeRows.length) {
+        const rows = financeRows.slice(-6).map((row) => ({
+            month: row.month,
+            label: row.label || row.month,
+            financialExposure: moneyValue(row.financialExposure ?? row.capex),
+            riskExposure: moneyValue(row.riskExposure ?? row.opex),
+            signals: Number(row.signals || 0),
+        }));
+        return rows.some(hasSignal) ? rows : [];
+    }
+    return [];
+}
+export default function ManagementDashboard() {
+    const [dashboard, setDashboard] = useState<DashboardData>(EMPTY_DASHBOARD);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [drill, setDrill] = useState<DrillState>({ level: 1 });
+    const [chartHover, setChartHover] = useState<number | null>(null);
+    const [story, setStory] = useState<ExecutiveStory | null>(null);
+    const [storyLoading, setStoryLoading] = useState(false);
+    const [tableSearch, setTableSearch] = useState("");
+    const [tableFilter, setTableFilter] = useState("all");
+    const [tablePage, setTablePage] = useState(1);
+    const [tablePageSize, setTablePageSize] = useState(10);
+    const resetDrillTableState = () => {
+        setTableSearch("");
+        setTableFilter("all");
+        setTablePage(1);
     };
-    const pendingText = loading ? "Loading..." : "Not recorded";
-    const countText = (value: number | null, unit = "") => value === null ? pendingText : `${value.toLocaleString()}${unit ? ` ${unit}` : ""}`;
-    const percentText = (value: number | null) => value === null ? pendingText : `${clampPercent(value)}%`;
-    const exposureValue = typeof dashboard.finance.totalCost === "number" && dashboard.finance.totalCost > 0 ? dashboard.finance.totalCost : null;
-    const totalEndpointsValue = metricNumber("totalEndpoints");
-    const onlineCoverageValue = metricNumber("onlineCoverage") ?? metricNumber("onlineRate");
-    const pricingCoverageValue = metricNumber("pricingCoverage");
-    const riskSignalsValue = metricNumber("riskCandidates");
-    const boardItemsValue = metricNumber("boardAttention") ?? metricNumber("boardItems") ?? (actions.length > 0 ? actions.length : null);
-    const healthScoreValue = metricNumber("healthScore");
-    const complianceScoreValue = metricNumber("complianceScore");
-    const pcAgingRuleFlag = metricBoolean("pcAgingRuleEnabled");
-    const hardwareLifecycleRiskValue =
-      metricNumber("hardwareLifecycleRiskItems") ??
-      metricNumber("endpointRiskCandidates") ??
-      metricNumber("aging");
-    const hasHardwareLifecycleMetrics =
-      hardwareLifecycleRiskValue !== null ||
-      metricNumber("hardwareAgingItems") !== null ||
-      metricNumber("hardwareMonitorItems") !== null ||
-      metricNumber("hardwareStaleItems") !== null ||
-      totalEndpointsValue !== null;
-    const pcAgingRuleActive = pcAgingRuleFlag === null ? hasHardwareLifecycleMetrics : pcAgingRuleFlag;
-    const executiveStory = story || buildLocalExecutiveStory(dashboard);
-
-    const latestTrendRow = chartRows[chartRows.length - 1] || null;
-    const peakTrendRow = chartRows.reduce<TrendPoint | null>((best, row) => {
-      const rowTotal = moneyValue(row.financialExposure) + moneyValue(row.riskExposure) + moneyValue(row.capex) + moneyValue(row.opex);
-      const bestTotal = best ? moneyValue(best.financialExposure) + moneyValue(best.riskExposure) + moneyValue(best.capex) + moneyValue(best.opex) : -1;
-      return rowTotal > bestTotal ? row : best;
-    }, null);
-    const peakExposureValue = peakTrendRow
-      ? moneyValue(peakTrendRow.financialExposure) + moneyValue(peakTrendRow.riskExposure) + moneyValue(peakTrendRow.capex) + moneyValue(peakTrendRow.opex)
-      : 0;
-    const latestFinancialValue = latestTrendRow
-      ? moneyValue(latestTrendRow.financialExposure) + moneyValue(latestTrendRow.capex)
-      : 0;
-    const latestRiskValue = latestTrendRow
-      ? moneyValue(latestTrendRow.riskExposure) + moneyValue(latestTrendRow.opex)
-      : 0;
-    const chartSignalTotal = chartRows.reduce((sum, row) => sum + Number(row.signals || row.serviceRisk || 0), 0);
-    const chartRiskSignalValue = riskSignalsValue ?? (chartSignalTotal > 0 ? chartSignalTotal : null);
-    const softwareScopeValue = metricNumber("uniqueSoftware") ?? metricNumber("softwareInstallCount") ?? metricNumber("softwareInstalls");
-    const networkScopeValue = metricNumber("networkKnownIps") ?? metricNumber("networkRecordCount") ?? metricNumber("networkRecords");
-    const geoScopeValue = metricNumber("geoTrackedDevices");
-    const evidenceCoverageText = [
-      totalEndpointsValue !== null ? `${countText(totalEndpointsValue)} endpoint(s)` : "endpoint scope not recorded",
-      softwareScopeValue !== null ? `${countText(softwareScopeValue)} software item(s)` : "software not recorded",
-      networkScopeValue !== null ? `${countText(networkScopeValue)} network record(s)` : "network not recorded",
-      geoScopeValue !== null ? `${countText(geoScopeValue)} geo device(s)` : "geo not recorded",
-    ].join(" • ");
-    const chartInsightCards = [
-      {
-        label: "Peak Exposure",
-        value: peakExposureValue > 0 ? formatMoney(peakExposureValue) : "Not recorded",
-        note: peakTrendRow ? `${peakTrendRow.label || peakTrendRow.month} highest combined exposure` : "No monthly exposure yet",
-        tone: "pink" as Tone,
-        area: "capex",
-        title: "Costed Exposure",
-      },
-      {
-        label: "Risk Movement",
-        value: countText(chartRiskSignalValue),
-        note: chartRiskSignalValue === null ? "Risk signal source not recorded" : "Cross-domain risk signals detected",
-        tone: "red" as Tone,
-        area: "risk",
-        title: "Active Risk Signals",
-      },
-      {
-        label: "Current Month",
-        value: latestFinancialValue + latestRiskValue > 0 ? formatMoney(latestFinancialValue + latestRiskValue) : "Not recorded",
-        note: latestTrendRow ? `${latestTrendRow.label || latestTrendRow.month}: ${formatMoney(latestFinancialValue)} financial / ${formatMoney(latestRiskValue)} risk` : "No current month movement",
-        tone: "amber" as Tone,
-        area: "capex",
-        title: "Costed Exposure",
-      },
-      {
-        label: "Evidence Coverage",
-        value: totalEndpointsValue === null ? "Not recorded" : countText(totalEndpointsValue),
-        note: evidenceCoverageText,
-        tone: "blue" as Tone,
-        area: "resources",
-        title: "Estate Scope",
-      },
-    ];
-
-    const frontKpis = [
-      {
-        title: "Estate Scope",
-        value: countText(totalEndpointsValue),
-        subValue: totalEndpointsValue === null ? "" : "endpoint(s)",
-        note: onlineCoverageValue === null ? "Online/control coverage not recorded" : `${percentText(onlineCoverageValue)} online/control coverage`,
-        tone: "blue" as Tone,
-        icon: "endpoint" as keyof typeof IconSet,
-        area: "resources",
-        key: "",
-      },
-      {
-        title: "Costed Exposure",
-        value: exposureValue === null ? "Not recorded" : formatMoney(exposureValue),
-        note: exposureValue === null ? "No live cost source recorded" : "Costed from pricing/catalog evidence",
-        tone: exposureValue === null ? "slate" as Tone : "pink" as Tone,
-        icon: "money" as keyof typeof IconSet,
-        area: "capex",
-        key: "",
-      },
-      {
-        title: "Active Risk Signals",
-        value: countText(riskSignalsValue),
-        note: "Hardware, software, network, geolocation and service evidence",
-        tone: riskSignalsValue && riskSignalsValue > 0 ? "red" as Tone : "green" as Tone,
-        icon: "risk" as keyof typeof IconSet,
-        area: "risk",
-        key: "",
-      },
-      {
-        title: "Compliance Coverage",
-        value: percentText(pricingCoverageValue),
-        note: complianceScoreValue === null ? "Evidence score not recorded" : `${percentText(complianceScoreValue)} compliance score`,
-        tone: complianceScoreValue !== null && complianceScoreValue >= 80 ? "green" as Tone : "amber" as Tone,
-        icon: "audit" as keyof typeof IconSet,
-        area: "compliance",
-        key: "",
-      },
-      {
-        title: "Open Decisions",
-        value: countText(boardItemsValue),
-        note: "Items requiring management owner, approval or evidence follow-up",
-        tone: boardItemsValue && boardItemsValue > 0 ? "orange" as Tone : "green" as Tone,
-        icon: "list" as keyof typeof IconSet,
-        area: "actions",
-        key: "",
-      },
-    ];
-
-    const domainMatrix = [
-      {
-        title: "Hardware",
-        caption: "Endpoint lifecycle, aging, stale telemetry and control evidence.",
-        value: pcAgingRuleActive ? hardwareLifecycleRiskValue : null,
-        valueLabel: "lifecycle signal(s)",
-        meta: pcAgingRuleActive ? (totalEndpointsValue === null ? "Estate scope not recorded" : `${countText(totalEndpointsValue)} endpoint(s) in estate`) : "PC aging rule/source not configured",
-        score: pcAgingRuleActive ? healthScoreValue : null,
-        scoreLabel: "health",
-        tone: "blue" as Tone,
-        icon: "endpoint" as keyof typeof IconSet,
-        area: "risk",
-        key: "pc-lifecycle",
-      },
-      {
-        title: "Software",
-        caption: "Unclassified, stale or review-needed software evidence.",
-        value: metricNumber("softwareRiskItems"),
-        valueLabel: "software signal(s)",
-        meta: metricNumber("uniqueSoftware") === null ? "Software scope not recorded" : `${countText(metricNumber("uniqueSoftware"))} app(s) tracked`,
-        score: metricNumber("softwareComplianceScore"),
-        scoreLabel: "classification",
-        tone: "cyan" as Tone,
-        icon: "package" as keyof typeof IconSet,
-        area: "software",
-        key: "software-risk",
-      },
-      {
-        title: "Network",
-        caption: "Unregistered IP, duplicate IP and network evidence integrity.",
-        value: metricNumber("networkRiskItems"),
-        valueLabel: "network signal(s)",
-        meta: metricNumber("networkKnownIps") === null ? "Network scope not recorded" : `${countText(metricNumber("networkKnownIps"))} IP record(s)`,
-        score: metricNumber("networkIntegrityScore"),
-        scoreLabel: "integrity",
-        tone: "purple" as Tone,
-        icon: "activity" as keyof typeof IconSet,
-        area: "network",
-        key: "network-risk",
-      },
-      {
-        title: "Geolocation",
-        caption: "Missing, stale or unknown location/custody evidence.",
-        value: metricNumber("geoRiskItems"),
-        valueLabel: "location issue(s)",
-        meta: metricNumber("geoTrackedDevices") === null ? "Location scope not recorded" : `${countText(metricNumber("geoTrackedDevices"))} tracked device(s)`,
-        score: metricNumber("geoIntegrityScore"),
-        scoreLabel: "freshness",
-        tone: "amber" as Tone,
-        icon: "target" as keyof typeof IconSet,
-        area: "geolocation",
-        key: "geolocation-risk",
-      },
-      {
-        title: "Service Desk",
-        caption: "Open ticket load, SLA governance and support pressure.",
-        value: metricNumber("slaBreached") !== null && Number(metricNumber("slaBreached")) > 0 ? metricNumber("slaBreached") : metricNumber("openTickets"),
-        valueLabel: metricNumber("slaBreached") !== null && Number(metricNumber("slaBreached")) > 0 ? "SLA exception(s)" : "open ticket(s)",
-        meta: metricNumber("openTickets") === null ? "Ticket scope not recorded" : `${countText(metricNumber("openTickets"))} open ticket(s)`,
-        score: null,
-        scoreLabel: "queue",
-        tone: "orange" as Tone,
-        icon: "list" as keyof typeof IconSet,
-        area: "service",
-        key: metricNumber("slaBreached") !== null && Number(metricNumber("slaBreached")) > 0 ? "sla-breach" : "service-desk",
-      },
-    ];
-
-    return (
-      <section className="md-dashboard-view" aria-label="Management dashboard overview">
-        <section className={`md-story-banner md-story-${normalizeStoryTone(executiveStory.tone)}`} aria-label="Executive AI storytelling">
-          <div className="md-story-main">
-            <span className="md-story-icon"><Icon name="sparkles" /></span>
+    useEffect(() => {
+        setTableSearch("");
+        setTableFilter("all");
+        setTablePage(1);
+    }, [drill.level, drill.area, drill.key]);
+    async function loadExecutiveStory() {
+        setStoryLoading(true);
+        try {
+            const data = await managementDashboardService.getStorytelling();
+            setStory((data || null) as ExecutiveStory | null);
+        }
+        catch {
+            setStory(null);
+        }
+        finally {
+            setStoryLoading(false);
+        }
+    }
+    async function loadDashboard() {
+        setLoading(true);
+        setError("");
+        try {
+            const overview = await managementDashboardService.getOverview();
+            setDashboard(normalizeDashboard(overview));
+            const scheduleStoryLoad = () => void loadExecutiveStory();
+            const idleCallback = (window as any).requestIdleCallback;
+            if (typeof idleCallback === "function") {
+                idleCallback(scheduleStoryLoad, { timeout: 2500 });
+            }
+            else {
+                window.setTimeout(scheduleStoryLoad, 800);
+            }
+        }
+        catch (err) {
+            setDashboard(EMPTY_DASHBOARD);
+            setError(err instanceof Error ? err.message : "Management dashboard failed to load.");
+        }
+        finally {
+            setLoading(false);
+        }
+    }
+    useEffect(() => { loadDashboard(); }, []);
+    useEffect(() => {
+        document.documentElement.classList.add("md-dashboard-page-active");
+        document.body.classList.add("md-dashboard-page-active");
+        document.documentElement.classList.remove("md-management-dashboard-active");
+        document.body.classList.remove("md-management-dashboard-active");
+        return () => {
+            document.documentElement.classList.remove("md-dashboard-page-active");
+            document.body.classList.remove("md-dashboard-page-active");
+        };
+    }, []);
+    useEffect(() => {
+        const root = document.querySelector(".management-center-page") as HTMLElement | null;
+        if (root)
+            root.scrollTo({ top: 0, behavior: "smooth" });
+    }, [drill.level, drill.title]);
+    const topKpis = useMemo(() => dashboard.executiveKpis.slice(0, 6), [dashboard.executiveKpis]);
+    const pillars = useMemo(() => dashboard.pillars.slice(0, 4), [dashboard.pillars]);
+    const actions = useMemo(() => dashboard.boardActions.slice(0, 8), [dashboard.boardActions]);
+    const signals = useMemo(() => {
+        const serviceSignals = dashboard.analysis?.signals || [];
+        if (serviceSignals.length)
+            return serviceSignals.slice(0, 5);
+        return pillars.flatMap((pillar) => (pillar.details || []).slice(0, 1).map((detail) => ({
+            title: detail.label,
+            subtitle: `${detail.value} from ${pillar.title}`,
+            value: detail.value,
+            area: pillar.area,
+            key: detail.key || "",
+            tone: detail.tone || pillar.tone,
+            icon: normalizeIcon(pillar.icon),
+        }))).slice(0, 5);
+    }, [dashboard.analysis?.signals, pillars]);
+    const chartRows = useMemo(() => buildChartRows(dashboard), [dashboard]);
+    const chartMode = useMemo(() => {
+        if (chartRows.some((row) => moneyValue(row.financialExposure) > 0 || moneyValue(row.riskExposure) > 0))
+            return "money" as const;
+        if (chartRows.some((row) => Number(row.signals || row.serviceRisk || 0) > 0))
+            return "signals" as const;
+        return "empty" as const;
+    }, [chartRows]);
+    const policyLabel = dashboard.policyUsed?.profileName || "Default EMA Management Policy";
+    const policyScope = dashboard.policyUsed?.scopeType || dashboard.policyUsed?.scopeKey || "GLOBAL";
+    const chartMax = useMemo(() => Math.max(1, ...chartRows.flatMap((row) => chartMode === "money"
+        ? [moneyValue(row.financialExposure), moneyValue(row.riskExposure)]
+        : [Number(row.signals || row.serviceRisk || 0)])), [chartRows, chartMode]);
+    const mix = dashboard.analysis?.mix || { risk: 0, control: 0, savings: 0 };
+    const healthValue = parseNumberFromText(topKpis.find((item) => /health/i.test(item.title))?.value, moneyValue(mix.control));
+    const ringHealth = clampPercent(healthValue || moneyValue(mix.control));
+    const ringRisk = clampPercent(moneyValue(mix.risk));
+    const ringCircumference = 2 * Math.PI * 78;
+    const ringControlDash = (ringHealth / 100) * ringCircumference;
+    const ringRiskDash = (Math.min(100, ringRisk) / 100) * ringCircumference;
+    function openLevel2(area: string, title: string, key = "") {
+        resetDrillTableState();
+        if (area === "actions") {
+            const rows: DrillRow[] = dashboard.boardActions.map((action) => {
+                const target = parseActionTarget(action);
+                return {
+                    key: action.key || `${target.area}:${target.key}`,
+                    label: action.issue,
+                    count: 1,
+                    valueFmt: action.impact,
+                    level3Area: target.area,
+                    level3Key: target.key,
+                };
+            });
+            setDrill({ level: 2, area, key, title, rows, total: rows.length });
+            return;
+        }
+        if (!key) {
+            const rows = dashboard.level2[area] || [];
+            if (rows.length) {
+                setDrill({ level: 2, area, key, title, rows, total: rows.length });
+                return;
+            }
+            // If the overview did not include a local breakdown, load the live domain breakdown.
+        }
+        setDrill({ level: 2, area, key, title, rows: [], total: 0, loading: true });
+        managementDashboardService.getDrilldown({ area, key, level: "2" })
+            .then((data) => {
+            const result = (data || {}) as {
+                title?: string;
+                rows?: DrillRow[];
+                total?: number;
+            };
+            setDrill({ level: 2, area, key, title: title || result.title || "Management Breakdown", rows: result.rows || [], total: result.total || 0 });
+        })
+            .catch(() => setDrill({ level: 2, area, key, title, rows: [], total: 0 }));
+    }
+    function openLevel3(area: string, key: string, title: string) {
+        resetDrillTableState();
+        const parent = drill.level === 2 ? { ...drill, loading: false } : undefined;
+        const evidenceTitle = title || key || "Evidence Detail";
+        setDrill({ level: 3, area, key, title: evidenceTitle, rows: [], total: 0, loading: true, parent });
+        managementDashboardService.getDrilldown({ area, key, level: "3" })
+            .then((data) => {
+            const result = (data || {}) as {
+                rows?: EvidenceRow[];
+                total?: number;
+            };
+            setDrill({ level: 3, area, key, title: evidenceTitle, rows: result.rows || [], total: result.total || 0, parent });
+        })
+            .catch(() => setDrill({ level: 3, area, key, title: evidenceTitle, rows: [], total: 0, parent }));
+    }
+    function closeDrilldown() { resetDrillTableState(); setDrill({ level: 1 }); }
+    function backDrilldown() { resetDrillTableState(); drill.level === 3 && drill.parent ? setDrill({ ...drill.parent, level: 2 }) : closeDrilldown(); }
+    function refreshDashboard() { closeDrilldown(); loadDashboard(); }
+    function printDashboard() { window.print(); }
+    function renderOverview() {
+        const metrics = dashboard.metrics || {};
+        const metricNumber = (key: string): number | null => {
+            const raw = metrics[key];
+            if (typeof raw === "number" && Number.isFinite(raw))
+                return raw;
+            if (typeof raw === "string" && raw.trim() !== "" && Number.isFinite(Number(raw)))
+                return Number(raw);
+            return null;
+        };
+        const metricBoolean = (key: string): boolean | null => {
+            const raw = metrics[key];
+            if (raw === undefined || raw === null || raw === "")
+                return null;
+            if (typeof raw === "boolean")
+                return raw;
+            if (typeof raw === "number")
+                return raw === 1;
+            const text = String(raw).trim().toLowerCase();
+            if (["true", "1", "yes", "y", "on", "enabled"].includes(text))
+                return true;
+            if (["false", "0", "no", "n", "off", "disabled"].includes(text))
+                return false;
+            return null;
+        };
+        const pendingText = loading ? "Loading..." : "Not recorded";
+        const countText = (value: number | null, unit = "") => value === null ? pendingText : `${value.toLocaleString()}${unit ? ` ${unit}` : ""}`;
+        const percentText = (value: number | null) => value === null ? pendingText : `${clampPercent(value)}%`;
+        const exposureValue = typeof dashboard.finance.totalCost === "number" && dashboard.finance.totalCost > 0 ? dashboard.finance.totalCost : null;
+        const totalEndpointsValue = metricNumber("totalEndpoints");
+        const onlineCoverageValue = metricNumber("onlineCoverage") ?? metricNumber("onlineRate");
+        const pricingCoverageValue = metricNumber("pricingCoverage");
+        const riskSignalsValue = metricNumber("riskCandidates");
+        const boardItemsValue = metricNumber("boardAttention") ?? metricNumber("boardItems") ?? (actions.length > 0 ? actions.length : null);
+        const healthScoreValue = metricNumber("healthScore");
+        const complianceScoreValue = metricNumber("complianceScore");
+        const pcAgingRuleFlag = metricBoolean("pcAgingRuleEnabled");
+        const hardwareLifecycleRiskValue = metricNumber("hardwareLifecycleRiskItems") ??
+            metricNumber("endpointRiskCandidates") ??
+            metricNumber("aging");
+        const hasHardwareLifecycleMetrics = hardwareLifecycleRiskValue !== null ||
+            metricNumber("hardwareAgingItems") !== null ||
+            metricNumber("hardwareMonitorItems") !== null ||
+            metricNumber("hardwareStaleItems") !== null ||
+            totalEndpointsValue !== null;
+        const pcAgingRuleActive = pcAgingRuleFlag === null ? hasHardwareLifecycleMetrics : pcAgingRuleFlag;
+        const executiveStory = story || buildLocalExecutiveStory(dashboard);
+        const latestTrendRow = chartRows[chartRows.length - 1] || null;
+        const peakTrendRow = chartRows.reduce<TrendPoint | null>((best, row) => {
+            const rowTotal = moneyValue(row.financialExposure) + moneyValue(row.riskExposure) + moneyValue(row.capex) + moneyValue(row.opex);
+            const bestTotal = best ? moneyValue(best.financialExposure) + moneyValue(best.riskExposure) + moneyValue(best.capex) + moneyValue(best.opex) : -1;
+            return rowTotal > bestTotal ? row : best;
+        }, null);
+        const peakExposureValue = peakTrendRow
+            ? moneyValue(peakTrendRow.financialExposure) + moneyValue(peakTrendRow.riskExposure) + moneyValue(peakTrendRow.capex) + moneyValue(peakTrendRow.opex)
+            : 0;
+        const latestFinancialValue = latestTrendRow
+            ? moneyValue(latestTrendRow.financialExposure) + moneyValue(latestTrendRow.capex)
+            : 0;
+        const latestRiskValue = latestTrendRow
+            ? moneyValue(latestTrendRow.riskExposure) + moneyValue(latestTrendRow.opex)
+            : 0;
+        const chartSignalTotal = chartRows.reduce((sum, row) => sum + Number(row.signals || row.serviceRisk || 0), 0);
+        const chartRiskSignalValue = riskSignalsValue ?? (chartSignalTotal > 0 ? chartSignalTotal : null);
+        const softwareScopeValue = metricNumber("uniqueSoftware") ?? metricNumber("softwareInstallCount") ?? metricNumber("softwareInstalls");
+        const networkScopeValue = metricNumber("networkKnownIps") ?? metricNumber("networkRecordCount") ?? metricNumber("networkRecords");
+        const geoScopeValue = metricNumber("geoTrackedDevices");
+        const evidenceCoverageText = [
+            totalEndpointsValue !== null ? `${countText(totalEndpointsValue)} endpoint(s)` : "endpoint scope not recorded",
+            softwareScopeValue !== null ? `${countText(softwareScopeValue)} software item(s)` : "software not recorded",
+            networkScopeValue !== null ? `${countText(networkScopeValue)} network record(s)` : "network not recorded",
+            geoScopeValue !== null ? `${countText(geoScopeValue)} geo device(s)` : "geo not recorded",
+        ].join(" • ");
+        const chartInsightCards = [
+            {
+                label: "Peak Exposure",
+                value: peakExposureValue > 0 ? formatMoney(peakExposureValue) : "Not recorded",
+                note: peakTrendRow ? `${peakTrendRow.label || peakTrendRow.month} highest combined exposure` : "No monthly exposure yet",
+                tone: "pink" as Tone,
+                area: "capex",
+                title: "Costed Exposure",
+            },
+            {
+                label: "Risk Movement",
+                value: countText(chartRiskSignalValue),
+                note: chartRiskSignalValue === null ? "Risk signal source not recorded" : "Cross-domain risk signals detected",
+                tone: "red" as Tone,
+                area: "risk",
+                title: "Active Risk Signals",
+            },
+            {
+                label: "Current Month",
+                value: latestFinancialValue + latestRiskValue > 0 ? formatMoney(latestFinancialValue + latestRiskValue) : "Not recorded",
+                note: latestTrendRow ? `${latestTrendRow.label || latestTrendRow.month}: ${formatMoney(latestFinancialValue)} financial / ${formatMoney(latestRiskValue)} risk` : "No current month movement",
+                tone: "amber" as Tone,
+                area: "capex",
+                title: "Costed Exposure",
+            },
+            {
+                label: "Evidence Coverage",
+                value: totalEndpointsValue === null ? "Not recorded" : countText(totalEndpointsValue),
+                note: evidenceCoverageText,
+                tone: "blue" as Tone,
+                area: "resources",
+                title: "Estate Scope",
+            },
+        ];
+        const frontKpis = [
+            {
+                title: "Estate Scope",
+                value: countText(totalEndpointsValue),
+                subValue: totalEndpointsValue === null ? "" : "endpoint(s)",
+                note: onlineCoverageValue === null ? "Online/control coverage not recorded" : `${percentText(onlineCoverageValue)} online/control coverage`,
+                tone: "blue" as Tone,
+                icon: "endpoint" as keyof typeof IconSet,
+                area: "resources",
+                key: "",
+            },
+            {
+                title: "Costed Exposure",
+                value: exposureValue === null ? "Not recorded" : formatMoney(exposureValue),
+                note: exposureValue === null ? "No live cost source recorded" : "Costed from pricing/catalog evidence",
+                tone: exposureValue === null ? "slate" as Tone : "pink" as Tone,
+                icon: "money" as keyof typeof IconSet,
+                area: "capex",
+                key: "",
+            },
+            {
+                title: "Active Risk Signals",
+                value: countText(riskSignalsValue),
+                note: "Hardware, software, network, geolocation and service evidence",
+                tone: riskSignalsValue && riskSignalsValue > 0 ? "red" as Tone : "green" as Tone,
+                icon: "risk" as keyof typeof IconSet,
+                area: "risk",
+                key: "",
+            },
+            {
+                title: "Compliance Coverage",
+                value: percentText(pricingCoverageValue),
+                note: complianceScoreValue === null ? "Evidence score not recorded" : `${percentText(complianceScoreValue)} compliance score`,
+                tone: complianceScoreValue !== null && complianceScoreValue >= 80 ? "green" as Tone : "amber" as Tone,
+                icon: "audit" as keyof typeof IconSet,
+                area: "compliance",
+                key: "",
+            },
+            {
+                title: "Open Decisions",
+                value: countText(boardItemsValue),
+                note: "Items requiring management owner, approval or evidence follow-up",
+                tone: boardItemsValue && boardItemsValue > 0 ? "orange" as Tone : "green" as Tone,
+                icon: "list" as keyof typeof IconSet,
+                area: "actions",
+                key: "",
+            },
+        ];
+        const domainMatrix = [
+            {
+                title: "Hardware",
+                caption: "Endpoint lifecycle, aging, stale telemetry and control evidence.",
+                value: pcAgingRuleActive ? hardwareLifecycleRiskValue : null,
+                valueLabel: "lifecycle signal(s)",
+                meta: pcAgingRuleActive ? (totalEndpointsValue === null ? "Estate scope not recorded" : `${countText(totalEndpointsValue)} endpoint(s) in estate`) : "PC aging rule/source not configured",
+                score: pcAgingRuleActive ? healthScoreValue : null,
+                scoreLabel: "health",
+                tone: "blue" as Tone,
+                icon: "endpoint" as keyof typeof IconSet,
+                area: "risk",
+                key: "pc-lifecycle",
+            },
+            {
+                title: "Software",
+                caption: "Unclassified, stale or review-needed software evidence.",
+                value: metricNumber("softwareRiskItems"),
+                valueLabel: "software signal(s)",
+                meta: metricNumber("uniqueSoftware") === null ? "Software scope not recorded" : `${countText(metricNumber("uniqueSoftware"))} app(s) tracked`,
+                score: metricNumber("softwareComplianceScore"),
+                scoreLabel: "classification",
+                tone: "cyan" as Tone,
+                icon: "package" as keyof typeof IconSet,
+                area: "software",
+                key: "software-risk",
+            },
+            {
+                title: "Network",
+                caption: "Unregistered IP, duplicate IP and network evidence integrity.",
+                value: metricNumber("networkRiskItems"),
+                valueLabel: "network signal(s)",
+                meta: metricNumber("networkKnownIps") === null ? "Network scope not recorded" : `${countText(metricNumber("networkKnownIps"))} IP record(s)`,
+                score: metricNumber("networkIntegrityScore"),
+                scoreLabel: "integrity",
+                tone: "purple" as Tone,
+                icon: "activity" as keyof typeof IconSet,
+                area: "network",
+                key: "network-risk",
+            },
+            {
+                title: "Geolocation",
+                caption: "Missing, stale or unknown location/custody evidence.",
+                value: metricNumber("geoRiskItems"),
+                valueLabel: "location issue(s)",
+                meta: metricNumber("geoTrackedDevices") === null ? "Location scope not recorded" : `${countText(metricNumber("geoTrackedDevices"))} tracked device(s)`,
+                score: metricNumber("geoIntegrityScore"),
+                scoreLabel: "freshness",
+                tone: "amber" as Tone,
+                icon: "target" as keyof typeof IconSet,
+                area: "geolocation",
+                key: "geolocation-risk",
+            },
+            {
+                title: "Service Desk",
+                caption: "Open ticket load, SLA governance and support pressure.",
+                value: metricNumber("slaBreached") !== null && Number(metricNumber("slaBreached")) > 0 ? metricNumber("slaBreached") : metricNumber("openTickets"),
+                valueLabel: metricNumber("slaBreached") !== null && Number(metricNumber("slaBreached")) > 0 ? "SLA exception(s)" : "open ticket(s)",
+                meta: metricNumber("openTickets") === null ? "Ticket scope not recorded" : `${countText(metricNumber("openTickets"))} open ticket(s)`,
+                score: null,
+                scoreLabel: "queue",
+                tone: "orange" as Tone,
+                icon: "list" as keyof typeof IconSet,
+                area: "service",
+                key: metricNumber("slaBreached") !== null && Number(metricNumber("slaBreached")) > 0 ? "sla-breach" : "service-desk",
+            },
+        ];
+        return (<section aria-label="Management dashboard overview">
+        <section aria-label="Executive AI storytelling">
+          <div>
+            <span><Icon name="sparkles"/></span>
             <div>
-              <span className="md-story-status">{storyLoading ? "Generating story" : executiveStory.status || "Executive narrative"}</span>
+              <span>{storyLoading ? "Generating story" : executiveStory.status || "Executive narrative"}</span>
               <h2>{executiveStory.headline || "Executive management summary is being prepared."}</h2>
               <p>{executiveStory.narrative || executiveStory.summary || "Management insights use only live endpoint lifecycle, risk, pricing, compliance and service evidence."}</p>
-              <div className="md-story-signals">
+              <div>
                 {(executiveStory.keySignals || []).slice(0, 4).map((signal, index) => <span key={`${signal}-${index}`}>{signal}</span>)}
               </div>
             </div>
           </div>
-          <aside className="md-story-recommendation">
+          <aside>
             <span>Recommended action</span>
             <strong>{executiveStory.boardRecommendation || "Review open risks, financial exposure and ownership before the next management cycle."}</strong>
-            <ul className="md-story-actions">
+            <ul>
               {(executiveStory.actionItems || []).slice(0, 3).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
             </ul>
-            <small className="md-story-source">{executiveStory.source === "gemini" ? "Gemini AI generated" : "Local executive rule"}</small>
+            <small>{executiveStory.source === "gemini" ? "Gemini AI generated" : "Local executive rule"}</small>
           </aside>
         </section>
 
-        <section className="md-kpi-grid md-exec-kpi-grid" aria-label="Executive KPI cards">
-          {frontKpis.map((kpi, index) => (
-            <button type="button" className={`md-card md-kpi-card tone-${normalizeTone(kpi.tone)} ${getKpiSemanticClass(kpi, index)}`} key={`${kpi.title}-${index}`} onClick={() => openLevel2(kpi.area, kpi.title, kpi.key)}>
+        <section aria-label="Executive KPI cards">
+          {frontKpis.map((kpi, index) => (<button type="button" key={`${kpi.title}-${index}`} onClick={() => openLevel2(kpi.area, kpi.title, kpi.key)}>
               <span>
                 <h3>{kpi.title}</h3>
-                <span className="md-kpi-value"><strong>{kpi.value}</strong>{kpi.subValue && <span>{kpi.subValue}</span>}</span>
+                <span><strong>{kpi.value}</strong>{kpi.subValue && <span>{kpi.subValue}</span>}</span>
                 <p>{kpi.note}</p>
               </span>
-              <span className="md-kpi-icon"><Icon name={normalizeIcon(kpi.icon)} /></span>
-            </button>
-          ))}
+              <span><Icon name={normalizeIcon(kpi.icon)}/></span>
+            </button>))}
         </section>
 
-        <section className="md-top-row md-overview-grid">
-          <article className="md-card md-chart-card">
-            <div className="md-card-head">
+        <section>
+          <article>
+            <div>
               <div>
-                <span className="md-eyebrow">Management Analytics</span>
+                <span>Management Analytics</span>
                 <h2>Monthly Exposure Movement</h2>
                 <p>{dashboard.analysis?.headline || "Trend appears only when live exposure, risk or signal records exist."}</p>
               </div>
-              <div className="md-actions">
-                <span className="md-action-btn md-policy-badge" title="Management Dashboard calculations use this active policy">Policy: {policyLabel} · {policyScope}</span>
-                <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
-                <button type="button" className="md-action-btn primary" onClick={printDashboard}><Icon name="download" /> Report</button>
+              <div>
+                <span title="Management Dashboard calculations use this active policy">Policy: {policyLabel} · {policyScope}</span>
+                <button type="button" onClick={refreshDashboard}><Icon name="refresh"/> Refresh</button>
+                <button type="button" onClick={printDashboard}><Icon name="download"/> Report</button>
               </div>
             </div>
 
-            <div className="md-chart-layout">
-              <div className="md-chart-summary">
+            <div>
+              <div>
                 <div>
-                  <p className="md-chart-number">{chartRows.length ? chartRows.length.toLocaleString() : "Not recorded"}</p>
+                  <p>{chartRows.length ? chartRows.length.toLocaleString() : "Not recorded"}</p>
                   <span>Live trend period(s)</span>
                 </div>
-                <span className="md-chart-context">Movement view only. The cards below explain peak exposure, current month impact and evidence coverage.</span>
-                <button type="button" className="md-summary-btn" onClick={() => openLevel2("capex", "Costed Exposure")}>Open exposure evidence</button>
+                <span>Movement view only. The cards below explain peak exposure, current month impact and evidence coverage.</span>
+                <button type="button" onClick={() => openLevel2("capex", "Costed Exposure")}>Open exposure evidence</button>
               </div>
-              <div className="md-chart-panel" onMouseLeave={() => setChartHover(null)}>
-                <div className="md-chart-legend">
-                  {chartMode === "money" ? (
-                    <>
-                      <span><i className="md-dot orange" /> Financial</span>
-                      <span><i className="md-dot red" /> Risk</span>
-                    </>
-                  ) : chartMode === "signals" ? (
-                    <span><i className="md-dot red" /> Evidence signals</span>
-                  ) : (
-                    <span>No recorded trend</span>
-                  )}
+              <div onMouseLeave={() => setChartHover(null)}>
+                <div>
+                  {chartMode === "money" ? (<>
+                      <span><i /> Financial</span>
+                      <span><i /> Risk</span>
+                    </>) : chartMode === "signals" ? (<span><i /> Evidence signals</span>) : (<span>No recorded trend</span>)}
                 </div>
-                <svg className="md-chart-svg" viewBox="0 0 640 230" role="img" aria-label="Monthly exposure trend">
+                <svg viewBox="0 0 640 230" role="img" aria-label="Monthly exposure trend">
                   <defs>
                     <linearGradient id="mdAreaGradient" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#fee2e2" stopOpacity="0.72" />
-                      <stop offset="100%" stopColor="#fff7ed" stopOpacity="0.08" />
+                      <stop offset="0%" stopColor="#fee2e2" stopOpacity="0.72"/>
+                      <stop offset="100%" stopColor="#fff7ed" stopOpacity="0.08"/>
                     </linearGradient>
                     <linearGradient id="mdFinanceBarGradient" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.82" />
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="1"/>
+                      <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.82"/>
                     </linearGradient>
                     <linearGradient id="mdRiskBarGradient" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#ef4444" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#fb7185" stopOpacity="0.86" />
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity="1"/>
+                      <stop offset="100%" stopColor="#fb7185" stopOpacity="0.86"/>
                     </linearGradient>
                   </defs>
                   {[0, 1, 2, 3].map((i) => {
-                    const y = 24 + i * 44;
-                    return (
-                      <g key={`grid-${i}`}>
-                        <line className="md-chart-grid" x1="54" x2="602" y1={y} y2={y} />
-                        <text className="md-chart-label" x="10" y={y + 4}>{chartMode === "money" ? formatMoney((chartMax * (4 - i)) / 4) : Math.round((chartMax * (4 - i)) / 4).toLocaleString()}</text>
-                      </g>
-                    );
-                  })}
-                  <line className="md-chart-axis" x1="54" x2="602" y1="190" y2="190" />
+                const y = 24 + i * 44;
+                return (<g key={`grid-${i}`}>
+                        <line x1="54" x2="602" y1={y} y2={y}/>
+                        <text x="10" y={y + 4}>{chartMode === "money" ? formatMoney((chartMax * (4 - i)) / 4) : Math.round((chartMax * (4 - i)) / 4).toLocaleString()}</text>
+                      </g>);
+            })}
+                  <line x1="54" x2="602" y1="190" y2="190"/>
                   {chartRows.map((row, index) => {
-                    const x = chartRows.length <= 1 ? 328 : 54 + (index / Math.max(1, chartRows.length - 1)) * 548;
-                    const financeRaw = moneyValue(row.financialExposure);
-                    const riskRaw = moneyValue(row.riskExposure);
-                    const signalRaw = Number(row.signals || row.serviceRisk || 0);
-                    const financeHeight = chartMode === "money" && financeRaw > 0 ? Math.max(9, (financeRaw / chartMax) * 172) : 0;
-                    const riskHeight = chartMode === "money" && riskRaw > 0 ? Math.max(9, (riskRaw / chartMax) * 172) : 0;
-                    const signalHeight = chartMode === "signals" && signalRaw > 0 ? Math.max(9, (signalRaw / chartMax) * 172) : 0;
-                    return (
-                      <g key={`bar-${index}`} onMouseEnter={() => setChartHover(index)}>
-                        <rect className="md-chart-hover-band" x={x - 34} y="12" width="68" height="194" rx="12" />
-                        {chartMode === "money" ? (
-                          <>
-                            <rect className="md-chart-bar-finance" x={x - 14} y={190 - financeHeight} width="12" height={financeHeight} rx="6" />
-                            <rect className="md-chart-bar-risk" x={x + 4} y={190 - riskHeight} width="12" height={riskHeight} rx="6" />
-                          </>
-                        ) : chartMode === "signals" ? (
-                          <rect className="md-chart-bar-risk" x={x - 8} y={190 - signalHeight} width="16" height={signalHeight} rx="8" />
-                        ) : null}
-                        <text className="md-chart-label" x={x - 12} y="218">{row.label || row.month}</text>
-                      </g>
-                    );
-                  })}
+                const x = chartRows.length <= 1 ? 328 : 54 + (index / Math.max(1, chartRows.length - 1)) * 548;
+                const financeRaw = moneyValue(row.financialExposure);
+                const riskRaw = moneyValue(row.riskExposure);
+                const signalRaw = Number(row.signals || row.serviceRisk || 0);
+                const financeHeight = chartMode === "money" && financeRaw > 0 ? Math.max(9, (financeRaw / chartMax) * 172) : 0;
+                const riskHeight = chartMode === "money" && riskRaw > 0 ? Math.max(9, (riskRaw / chartMax) * 172) : 0;
+                const signalHeight = chartMode === "signals" && signalRaw > 0 ? Math.max(9, (signalRaw / chartMax) * 172) : 0;
+                return (<g key={`bar-${index}`} onMouseEnter={() => setChartHover(index)}>
+                        <rect x={x - 34} y="12" width="68" height="194" rx="12"/>
+                        {chartMode === "money" ? (<>
+                            <rect x={x - 14} y={190 - financeHeight} width="12" height={financeHeight} rx="6"/>
+                            <rect x={x + 4} y={190 - riskHeight} width="12" height={riskHeight} rx="6"/>
+                          </>) : chartMode === "signals" ? (<rect x={x - 8} y={190 - signalHeight} width="16" height={signalHeight} rx="8"/>) : null}
+                        <text x={x - 12} y="218">{row.label || row.month}</text>
+                      </g>);
+            })}
                   {chartHover !== null && chartRows[chartHover] && (() => {
-                    const row = chartRows[chartHover];
-                    const x = chartRows.length <= 1 ? 328 : 54 + (chartHover / Math.max(1, chartRows.length - 1)) * 548;
-                    const boxX = x > 440 ? x - 202 : x + 20;
-                    const boxY = 24;
-                    return (
-                      <g pointerEvents="none">
-                        <line className="md-chart-active-line" x1={x} x2={x} y1="18" y2="190" />
-                        <rect className="md-chart-tooltip-box" x={boxX} y={boxY} width="182" height="82" rx="14" />
-                        <text className="md-chart-tooltip-title" x={boxX + 14} y={boxY + 22}>{row.label || row.month}</text>
-                        {chartMode === "money" ? (
-                          <>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 42}>Financial: {formatMoney(row.financialExposure || 0)}</text>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 59}>Risk: {formatMoney(row.riskExposure || 0)}</text>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 76}>Signals: {Number(row.signals || 0).toLocaleString()}</text>
-                          </>
-                        ) : (
-                          <>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 42}>Evidence signals: {Number(row.signals || row.serviceRisk || 0).toLocaleString()}</text>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 59}>Cost source: Not recorded</text>
-                          </>
-                        )}
-                      </g>
-                    );
-                  })()}
-                  {chartRows.length === 0 && (
-                    <text className="md-chart-empty-note" x="190" y="104">No live monthly exposure trend is recorded yet.</text>
-                  )}
+                const row = chartRows[chartHover];
+                const x = chartRows.length <= 1 ? 328 : 54 + (chartHover / Math.max(1, chartRows.length - 1)) * 548;
+                const boxX = x > 440 ? x - 202 : x + 20;
+                const boxY = 24;
+                return (<g pointerEvents="none">
+                        <line x1={x} x2={x} y1="18" y2="190"/>
+                        <rect x={boxX} y={boxY} width="182" height="82" rx="14"/>
+                        <text x={boxX + 14} y={boxY + 22}>{row.label || row.month}</text>
+                        {chartMode === "money" ? (<>
+                            <text x={boxX + 14} y={boxY + 42}>Financial: {formatMoney(row.financialExposure || 0)}</text>
+                            <text x={boxX + 14} y={boxY + 59}>Risk: {formatMoney(row.riskExposure || 0)}</text>
+                            <text x={boxX + 14} y={boxY + 76}>Signals: {Number(row.signals || 0).toLocaleString()}</text>
+                          </>) : (<>
+                            <text x={boxX + 14} y={boxY + 42}>Evidence signals: {Number(row.signals || row.serviceRisk || 0).toLocaleString()}</text>
+                            <text x={boxX + 14} y={boxY + 59}>Cost source: Not recorded</text>
+                          </>)}
+                      </g>);
+            })()}
+                  {chartRows.length === 0 && (<text x="190" y="104">No live monthly exposure trend is recorded yet.</text>)}
                 </svg>
               </div>
             </div>
 
-            <div className="md-exposure-insight-strip" aria-label="Monthly exposure intelligence">
-              {chartInsightCards.map((card) => (
-                <button type="button" key={card.label} className={`md-exposure-insight tone-${normalizeTone(card.tone)}`} onClick={() => openLevel2(card.area, card.title)}>
+            <div aria-label="Monthly exposure intelligence">
+              {chartInsightCards.map((card) => (<button type="button" key={card.label} onClick={() => openLevel2(card.area, card.title)}>
                   <span>{card.label}</span>
                   <strong>{card.value}</strong>
                   <small>{card.note}</small>
-                </button>
-              ))}
+                </button>))}
             </div>
           </article>
 
-          <article className="md-card md-domain-card">
-            <div className="md-card-head">
+          <article>
+            <div>
               <div>
-                <span className="md-eyebrow">Domain Risk Matrix</span>
+                <span>Domain Risk Matrix</span>
                 <h2>Risk by Evidence Domain</h2>
                 <p>Hardware, software, network, geolocation and service desk are separated to avoid hardware-only analysis.</p>
               </div>
-              <Icon name="target" />
+              <Icon name="target"/>
             </div>
-            <div className="md-domain-list">
+            <div>
               {domainMatrix.map((domain) => {
                 const domainHasData = domain.value !== null && Number(domain.value) > 0;
-                return (
-                <button type="button" key={domain.title} className={`md-domain-row ${domainHasData ? "" : "is-muted"}`} disabled={!domainHasData} onClick={() => domainHasData && openLevel2(domain.area, domain.title, domain.key)}>
-                  <span className={`md-domain-icon bg-${domain.tone}`}><Icon name={normalizeIcon(domain.icon)} /></span>
-                  <span className="md-domain-copy">
+                return (<button type="button" key={domain.title} disabled={!domainHasData} onClick={() => domainHasData && openLevel2(domain.area, domain.title, domain.key)}>
+                  <span><Icon name={normalizeIcon(domain.icon)}/></span>
+                  <span>
                     <strong>{domain.title}</strong>
                     <span>{domain.caption}</span>
                     <span>{domain.meta}</span>
                   </span>
-                  <span className="md-domain-score">
+                  <span>
                     <strong>{domain.value === null ? "Not recorded" : domain.value.toLocaleString()}</strong>
                     <span>{domain.valueLabel}</span>
                     {domain.score !== null && <span>{percentText(domain.score)} {domain.scoreLabel}</span>}
                   </span>
-                </button>
-                );
-              })}
+                </button>);
+            })}
             </div>
           </article>
         </section>
 
-        <section className="md-management-action-grid" aria-label="Decision table and core management modules">
-          <aside className="md-card md-core-module-panel" aria-label="Core management modules">
-            <div className="md-card-head">
+        <section aria-label="Decision table and core management modules">
+          <aside aria-label="Core management modules">
+            <div>
               <div>
-                <span className="md-eyebrow">Core Modules</span>
+                <span>Core Modules</span>
                 <h2>Main Management Lens</h2>
                 <p>Risk, resource, audit and saving lenses are stacked beside the decision queue for faster management review.</p>
               </div>
             </div>
-            <div className="md-pillar-grid md-pillar-stack">
+            <div>
               {pillars.map((pillar, index) => {
                 const tileClass = ["tile-purple", "tile-blue", "tile-teal", "tile-orange"][index % 4];
-                return (
-                  <button
-                    type="button"
-                    className={`md-pillar-tile ${tileClass}`}
-                    key={pillar.id || `${pillar.title}-${index}`}
-                    onClick={() => openLevel2(pillar.area, pillar.title)}
-                  >
-                    <span className="md-tile-icon"><Icon name={normalizeIcon(pillar.icon)} /></span>
+                return (<button type="button" key={pillar.id || `${pillar.title}-${index}`} onClick={() => openLevel2(pillar.area, pillar.title)}>
+                    <span><Icon name={normalizeIcon(pillar.icon)}/></span>
                     <span>
                       <h3>{pillar.title}</h3>
-                      <span className="md-tile-value">
+                      <span>
                         <strong>{pillar.scoreValue || pillar.secondValue || "-"}</strong>
                         {pillar.scoreUnit && <span>{pillar.scoreUnit}</span>}
                       </span>
                       <small>{[pillar.scoreTitle, pillar.scoreStatus || pillar.secondNote].filter(Boolean).join(" • ") || "Open management lens"}</small>
                     </span>
-                  </button>
-                );
-              })}
+                  </button>);
+            })}
             </div>
           </aside>
 
-          <article className="md-card md-action-card md-decision-table-card">
-            <div className="md-action-header">
+          <article>
+            <div>
               <div>
-                <span className="md-eyebrow">Decision Table</span>
-                <h2 className="md-section-title">Board Action Queue</h2>
-                <p className="md-section-subtitle">Single actionable table for management decisions. Click a row to open the related evidence.</p>
+                <span>Decision Table</span>
+                <h2>Board Action Queue</h2>
+                <p>Single actionable table for management decisions. Click a row to open the related evidence.</p>
               </div>
-              <div className="md-actions">
-                <button type="button" className="md-action-btn primary" onClick={() => openLevel2("actions", "Board Action Queue")}><Icon name="list" /> View All</button>
-                <button type="button" className="md-action-btn md-action-icon" onClick={refreshDashboard} aria-label="Refresh"><Icon name="refresh" /></button>
+              <div>
+                <button type="button" onClick={() => openLevel2("actions", "Board Action Queue")}><Icon name="list"/> View All</button>
+                <button type="button" onClick={refreshDashboard} aria-label="Refresh"><Icon name="refresh"/></button>
               </div>
             </div>
-            <div className="md-table-wrap">
-              <table className="md-table">
+            <div>
+              <table>
                 <thead>
                   <tr>
-                    <th style={{ width: "90px" }}>Priority</th>
-                    <th style={{ width: "112px" }}>Area</th>
+                    <th>Priority</th>
+                    <th>Area</th>
                     <th>Signal</th>
-                    <th style={{ width: "132px" }}>Impact</th>
+                    <th>Impact</th>
                     <th>Decision</th>
-                    <th style={{ width: "86px" }}>Status</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {actions.length === 0 ? (
-                    <tr><td colSpan={6}>No executive action is required for this view.</td></tr>
-                  ) : actions.map((action, index) => {
-                    const target = parseActionTarget(action);
-                    const priority = String(action.priority || "Low").toLowerCase();
-                    return (
-                      <tr key={`${action.area}-${action.key}-${index}`} onClick={() => openLevel2(target.area, action.issue, target.key)}>
-                        <td><span className={`md-priority ${priority}`}>{action.priority}</span></td>
+                  {actions.length === 0 ? (<tr><td colSpan={6}>No executive action is required for this view.</td></tr>) : actions.map((action, index) => {
+                const target = parseActionTarget(action);
+                const priority = String(action.priority || "Low").toLowerCase();
+                return (<tr key={`${action.area}-${action.key}-${index}`} onClick={() => openLevel2(target.area, action.issue, target.key)}>
+                        <td><span>{action.priority}</span></td>
                         <td>{action.area}</td>
                         <td>{action.issue}</td>
                         <td>{action.impact}</td>
                         <td>{action.decision}</td>
-                        <td><span className="md-status-pill">Open</span></td>
-                      </tr>
-                    );
-                  })}
+                        <td><span>Open</span></td>
+                      </tr>);
+            })}
                 </tbody>
               </table>
             </div>
           </article>
         </section>
-      </section>
-    );
-  }
-
-  function renderBreakdownView() {
-    const rows = (drill.rows || []) as DrillRow[];
-    const lens = getBreakdownLens(drill.area, drill.title);
-    const totalCount = rows.reduce((sum, row) => sum + drillNumber(row.count), 0);
-    const totalValue = rows.reduce((sum, row) => sum + getRowValue(row), 0);
-    const maxValue = Math.max(1, ...rows.map((row) => getRowValue(row)));
-    const costedRows = rows.filter((row) => getRowValue(row) > 0).length;
-    const confidence = rows.length ? Math.round((costedRows / rows.length) * 100) : 0;
-    const visual = buildBreakdownVisual(rows, drill.area, lens);
-    const sortedRows = [...rows].sort((a, b) => (getRowValue(b) || drillNumber(b.count)) - (getRowValue(a) || drillNumber(a.count)));
-    const commandFilterOptions = Array.from(new Set(sortedRows.map((row) => getRowLens(row, drill.area, maxValue, totalCount).impactType).filter(Boolean)));
-    const commandSearch = tableSearch.trim().toLowerCase();
-    const filteredCommandRows = sortedRows.filter((row) => {
-      const rowLens = getRowLens(row, drill.area, maxValue, totalCount);
-      const matchesFilter = tableFilter === "all" || rowLens.impactType === tableFilter;
-      if (!matchesFilter) return false;
-      if (!commandSearch) return true;
-      return normalizeTableSearchText(row.label, row.valueFmt, row.sample?.join(" "), rowLens.impactType, rowLens.riskType, rowLens.costType, rowLens.decision, rowLens.insight).includes(commandSearch);
-    });
-    const commandPageInfo = getPageInfo(filteredCommandRows.length, tablePage, tablePageSize);
-    const visibleCommandRows = filteredCommandRows.slice(commandPageInfo.start, commandPageInfo.end);
-    const topRow = sortedRows[0];
-    const topLens = topRow ? getRowLens(topRow, drill.area, maxValue, totalCount) : null;
-    const topPrimary = topRow ? getDrillValue(topRow, drill.area) : "-";
-    const scopeTotal = Number(totalCount || drill.total || rows.length || 0);
-    const primaryValue = totalValue > 0 ? formatMoney(totalValue) : scopeTotal.toLocaleString();
-    const exposureCaption = totalValue > 0 ? "Recorded / priced value" : "Evidence records in scope";
-    const managementRead = topRow
-      ? `${topRow.label} is the strongest management signal. Open evidence to confirm owner, recorded value and remediation path.`
-      : "Open a breakdown item to review the supporting evidence.";
-
-    return (
-      <section className="md-view-panel">
-        <div className="md-view-header">
+      </section>);
+    }
+    function renderBreakdownView() {
+        const rows = (drill.rows || []) as DrillRow[];
+        const lens = getBreakdownLens(drill.area, drill.title);
+        const totalCount = rows.reduce((sum, row) => sum + drillNumber(row.count), 0);
+        const totalValue = rows.reduce((sum, row) => sum + getRowValue(row), 0);
+        const maxValue = Math.max(1, ...rows.map((row) => getRowValue(row)));
+        const costedRows = rows.filter((row) => getRowValue(row) > 0).length;
+        const confidence = rows.length ? Math.round((costedRows / rows.length) * 100) : 0;
+        const visual = buildBreakdownVisual(rows, drill.area, lens);
+        const sortedRows = [...rows].sort((a, b) => (getRowValue(b) || drillNumber(b.count)) - (getRowValue(a) || drillNumber(a.count)));
+        const commandFilterOptions = Array.from(new Set(sortedRows.map((row) => getRowLens(row, drill.area, maxValue, totalCount).impactType).filter(Boolean)));
+        const commandSearch = tableSearch.trim().toLowerCase();
+        const filteredCommandRows = sortedRows.filter((row) => {
+            const rowLens = getRowLens(row, drill.area, maxValue, totalCount);
+            const matchesFilter = tableFilter === "all" || rowLens.impactType === tableFilter;
+            if (!matchesFilter)
+                return false;
+            if (!commandSearch)
+                return true;
+            return normalizeTableSearchText(row.label, row.valueFmt, row.sample?.join(" "), rowLens.impactType, rowLens.riskType, rowLens.costType, rowLens.decision, rowLens.insight).includes(commandSearch);
+        });
+        const commandPageInfo = getPageInfo(filteredCommandRows.length, tablePage, tablePageSize);
+        const visibleCommandRows = filteredCommandRows.slice(commandPageInfo.start, commandPageInfo.end);
+        const topRow = sortedRows[0];
+        const topLens = topRow ? getRowLens(topRow, drill.area, maxValue, totalCount) : null;
+        const topPrimary = topRow ? getDrillValue(topRow, drill.area) : "-";
+        const scopeTotal = Number(totalCount || drill.total || rows.length || 0);
+        const primaryValue = totalValue > 0 ? formatMoney(totalValue) : scopeTotal.toLocaleString();
+        const exposureCaption = totalValue > 0 ? "Recorded / priced value" : "Evidence records in scope";
+        const managementRead = topRow
+            ? `${topRow.label} is the strongest management signal. Open evidence to confirm owner, recorded value and remediation path.`
+            : "Open a breakdown item to review the supporting evidence.";
+        return (<section>
+        <div>
           <div>
-            <span className="md-view-eyebrow">Executive Command Center</span>
+            <span>Executive Command Center</span>
             <h2>{drill.title || "Management Breakdown"}</h2>
             <p>{scopeTotal.toLocaleString()} item(s). Compact view for value, risk, evidence and action priority.</p>
           </div>
-          <div className="md-view-actions">
-            <button type="button" className="md-action-btn primary" onClick={closeDrilldown}><Icon name="back" /> Back to Overview</button>
-            <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
+          <div>
+            <button type="button" onClick={closeDrilldown}><Icon name="back"/> Back to Overview</button>
+            <button type="button" onClick={refreshDashboard}><Icon name="refresh"/> Refresh</button>
           </div>
         </div>
-        <div className="md-view-body">
-          {drill.loading ? <div className="md-state-panel">Loading breakdown...</div> : rows.length === 0 ? <div className="md-state-panel">No breakdown item is available for this selection.</div> : (
-            <div className="md-command-lens">
-              <section className="md-command-hero">
-                <div className="md-command-story">
+        <div>
+          {drill.loading ? <div>Loading breakdown...</div> : rows.length === 0 ? <div>No breakdown item is available for this selection.</div> : (<div>
+              <section>
+                <div>
                   <span>{lens.label}</span>
                   <h3>{lens.title}</h3>
                   <p>{lens.description}</p>
                 </div>
-                <div className="md-command-scoreboard">
+                <div>
                   <article>
                     <span>{lens.valueLabel}</span>
                     <strong>{primaryValue}</strong>
@@ -4888,10 +4815,9 @@ export default function ManagementDashboard() {
                 </div>
               </section>
 
-              {visual && (
-                <section className="md-command-grid">
-                  <article className="md-command-chart-card">
-                    <div className="md-command-card-head">
+              {visual && (<section>
+                  <article>
+                    <div>
                       <div>
                         <span>{visual.modeLabel}</span>
                         <h3>{visual.title}</h3>
@@ -4900,67 +4826,45 @@ export default function ManagementDashboard() {
                       <em>{visual.type === "donut" ? "Composition" : "Ranking"}</em>
                     </div>
 
-                    {visual.type === "donut" ? (
-                      <div className="md-command-donut-layout">
-                        <div className="md-command-donut" style={{ "--donut": visual.gradient } as React.CSSProperties} aria-label={visual.title}>
+                    {visual.type === "donut" ? (<div>
+                        <div aria-label={visual.title}>
                           <span>
                             <strong>{visual.totalLabel}</strong>
                             <small>{visual.totalCaption}</small>
                           </span>
                         </div>
-                        <div className="md-command-mini-legend">
-                          {visual.items.slice(0, 5).map((item) => (
-                            <button
-                              type="button"
-                              key={`cmd-donut-${item.row.key || item.label}`}
-                              style={{ "--dot": item.color } as React.CSSProperties}
-                              onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}
-                            >
+                        <div>
+                          {visual.items.slice(0, 5).map((item) => (<button type="button" key={`cmd-donut-${item.row.key || item.label}`} onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}>
                               <i />
                               <span>{item.shortLabel}</span>
                               <strong>{item.percent}%</strong>
-                            </button>
-                          ))}
+                            </button>))}
                         </div>
-                      </div>
-                    ) : (
-                      <div className="md-command-bars">
-                        {visual.items.map((item) => (
-                          <button
-                            type="button"
-                            key={`cmd-bar-${item.row.key || item.label}`}
-                            style={{ "--dot": item.color } as React.CSSProperties}
-                            onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}
-                          >
+                      </div>) : (<div>
+                        {visual.items.map((item) => (<button type="button" key={`cmd-bar-${item.row.key || item.label}`} onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}>
                             <span><b>{item.shortLabel}</b><em>{item.display}</em></span>
-                            <i><u style={{ "--w": `${item.percent}%` } as React.CSSProperties} /></i>
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                            <i><u /></i>
+                          </button>))}
+                      </div>)}
                   </article>
 
-                  <article className="md-command-priority-card">
-                    <span className="md-command-pill">Priority signal</span>
+                  <article>
+                    <span>Priority signal</span>
                     <h3>{topRow?.label || "No priority signal"}</h3>
                     <strong>{topPrimary}</strong>
                     <p>{managementRead}</p>
-                    {topLens && (
-                      <div className="md-command-chipline">
+                    {topLens && (<div>
                         <span>{topLens.impactType}</span>
                         <span>{topLens.riskType}</span>
                         <span>{topLens.confidence}</span>
-                      </div>
-                    )}
-                    {topRow && (
-                      <button type="button" onClick={() => openLevel3(topRow.level3Area || drill.area || "risk", topRow.level3Key || topRow.key, topRow.label)}>
-                        Open evidence <Icon name="next" />
-                      </button>
-                    )}
+                      </div>)}
+                    {topRow && (<button type="button" onClick={() => openLevel3(topRow.level3Area || drill.area || "risk", topRow.level3Key || topRow.key, topRow.label)}>
+                        Open evidence <Icon name="next"/>
+                      </button>)}
                   </article>
 
-                  <article className="md-command-read-card">
-                    <span className="md-command-pill">Management read</span>
+                  <article>
+                    <span>Management read</span>
                     <h3>What this means</h3>
                     <p>{visual.guidance}</p>
                     <div>
@@ -4969,26 +4873,20 @@ export default function ManagementDashboard() {
                       <span>Priced</span><strong>{confidence}%</strong>
                     </div>
                   </article>
-                </section>
-              )}
+                </section>)}
 
-              <section className="md-command-table-card">
-                <div className="md-command-table-head">
+              <section>
+                <div>
                   <div>
-                    <span className="md-command-pill">Decision queue</span>
+                    <span>Decision queue</span>
                     <h3>Management actions by value and evidence</h3>
                   </div>
                   <p>Search, filter and paginate the queue before opening evidence. No assumed values are shown.</p>
                 </div>
-                <div className="md-data-toolbar">
-                  <label className="md-data-search">
-                    <Icon name="search" />
-                    <input
-                      type="search"
-                      value={tableSearch}
-                      onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); }}
-                      placeholder="Search signal, risk, decision..."
-                    />
+                <div>
+                  <label>
+                    <Icon name="search"/>
+                    <input type="search" value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); }} placeholder="Search signal, risk, decision..."/>
                   </label>
                   <select value={tableFilter} onChange={(event) => { setTableFilter(event.target.value); setTablePage(1); }} aria-label="Filter decision queue">
                     <option value="all">All impact types</option>
@@ -4999,8 +4897,8 @@ export default function ManagementDashboard() {
                   </select>
                   <span>{filteredCommandRows.length.toLocaleString()} / {sortedRows.length.toLocaleString()} row(s)</span>
                 </div>
-                <div className="md-command-rows">
-                  <div className="md-command-row md-command-row-head" aria-hidden="true">
+                <div>
+                  <div aria-hidden="true">
                     <span>Impact</span>
                     <span>Signal</span>
                     <span>Value</span>
@@ -5008,30 +4906,21 @@ export default function ManagementDashboard() {
                     <span>Decision</span>
                     <span></span>
                   </div>
-                  {visibleCommandRows.length === 0 ? (
-                    <div className="md-empty-row">No matching decision row.</div>
-                  ) : visibleCommandRows.map((row) => {
+                  {visibleCommandRows.length === 0 ? (<div>No matching decision row.</div>) : visibleCommandRows.map((row) => {
                     const rowLens = getRowLens(row, drill.area, maxValue, totalCount);
                     const primary = getDrillValue(row, drill.area);
                     const countLabel = `${Number(row.count || 0).toLocaleString()} record(s)`;
-                    return (
-                      <button
-                        type="button"
-                        key={row.key || row.label}
-                        className={`md-command-row tone-${normalizeTone(rowLens.tone)}`}
-                        onClick={() => openLevel3(row.level3Area || drill.area || "risk", row.level3Key || row.key, row.label)}
-                      >
+                    return (<button type="button" key={row.key || row.label} onClick={() => openLevel3(row.level3Area || drill.area || "risk", row.level3Key || row.key, row.label)}>
                         <span><i />{rowLens.impactType}</span>
                         <span><b>{row.label}</b><em>{rowLens.riskType}</em></span>
                         <span><b>{primary}</b><em>{rowLens.metricLabel}</em></span>
                         <span><b>{countLabel}</b><em>{rowLens.confidence}</em></span>
                         <span>{rowLens.decision}</span>
-                        <span>Evidence <Icon name="next" /></span>
-                      </button>
-                    );
-                  })}
+                        <span>Evidence <Icon name="next"/></span>
+                      </button>);
+                })}
                 </div>
-                <div className="md-data-pagination">
+                <div>
                   <span>Showing {filteredCommandRows.length ? (commandPageInfo.start + 1).toLocaleString() : 0} - {commandPageInfo.end.toLocaleString()} of {filteredCommandRows.length.toLocaleString()}</span>
                   <div>
                     <button type="button" onClick={() => setTablePage(1)} disabled={commandPageInfo.safePage <= 1}>First</button>
@@ -5042,54 +4931,45 @@ export default function ManagementDashboard() {
                   </div>
                 </div>
               </section>
-            </div>
-          )}
+            </div>)}
         </div>
-      </section>
-    );
-  }
-
-
-  function renderEvidenceView() {
-    const rows = (drill.rows || []) as EvidenceRow[];
-    const kind = evidenceKind(drill.area, drill.key, rows);
-    const evidenceColumns = getEvidenceColumns(kind);
-    const evidenceFilterOptions = Array.from(new Set(rows.map((row) => evidenceDomain(row)).filter(Boolean)));
-    const evidenceSearch = tableSearch.trim().toLowerCase();
-    const filteredEvidenceRows = rows.filter((row) => {
-      const domain = evidenceDomain(row);
-      const matchesFilter = tableFilter === "all" || domain === tableFilter;
-      if (!matchesFilter) return false;
-      if (!evidenceSearch) return true;
-      return normalizeTableSearchText(...Object.values(row as Record<string, unknown>)).includes(evidenceSearch);
-    });
-    const evidencePageInfo = getPageInfo(filteredEvidenceRows.length, tablePage, tablePageSize);
-    const visibleEvidenceRows = filteredEvidenceRows.slice(evidencePageInfo.start, evidencePageInfo.end);
-    return (
-      <section className="md-view-panel">
-        <div className="md-view-header">
+      </section>);
+    }
+    function renderEvidenceView() {
+        const rows = (drill.rows || []) as EvidenceRow[];
+        const kind = evidenceKind(drill.area, drill.key, rows);
+        const evidenceColumns = getEvidenceColumns(kind);
+        const evidenceFilterOptions = Array.from(new Set(rows.map((row) => evidenceDomain(row)).filter(Boolean)));
+        const evidenceSearch = tableSearch.trim().toLowerCase();
+        const filteredEvidenceRows = rows.filter((row) => {
+            const domain = evidenceDomain(row);
+            const matchesFilter = tableFilter === "all" || domain === tableFilter;
+            if (!matchesFilter)
+                return false;
+            if (!evidenceSearch)
+                return true;
+            return normalizeTableSearchText(...Object.values(row as Record<string, unknown>)).includes(evidenceSearch);
+        });
+        const evidencePageInfo = getPageInfo(filteredEvidenceRows.length, tablePage, tablePageSize);
+        const visibleEvidenceRows = filteredEvidenceRows.slice(evidencePageInfo.start, evidencePageInfo.end);
+        return (<section>
+        <div>
           <div>
-            <span className="md-view-eyebrow">Evidence Detail</span>
+            <span>Evidence Detail</span>
             <h2>{drill.title || "Evidence View"}</h2>
             <p>{drill.loading ? "Loading evidence for this selection..." : `${Number(drill.total || rows.length || 0).toLocaleString()} record(s) found for this selection.`}</p>
           </div>
-          <div className="md-view-actions">
-            <button type="button" className="md-action-btn primary" onClick={backDrilldown}><Icon name="back" /> {drill.parent ? "Back to Breakdown" : "Back to Overview"}</button>
-            <button type="button" className="md-action-btn" onClick={closeDrilldown}>Close</button>
+          <div>
+            <button type="button" onClick={backDrilldown}><Icon name="back"/> {drill.parent ? "Back to Breakdown" : "Back to Overview"}</button>
+            <button type="button" onClick={closeDrilldown}>Close</button>
           </div>
         </div>
-        <div className="md-view-body">
-          {drill.loading ? <div className="md-state-panel">Loading evidence...</div> : (
-            <div className="md-data-table-shell">
-              <div className="md-data-toolbar">
-                <label className="md-data-search">
-                  <Icon name="search" />
-                  <input
-                    type="search"
-                    value={tableSearch}
-                    onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); }}
-                    placeholder={kind === "geolocation" ? "Search device, location, coordinate, issue..." : kind === "software" ? "Search software, device, publisher, version..." : kind === "network" ? "Search IP, host, owner, status..." : kind === "service" ? "Search ticket, customer, SLA, priority..." : "Search device, owner, model, risk..."}
-                  />
+        <div>
+          {drill.loading ? <div>Loading evidence...</div> : (<div>
+              <div>
+                <label>
+                  <Icon name="search"/>
+                  <input type="search" value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); }} placeholder={kind === "geolocation" ? "Search device, location, coordinate, issue..." : kind === "software" ? "Search software, device, publisher, version..." : kind === "network" ? "Search IP, host, owner, status..." : kind === "service" ? "Search ticket, customer, SLA, priority..." : "Search device, owner, model, risk..."}/>
                 </label>
                 <select value={tableFilter} onChange={(event) => { setTableFilter(event.target.value); setTablePage(1); }} aria-label="Filter evidence domain">
                   <option value="all">All domains</option>
@@ -5100,23 +4980,21 @@ export default function ManagementDashboard() {
                 </select>
                 <span>{filteredEvidenceRows.length.toLocaleString()} / {rows.length.toLocaleString()} record(s)</span>
               </div>
-              <div className="md-table-wrap md-evidence-wrap">
-                <table className="md-table">
+              <div>
+                <table>
                   <thead>
                     <tr>
                       {evidenceColumns.map((column) => <th key={column.label}>{column.label}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleEvidenceRows.length === 0 ? <tr><td colSpan={evidenceColumns.length}>No matching evidence record found.</td></tr> : visibleEvidenceRows.map((row, index) => (
-                      <tr key={row.assetKey || `${row.objectAgent}-${row.assetId}-${evidencePageInfo.start + index}`}>
+                    {visibleEvidenceRows.length === 0 ? <tr><td colSpan={evidenceColumns.length}>No matching evidence record found.</td></tr> : visibleEvidenceRows.map((row, index) => (<tr key={row.assetKey || `${row.objectAgent}-${row.assetId}-${evidencePageInfo.start + index}`}>
                         {evidenceColumns.map((column) => <td key={column.label}>{column.render(row)}</td>)}
-                      </tr>
-                    ))}
+                      </tr>))}
                   </tbody>
                 </table>
               </div>
-              <div className="md-data-pagination">
+              <div>
                 <span>Showing {filteredEvidenceRows.length ? (evidencePageInfo.start + 1).toLocaleString() : 0} - {evidencePageInfo.end.toLocaleString()} of {filteredEvidenceRows.length.toLocaleString()}</span>
                 <div>
                   <button type="button" onClick={() => setTablePage(1)} disabled={evidencePageInfo.safePage <= 1}>First</button>
@@ -5126,33 +5004,25 @@ export default function ManagementDashboard() {
                   <button type="button" onClick={() => setTablePage(evidencePageInfo.totalPages)} disabled={evidencePageInfo.safePage >= evidencePageInfo.totalPages}>Last</button>
                 </div>
               </div>
-            </div>
-          )}
+            </div>)}
         </div>
-      </section>
-    );
-  }
-
-  const hasData =
-    dashboard.executiveKpis.length > 0 ||
-    dashboard.pillars.length > 0 ||
-    dashboard.boardActions.length > 0 ||
-    Object.keys(dashboard.metrics || {}).length > 0 ||
-    Boolean(dashboard.analysis?.signals?.length || dashboard.analysis?.trend?.length) ||
-    Object.values(dashboard.level2 || {}).some((rows) => Array.isArray(rows) && rows.length > 0);
-
-  const shouldRenderDashboard = !error && (hasData || loading);
-
-  return (
-    <div className="management-center-page">
-      <style>{MANAGEMENT_DASHBOARD_INLINE_CSS}</style>
-      <main className="management-module-root">
-        <div className="md-content">
-          {!loading && error && <div className="md-state-panel md-state-error">{error}</div>}
+      </section>);
+    }
+    const hasData = dashboard.executiveKpis.length > 0 ||
+        dashboard.pillars.length > 0 ||
+        dashboard.boardActions.length > 0 ||
+        Object.keys(dashboard.metrics || {}).length > 0 ||
+        Boolean(dashboard.analysis?.signals?.length || dashboard.analysis?.trend?.length) ||
+        Object.values(dashboard.level2 || {}).some((rows) => Array.isArray(rows) && rows.length > 0);
+    const shouldRenderDashboard = !error && (hasData || loading);
+    return (<div>
+      
+      <main>
+        <div>
+          {!loading && error && <div>{error}</div>}
           {shouldRenderDashboard && (drill.level === 2 ? renderBreakdownView() : drill.level === 3 ? renderEvidenceView() : renderOverview())}
-          {!loading && !error && !hasData && <div className="md-state-panel">No management insight is available right now.</div>}
+          {!loading && !error && !hasData && <div>No management insight is available right now.</div>}
         </div>
       </main>
-    </div>
-  );
+    </div>);
 }
