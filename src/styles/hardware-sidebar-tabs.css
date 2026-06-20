@@ -132,6 +132,7 @@
   align-content: start;
   gap: 0.22rem;
   overflow-y: auto;
+  overflow-x: visible;
   padding: 0.08rem 0.08rem 0.12rem;
 }
 
@@ -141,14 +142,25 @@
   display: none;
 }
 
+.hardware-left-panel .ema-sidebar-tree-branch,
+.hardware-left-panel .hardware-tree-branch,
+.hardware-left-panel .hardware-stat-tree-branch {
+  position: relative;
+  overflow: visible;
+}
+
 .hardware-left-panel .ema-sidebar-tree-node,
 .hardware-left-panel .hardware-tree-node,
 .hardware-left-panel .hardware-stat-tree-node {
   position: relative;
   width: 100%;
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 1.75rem;
+  align-items: center;
   border: 1px solid transparent;
   border-radius: 0.7rem;
   background: transparent;
+  overflow: visible;
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
@@ -191,16 +203,34 @@
   color: #1d4ed8;
 }
 
+.hardware-left-panel .ema-sidebar-tree-toggle,
+.hardware-left-panel .hardware-tree-node-chevron,
+.hardware-left-panel .hardware-stat-tree-toggle {
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+}
+
 .hardware-left-panel .ema-sidebar-tree-main,
 .hardware-left-panel .hardware-tree-node-main,
 .hardware-left-panel .hardware-stat-tree-main {
   width: 100%;
+  min-width: 0;
   min-height: 2.15rem;
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  border: 0;
   border-radius: 0.6rem;
-  padding: 0.35rem 0.48rem;
+  padding: 0.35rem 0.25rem;
+  background: transparent;
+  text-align: left;
 }
 
 .hardware-left-panel .ema-sidebar-tree-label,
@@ -211,6 +241,129 @@
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hardware-left-panel .ema-sidebar-tree-icon,
+.hardware-left-panel .hardware-tree-node-icon,
+.hardware-left-panel .hardware-stat-tree-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.48rem;
+  color: #475569;
+  background: #eef4fb;
+}
+
+.hardware-left-panel .ema-sidebar-tree-count,
+.hardware-left-panel .hardware-tree-node-count {
+  margin-left: auto;
+  color: #64748b;
+  font-weight: 750;
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu-wrap,
+.hardware-left-panel .hardware-tree-menu-wrap,
+.hardware-left-panel .hardware-stat-tree-menu-wrap {
+  position: relative;
+  width: 1.75rem;
+  height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  overflow: visible;
+  z-index: 5;
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu-btn,
+.hardware-left-panel .hardware-tree-menu-btn,
+.hardware-left-panel .hardware-stat-tree-menu-btn {
+  width: 1.65rem;
+  height: 1.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu-btn:hover,
+.hardware-left-panel .hardware-tree-menu-btn:hover,
+.hardware-left-panel .hardware-stat-tree-menu-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu,
+.hardware-left-panel .hardware-tree-menu,
+.hardware-left-panel .hardware-stat-tree-menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: 80;
+  width: 10.25rem;
+  display: grid;
+  gap: 0.15rem;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.35rem;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu button,
+.hardware-left-panel .hardware-tree-menu button,
+.hardware-left-panel .hardware-stat-tree-menu button {
+  width: 100%;
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  padding: 0.35rem 0.55rem;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu button:hover,
+.hardware-left-panel .hardware-tree-menu button:hover,
+.hardware-left-panel .hardware-stat-tree-menu button:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu button.danger,
+.hardware-left-panel .hardware-tree-menu button.danger,
+.hardware-left-panel .hardware-stat-tree-menu button.danger {
+  color: #dc2626;
+}
+
+.hardware-left-panel .ema-sidebar-tree-menu button.danger:hover,
+.hardware-left-panel .hardware-tree-menu button.danger:hover,
+.hardware-left-panel .hardware-stat-tree-menu button.danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.hardware-left-panel .ema-sidebar-tree-children,
+.hardware-left-panel .hardware-tree-children,
+.hardware-left-panel .hardware-stat-tree-children {
+  display: grid;
+  gap: 0.12rem;
+  margin-left: 1rem;
+  padding-left: 0.35rem;
+  border-left: 1px dashed #dbe7f6;
+  overflow: visible;
 }
 
 .hardware-device-table .hardware-empty-state,
