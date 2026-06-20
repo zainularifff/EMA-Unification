@@ -1,43 +1,90 @@
-/* Temporary bridge while Hardware.tsx is migrated to Tailwind.
-   Keeps the selected-device action panel beside the registry table, not below it. */
+/* Hardware selected-device layout bridge while Hardware.tsx is migrated to Tailwind. */
+
+.hardware-right-device {
+  min-width: 0;
+  display: block !important;
+}
+
+.hardware-right-panel .hardware-right-header {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 0.6rem !important;
+}
+
+.hardware-right-panel .hardware-right-title {
+  min-width: 0;
+  display: block !important;
+}
+
+.hardware-right-panel .hardware-right-title h3,
+.hardware-right-panel .hardware-right-title p {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.hardware-right-panel .hardware-action-list {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 0.45rem !important;
+  margin-top: 0.6rem !important;
+}
+
+.hardware-right-panel .hardware-action-item {
+  width: 100%;
+  min-width: 0;
+  min-height: 3.5rem;
+  display: grid !important;
+  grid-template-columns: 1.9rem minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+}
+
+.hardware-right-panel .hardware-action-item > div:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.hardware-right-panel .hardware-action-item strong,
+.hardware-right-panel .hardware-action-item span {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
 
 @media (min-width: 1280px) {
   .hardware-main-grid.has-inspector,
   .hardware-main-grid:has(.hardware-right-panel) {
-    grid-template-columns: minmax(0, 1fr) 18.5rem;
+    grid-template-columns: minmax(0, 1fr) minmax(21rem, 23rem);
     align-items: start;
   }
 
   .hardware-main-grid.has-inspector .hardware-registry-card,
   .hardware-main-grid:has(.hardware-right-panel) .hardware-registry-card {
     min-width: 0;
+    overflow: hidden;
   }
 
   .hardware-main-grid.has-inspector .hardware-right-panel,
   .hardware-main-grid:has(.hardware-right-panel) .hardware-right-panel {
     position: sticky;
-    top: 0.4rem;
+    top: 0.35rem;
     align-self: start;
-    max-height: calc(100vh - 7rem);
+    max-height: calc(100vh - 6rem);
     overflow: auto;
   }
 
   .hardware-main-grid.has-inspector .hardware-right-info,
-  .hardware-main-grid:has(.hardware-right-panel) .hardware-right-info,
-  .hardware-main-grid.has-inspector .hardware-action-list,
-  .hardware-main-grid:has(.hardware-right-panel) .hardware-action-list {
+  .hardware-main-grid:has(.hardware-right-panel) .hardware-right-info {
     grid-template-columns: 1fr;
-  }
-
-  .hardware-main-grid.has-inspector .hardware-action-item,
-  .hardware-main-grid:has(.hardware-right-panel) .hardware-action-item {
-    min-height: 3.65rem;
   }
 }
 
 @media (min-width: 1536px) {
   .hardware-main-grid.has-inspector,
   .hardware-main-grid:has(.hardware-right-panel) {
-    grid-template-columns: minmax(0, 1fr) 20rem;
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 24rem);
   }
 }
