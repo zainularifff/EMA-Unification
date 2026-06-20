@@ -1,0 +1,488 @@
+.ema-module-sidebar-nav {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0 0 0.7rem;
+  padding: 0.22rem;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.9rem;
+  background: #f8fbff;
+}
+
+.ema-module-sidebar-nav .setting-btn {
+  min-width: 0;
+  min-height: 2.55rem;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.45rem;
+  border: 0 !important;
+  border-radius: 0.72rem;
+  background: transparent;
+  color: #475569;
+  box-shadow: none !important;
+}
+
+.ema-module-sidebar-nav .setting-btn.active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12) !important;
+}
+
+.ema-module-sidebar-nav .setting-btn strong {
+  display: block;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.8rem;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ema-module-sidebar-nav .setting-btn small {
+  display: none !important;
+}
+
+.ema-panel-surface.settings-menu {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.ema-panel-surface .ema-sidebar-subpanel {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  overflow: hidden;
+}
+
+.ema-panel-surface .soft-btn,
+.ema-sidebar-action-btn {
+  width: 100%;
+  min-height: 2.25rem;
+  justify-content: center;
+  border-color: #bfdbfe;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.ema-panel-surface .soft-btn:hover:not(:disabled),
+.ema-sidebar-action-btn:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.ema-sidebar-scope-card {
+  width: 100%;
+  display: grid;
+  gap: 0.18rem;
+  margin: 0 0 0.1rem;
+  padding: 0.68rem 0.78rem;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.82rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.ema-sidebar-scope-card strong,
+.ema-sidebar-scope-card span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ema-sidebar-scope-card strong {
+  color: #0f172a;
+  font-size: 0.92rem;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.ema-sidebar-scope-card span {
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.ema-sidebar-tree > .ema-sidebar-section-title {
+  display: none !important;
+}
+
+.ema-sidebar-tree,
+[class*="-tree"]:is(.ema-sidebar-tree) {
+  width: 100%;
+  min-height: 0 !important;
+  flex: 1 1 auto;
+  display: grid;
+  align-content: start;
+  gap: 0.22rem;
+  overflow-y: auto;
+  overflow-x: visible;
+  padding: 0.08rem 0.08rem 0.12rem;
+}
+
+.ema-sidebar-tree-branch,
+[class*="-tree-branch"] {
+  position: relative;
+  overflow: visible;
+}
+
+.ema-sidebar-tree-node,
+[class*="-tree-node"] {
+  position: relative;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 1.75rem;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 0.7rem;
+  background: transparent;
+  overflow: visible;
+}
+
+.ema-sidebar-tree-node:hover,
+[class*="-tree-node"]:hover {
+  border-color: #dbe7f6;
+  background: #f8fafc;
+}
+
+.ema-sidebar-tree-node.is-selected,
+.ema-sidebar-tree-node.is-active,
+[class*="-tree-node"].is-selected,
+[class*="-tree-node"].is-active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.ema-sidebar-tree-toggle,
+[class*="-tree-toggle"],
+[class*="-tree-node-chevron"] {
+  width: 1.25rem;
+  min-width: 1.25rem;
+  height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+}
+
+.ema-sidebar-tree-main,
+[class*="-tree-main"],
+[class*="-tree-node-main"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.25rem;
+  background: transparent;
+  text-align: left;
+}
+
+.ema-sidebar-tree-label,
+[class*="-tree-label"],
+[class*="-tree-main"] > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ema-sidebar-tree-menu-wrap,
+[class*="-tree-menu-wrap"] {
+  position: relative;
+  width: 1.75rem;
+  height: 2.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  overflow: visible;
+  z-index: 5;
+}
+
+.ema-sidebar-tree-menu,
+[class*="-tree-menu"] {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: 80;
+  width: 10.25rem;
+  display: grid;
+  gap: 0.15rem;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0.35rem;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+}
+
+.ema-sidebar-tree-menu button,
+[class*="-tree-menu"] button {
+  width: 100%;
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  padding: 0.35rem 0.55rem;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.ema-sidebar-tree-menu button:hover,
+[class*="-tree-menu"] button:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.ema-sidebar-tree-menu button.danger,
+[class*="-tree-menu"] button.danger,
+.ema-btn-danger {
+  color: #dc2626;
+}
+
+.ema-empty-state,
+[class*="empty-state"] {
+  min-height: 11.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  border-top: 1px solid #e2e8f0;
+  color: #94a3b8;
+  font-size: 0;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.ema-empty-state::before,
+[class*="empty-state"]::before {
+  content: "";
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid rgba(37, 99, 235, 0.16);
+  border-top-color: #3b82f6;
+  border-radius: 999px;
+  animation: ema-spin 0.8s linear infinite;
+}
+
+.ema-empty-state::after,
+[class*="empty-state"]::after {
+  content: "LOADING DATA...";
+  color: #94a3b8;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.ema-panel-surface svg.animate-spin,
+.ema-panel-surface .animate-spin.text-blue-500 {
+  width: 2rem !important;
+  height: 2rem !important;
+  margin: 0 auto 0.5rem !important;
+  border: 3px solid rgba(37, 99, 235, 0.16) !important;
+  border-top-color: #3b82f6 !important;
+  border-radius: 999px !important;
+  color: transparent !important;
+  stroke: transparent !important;
+  animation: ema-spin 0.8s linear infinite !important;
+}
+
+.ema-panel-surface svg.animate-spin *,
+.ema-panel-surface .animate-spin.text-blue-500 * {
+  stroke: transparent !important;
+}
+
+.ema-stat-workbench,
+[class*="stat-workbench"] {
+  min-height: 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ema-stat-commandbar,
+[class*="stat-commandbar"] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.95rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+}
+
+.ema-stat-commandbar h3,
+[class*="stat-commandbar"] h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.ema-stat-commandbar p,
+[class*="stat-commandbar"] p {
+  width: fit-content;
+  margin: 0.3rem 0 0;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.68rem;
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ema-stat-refresh-btn,
+[class*="stat-refresh-btn"] {
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  padding: 0 0.85rem;
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 950;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08);
+}
+
+.ema-stat-refresh-btn:hover:not(:disabled),
+[class*="stat-refresh-btn"]:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.ema-stat-refresh-btn:disabled,
+[class*="stat-refresh-btn"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.ema-stat-table-card,
+[class*="stat-table-card"] {
+  flex: 1 1 auto;
+  min-height: 18rem;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.95rem;
+  background: #ffffff;
+}
+
+.ema-stat-table-scroll,
+[class*="stat-table-scroll"] {
+  flex: 1 1 auto;
+  min-height: 18rem;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.ema-stat-table-scroll > .flex.items-center.justify-center,
+[class*="stat-table-scroll"] > .flex.items-center.justify-center {
+  min-height: 18rem;
+  border-radius: 0.8rem;
+  background: #ffffff;
+}
+
+.ema-stat-summary-layout,
+[class*="stat-summary-layout"] {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ema-stat-summary-total,
+[class*="stat-summary-total"] {
+  width: fit-content;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  padding: 0.35rem 0.7rem;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+
+.ema-stat-summary-table,
+[class*="stat-summary-table"] {
+  width: 100%;
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.85rem;
+  color: #0f172a;
+  font-size: 0.78rem;
+}
+
+.ema-stat-summary-table thead th,
+[class*="stat-summary-table"] thead th {
+  padding: 0.65rem 0.8rem;
+  background: #f1f5f9;
+  color: #475569 !important;
+  font-size: 0.68rem;
+  font-weight: 950;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.ema-stat-summary-table tbody td,
+[class*="stat-summary-table"] tbody td {
+  padding: 0.7rem 0.8rem;
+  border-top: 1px solid #e2e8f0;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.ema-stat-summary-table tbody tr:hover td,
+[class*="stat-summary-table"] tbody tr:hover td {
+  background: #f8fbff;
+}
+
+.ema-stat-summary-reference,
+[class*="stat-summary-reference"] {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@keyframes ema-spin {
+  to { transform: rotate(360deg); }
+}
