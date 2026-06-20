@@ -9,6 +9,7 @@ import "./components/ema/EmaButtonRuntimeStyles";
 import "./components/ema/EmaTableRuntimeStyles";
 import "./components/ema/EmaStatisticRuntimeStyles";
 import "./components/ema/EmaBarePageRuntimeStyles";
+import "./components/ema/EmaLoadingRuntimeStyles";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
