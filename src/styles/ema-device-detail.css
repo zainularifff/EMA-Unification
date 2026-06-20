@@ -1,0 +1,163 @@
+/* =========================================================
+   EMA device detail modal
+   Global bridge for device detail views while pages are migrated to ema-* markup.
+========================================================= */
+
+:root {
+  --ema-detail-border: #e2e8f0;
+  --ema-detail-muted: #64748b;
+  --ema-detail-strong: #0f172a;
+  --ema-detail-soft: #f8fafc;
+}
+
+.hardware-detail-drawer {
+  width: min(58rem, calc(100vw - 1.5rem));
+}
+
+.hardware-detail-drawer-header {
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+}
+
+.hardware-detail-title-wrap {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.hardware-detail-title-wrap h2 {
+  margin: 0.15rem 0 0;
+  color: var(--ema-detail-strong);
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.hardware-detail-title-wrap p {
+  margin: 0.2rem 0 0;
+  color: #334155;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.hardware-detail-header-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.hardware-detail-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0.85rem 1rem 0.6rem;
+}
+
+.hardware-detail-summary-grid .hardware-detail-summary-card:nth-child(2) {
+  display: none;
+}
+
+.hardware-detail-summary-card {
+  min-height: 3.25rem;
+  padding: 0.7rem 0.8rem;
+  border-color: var(--ema-detail-border);
+  border-radius: 0.75rem;
+  background: #ffffff;
+}
+
+.hardware-detail-tabs {
+  gap: 0.35rem;
+  padding: 0.55rem 1rem 0.75rem;
+}
+
+.hardware-detail-tabs button {
+  min-height: 1.75rem;
+  padding: 0.35rem 0.7rem;
+}
+
+.hardware-detail-body {
+  padding: 1rem 1.15rem 1.25rem;
+}
+
+.hardware-detail-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 0;
+}
+
+.hardware-detail-card {
+  min-width: 0;
+  padding: 0.8rem;
+  border-color: var(--ema-detail-border);
+  border-radius: 0.85rem;
+  background: #ffffff;
+}
+
+.hardware-detail-card h3 {
+  margin: 0 0 0.65rem;
+  color: var(--ema-detail-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.hardware-detail-card .hardware-detail-item {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--ema-detail-border);
+  border-radius: 0.72rem;
+  background: #ffffff;
+}
+
+.hardware-detail-card .hardware-detail-item + .hardware-detail-item {
+  margin-top: 0.55rem;
+}
+
+.hardware-detail-item span,
+.hardware-detail-summary-card span {
+  color: var(--ema-detail-muted);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.hardware-detail-item strong,
+.hardware-detail-summary-card strong {
+  margin-top: 0.28rem;
+  color: var(--ema-detail-strong);
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.hardware-detail-drawer:has(.hardware-detail-tabs button:nth-child(1).is-active)
+  .hardware-detail-section-grid
+  .hardware-detail-card:first-child
+  .hardware-detail-item:nth-of-type(3) {
+  display: none;
+}
+
+.hardware-detail-drawer:has(.hardware-detail-tabs button:nth-child(2).is-active)
+  .hardware-detail-section-grid
+  .hardware-detail-card:nth-child(2)
+  .hardware-detail-item:nth-of-type(3) {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .hardware-detail-summary-grid,
+  .hardware-detail-section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hardware-detail-drawer-header {
+    flex-direction: column;
+  }
+
+  .hardware-detail-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
