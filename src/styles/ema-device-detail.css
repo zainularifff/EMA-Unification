@@ -12,9 +12,14 @@
 
 .hardware-detail-drawer {
   width: min(58rem, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 1.5rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .hardware-detail-drawer-header {
+  flex: 0 0 auto;
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.9rem 1rem;
@@ -50,6 +55,7 @@
 }
 
 .hardware-detail-summary-grid {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
@@ -69,6 +75,7 @@
 }
 
 .hardware-detail-tabs {
+  flex: 0 0 auto;
   gap: 0.35rem;
   padding: 0.55rem 1rem 0.75rem;
 }
@@ -78,8 +85,36 @@
   padding: 0.35rem 0.7rem;
 }
 
-.hardware-detail-body {
+.hardware-detail-body,
+.hardware-detail-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1rem 1.15rem 1.25rem;
+}
+
+.hardware-detail-body::-webkit-scrollbar,
+.hardware-detail-drawer-body::-webkit-scrollbar {
+  width: 0.55rem;
+}
+
+.hardware-detail-body::-webkit-scrollbar-thumb,
+.hardware-detail-drawer-body::-webkit-scrollbar-thumb {
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.hardware-detail-body::-webkit-scrollbar-track,
+.hardware-detail-drawer-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hardware-detail-footer,
+.hardware-detail-form-footer,
+.hardware-detail-drawer-footer {
+  flex: 0 0 auto;
 }
 
 .hardware-detail-section-grid {
@@ -147,6 +182,10 @@
 }
 
 @media (max-width: 760px) {
+  .hardware-detail-drawer {
+    max-height: calc(100vh - 1rem);
+  }
+
   .hardware-detail-summary-grid,
   .hardware-detail-section-grid {
     grid-template-columns: 1fr;
