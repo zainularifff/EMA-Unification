@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 import './components/ema/EmaRuntimeStyles';
+import './components/ema/EmaSidebarRuntimeStyles';
 import './components/ema/EmaToolbarRuntimeStyles';
 import './components/ema/EmaTableRuntimeStyles';
 import App from './App';
