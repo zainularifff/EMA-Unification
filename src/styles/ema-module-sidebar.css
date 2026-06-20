@@ -1,7 +1,8 @@
 /* EMA shared module sidebar, tree, loading and statistic states.
    Keep this file global. No module-owned sidebar CSS files. */
 
-body .ema-module-root .settings-layout {
+body .ema-module-root .settings-layout,
+body .ema-module-root > .grid.min-w-0 {
   grid-template-columns: 16.25rem minmax(0, 1fr) !important;
   gap: 0.55rem !important;
   height: 100% !important;
@@ -10,7 +11,8 @@ body .ema-module-root .settings-layout {
 }
 
 body .ema-module-root .settings-menu.ema-panel-surface,
-body .ema-module-root .settings-menu {
+body .ema-module-root .settings-menu,
+body .ema-module-root > .grid.min-w-0 > aside {
   min-width: 0 !important;
   max-width: none !important;
   width: 100% !important;
@@ -33,7 +35,8 @@ body .ema-module-root .settings-menu {
   background: #f8fbff;
 }
 
-.ema-module-sidebar-nav .setting-btn {
+.ema-module-sidebar-nav .setting-btn,
+.ema-module-sidebar-nav button {
   min-width: 0;
   min-height: 2.55rem;
   display: inline-flex !important;
@@ -47,13 +50,16 @@ body .ema-module-root .settings-menu {
   box-shadow: none !important;
 }
 
-.ema-module-sidebar-nav .setting-btn.active {
+.ema-module-sidebar-nav .setting-btn.active,
+.ema-module-sidebar-nav button[aria-selected="true"],
+.ema-module-sidebar-nav button.is-active {
   background: #ffffff;
   color: #1d4ed8;
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12) !important;
 }
 
-.ema-module-sidebar-nav .setting-btn strong {
+.ema-module-sidebar-nav .setting-btn strong,
+.ema-module-sidebar-nav button strong {
   display: block;
   overflow: hidden;
   color: inherit;
@@ -63,11 +69,13 @@ body .ema-module-root .settings-menu {
   white-space: nowrap;
 }
 
-.ema-module-sidebar-nav .setting-btn small {
+.ema-module-sidebar-nav .setting-btn small,
+.ema-module-sidebar-nav button small {
   display: none !important;
 }
 
-.ema-sidebar-content {
+.ema-sidebar-content,
+body .ema-module-root > .grid.min-w-0 > aside > div:last-child {
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
@@ -584,7 +592,8 @@ body .ema-module-root .settings-menu {
 }
 
 @media (max-width: 1100px) {
-  body .ema-module-root .settings-layout {
+  body .ema-module-root .settings-layout,
+  body .ema-module-root > .grid.min-w-0 {
     grid-template-columns: 1fr !important;
   }
 }
