@@ -220,6 +220,25 @@ const css = `
   color: #64748b !important;
 }
 
+/* Merge generic EMA toolbar with the table panel below it. This keeps KPI panels separate, while toolbar/search/filter visually belongs to the main table content. */
+main div[class~="space-y-3"] > div[class~="rounded-xl"][class~="border"][class~="p-3"][class~="shadow-sm"]:has(+ section[class~="rounded-xl"][class~="border"][class~="shadow-sm"]) {
+  margin-bottom: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, .04) !important;
+}
+
+main div[class~="space-y-3"] > div[class~="rounded-xl"][class~="border"][class~="p-3"][class~="shadow-sm"] + section[class~="rounded-xl"][class~="border"][class~="shadow-sm"] {
+  margin-top: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+main div[class~="space-y-3"] > div[class~="rounded-xl"][class~="border"][class~="p-3"][class~="shadow-sm"] + section[class~="rounded-xl"][class~="border"][class~="shadow-sm"] > div:first-child {
+  border-top: 1px solid #e2e8f0 !important;
+}
+
 @media (max-width: 1080px) {
   .ema-module-root .ema-scan-command-row,
   .ema-module-root .ema-registry-filter-row {
