@@ -1,6 +1,38 @@
 const STYLE_ID = "ema-table-runtime-styles";
 
 const css = `
+html body .ema-module-root table {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+html body .ema-module-root th,
+html body .ema-module-root td,
+html body .ema-module-root td *,
+html body .ema-module-root th * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+html body .ema-module-root .ema-device-main-cell,
+html body .ema-module-root .ema-device-main-cell *,
+html body .ema-module-root .ema-location-cell,
+html body .ema-module-root .ema-location-cell *,
+html body .ema-module-root .ema-network-cell,
+html body .ema-module-root .ema-network-cell *,
+html body .ema-module-root .ema-date-cell,
+html body .ema-module-root .ema-model-text {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  line-height: 1.25 !important;
+}
+
 html body .ema-module-root .ema-device-main-cell .user-name > div > small {
   display: none !important;
 }
@@ -9,9 +41,11 @@ html body .ema-module-root .ema-device-main-cell .user-name > div > em {
   display: block !important;
   max-width: 100% !important;
   margin-top: .18rem !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
   color: #64748b !important;
   font-size: .72rem !important;
   font-weight: 750 !important;
@@ -32,12 +66,16 @@ html body .ema-module-root .ema-status-pill {
   line-height: 1 !important;
   text-transform: capitalize !important;
   box-shadow: none !important;
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
 }
 
 html body .ema-module-root .ema-status-pill::before {
   content: "" !important;
   width: .45rem !important;
   height: .45rem !important;
+  flex: 0 0 .45rem !important;
   border-radius: 999px !important;
   background: currentColor !important;
 }
@@ -89,13 +127,6 @@ html body .ema-module-root .ema-status-dot[class*="stale" i],
 html body .ema-module-root .ema-status-dot[class*="not" i] {
   background: #f97316 !important;
   box-shadow: 0 0 0 .25rem rgba(249, 115, 22, .13) !important;
-}
-
-html body .ema-module-root .ema-location-cell strong,
-html body .ema-module-root .ema-network-cell strong,
-html body .ema-module-root .ema-date-cell,
-html body .ema-module-root .ema-model-text {
-  white-space: nowrap !important;
 }
 `;
 
