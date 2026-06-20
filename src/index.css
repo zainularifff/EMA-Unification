@@ -45,7 +45,7 @@ input:disabled,
 select:disabled,
 textarea:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.58;
 }
 
 a {
@@ -62,23 +62,23 @@ table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 thead th {
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
-  padding: 0.75rem 1rem;
+  padding: 0.55rem 0.75rem;
   color: #475569;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.035em;
   text-transform: uppercase;
 }
 
 tbody td {
   border-bottom: 1px solid #f1f5f9;
-  padding: 0.75rem 1rem;
+  padding: 0.55rem 0.75rem;
   color: #334155;
   vertical-align: middle;
 }
@@ -105,9 +105,10 @@ tbody tr:hover td {
   min-width: 0;
   flex: 1 1 0%;
   overflow: auto;
-  padding: 1.5rem;
+  padding: 1rem;
 }
 
+/* Compact bridge only for old pages while TSX is migrated to Tailwind. */
 .ema-card,
 .settings-card,
 .settings-panel,
@@ -119,9 +120,9 @@ tbody tr:hover td {
 .ema-notification-card,
 .ema-panel-surface {
   border: 1px solid #e2e8f0;
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.045);
 }
 
 .btn,
@@ -139,17 +140,17 @@ tbody tr:hover td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  min-height: 2.5rem;
+  gap: 0.4rem;
+  min-height: 2.25rem;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   background: #ffffff;
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem;
   color: #334155;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 800;
-  line-height: 1.25rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  line-height: 1.1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.045);
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
@@ -189,15 +190,6 @@ tbody tr:hover td {
   color: #ffffff;
 }
 
-.btn-light,
-.soft-btn,
-.ema-btn-soft,
-.hardware-btn.link {
-  border-color: #e2e8f0;
-  background: #ffffff;
-  color: #334155;
-}
-
 .danger-btn,
 .ema-btn-danger,
 .hardware-btn.danger,
@@ -207,14 +199,13 @@ tbody tr:hover td {
   color: #b91c1c;
 }
 
-/* Shared legacy bridge while modules are migrated to Tailwind classes */
 .settings-layout,
 .hardware-settings-layout,
 .software-settings-layout,
 .module-layout {
   display: grid;
   min-width: 0;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 @media (min-width: 1024px) {
@@ -222,7 +213,7 @@ tbody tr:hover td {
   .hardware-settings-layout,
   .software-settings-layout,
   .module-layout {
-    grid-template-columns: 20rem minmax(0, 1fr);
+    grid-template-columns: 17.5rem minmax(0, 1fr);
     align-items: stretch;
   }
 }
@@ -252,7 +243,7 @@ tbody tr:hover td {
 .network-module-root > * + *,
 .dashboard-page > * + *,
 .report-page > * + * {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
 .settings-sidebar,
@@ -262,60 +253,60 @@ tbody tr:hover td {
 .module-left-panel {
   min-width: 0;
   border: 1px solid #dbe4f0;
-  border-radius: 1rem;
+  border-radius: 0.9rem;
   background: #ffffff;
-  padding: 1rem;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+  padding: 0.8rem;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.045);
 }
 
 .panel-head,
 .hardware-panel-head {
   display: grid;
-  gap: 0.25rem;
-  margin-bottom: 1rem;
+  gap: 0.15rem;
+  margin-bottom: 0.75rem;
 }
 
 .panel-head span,
 .hardware-panel-head span,
 .eyebrow {
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .panel-head strong,
 .hardware-panel-head strong {
   color: #0f172a;
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 900;
 }
 
 .panel-head small,
 .hardware-panel-head small {
   color: #64748b;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  line-height: 1.45;
+  line-height: 1.35;
 }
 
 .settings-menu-list,
 .ema-module-sidebar-nav {
   display: grid;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
 }
 
 .setting-btn {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.55rem;
   border: 1px solid transparent;
-  border-radius: 0.85rem;
+  border-radius: 0.75rem;
   background: transparent;
-  padding: 0.7rem;
+  padding: 0.55rem;
   color: #334155;
   text-align: left;
 }
@@ -329,13 +320,13 @@ tbody tr:hover td {
 
 .setting-icon,
 .ema-sidebar-tree-icon {
-  width: 2rem;
-  height: 2rem;
+  width: 1.8rem;
+  height: 1.8rem;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.7rem;
+  border-radius: 0.65rem;
   background: #f1f5f9;
   color: #475569;
 }
@@ -347,13 +338,13 @@ tbody tr:hover td {
 
 .setting-btn strong {
   color: inherit;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 900;
 }
 
 .setting-btn small {
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
@@ -362,12 +353,12 @@ tbody tr:hover td {
 .ema-sidebar-field {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-height: 2.5rem;
+  gap: 0.5rem;
+  min-height: 2.25rem;
   border: 1px solid #e2e8f0;
-  border-radius: 0.85rem;
+  border-radius: 0.75rem;
   background: #ffffff;
-  padding: 0 0.75rem;
+  padding: 0 0.6rem;
   color: #64748b;
 }
 
@@ -380,73 +371,93 @@ tbody tr:hover td {
   outline: 0;
   background: transparent;
   color: #0f172a;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
 .ema-sidebar-content,
 .ema-sidebar-subpanel,
-.ema-sidebar-tree {
+.ema-sidebar-tree,
+.hardware-tree,
+.hardware-stat-tree {
   min-width: 0;
 }
 
 .ema-sidebar-subpanel > * + *,
-.ema-sidebar-tree > * + * {
-  margin-top: 0.55rem;
+.ema-sidebar-tree > * + *,
+.hardware-tree > * + *,
+.hardware-stat-tree > * + * {
+  margin-top: 0.4rem;
 }
 
-.ema-sidebar-tree {
-  max-height: calc(100vh - 21rem);
+.ema-sidebar-tree,
+.hardware-tree,
+.hardware-stat-tree {
+  max-height: calc(100vh - 19rem);
   overflow: auto;
-  padding-right: 0.2rem;
+  padding-right: 0.15rem;
 }
 
-.ema-sidebar-tree-node {
+.ema-sidebar-tree-node,
+.hardware-tree-node,
+.hardware-stat-tree-node {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  border-radius: 0.75rem;
-  padding: 0.2rem;
+  gap: 0.25rem;
+  border-radius: 0.7rem;
+  padding: 0.15rem;
 }
 
 .ema-sidebar-tree-node:hover,
 .ema-sidebar-tree-node.is-selected,
-.ema-sidebar-tree-node.is-active {
+.ema-sidebar-tree-node.is-active,
+.hardware-tree-node:hover,
+.hardware-tree-node.is-selected,
+.hardware-stat-tree-node:hover,
+.hardware-stat-tree-node.is-selected {
   background: #f8fafc;
 }
 
 .ema-sidebar-tree-toggle,
 .ema-sidebar-tree-main,
 .hardware-tree-node-chevron,
-.hardware-tree-node-main {
+.hardware-tree-node-main,
+.hardware-stat-tree-toggle,
+.hardware-stat-tree-main {
   border: 0;
   background: transparent;
   color: #475569;
 }
 
-.ema-sidebar-tree-toggle {
-  width: 1.5rem;
-  height: 1.5rem;
+.ema-sidebar-tree-toggle,
+.hardware-tree-node-chevron,
+.hardware-stat-tree-toggle {
+  width: 1.35rem;
+  height: 1.35rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.ema-sidebar-tree-main {
+.ema-sidebar-tree-main,
+.hardware-tree-node-main,
+.hardware-stat-tree-main {
   min-width: 0;
   flex: 1 1 0%;
   display: flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.35rem;
+  gap: 0.45rem;
+  padding: 0.3rem;
   text-align: left;
 }
 
-.ema-sidebar-tree-label {
+.ema-sidebar-tree-label,
+.hardware-tree-node-label,
+.hardware-stat-tree-main > span:last-child {
   min-width: 0;
   overflow: hidden;
   color: #0f172a;
-  font-size: 0.875rem;
+  font-size: 0.82rem;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -456,37 +467,37 @@ tbody tr:hover td {
 .hardware-hero,
 .software-hero {
   display: grid;
-  gap: 1rem;
+  gap: 0.7rem;
   border: 1px solid #dbe4f0;
-  border-radius: 1rem;
+  border-radius: 0.9rem;
   background: #ffffff;
-  padding: 1rem;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+  padding: 0.85rem;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.045);
 }
 
 .hardware-hero h2,
 .settings-hero h2,
 .software-hero h2 {
-  margin: 0.25rem 0 0;
+  margin: 0.1rem 0 0;
   color: #0f172a;
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 950;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
 }
 
 .hardware-hero p,
 .settings-hero p,
 .software-hero p {
-  margin: 0.25rem 0 0;
+  margin: 0.15rem 0 0;
   color: #64748b;
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
 .hardware-hero-score {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
 }
 
 .ema-kpi-card,
@@ -496,11 +507,11 @@ tbody tr:hover td {
 .stat-card {
   min-width: 0;
   border: 1px solid #dbe4f0;
-  border-radius: 1rem;
+  border-radius: 0.8rem;
   background: #ffffff;
-  padding: 1rem;
+  padding: 0.72rem;
   text-align: left;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.045);
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
@@ -510,29 +521,34 @@ tbody tr:hover td {
 .metric-card:hover,
 .stat-card:hover,
 .hardware-kpi-card.is-active {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   border-color: #93c5fd;
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.065);
 }
 
 .hardware-kpi-content {
   display: grid;
-  grid-template-columns: 2rem 1fr;
+  grid-template-columns: 1.65rem 1fr;
   align-items: center;
-  gap: 0.35rem 0.75rem;
+  gap: 0.18rem 0.5rem;
 }
 
 .hardware-kpi-icon {
   grid-row: span 3;
-  width: 2rem;
-  height: 2rem;
+  width: 1.65rem;
+  height: 1.65rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
+  border-radius: 0.6rem;
   background: #eff6ff;
   color: #2563eb;
   font-style: normal;
+}
+
+.hardware-kpi-icon svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .ema-kpi-label,
@@ -540,9 +556,9 @@ tbody tr:hover td {
 .software-kpi-label,
 .metric-label {
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
@@ -551,10 +567,10 @@ tbody tr:hover td {
 .software-kpi-value,
 .metric-value {
   color: #0f172a;
-  font-size: 1.65rem;
+  font-size: 1.25rem;
   font-weight: 950;
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.035em;
 }
 
 .ema-kpi-note,
@@ -562,41 +578,41 @@ tbody tr:hover td {
 .software-kpi-note,
 .metric-note {
   color: #64748b;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 600;
 }
 
 .hardware-main-grid {
   display: grid;
   min-width: 0;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .hardware-main-grid.has-inspector {
-  grid-template-columns: minmax(0, 1fr) 22rem;
+  grid-template-columns: minmax(0, 1fr) 19rem;
 }
 
 .hardware-registry-card {
   min-width: 0;
-  padding: 1rem;
+  padding: 0.8rem;
 }
 
 .hardware-registry-toolbar,
 .hardware-registry-toolbar-stacked {
   display: grid;
-  gap: 0.9rem;
-  margin-bottom: 1rem;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
 }
 
 .hardware-scan-command-row {
   display: grid;
-  grid-template-columns: repeat(3, max-content) minmax(18rem, 1fr) 2.5rem max-content;
+  grid-template-columns: repeat(3, max-content) minmax(14rem, 1fr) 2.25rem max-content;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.55rem;
 }
 
 .hardware-toolbar-refresh {
-  width: 2.5rem;
+  width: 2.25rem;
   padding: 0;
 }
 
@@ -607,8 +623,8 @@ tbody tr:hover td {
 }
 
 .hardware-search-clear {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.55rem;
+  height: 1.55rem;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -626,22 +642,22 @@ tbody tr:hover td {
 
 .hardware-registry-filter-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(11rem, 14rem)) max-content;
+  grid-template-columns: repeat(2, minmax(9rem, 12rem)) max-content;
   justify-content: end;
   align-items: end;
-  gap: 0.75rem;
+  gap: 0.55rem;
 }
 
 .hardware-filter-group {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .hardware-filter-group label {
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.045em;
   text-transform: uppercase;
 }
 
@@ -652,33 +668,33 @@ tbody tr:hover td {
 
 .hardware-custom-select-trigger {
   width: 100%;
-  min-height: 2.5rem;
+  min-height: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.55rem;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   background: #ffffff;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   color: #334155;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
 .hardware-custom-select-menu {
   position: absolute;
-  top: calc(100% + 0.35rem);
+  top: calc(100% + 0.3rem);
   left: 0;
   right: 0;
   z-index: 30;
-  max-height: 14rem;
+  max-height: 12rem;
   overflow: auto;
   border: 1px solid #e2e8f0;
   border-radius: 0.75rem;
   background: #ffffff;
-  padding: 0.35rem;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.15);
+  padding: 0.3rem;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.13);
 }
 
 .hardware-custom-select-option {
@@ -687,12 +703,12 @@ tbody tr:hover td {
   align-items: center;
   justify-content: space-between;
   border: 0;
-  border-radius: 0.55rem;
+  border-radius: 0.5rem;
   background: transparent;
-  padding: 0.55rem 0.65rem;
+  padding: 0.45rem 0.55rem;
   color: #334155;
   text-align: left;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 700;
 }
 
@@ -703,19 +719,19 @@ tbody tr:hover td {
 }
 
 .hardware-registry-subhead {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.55rem;
   color: #64748b;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
 .hardware-standard-table,
 .hardware-device-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 720px;
   overflow: auto;
   border: 1px solid #e2e8f0;
-  border-radius: 0.9rem;
+  border-radius: 0.8rem;
   background: #ffffff;
 }
 
@@ -723,9 +739,9 @@ tbody tr:hover td {
 .hardware-device-table-row,
 .user-row {
   display: grid;
-  grid-template-columns: 4.25rem minmax(15rem, 1.45fr) minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(8.5rem, 0.8fr) minmax(11rem, 0.9fr) minmax(8rem, 0.8fr);
+  grid-template-columns: 3.4rem minmax(12rem, 1.45fr) minmax(9rem, 1fr) minmax(10rem, 1fr) minmax(7rem, 0.8fr) minmax(9.5rem, 0.9fr) minmax(7rem, 0.8fr);
   align-items: center;
-  min-width: 760px;
+  min-width: 720px;
   border-bottom: 1px solid #eef2f7;
 }
 
@@ -751,25 +767,25 @@ tbody tr:hover td {
 
 .user-cell {
   min-width: 0;
-  padding: 0.75rem 0.9rem;
+  padding: 0.55rem 0.65rem;
   color: #334155;
-  font-size: 0.83rem;
+  font-size: 0.76rem;
   font-weight: 650;
 }
 
 .head .user-cell,
 .head .hardware-sort-btn {
   color: #475569;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 900;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.035em;
   text-transform: uppercase;
 }
 
 .hardware-sort-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
   border: 0;
   background: transparent;
   padding: 0;
@@ -782,14 +798,14 @@ tbody tr:hover td {
 
 .row-index-pill {
   display: inline-flex;
-  min-width: 2rem;
-  height: 1.6rem;
+  min-width: 1.7rem;
+  height: 1.35rem;
   align-items: center;
   justify-content: center;
   border-radius: 999px;
   background: #f1f5f9;
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 900;
 }
 
@@ -797,7 +813,7 @@ tbody tr:hover td {
 .user-name {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.5rem;
   min-width: 0;
 }
 
@@ -814,7 +830,7 @@ tbody tr:hover td {
   color: #0f172a;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
   font-weight: 900;
 }
 
@@ -822,23 +838,36 @@ tbody tr:hover td {
 .hardware-user-name em,
 .hardware-location-cell small,
 .hardware-model-text,
-.hardware-date-cell {
+.hardware-date-cell,
+.hardware-device-id-cell,
+.hardware-group-cell,
+.hardware-ip-cell {
   display: block;
   overflow: hidden;
   color: #64748b;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-style: normal;
   font-weight: 650;
 }
 
 .hardware-status-dot {
-  width: 0.65rem;
-  height: 0.65rem;
+  width: 0.55rem;
+  height: 0.55rem;
   flex: 0 0 auto;
   border-radius: 999px;
   background: #94a3b8;
+}
+
+.hardware-status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 900;
 }
 
 .hardware-status-dot.is-online,
@@ -873,118 +902,92 @@ tbody tr:hover td {
   color: #991b1b;
 }
 
-.hardware-status-dot.is-online,
-.hardware-status-dot.online,
-.hardware-status-dot.is-offline,
-.hardware-status-dot.offline,
-.hardware-status-dot.is-stale,
-.hardware-status-dot.stale,
-.hardware-status-dot.is-locked,
-.hardware-status-dot.locked {
-  color: transparent;
-}
-
-.hardware-status-pill,
-.user-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 0.3rem 0.6rem;
-  background: #f1f5f9;
-  color: #475569;
-  font-size: 0.72rem;
-  font-weight: 900;
-}
-
-.settings-empty-state,
-.hardware-empty-state {
-  padding: 2.5rem 1rem;
-  color: #64748b;
-  text-align: center;
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.table-pagination,
-.pagination,
 .uam-pagination,
 .hardware-pagination,
+.hardware-geo-pagination,
+.pagination,
 .ema-pagination {
-  margin-top: 1rem;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  color: #475569;
-  font-size: 0.875rem;
+  gap: 0.6rem;
+  margin-top: 0.65rem;
+  color: #64748b;
+  font-size: 0.76rem;
+  font-weight: 700;
 }
 
 .uam-pagination-controls,
-.hardware-pagination-actions {
+.hardware-pagination-actions,
+.hardware-geo-pagination-actions,
+.pagination-controls,
+.ema-pagination-controls {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
 }
 
-.page-btn,
-.pagination button,
 .uam-page-icon,
-.ema-page-icon {
+.hardware-pagination-actions button,
+.hardware-geo-pagination-actions button,
+.pagination-controls button,
+.ema-pagination-controls button,
+.uam-page-current,
+.hardware-pagination-current,
+.hardware-geo-pagination-current {
+  min-width: 1.9rem;
+  height: 1.9rem;
   display: inline-flex;
-  min-width: 2.25rem;
-  height: 2.25rem;
   align-items: center;
   justify-content: center;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 0.65rem;
   background: #ffffff;
-  padding: 0 0.75rem;
-  color: #334155;
-  font-size: 0.875rem;
-  font-weight: 800;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 850;
 }
 
-.page-btn.active,
-.pagination .active,
 .uam-page-current,
-.ema-page-current {
-  display: inline-flex;
-  min-width: 2.25rem;
-  height: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #0f172a;
-  border-radius: 0.75rem;
+.hardware-pagination-current,
+.hardware-geo-pagination-current {
+  border-color: #0f172a;
   background: #0f172a;
   color: #ffffff;
-  font-size: 0.875rem;
-  font-weight: 900;
 }
 
-.hardware-right-panel {
+.hardware-right-panel,
+.hardware-inspector,
+.detail-panel {
   min-width: 0;
-  padding: 1rem;
+  border: 1px solid #dbe4f0;
+  border-radius: 0.9rem;
+  background: #ffffff;
+  padding: 0.8rem;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.045);
 }
 
 .hardware-right-header,
-.hardware-detail-title-wrap {
+.hardware-detail-drawer-header,
+.hardware-modal-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.75rem;
 }
 
 .hardware-right-icon,
 .hardware-action-icon,
 .hardware-detail-device-icon {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2rem;
+  height: 2rem;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   background: #eff6ff;
   color: #2563eb;
 }
@@ -1000,25 +1003,25 @@ tbody tr:hover td {
   color: #0f172a;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 900;
 }
 
 .hardware-right-title p {
-  margin: 0.2rem 0 0;
+  margin: 0.15rem 0 0;
   overflow: hidden;
   color: #64748b;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 600;
 }
 
 .hardware-right-close,
 .hardware-detail-close,
 .hardware-modal-close {
-  width: 2rem;
-  height: 2rem;
+  width: 1.8rem;
+  height: 1.8rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1030,19 +1033,19 @@ tbody tr:hover td {
 
 .hardware-action-list {
   display: grid;
-  gap: 0.65rem;
-  margin-top: 1rem;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 
 .hardware-action-item {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.55rem;
   border: 1px solid #e2e8f0;
-  border-radius: 0.9rem;
+  border-radius: 0.75rem;
   background: #ffffff;
-  padding: 0.8rem;
+  padding: 0.6rem;
   color: #334155;
   text-align: left;
 }
@@ -1059,13 +1062,13 @@ tbody tr:hover td {
 
 .hardware-action-item strong {
   color: #0f172a;
-  font-size: 0.86rem;
+  font-size: 0.78rem;
   font-weight: 900;
 }
 
 .hardware-action-item span {
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 600;
 }
 
@@ -1076,7 +1079,7 @@ tbody tr:hover td {
 .ema-notification-field {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 0.3rem;
 }
 
 .form-field label,
@@ -1086,9 +1089,9 @@ tbody tr:hover td {
 .ema-notification-field label,
 .ema-notification-label {
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.035em;
   text-transform: uppercase;
 }
 
@@ -1109,11 +1112,11 @@ tbody tr:hover td {
 .ema-notification-field textarea {
   width: 100%;
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   background: #ffffff;
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.65rem;
   color: #1e293b;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 600;
   outline: none;
   transition: border-color 160ms ease, box-shadow 160ms ease;
@@ -1135,7 +1138,7 @@ tbody tr:hover td {
 .ema-notification-field select:focus,
 .ema-notification-field textarea:focus {
   border-color: #94a3b8;
-  box-shadow: 0 0 0 4px #f1f5f9;
+  box-shadow: 0 0 0 3px #f1f5f9;
 }
 
 .modal-overlay,
@@ -1159,17 +1162,17 @@ tbody tr:hover td {
 .hardware-modal,
 .hardware-detail-drawer,
 .settings-modal {
-  width: min(52rem, calc(100vw - 2rem));
+  width: min(48rem, calc(100vw - 2rem));
   max-height: 90vh;
   overflow: hidden;
   border: 1px solid #e2e8f0;
-  border-radius: 1rem;
+  border-radius: 0.9rem;
   background: #ffffff;
-  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.24);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
 }
 
 .hardware-detail-drawer {
-  width: min(64rem, calc(100vw - 2rem));
+  width: min(58rem, calc(100vw - 2rem));
 }
 
 .modal-header,
@@ -1180,9 +1183,9 @@ tbody tr:hover td {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.6rem;
   border-bottom: 1px solid #e2e8f0;
-  padding: 1rem 1.25rem;
+  padding: 0.8rem 1rem;
 }
 
 .modal-body,
@@ -1192,7 +1195,7 @@ tbody tr:hover td {
 .hardware-detail-body {
   max-height: 70vh;
   overflow: auto;
-  padding: 1rem 1.25rem;
+  padding: 0.85rem 1rem;
 }
 
 .modal-footer,
@@ -1204,18 +1207,18 @@ tbody tr:hover td {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 0.55rem;
   border-top: 1px solid #e2e8f0;
-  padding: 1rem 1.25rem;
+  padding: 0.8rem 1rem;
 }
 
 .hardware-detail-summary-grid,
 .hardware-detail-section-grid,
 .hardware-storage-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: 0.75rem;
-  padding: 1rem 1.25rem 0;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.55rem;
+  padding: 0.8rem 1rem 0;
 }
 
 .hardware-detail-card,
@@ -1225,33 +1228,33 @@ tbody tr:hover td {
 .hardware-info-banner,
 .hardware-option-card {
   border: 1px solid #e2e8f0;
-  border-radius: 0.9rem;
+  border-radius: 0.75rem;
   background: #ffffff;
-  padding: 0.85rem;
+  padding: 0.65rem;
 }
 
 .hardware-detail-card h3 {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.55rem;
   color: #0f172a;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 900;
 }
 
 .hardware-detail-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.3rem;
   border-bottom: 1px solid #e2e8f0;
-  padding: 0.75rem 1.25rem;
+  padding: 0.6rem 1rem;
 }
 
 .hardware-detail-tabs button {
   border: 1px solid #e2e8f0;
   border-radius: 999px;
   background: #ffffff;
-  padding: 0.45rem 0.75rem;
+  padding: 0.35rem 0.6rem;
   color: #475569;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
 }
 
@@ -1266,7 +1269,7 @@ tbody tr:hover td {
 .hardware-preview-card span {
   display: block;
   color: #64748b;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -1275,9 +1278,9 @@ tbody tr:hover td {
 .hardware-detail-summary-card strong,
 .hardware-preview-card strong {
   display: block;
-  margin-top: 0.35rem;
+  margin-top: 0.25rem;
   color: #0f172a;
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 900;
   word-break: break-word;
 }
@@ -1288,13 +1291,13 @@ tbody tr:hover td {
 .hardware-toast-layer,
 .module-toast-layer {
   position: fixed;
-  top: 1.25rem;
-  right: 1.25rem;
+  top: 1rem;
+  right: 1rem;
   z-index: 80;
   display: flex;
-  width: min(24rem, calc(100vw - 2rem));
+  width: min(22rem, calc(100vw - 2rem));
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 
 .toast,
@@ -1305,20 +1308,20 @@ tbody tr:hover td {
 .toast-message,
 .toast-card {
   position: fixed;
-  top: 5rem;
-  right: 1.5rem;
+  top: 4.5rem;
+  right: 1rem;
   z-index: 80;
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  max-width: min(24rem, calc(100vw - 2rem));
+  gap: 0.6rem;
+  max-width: min(22rem, calc(100vw - 2rem));
   border: 1px solid #e2e8f0;
-  border-radius: 1rem;
+  border-radius: 0.85rem;
   background: #ffffff;
-  padding: 1rem;
+  padding: 0.8rem;
   color: #334155;
-  font-size: 0.875rem;
-  box-shadow: 0 25px 50px rgba(15, 23, 42, 0.18);
+  font-size: 0.8rem;
+  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.16);
 }
 
 .hardware-toast strong,
@@ -1333,18 +1336,18 @@ tbody tr:hover td {
 
 .hardware-toast span {
   color: #64748b;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 600;
 }
 
 .hardware-toast-icon {
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 2rem;
+  height: 2rem;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   background: #eff6ff;
   color: #2563eb;
 }
@@ -1379,7 +1382,7 @@ tbody tr:hover td {
 .ema-notification-shell > * + *,
 .ema-notification-body > * + *,
 .ema-notification-section > * + * {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
 .ema-notification-topbar {
@@ -1387,25 +1390,25 @@ tbody tr:hover td {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.6rem;
   border: 1px solid #e2e8f0;
-  border-radius: 1rem;
+  border-radius: 0.9rem;
   background: #ffffff;
-  padding: 1rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  padding: 0.85rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.045);
 }
 
 .ema-notification-title {
   margin: 0;
   color: #0f172a;
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 900;
 }
 
 .ema-notification-subtitle {
   margin: 0;
   color: #64748b;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
@@ -1420,12 +1423,12 @@ tbody tr:hover td {
 
 .ema-notification-tab {
   border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 999px;
   background: #ffffff;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.7rem;
   color: #475569;
-  font-size: 0.875rem;
-  font-weight: 800;
+  font-size: 0.78rem;
+  font-weight: 850;
 }
 
 .ema-notification-tab-active {
@@ -1434,13 +1437,21 @@ tbody tr:hover td {
   color: #ffffff;
 }
 
-.ema-notification-grid {
+.ema-notification-card,
+.ema-notification-section,
+.ema-notification-panel {
+  padding: 0.85rem;
+}
+
+.ema-notification-grid,
+.ema-notification-section-grid {
   display: grid;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 @media (min-width: 768px) {
-  .ema-notification-grid {
+  .ema-notification-grid,
+  .ema-notification-section-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -1449,99 +1460,60 @@ tbody tr:hover td {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 1rem;
-  background: #ffffff;
-  padding: 0.75rem;
-  color: #334155;
-  font-size: 0.875rem;
-  font-weight: 700;
+  border: 1px solid #dbeafe;
+  border-radius: 0.8rem;
+  background: #eff6ff;
+  padding: 0.7rem 0.8rem;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
 .ema-notification-alert-success {
   border-color: #a7f3d0;
   background: #ecfdf5;
-  color: #065f46;
+  color: #047857;
 }
 
 .ema-notification-alert-error {
   border-color: #fecaca;
   background: #fef2f2;
-  color: #991b1b;
+  color: #b91c1c;
 }
 
-.ema-notification-alert-info {
-  border-color: #bae6fd;
-  background: #f0f9ff;
-  color: #075985;
-}
-
-.ema-notification-spin,
-.animate-spin-slow {
-  animation: ema-spin 1s linear infinite;
-}
-
-.settings-notification-page-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 1rem;
-  background: #ffffff;
-  padding: 0.5rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-}
-
-.settings-notification-page-tab {
-  border: 0;
-  border-radius: 0.75rem;
-  background: transparent;
-  padding: 0.5rem 1rem;
-  color: #475569;
-  font-size: 0.875rem;
-  font-weight: 800;
-}
-
-.settings-notification-page-tab.active {
-  background: #0f172a;
-  color: #ffffff;
-}
-
-.canvas-wrap {
-  width: 100%;
-  overflow: auto;
-}
-
-@media (max-width: 1280px) {
+@media (max-width: 1200px) {
   .hardware-scan-command-row,
-  .hardware-main-grid.has-inspector {
-    grid-template-columns: 1fr;
-  }
-
   .hardware-registry-filter-row {
     grid-template-columns: 1fr;
     justify-content: stretch;
+  }
+
+  .hardware-main-grid.has-inspector {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 768px) {
   .ema-page {
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
-  .hardware-standard-table,
-  .hardware-device-table {
-    min-width: 720px;
+  .hardware-hero-score {
+    grid-template-columns: 1fr 1fr;
   }
 
-  .hardware-hero-score,
-  .hardware-scan-command-row {
-    grid-template-columns: 1fr;
+  .uam-pagination,
+  .hardware-pagination,
+  .hardware-geo-pagination,
+  .pagination,
+  .ema-pagination {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
-@keyframes ema-spin {
-  to {
-    transform: rotate(360deg);
+@media (max-width: 560px) {
+  .hardware-hero-score {
+    grid-template-columns: 1fr;
   }
 }
