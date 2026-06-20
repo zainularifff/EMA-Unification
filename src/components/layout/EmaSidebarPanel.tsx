@@ -24,7 +24,6 @@ const sidebarStyles = {
   tabIconIdle: "bg-white text-slate-500 shadow-sm shadow-slate-100",
   tabText: "min-w-0 leading-none",
   tabTitle: "block truncate text-xs font-black leading-4",
-  tabDesc: "hidden",
   searchWrap:
     "flex h-10 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500 shadow-sm shadow-slate-100/80 focus-within:border-blue-200 focus-within:ring-2 focus-within:ring-blue-50",
   searchIcon: "grid shrink-0 place-items-center",
@@ -115,19 +114,19 @@ export function EmaSidebarTabs({ children, className }: EmaSidebarTabsProps) {
   return <div className={cx(sidebarStyles.tabs, className)}>{children}</div>;
 }
 
-export function EmaSidebarTabButton({ icon, title, description, active, onClick, className }: EmaSidebarTabButtonProps) {
+export function EmaSidebarTabButton({ icon, title, active, onClick, className }: EmaSidebarTabButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cx(sidebarStyles.tabBase, active ? sidebarStyles.tabActive : sidebarStyles.tabIdle, className)}
+      title={title}
     >
       {icon ? (
         <span className={cx(sidebarStyles.tabIcon, active ? sidebarStyles.tabIconActive : sidebarStyles.tabIconIdle)}>{icon}</span>
       ) : null}
       <span className={sidebarStyles.tabText}>
         <strong className={sidebarStyles.tabTitle}>{title}</strong>
-        {description ? <small className={sidebarStyles.tabDesc}>{description}</small> : null}
       </span>
     </button>
   );
