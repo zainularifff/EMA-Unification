@@ -7,7 +7,7 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 const layoutStyles = {
   root: "min-w-0 h-full flex-1 overflow-auto px-3 py-3 text-slate-900",
-  grid: "grid min-w-0 items-stretch gap-3 lg:grid-cols-[16.25rem_minmax(0,1fr)]",
+  grid: "grid min-w-0 items-stretch gap-3 lg:grid-cols-[20rem_minmax(0,1fr)]",
   content: "min-w-0",
   stack: "grid min-w-0 gap-3",
   panel: "min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm",
