@@ -1,6 +1,19 @@
 /* Hardware-only compact fixes.
    Keep this small: sidebar segmented tabs, branch selection highlight and loading state only. */
 
+.hardware-settings-layout,
+.settings-module-root.hardware-module-root .hardware-settings-layout {
+  align-items: flex-start !important;
+}
+
+.hardware-left-panel,
+.settings-module-root.hardware-module-root .hardware-left-panel {
+  align-self: flex-start !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
 .hardware-left-panel .panel-head {
   margin-bottom: 0.65rem;
 }
@@ -95,16 +108,29 @@
   color: #1d4ed8;
 }
 
-.hardware-left-panel .ema-sidebar-tree {
+.hardware-left-panel .ema-sidebar-tree,
+.hardware-left-panel .hardware-tree,
+.hardware-left-panel .hardware-stat-tree {
+  width: 100%;
+  min-height: 0 !important;
+  max-height: min(28rem, calc(100vh - 22rem));
   display: grid;
   gap: 0.22rem;
-  padding-top: 0.08rem;
+  overflow-y: auto;
+  padding: 0.08rem 0.08rem 0.12rem;
+}
+
+.hardware-left-panel .ema-sidebar-tree:empty,
+.hardware-left-panel .hardware-tree:empty,
+.hardware-left-panel .hardware-stat-tree:empty {
+  display: none;
 }
 
 .hardware-left-panel .ema-sidebar-tree-node,
 .hardware-left-panel .hardware-tree-node,
 .hardware-left-panel .hardware-stat-tree-node {
   position: relative;
+  width: 100%;
   border: 1px solid transparent;
   border-radius: 0.7rem;
   background: transparent;
@@ -153,6 +179,7 @@
 .hardware-left-panel .ema-sidebar-tree-main,
 .hardware-left-panel .hardware-tree-node-main,
 .hardware-left-panel .hardware-stat-tree-main {
+  width: 100%;
   min-height: 2.15rem;
   display: flex;
   align-items: center;
