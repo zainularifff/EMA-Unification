@@ -7,6 +7,7 @@ import "./styles/ema-module-sidebar.css";
 import "./styles/ema-device-detail.css";
 import "./styles/ema-table.css";
 import "./styles/ema-modal.css";
+import "./styles/ema-inventory.css";
 
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
