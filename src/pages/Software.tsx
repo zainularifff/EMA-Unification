@@ -361,80 +361,83 @@ function mapAssetToDeviceNode(asset: AssetItem, relationId?: number): TreeNode {
 function collectDepartmentRelationIds(departments: DepartmentNode[]): number[] {
   return departments
     .flatMap((department) => [department.Object_Rel_Idn, ...collectDepartmentRelationIds(department.children || [])])
-    .filter((id) => Number.isFinite(id) && id > 0);
+    .filter((id) => Number.isFinite(Number(id)) && Number(id) > 0);
 }
 
-function createDefaultBranchTree(departments: DepartmentNode[], assets: AssetItem[]): TreeNode[] {
-  const departmentNodes = mapDepartmentsToTree(departments);
-  if (departmentNodes.length > 0) {
-    return [{ id: "all", label: "All Branches", type: "org", count: departmentNodes.reduce((sum, node) => sum + getTreeCount(node), 0), children: departmentNodes }];
-  }
+function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
+  const term = query.trim().toLowerCase();
+  if (!term) return nodes;
 
-  const deviceNodes = assets.map((asset) => mapAssetToDeviceNode(asset));
-  return [{ id: "all", label: "All Branches", type: "org", count: deviceNodes.length, children: deviceNodes }];
+  return nodes
+    .map((node) => {
+      const filteredChildren = filterTree(node.children || [], query);
+      if (node.label.toLowerCase().includes(term) || filteredChildren.length) return { ...node, children: filteredChildren };
+      return null;
+    })
+    .filter(Boolean) as TreeNode[];
 }
 
-function flattenTree(nodes: TreeNode[]): TreeNode[] {
-  return nodes.flatMap((node) => [node, ...flattenTree(node.children || [])]);
-}
-
-function makeStatTree(): TreeNode[] {
+function buildStatTree(summary: { totalRecords: number; categories: number; uniqueSoftware: number; unclassified: number }) {
   return [
-    {
-      id: "software-statistics",
-      label: "Software Statistics",
-      type: "category",
-      children: [
-        { id: "stat-installed", label: "Installed Software", type: "sub" },
-        { id: "stat-license", label: "License Status", type: "sub" },
-        { id: "stat-exe", label: "EXE File Extension", type: "sub" },
-        { id: "stat-dll", label: "DLL File Extension", type: "sub" },
-        { id: "stat-ini", label: "INI File Extension", type: "sub" },
-      ],
-    },
+    { id: "stat-installed", label: "Installed Software", type: "category" as const, count: summary.totalRecords },
+    { id: "stat-license", label: "License Status", type: "category" as const, count: summary.uniqueSoftware },
+    { id: "stat-exe", label: "EXE File Extension", type: "category" as const, count: summary.categories },
+    { id: "stat-dll", label: "DLL File Extension", type: "category" as const, count: summary.unclassified },
+    { id: "stat-ini", label: "INI File Extension", type: "category" as const, count: summary.totalRecords },
   ];
 }
 
-function sortRecords(records: SoftwareRecord[], sortKey: SortKey, direction: SortDirection) {
-  return [...records].sort((a, b) => {
-    const av = safeString(a[sortKey], "").toLowerCase();
-    const bv = safeString(b[sortKey], "").toLowerCase();
-    const compare = av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" });
-    return direction === "asc" ? compare : -compare;
-  });
+function pickStatValue(row: StatRow, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+    const found = Object.keys(row).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    if (found) {
+      const nextValue = row[found];
+      if (nextValue !== undefined && nextValue !== null && String(nextValue).trim()) return String(nextValue).trim();
+    }
+  }
+  return EMPTY_VALUE;
 }
 
-function exportCsv(filename: string, headers: string[], rows: Array<Array<string | number>>) {
-  const escape = (value: string | number) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-  const csv = [headers.map(escape).join(","), ...rows.map((row) => row.map(escape).join(","))].join("\n");
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
 
-export default function Software() {
+function statEndpoint(stat: StatView) {
+  if (stat === "installed") return "/api/software/statistics/installed-software";
+  if (stat === "license") return "/api/software/statistics/license-status";
+  if (stat === "exe") return "/api/software/statistics/exe-files";
+  if (stat === "dll") return "/api/software/statistics/dll-files";
+  return "/api/software/statistics/ini-files";
+}
+
+function Software() {
   const [records, setRecords] = useState<SoftwareRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [treeLoading, setTreeLoading] = useState(true);
-  const [treeError, setTreeError] = useState("");
-  const [deviceTree, setDeviceTree] = useState<TreeNode[]>([{ id: "all", label: "All Branches", type: "org", children: [] }]);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => new Set(["all", "software-statistics"]));
-  const [selectedNode, setSelectedNode] = useState<TreeNode>({ id: "all", label: "All Branches", type: "org" });
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("branch");
-  const [activeView, setActiveView] = useState<ActiveView>("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [osFilter, setOsFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>("softwareName");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [page, setPage] = useState(1);
+  const [activeView, setActiveView] = useState<ActiveView>("all");
+  const [selectedNode, setSelectedNode] = useState<TreeNode>({ id: "all", label: "All Branches", type: "org", relationId: -1 });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(["all", "stat-root", "stat-installed", "stat-license", "stat-exe", "stat-dll", "stat-ini"]));
+  const [departmentTree, setDepartmentTree] = useState<TreeNode[]>([]);
+  const [treeLoading, setTreeLoading] = useState(true);
+  const [treeError, setTreeError] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [showInsightsModal, setShowInsightsModal] = useState(false);
@@ -443,95 +446,101 @@ export default function Software() {
   const [statLoading, setStatLoading] = useState(false);
   const [statError, setStatError] = useState("");
 
-  const statTree = useMemo(() => makeStatTree(), []);
-
-  const showToast = (next: ToastState) => {
-    setToast(next);
-    if (next) window.setTimeout(() => setToast(null), 4200);
+  const showToast = (nextToast: Exclude<ToastState, null>) => {
+    setToast(nextToast);
+    window.setTimeout(() => setToast(null), 3200);
   };
 
-  const fetchTree = async () => {
-    setTreeLoading(true);
-    setTreeError("");
-
-    try {
-      const [departmentPayload, assetPayload] = await Promise.allSettled([
-        apiGet<unknown>("/api/departments/tree"),
-        apiGet<unknown>("/api/hardware/assets"),
-      ]);
-
-      const departments = departmentPayload.status === "fulfilled" ? (unwrapRows(departmentPayload.value) as DepartmentNode[]) : [];
-      const assets = assetPayload.status === "fulfilled" ? (unwrapRows(assetPayload.value) as AssetItem[]) : [];
-      const tree = createDefaultBranchTree(departments, assets);
-      setDeviceTree(tree);
-      setExpandedNodes((current) => new Set([...Array.from(current), "all"]));
-    } catch (err) {
-      setTreeError(err instanceof Error ? err.message : "Failed to load branches.");
-    } finally {
-      setTreeLoading(false);
-    }
-  };
-
-  const fetchSoftware = async () => {
+  const fetchSoftwareRecords = async () => {
     setLoading(true);
     setError("");
-
     try {
-      const payload = await apiGet<unknown>("/api/software-inventory");
-      const rows = unwrapRows(payload) as ApiSoftwareRecord[];
+      const payload = await apiGet<ApiSoftwareRecord[] | { data?: ApiSoftwareRecord[] }>("/api/software-inventory");
+      const rows = Array.isArray(payload) ? payload : payload?.data || [];
       setRecords(rows.map(normalizeSoftwareRecord));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load software inventory.");
+      const message = err instanceof Error ? err.message : "Failed to load software inventory.";
+      setError(message);
       setRecords([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchDepartmentTree = async () => {
+    setTreeLoading(true);
+    setTreeError("");
+    try {
+      const [departmentsPayload, assetsPayload] = await Promise.all([
+        apiGet<DepartmentNode[] | { data?: DepartmentNode[] }>("/api/departments/tree"),
+        apiGet<AssetItem[] | { data?: AssetItem[] }>("/api/hardware-inventory").catch(() => [] as AssetItem[]),
+      ]);
+      const departments = Array.isArray(departmentsPayload) ? departmentsPayload : departmentsPayload?.data || [];
+      const assets = Array.isArray(assetsPayload) ? assetsPayload : (assetsPayload as { data?: AssetItem[] })?.data || [];
+      const baseChildren = mapDepartmentsToTree(departments);
+      const relationIds = new Set(collectDepartmentRelationIds(departments));
+      const looseAssets = assets
+        .filter((asset) => {
+          const relationId = Number(asset.Object_Root_Idn ?? 0);
+          return !relationId || !relationIds.has(relationId);
+        })
+        .slice(0, 400)
+        .map((asset) => mapAssetToDeviceNode(asset));
+      const children = looseAssets.length ? [...baseChildren, { id: "unassigned-devices", label: "Unassigned Devices", type: "branch" as const, children: looseAssets, count: looseAssets.length }] : baseChildren;
+      setDepartmentTree([
+        {
+          id: "all",
+          label: "All Branches",
+          type: "org",
+          relationId: -1,
+          children,
+          count: records.length,
+        },
+      ]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load branch tree.";
+      setTreeError(message);
+      setDepartmentTree([{ id: "all", label: "All Branches", type: "org", relationId: -1, children: [], count: records.length }]);
+    } finally {
+      setTreeLoading(false);
+    }
+  };
+
   useEffect(() => {
-    void fetchTree();
-    void fetchSoftware();
+    void fetchSoftwareRecords();
   }, []);
 
   useEffect(() => {
-    setPage(1);
-  }, [searchTerm, categoryFilter, osFilter, activeView, selectedNode.id, selectedStat]);
+    void fetchDepartmentTree();
+  }, [records.length]);
 
-  const treeNodesFlat = useMemo(() => flattenTree(deviceTree), [deviceTree]);
+  const summary = useMemo(() => {
+    const uniqueSoftware = new Set(records.map((record) => record.softwareName.toLowerCase())).size;
+    const uniqueDevices = new Set(records.map((record) => record.deviceName.toLowerCase())).size;
+    const categories = new Set(records.map((record) => record.category.toLowerCase()).filter((category) => category && category !== "unclassified")).size;
+    const unclassified = records.filter((record) => record.category.toLowerCase() === "unclassified").length;
+    return { totalRecords: records.length, uniqueSoftware, uniqueDevices, categories, unclassified };
+  }, [records]);
 
-  const selectedRelationId = useMemo(() => {
-    if (selectedNode.relationId && selectedNode.relationId > 0) return selectedNode.relationId;
-    return -1;
-  }, [selectedNode]);
+  const statTree = useMemo(() => [{ id: "stat-root", label: "Software Statistics", type: "category" as const, count: summary.totalRecords, children: buildStatTree(summary) }], [summary]);
 
-  const selectedAsset = useMemo(() => {
-    if (selectedNode.type !== "device") return null;
-    return selectedNode;
-  }, [selectedNode]);
+  const filteredTree = useMemo(() => filterTree(sidebarTab === "branch" ? departmentTree : statTree, searchTerm), [departmentTree, searchTerm, sidebarTab, statTree]);
 
-  const selectedScopeRecords = useMemo(() => {
-    if (selectedNode.id === "all" || selectedNode.type === "org") return records;
-    if (selectedNode.type === "device" && selectedNode.assetId) {
-      const selectedAssetKeys = [String(selectedNode.assetId), selectedNode.objectDeviceId, selectedNode.label].filter(Boolean).map((value) => String(value).toLowerCase());
-      return records.filter((record) =>
-        selectedAssetKeys.some((key) =>
-          [record.assetId, record.assetTag, record.objectDeviceId, record.deviceName].some((value) => String(value || "").toLowerCase() === key)
-        )
-      );
-    }
+  const selectedRelationId = selectedNode.relationId ?? -1;
 
-    if (selectedNode.relationId && selectedNode.relationId > 0) {
-      const descendants = flattenTree(selectedNode.children || []);
-      const names = new Set([selectedNode.label, ...descendants.map((node) => node.label)].map((value) => value.toLowerCase()));
-      return records.filter((record) => names.has(record.department.toLowerCase()));
-    }
-
-    return records;
-  }, [records, selectedNode]);
+  const categoryOptions = useMemo(() => [...new Set(records.map((record) => record.category).filter(Boolean))].sort(), [records]);
+  const typeOptions = useMemo(() => [...new Set(records.map((record) => record.machineType).filter(Boolean))].sort(), [records]);
 
   const filteredRecords = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    let next = selectedScopeRecords;
+    let next = [...records];
+    const term = searchTerm.trim().toLowerCase();
+
+    if (selectedRelationId > 0) {
+      const selectedLabel = selectedNode.label.toLowerCase();
+      next = next.filter((record) => record.department.toLowerCase().includes(selectedLabel));
+    } else if (selectedNode.type === "device") {
+      next = next.filter((record) => record.assetId === String(selectedNode.assetId) || record.objectDeviceId === selectedNode.objectDeviceId || record.deviceName === selectedNode.label);
+    }
 
     if (activeView === "unique") {
       const seen = new Set<string>();
@@ -541,63 +550,104 @@ export default function Software() {
         seen.add(key);
         return true;
       });
-    } else if (activeView === "categories") {
-      next = next.filter((record) => record.category !== "Unclassified");
-    } else if (activeView === "unclassified") {
-      next = next.filter((record) => record.category === "Unclassified");
     }
+    if (activeView === "installed") {
+      const seen = new Set<string>();
+      next = next.filter((record) => {
+        const key = record.deviceName.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+    if (activeView === "categories") next = next.filter((record) => record.category.toLowerCase() !== "unclassified");
+    if (activeView === "unclassified") next = next.filter((record) => record.category.toLowerCase() === "unclassified");
 
     if (categoryFilter !== "all") next = next.filter((record) => record.category === categoryFilter);
-    if (osFilter !== "all") next = next.filter((record) => record.os === osFilter || record.machineType === osFilter);
-
-    if (query) {
-      next = next.filter((record) =>
-        [
-          record.softwareName,
-          record.category,
-          record.publisher,
-          record.version,
-          record.username,
-          record.deviceName,
-          record.assetTag,
-          record.os,
-          record.ip,
-          record.department,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(query)
-      );
+    if (typeFilter !== "all") next = next.filter((record) => record.machineType === typeFilter);
+    if (term) {
+      next = next.filter((record) => [record.softwareName, record.category, record.publisher, record.description, record.version, record.deviceName, record.assetTag, record.ip, record.department].some((value) => value.toLowerCase().includes(term)));
     }
 
-    return sortRecords(next, sortKey, sortDirection);
-  }, [activeView, categoryFilter, osFilter, searchTerm, selectedScopeRecords, sortDirection, sortKey]);
+    next.sort((a, b) => {
+      const left = a[sortKey] || "";
+      const right = b[sortKey] || "";
+      return sortDirection === "asc" ? left.localeCompare(right, undefined, { numeric: true }) : right.localeCompare(left, undefined, { numeric: true });
+    });
 
-  const summary = useMemo(() => {
-    const uniqueSoftware = new Set(records.map((record) => record.softwareName.toLowerCase())).size;
-    const uniqueDevices = new Set(records.map((record) => record.deviceName.toLowerCase())).size;
-    const categories = new Set(records.map((record) => record.category).filter((category) => category !== "Unclassified")).size;
-    const unclassified = records.filter((record) => record.category === "Unclassified").length;
+    return next;
+  }, [activeView, categoryFilter, records, searchTerm, selectedNode, selectedRelationId, sortDirection, sortKey, typeFilter]);
 
-    return {
-      totalRecords: records.length,
-      uniqueSoftware,
-      uniqueDevices,
-      categories,
-      unclassified,
-    };
-  }, [records]);
+  const pageCount = Math.max(1, Math.ceil((selectedStat ? statRows.length : filteredRecords.length) / PAGE_SIZE));
+  const currentRows = useMemo(() => filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filteredRecords, page]);
+  const currentStatRows = useMemo(() => statRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [statRows, page]);
 
-  const categoryOptions = useMemo(() => [...new Set(records.map((record) => record.category))].filter(Boolean).sort(), [records]);
-  const osOptions = useMemo(() => [...new Set(records.map((record) => record.os || record.machineType))].filter((value) => value && value !== EMPTY_VALUE).sort(), [records]);
   const classificationCoverage = summary.totalRecords ? Math.round(((summary.totalRecords - summary.unclassified) / summary.totalRecords) * 100) : 0;
 
-  const pageCount = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const pagedRecords = filteredRecords.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  const activateView = (view: ActiveView) => {
+    setSelectedStat(null);
+    setActiveView(view);
+    setPage(1);
+  };
+
+  const handleSort = (key: SortKey) => {
+    setSortKey((currentKey) => {
+      if (currentKey === key) {
+        setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+        return currentKey;
+      }
+      setSortDirection("asc");
+      return key;
+    });
+  };
+
+  const renderSort = (key: SortKey) => (sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "");
+
+  const loadStatRows = async (stat: StatView) => {
+    setSelectedStat(stat);
+    setSidebarTab("statistics");
+    setPage(1);
+    setStatLoading(true);
+    setStatError("");
+    setStatRows([]);
+    try {
+      const payload = await apiGet<unknown>(statEndpoint(stat));
+      setStatRows(unwrapRows(payload));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load statistic data.";
+      setStatError(message);
+      setStatRows([]);
+    } finally {
+      setStatLoading(false);
+    }
+  };
+
+  const handleNodeSelect = (node: TreeNode) => {
+    if (sidebarTab === "statistics") {
+      const map: Record<string, StatView> = {
+        "stat-installed": "installed",
+        "stat-license": "license",
+        "stat-exe": "exe",
+        "stat-dll": "dll",
+        "stat-ini": "ini",
+      };
+      const stat = map[node.id];
+      if (stat) void loadStatRows(stat);
+      return;
+    }
+
+    setSelectedNode(node);
+    setSelectedStat(null);
+    setStatRows([]);
+    setPage(1);
+  };
 
   const toggleNode = (node: TreeNode) => {
-    setExpandedNodes((current) => {
+    setExpandedGroups((current) => {
       const next = new Set(current);
       if (next.has(node.id)) next.delete(node.id);
       else next.add(node.id);
@@ -605,130 +655,11 @@ export default function Software() {
     });
   };
 
-  const handleNodeSelect = (node: TreeNode) => {
-    if (node.type === "category") {
-      toggleNode(node);
-      return;
-    }
-
-    if (node.id === "stat-installed") setSelectedStat("installed");
-    else if (node.id === "stat-license") setSelectedStat("license");
-    else if (node.id === "stat-exe") setSelectedStat("exe");
-    else if (node.id === "stat-dll") setSelectedStat("dll");
-    else if (node.id === "stat-ini") setSelectedStat("ini");
-    else {
-      setSelectedStat(null);
-      setSelectedNode(node);
-      if (node.type !== "org") setActiveView("all");
-    }
-  };
-
-  const activateView = (view: ActiveView) => {
-    setSelectedStat(null);
-    setActiveView(view);
-  };
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-    else {
-      setSortKey(key);
-      setSortDirection("asc");
-    }
-  };
-
-  const renderSort = (key: SortKey) => (sortKey === key ? (sortDirection === "asc" ? "↑" : "↓") : "↕");
-
-  const refreshCurrentView = async () => {
-    if (selectedStat) {
-      await fetchStatistic(selectedStat);
-      return;
-    }
-
-    await Promise.all([fetchTree(), fetchSoftware()]);
-  };
-
-  const handleSoftwareScan = async (mode: "all" | "folder" | "device") => {
-    setScanLoading(true);
-
-    try {
-      const payload: Record<string, unknown> = { scanMode: mode };
-      if (mode === "folder") payload.objectRelIdn = selectedRelationId;
-      if (mode === "device" && selectedAsset) {
-        payload.objectAgent = selectedAsset.objectAgent;
-        payload.objectRootIdn = selectedAsset.assetId;
-        payload.objectDeviceID = selectedAsset.objectDeviceId;
-        payload.deviceName = selectedAsset.label;
-      }
-
-      await apiPost<unknown>("/api/software-inventory/scan", payload);
-      showToast({ type: "success", title: "Scan queued", message: mode === "all" ? "Software scan started for all devices." : "Software scan request has been queued." });
-    } catch (err) {
-      showToast({ type: "error", title: "Scan failed", message: err instanceof Error ? err.message : "Unable to start software scan." });
-    } finally {
-      setScanLoading(false);
-    }
-  };
-
-  const fetchStatistic = async (view: StatView) => {
-    setSelectedStat(view);
-    setStatLoading(true);
-    setStatError("");
-
-    const endpointMap: Record<StatView, string> = {
-      installed: "/api/software/statistics/installed",
-      license: "/api/software/statistics/license-status",
-      exe: "/api/software/statistics/files/exe",
-      dll: "/api/software/statistics/files/dll",
-      ini: "/api/software/statistics/files/ini",
-    };
-
-    try {
-      const rows = unwrapRows(await apiGet<unknown>(endpointMap[view]));
-      setStatRows(rows);
-    } catch (err) {
-      setStatRows([]);
-      setStatError(err instanceof Error ? err.message : "Failed to load statistic.");
-    } finally {
-      setStatLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (selectedStat) void fetchStatistic(selectedStat);
-  }, [selectedStat]);
-
-  const exportCurrentView = () => {
-    if (selectedStat) {
-      const keys = Object.keys(statRows[0] || {});
-      exportCsv(`software-${selectedStat}.csv`, keys, statRows.map((row) => keys.map((key) => safeString(row[key]))));
-      return;
-    }
-
-    exportCsv(
-      "software-inventory.csv",
-      ["Software Name", "Category", "Device", "Version", "OS", "Last Updated"],
-      filteredRecords.map((record) => [record.softwareName, record.category, record.deviceName, record.version, record.os, record.lastUpdated])
-    );
-  };
-
-  const clearFilters = () => {
-    setSearchTerm("");
-    setCategoryFilter("all");
-    setOsFilter("all");
-    setActiveView("all");
-  };
-
   const renderTree = (nodes: TreeNode[], depth = 0, mode: SidebarTab = "branch") => (
-    <div className="grid gap-1" style={{ marginLeft: depth ? 12 : 0 }}>
-      {nodes
-        .filter((node) => {
-          const query = searchTerm.trim().toLowerCase();
-          if (!query || mode !== sidebarTab) return true;
-          return node.label.toLowerCase().includes(query) || (node.children || []).some((child) => child.label.toLowerCase().includes(query));
-        })
-        .map((node) => {
+    <div className={depth > 0 ? "grid gap-1 border-l border-slate-200 pl-3 ml-4" : "grid gap-1"}>
+      {nodes.map((node) => {
         const hasChildren = Boolean(node.children?.length);
-        const isExpanded = expandedNodes.has(node.id);
+        const isExpanded = expandedGroups.has(node.id);
         const isDevice = node.type === "device";
         const isStat = mode === "statistics";
         const activeStatId = selectedStat
@@ -787,7 +718,7 @@ export default function Software() {
     : "";
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root software-inventory-module container-fluid p-3 p-xl-4" data-section="software">
+    <main className="settings-module-root ema-settings-pro ema-module-root ema-page container-fluid p-3 p-xl-4" data-section="software">
       {toast && (
         <div className="fixed right-6 top-[86px] z-[2147483647] max-w-[26rem] rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl">
           <div className="flex items-start gap-3">
@@ -805,8 +736,8 @@ export default function Software() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(300px,322px)_minmax(0,1fr)]">
-        <aside className="settings-menu ema-panel-surface min-w-[300px] max-w-[322px] rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="settings-layout grid min-w-0 gap-3">
+        <aside className="settings-menu ema-panel-surface rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="mb-3 grid gap-0.5">
             <span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-slate-500">SOFTWARE</span>
             <strong className="text-[0.92rem] font-black text-slate-950">Software Inventory</strong>
@@ -966,173 +897,130 @@ export default function Software() {
                     </select>
                   </label>
                   <label className="grid gap-1">
-                    <span className="text-[0.66rem] font-black uppercase tracking-[0.06em] text-slate-500">Operating System</span>
-                    <select className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[0.8rem] font-bold text-slate-900 outline-none focus:border-blue-300" value={osFilter} onChange={(event) => setOsFilter(event.target.value)}>
-                      <option value="all">All OS</option>
-                      {osOptions.map((os) => (
-                        <option key={os} value={os}>{os}</option>
+                    <span className="text-[0.66rem] font-black uppercase tracking-[0.06em] text-slate-500">Device Type</span>
+                    <select className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[0.8rem] font-bold text-slate-900 outline-none focus:border-blue-300" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                      <option value="all">All type</option>
+                      {typeOptions.map((type) => (
+                        <option key={type} value={type}>{type}</option>
                       ))}
                     </select>
                   </label>
-                  <button type="button" className="mt-auto flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[0.78rem] font-black text-slate-500 shadow-sm hover:bg-slate-50" onClick={clearFilters}>
-                    <X size={14} />
+                  <button type="button" className="mt-auto flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[0.78rem] font-black text-slate-600 hover:bg-slate-50" onClick={() => { setCategoryFilter("all"); setTypeFilter("all"); setSearchTerm(""); setActiveView("all"); }}>
                     Reset
                   </button>
                 </div>
               )}
             </div>
 
-            <div className="px-3 pb-2 text-[0.78rem] font-black text-slate-600">
-              {selectedStat ? statTitle : `${selectedNode.label} scope${loading ? " • Loading software data..." : ""}${error ? " • Note: Some records could not be refreshed." : ""}`}
-            </div>
-
-            <div className="mx-3 flex min-h-[22rem] flex-1 flex-col overflow-hidden rounded-xl border border-slate-200">
+            <div className="min-h-[22rem] flex-1 overflow-auto border-t border-slate-100">
               {selectedStat ? (
-                <div className="flex min-h-[22rem] flex-1 flex-col overflow-auto">
-                  {statLoading ? (
-                    <div className="grid flex-1 place-items-center text-center">
-                      <div>
-                        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-100 border-t-blue-500" />
-                        <div className="mt-3 text-[0.72rem] font-black uppercase tracking-[0.12em] text-slate-400">Loading Data...</div>
-                      </div>
+                <>
+                  <div className="sticky top-0 z-10 grid min-w-[900px] grid-cols-[4rem_2fr_1fr_1.2fr_1.5fr_1fr] bg-slate-100 text-[0.68rem] font-black uppercase tracking-[0.06em] text-slate-600">
+                    {["No", "Name", "Version", "Publisher", "Reference", "Count"].map((header) => <div key={header} className="px-3 py-3">{header}</div>)}
+                  </div>
+                  {statLoading && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">Loading Data...</div>}
+                  {!statLoading && statError && <div className="grid min-h-[18rem] place-items-center text-sm font-bold text-red-600">{statError}</div>}
+                  {!statLoading && !statError && currentStatRows.map((row, index) => (
+                    <div key={`${selectedStat}-${index}`} className="grid min-w-[900px] grid-cols-[4rem_2fr_1fr_1.2fr_1.5fr_1fr] border-t border-slate-100 bg-white text-[0.76rem] text-slate-700 hover:bg-blue-50/40">
+                      <div className="px-3 py-3 font-black text-slate-400">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
+                      <div className="px-3 py-3 font-black text-slate-900">{pickStatValue(row, ["SoftwareName", "Name", "FileName", "ProgramName", "ApplicationName", "ProductName"])}</div>
+                      <div className="px-3 py-3 font-semibold">{pickStatValue(row, ["Version", "FileVersion", "ProductVersion"])}</div>
+                      <div className="px-3 py-3 font-semibold">{pickStatValue(row, ["Publisher", "Company", "Vendor", "Manufacturer"])}</div>
+                      <div className="px-3 py-3 font-semibold">{pickStatValue(row, ["Path", "InstallPath", "FilePath", "Location", "LicenseStatus", "Category"])}</div>
+                      <div className="px-3 py-3 font-black text-blue-600">{pickStatValue(row, ["Count", "Total", "InstallCount", "DeviceCount", "NoOfDevices"])}</div>
                     </div>
-                  ) : statError ? (
-                    <div className="grid flex-1 place-items-center text-center text-red-600">
-                      <div>
-                        <AlertTriangle className="mx-auto" size={30} />
-                        <strong className="mt-3 block text-[0.76rem] uppercase tracking-[0.12em]">Failed to load statistic</strong>
-                        <span className="mt-2 block text-xs text-slate-500">{statError}</span>
-                      </div>
-                    </div>
-                  ) : statRows.length === 0 ? (
-                    <div className="grid flex-1 place-items-center text-center text-slate-400">
-                      <div>
-                        <Database className="mx-auto" size={30} />
-                        <strong className="mt-3 block text-[0.76rem] uppercase tracking-[0.12em]">No Data</strong>
-                      </div>
-                    </div>
-                  ) : (
-                    <table className="min-w-full text-left text-[0.78rem]">
-                      <thead className="bg-slate-100 text-[0.68rem] uppercase tracking-[0.08em] text-slate-600">
-                        <tr>
-                          {Object.keys(statRows[0] || {}).map((key) => <th key={key} className="px-4 py-3 font-black">{key}</th>)}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {statRows.map((row, index) => (
-                          <tr key={index} className="border-t border-slate-100 hover:bg-slate-50">
-                            {Object.keys(statRows[0] || {}).map((key) => <td key={key} className="px-4 py-3 font-bold text-slate-700">{safeString(row[key])}</td>)}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+                  ))}
+                  {!statLoading && !statError && !currentStatRows.length && <div className="grid min-h-[18rem] place-items-center text-sm font-bold text-slate-500">No statistic record found.</div>}
+                </>
               ) : (
                 <>
-                  <div className="grid min-w-[980px] grid-cols-[54px_minmax(220px,1.5fr)_minmax(150px,1fr)_minmax(160px,0.9fr)_minmax(120px,0.75fr)_minmax(120px,0.75fr)_minmax(150px,0.9fr)] bg-slate-100 text-[0.68rem] font-black uppercase tracking-[0.06em] text-slate-600">
-                    <div className="px-4 py-3">#</div>
-                    <button type="button" className="px-4 py-3 text-left font-black" onClick={() => handleSort("softwareName")}>Software Name {renderSort("softwareName")}</button>
-                    <button type="button" className="px-4 py-3 text-left font-black" onClick={() => handleSort("category")}>Category {renderSort("category")}</button>
-                    <button type="button" className="px-4 py-3 text-left font-black" onClick={() => handleSort("deviceName")}>Device {renderSort("deviceName")}</button>
-                    <button type="button" className="px-4 py-3 text-left font-black" onClick={() => handleSort("version")}>Version {renderSort("version")}</button>
-                    <button type="button" className="px-4 py-3 text-left font-black" onClick={() => handleSort("machineType")}>Type {renderSort("machineType")}</button>
-                    <button type="button" className="px-4 py-3 text-left font-black" onClick={() => handleSort("lastUpdated")}>Last Updated {renderSort("lastUpdated")}</button>
+                  <div className="sticky top-0 z-10 grid min-w-[1050px] grid-cols-[4rem_2fr_1.2fr_1.5fr_0.9fr_1fr_1.2fr] bg-slate-100 text-[0.68rem] font-black uppercase tracking-[0.06em] text-slate-600">
+                    {[
+                      ["No", null],
+                      ["Software Name", "softwareName"],
+                      ["Category", "category"],
+                      ["Publisher", null],
+                      ["Version", "version"],
+                      ["Device", "deviceName"],
+                      ["Last Updated", "lastUpdated"],
+                    ].map(([label, key]) => (
+                      <button key={String(label)} type="button" className="px-3 py-3 text-left" onClick={() => key && handleSort(key as SortKey)}>
+                        {label}{key ? renderSort(key as SortKey) : ""}
+                      </button>
+                    ))}
                   </div>
-
-                  <div className="flex-1 overflow-auto">
-                    {loading ? (
-                      <div className="grid min-h-[20rem] place-items-center text-center">
-                        <div>
-                          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-100 border-t-blue-500" />
-                          <div className="mt-3 text-[0.72rem] font-black uppercase tracking-[0.12em] text-slate-400">Loading Data...</div>
-                        </div>
+                  {loading && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">Loading Data...</div>}
+                  {!loading && error && <div className="grid min-h-[18rem] place-items-center px-6 text-center text-sm font-bold text-red-600">{error}</div>}
+                  {!loading && !error && currentRows.map((record, index) => (
+                    <div key={record.id} className="grid min-w-[1050px] grid-cols-[4rem_2fr_1.2fr_1.5fr_0.9fr_1fr_1.2fr] border-t border-slate-100 bg-white text-[0.76rem] text-slate-700 hover:bg-blue-50/40">
+                      <div className="px-3 py-3 font-black text-slate-400">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
+                      <div className="px-3 py-3">
+                        <strong className="block text-[0.82rem] text-slate-900">{record.softwareName}</strong>
+                        <small className="block truncate text-[0.68rem] font-semibold text-slate-500">{record.description}</small>
                       </div>
-                    ) : error ? (
-                      <div className="grid min-h-[20rem] place-items-center text-center text-red-600">
-                        <div>
-                          <AlertTriangle className="mx-auto" size={30} />
-                          <strong className="mt-3 block text-[0.76rem] uppercase tracking-[0.12em]">Failed to load software</strong>
-                          <span className="mt-2 block text-xs text-slate-500">{error}</span>
-                        </div>
+                      <div className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-black text-slate-600">{record.category}</span></div>
+                      <div className="px-3 py-3 font-semibold text-slate-700">{record.publisher}</div>
+                      <div className="px-3 py-3 font-mono text-[0.72rem] font-bold text-slate-600">{record.version}</div>
+                      <div className="px-3 py-3">
+                        <strong className="block text-slate-900">{record.deviceName}</strong>
+                        <small className="block text-[0.68rem] font-semibold text-slate-500">{record.ip}</small>
                       </div>
-                    ) : pagedRecords.length === 0 ? (
-                      <div className="grid min-h-[20rem] place-items-center text-center text-slate-400">
-                        <div>
-                          <Package className="mx-auto" size={30} />
-                          <strong className="mt-3 block text-[0.76rem] uppercase tracking-[0.12em]">No Software Found</strong>
-                        </div>
-                      </div>
-                    ) : (
-                      pagedRecords.map((record, index) => (
-                        <div key={record.id} className="grid min-w-[980px] grid-cols-[54px_minmax(220px,1.5fr)_minmax(150px,1fr)_minmax(160px,0.9fr)_minmax(120px,0.75fr)_minmax(120px,0.75fr)_minmax(150px,0.9fr)] items-center border-t border-slate-100 text-[0.78rem] font-bold text-slate-700 hover:bg-slate-50">
-                          <div className="px-4 py-3 text-slate-500">{String((currentPage - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
-                          <div className="min-w-0 px-4 py-3">
-                            <strong className="block truncate text-slate-950">{record.softwareName}</strong>
-                            <small className="block truncate text-[0.68rem] text-slate-500">{record.publisher !== EMPTY_VALUE ? record.publisher : record.description}</small>
-                          </div>
-                          <div className="px-4 py-3">{record.category}</div>
-                          <div className="min-w-0 px-4 py-3">
-                            <strong className="block truncate text-slate-950">{record.deviceName}</strong>
-                            <small className="block truncate text-[0.68rem] text-slate-500">{record.assetTag}</small>
-                          </div>
-                          <div className="px-4 py-3">{record.version}</div>
-                          <div className="px-4 py-3">{record.machineType}</div>
-                          <div className="px-4 py-3">{formatDateTime(record.lastUpdated)}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                      <div className="px-3 py-3 font-semibold text-slate-600">{formatDateTime(record.lastUpdated)}</div>
+                    </div>
+                  ))}
+                  {!loading && !error && !currentRows.length && <div className="grid min-h-[18rem] place-items-center text-sm font-bold text-slate-500">No software record found.</div>}
                 </>
               )}
             </div>
 
-            {!selectedStat && (
-              <div className="flex items-center justify-between px-3 py-3 text-[0.78rem] font-black text-slate-600">
-                <div>Page {currentPage} of {pageCount}</div>
-                <div className="flex items-center gap-1">
-                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white disabled:opacity-50" onClick={() => setPage(1)} disabled={currentPage === 1}>«</button>
-                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white disabled:opacity-50" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1}>‹</button>
-                  <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-slate-950 px-2 text-white">{currentPage}</span>
-                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white disabled:opacity-50" onClick={() => setPage((value) => Math.min(pageCount, value + 1))} disabled={currentPage === pageCount}>›</button>
-                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white disabled:opacity-50" onClick={() => setPage(pageCount)} disabled={currentPage === pageCount}>»</button>
-                </div>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 p-3 text-[0.78rem] font-black text-slate-500">
+              <span>Page {page} of {pageCount}</span>
+              <div className="flex items-center gap-2">
+                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === 1} onClick={() => setPage(1)}>First</button>
+                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Prev</button>
+                <span className="rounded-lg bg-blue-600 px-3 py-2 text-white">{page}</span>
+                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Next</button>
+                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === pageCount} onClick={() => setPage(pageCount)}>Last</button>
               </div>
-            )}
+            </div>
           </section>
         </section>
       </div>
 
       {showInsightsModal && (
-        <div className="fixed inset-0 z-[2000] grid place-items-center bg-slate-900/50 p-4" onClick={() => setShowInsightsModal(false)}>
-          <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between border-b border-slate-200 p-5">
+        <div className="fixed inset-0 z-[2147483600] grid place-items-center bg-slate-950/45 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
               <div>
-                <h3 className="text-lg font-black text-slate-950">Software Insights</h3>
-                <p className="mt-1 text-sm font-semibold text-slate-600">Classification and governance summary.</p>
+                <span className="text-[0.68rem] font-black uppercase tracking-[0.08em] text-blue-600">Software Intelligence</span>
+                <h3 className="mt-1 text-xl font-black text-slate-950">Inventory Insights</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-600">Summary based on current software inventory records.</p>
               </div>
-              <button type="button" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" onClick={() => setShowInsightsModal(false)}>
+              <button type="button" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setShowInsightsModal(false)} aria-label="Close insights">
                 <X size={18} />
               </button>
             </div>
-            <div className="grid gap-4 p-5 md:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 p-4">
-                <span className="text-xs font-black uppercase text-slate-500">Coverage</span>
-                <strong className="mt-2 block text-2xl font-black text-blue-600">{classificationCoverage}%</strong>
+            <div className="grid gap-3 p-5 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Classification Coverage</span>
+                <strong className="mt-2 block text-3xl font-black text-slate-950">{classificationCoverage}%</strong>
+                <p className="mt-2 text-sm font-semibold text-slate-600">{summary.unclassified} records are still unclassified.</p>
               </div>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <span className="text-xs font-black uppercase text-slate-500">Unclassified</span>
-                <strong className="mt-2 block text-2xl font-black text-slate-950">{summary.unclassified}</strong>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Device Reach</span>
+                <strong className="mt-2 block text-3xl font-black text-slate-950">{summary.uniqueDevices}</strong>
+                <p className="mt-2 text-sm font-semibold text-slate-600">Devices currently mapped with installed software records.</p>
               </div>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <span className="text-xs font-black uppercase text-slate-500">Categories</span>
-                <strong className="mt-2 block text-2xl font-black text-slate-950">{summary.categories}</strong>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Unique Software</span>
+                <strong className="mt-2 block text-3xl font-black text-slate-950">{summary.uniqueSoftware}</strong>
+                <p className="mt-2 text-sm font-semibold text-slate-600">Distinct software names detected across inventory.</p>
               </div>
-            </div>
-            <div className="flex justify-end border-t border-slate-200 p-4">
-              <button type="button" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white" onClick={() => setShowInsightsModal(false)}>
-                Done
-              </button>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Categories</span>
+                <strong className="mt-2 block text-3xl font-black text-slate-950">{summary.categories}</strong>
+                <p className="mt-2 text-sm font-semibold text-slate-600">Known category groups available for governance review.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1140,3 +1028,5 @@ export default function Software() {
     </main>
   );
 }
+
+export default Software;
