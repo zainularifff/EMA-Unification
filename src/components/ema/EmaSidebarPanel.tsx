@@ -79,7 +79,7 @@ export function EmaSidebarPanel({
 
       {action ? <div className="mt-3 shrink-0">{action}</div> : null}
 
-      <div className="mt-3 min-h-0 flex-1 overflow-auto">{children}</div>
+      <div className="ema-sidebar-content mt-3 min-h-0 flex-1 overflow-auto">{children}</div>
     </div>
   );
 }
