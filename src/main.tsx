@@ -12,6 +12,7 @@ import "./components/ema/EmaActionRuntimeStyles";
 import "./components/ema/EmaStatisticRuntimeStyles";
 import "./components/ema/EmaBarePageRuntimeStyles";
 import "./components/ema/EmaLoadingRuntimeStyles";
+import "./components/ema/EmaNoticeRuntimeStyles";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
