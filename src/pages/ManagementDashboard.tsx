@@ -807,7 +807,6 @@ body.md-dashboard-page-active .content-area {
   background: rgba(239, 246, 255, 0.56) !important;
 }
 
-
 /* Modern executive visual refresh: calmer palette, proper chart hover, premium ring */
 :root {
   --md-prof-blue: #2563eb;
@@ -906,7 +905,6 @@ body.md-dashboard-page-active .content-area {
 .md-content,
 .md-dashboard-view { padding-bottom: 0 !important; }
 .md-bottom-grid { margin-bottom: 0 !important; }
-
 
 /* Final bottom card alignment polish */
 .md-bottom-grid {
@@ -1051,7 +1049,6 @@ body.md-dashboard-page-active .content-area {
   .md-card, .md-view-panel { box-shadow: none; break-inside: avoid; }
 }
 
-
 /* Executive density polish - fills the main canvas with useful, compact signals */
 .management-module-root {
   background:
@@ -1194,7 +1191,6 @@ body.md-dashboard-page-active .content-area {
 @media (max-width: 720px) {
   .md-intel-strip { grid-template-columns: 1fr; }
 }
-
 
 /* =========================================================
    V Next - executive colour accents for previously plain cards
@@ -1346,7 +1342,6 @@ body.md-dashboard-page-active .content-area {
 .md-breakdown-card:nth-child(4n + 4) { --card-a:#f59e0b; --card-b:#fb923c; }
 .md-evidence-wrap { --card-a:#0ea5e9; --card-b:#6366f1; }
 
-
 /* =========================================================
    Final colour correction - no accent stripes, modern KPI cards
    Reference direction: rounded gradient cards with full colour body.
@@ -1445,7 +1440,6 @@ body.md-dashboard-page-active .content-area {
 .tone-pink.md-kpi-card { background: linear-gradient(135deg, #f472b6 0%, #8b5cf6 100%) !important; }
 .tone-orange.md-kpi-card { background: linear-gradient(135deg, #ffb64a 0%, #fb7b2b 100%) !important; }
 .tone-slate.md-kpi-card { background: linear-gradient(135deg, #64748b 0%, #334155 100%) !important; }
-
 
 /* KPI semantic colour system
    Premium/executive palette. Each top KPI uses a distinct semantic colour,
@@ -1556,7 +1550,6 @@ body.md-dashboard-page-active .content-area {
   .md-kpi-grid { grid-template-columns: 1fr !important; }
 }
 
-
 /* =========================================================
    Chart layout repair
    Fix cramped left summary card and clipped CTA in Monthly Exposure Snapshot.
@@ -1664,7 +1657,6 @@ body.md-dashboard-page-active .content-area {
     grid-template-columns: 1fr !important;
   }
 }
-
 
 /* =========================================================
    Executive AI Storytelling Layer
@@ -1834,7 +1826,6 @@ body.md-dashboard-page-active .content-area {
   .md-story-main { grid-template-columns: 1fr !important; }
   .md-story-icon { width: 40px !important; height: 40px !important; }
 }
-
 
 /* =========================================================
    Final executive layout rewrite
@@ -2055,7 +2046,6 @@ body.md-dashboard-page-active .content-area {
   .md-intel-strip { grid-template-columns: 1fr !important; }
 }
 
-
 /* =========================================================
    Storytelling typography refinement
    Cleaner executive reading hierarchy, less heavy display type.
@@ -2173,7 +2163,6 @@ body.md-dashboard-page-active .content-area {
   .md-story-banner p { max-width: 100% !important; }
 }
 
-
 /* =========================================================
    Executive second-level decision lens
    Replaces count-only cards with exposure, confidence, action and evidence logic.
@@ -2283,7 +2272,6 @@ body.md-dashboard-page-active .content-area {
 .md-lens-metric.is-money { background: linear-gradient(135deg, #fff, #fdf2f8); }
 .md-lens-metric.is-risk { background: linear-gradient(135deg, #fff, #fff1f2); }
 .md-lens-metric.is-evidence { background: linear-gradient(135deg, #fff, #ecfeff); }
-
 
 /* Visual intelligence layer for second-level breakdowns */
 .md-visual-panel {
@@ -2641,7 +2629,6 @@ body.md-dashboard-page-active .content-area {
   font-style: normal;
   white-space: nowrap;
 }
-
 
 /* =========================================================
    Compact executive command center for second-level drilldown
@@ -3225,7 +3212,6 @@ body.md-dashboard-page-active .content-area {
   .md-visual-donut-row { grid-template-columns: 1fr; justify-items: center; }
 }
 
-
 /* De-duplicated management overview: one meaning per section */
 .md-kpi-grid.md-exec-kpi-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
@@ -3409,7 +3395,6 @@ body.md-dashboard-page-active .content-area {
   .md-domain-score { grid-column: 2; justify-items: start; min-width: 0; }
 }
 
-
 /* Monthly Exposure Intelligence compact layout */
 .md-chart-card {
   display: grid !important;
@@ -3520,9 +3505,9 @@ body.md-dashboard-page-active .content-area {
 
 `;
 
-function Icon({ name, className = "" }: { name: keyof typeof IconSet; className?: string }) {
+function Icon({ name, }: { name: keyof typeof IconSet; className?: string }) {
   const Cmp = IconSet[name] || IconSet.activity;
-  return <Cmp className={`md-icon ${className}`} strokeWidth={2.1} aria-hidden="true" />;
+  return <Cmp strokeWidth={2.1} aria-hidden="true" />;
 }
 
 function moneyValue(value: unknown) {
@@ -3574,7 +3559,6 @@ function normalizeTone(value?: string): Tone {
   if (["blue", "green", "red", "amber", "purple", "cyan", "pink", "orange", "slate"].includes(text)) return text as Tone;
   return "blue";
 }
-
 
 function getKpiSemanticClass(kpi: KpiItem, index = 0) {
   const title = String(kpi.title || "").toLowerCase();
@@ -3687,7 +3671,6 @@ function isZeroMoneyText(value?: string) {
 function formatEvidenceCount(row: DrillRow, unit = "record(s)") {
   return `${Number(row.count || 0).toLocaleString()} ${unit}`;
 }
-
 
 type BreakdownVisualItem = {
   row: DrillRow;
@@ -3972,7 +3955,6 @@ function readText(value: unknown, fallback = "-") {
   if (value === undefined || value === null || value === "") return fallback;
   return String(value);
 }
-
 
 function evidenceCellValue(row: EvidenceRow, keys: string | string[], fallback = "-") {
   const list = Array.isArray(keys) ? keys : [keys];
@@ -4536,80 +4518,80 @@ export default function ManagementDashboard() {
     ];
 
     return (
-      <section className="md-dashboard-view" aria-label="Management dashboard overview">
-        <section className={`md-story-banner md-story-${normalizeStoryTone(executiveStory.tone)}`} aria-label="Executive AI storytelling">
-          <div className="md-story-main">
-            <span className="md-story-icon"><Icon name="sparkles" /></span>
+      <section aria-label="Management dashboard overview">
+        <section aria-label="Executive AI storytelling">
+          <div>
+            <span><Icon name="sparkles" /></span>
             <div>
-              <span className="md-story-status">{storyLoading ? "Generating story" : executiveStory.status || "Executive narrative"}</span>
+              <span>{storyLoading ? "Generating story" : executiveStory.status || "Executive narrative"}</span>
               <h2>{executiveStory.headline || "Executive management summary is being prepared."}</h2>
               <p>{executiveStory.narrative || executiveStory.summary || "Management insights use only live endpoint lifecycle, risk, pricing, compliance and service evidence."}</p>
-              <div className="md-story-signals">
+              <div>
                 {(executiveStory.keySignals || []).slice(0, 4).map((signal, index) => <span key={`${signal}-${index}`}>{signal}</span>)}
               </div>
             </div>
           </div>
-          <aside className="md-story-recommendation">
+          <aside>
             <span>Recommended action</span>
             <strong>{executiveStory.boardRecommendation || "Review open risks, financial exposure and ownership before the next management cycle."}</strong>
-            <ul className="md-story-actions">
+            <ul>
               {(executiveStory.actionItems || []).slice(0, 3).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
             </ul>
-            <small className="md-story-source">{executiveStory.source === "gemini" ? "Gemini AI generated" : "Local executive rule"}</small>
+            <small>{executiveStory.source === "gemini" ? "Gemini AI generated" : "Local executive rule"}</small>
           </aside>
         </section>
 
-        <section className="md-kpi-grid md-exec-kpi-grid" aria-label="Executive KPI cards">
+        <section aria-label="Executive KPI cards">
           {frontKpis.map((kpi, index) => (
-            <button type="button" className={`md-card md-kpi-card tone-${normalizeTone(kpi.tone)} ${getKpiSemanticClass(kpi, index)}`} key={`${kpi.title}-${index}`} onClick={() => openLevel2(kpi.area, kpi.title, kpi.key)}>
+            <button type="button" key={`${kpi.title}-${index}`} onClick={() => openLevel2(kpi.area, kpi.title, kpi.key)}>
               <span>
                 <h3>{kpi.title}</h3>
-                <span className="md-kpi-value"><strong>{kpi.value}</strong>{kpi.subValue && <span>{kpi.subValue}</span>}</span>
+                <span><strong>{kpi.value}</strong>{kpi.subValue && <span>{kpi.subValue}</span>}</span>
                 <p>{kpi.note}</p>
               </span>
-              <span className="md-kpi-icon"><Icon name={normalizeIcon(kpi.icon)} /></span>
+              <span><Icon name={normalizeIcon(kpi.icon)} /></span>
             </button>
           ))}
         </section>
 
-        <section className="md-top-row md-overview-grid">
-          <article className="md-card md-chart-card">
-            <div className="md-card-head">
+        <section>
+          <article>
+            <div>
               <div>
-                <span className="md-eyebrow">Management Analytics</span>
+                <span>Management Analytics</span>
                 <h2>Monthly Exposure Movement</h2>
                 <p>{dashboard.analysis?.headline || "Trend appears only when live exposure, risk or signal records exist."}</p>
               </div>
-              <div className="md-actions">
-                <span className="md-action-btn md-policy-badge" title="Management Dashboard calculations use this active policy">Policy: {policyLabel} · {policyScope}</span>
-                <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
-                <button type="button" className="md-action-btn primary" onClick={printDashboard}><Icon name="download" /> Report</button>
+              <div>
+                <span title="Management Dashboard calculations use this active policy">Policy: {policyLabel} · {policyScope}</span>
+                <button type="button" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
+                <button type="button" onClick={printDashboard}><Icon name="download" /> Report</button>
               </div>
             </div>
 
-            <div className="md-chart-layout">
-              <div className="md-chart-summary">
+            <div>
+              <div>
                 <div>
-                  <p className="md-chart-number">{chartRows.length ? chartRows.length.toLocaleString() : "Not recorded"}</p>
+                  <p>{chartRows.length ? chartRows.length.toLocaleString() : "Not recorded"}</p>
                   <span>Live trend period(s)</span>
                 </div>
-                <span className="md-chart-context">Movement view only. The cards below explain peak exposure, current month impact and evidence coverage.</span>
-                <button type="button" className="md-summary-btn" onClick={() => openLevel2("capex", "Costed Exposure")}>Open exposure evidence</button>
+                <span>Movement view only. The cards below explain peak exposure, current month impact and evidence coverage.</span>
+                <button type="button" onClick={() => openLevel2("capex", "Costed Exposure")}>Open exposure evidence</button>
               </div>
-              <div className="md-chart-panel" onMouseLeave={() => setChartHover(null)}>
-                <div className="md-chart-legend">
+              <div onMouseLeave={() => setChartHover(null)}>
+                <div>
                   {chartMode === "money" ? (
                     <>
-                      <span><i className="md-dot orange" /> Financial</span>
-                      <span><i className="md-dot red" /> Risk</span>
+                      <span><i /> Financial</span>
+                      <span><i /> Risk</span>
                     </>
                   ) : chartMode === "signals" ? (
-                    <span><i className="md-dot red" /> Evidence signals</span>
+                    <span><i /> Evidence signals</span>
                   ) : (
                     <span>No recorded trend</span>
                   )}
                 </div>
-                <svg className="md-chart-svg" viewBox="0 0 640 230" role="img" aria-label="Monthly exposure trend">
+                <svg viewBox="0 0 640 230" role="img" aria-label="Monthly exposure trend">
                   <defs>
                     <linearGradient id="mdAreaGradient" x1="0" x2="0" y1="0" y2="1">
                       <stop offset="0%" stopColor="#fee2e2" stopOpacity="0.72" />
@@ -4628,12 +4610,12 @@ export default function ManagementDashboard() {
                     const y = 24 + i * 44;
                     return (
                       <g key={`grid-${i}`}>
-                        <line className="md-chart-grid" x1="54" x2="602" y1={y} y2={y} />
-                        <text className="md-chart-label" x="10" y={y + 4}>{chartMode === "money" ? formatMoney((chartMax * (4 - i)) / 4) : Math.round((chartMax * (4 - i)) / 4).toLocaleString()}</text>
+                        <line x1="54" x2="602" y1={y} y2={y} />
+                        <text x="10" y={y + 4}>{chartMode === "money" ? formatMoney((chartMax * (4 - i)) / 4) : Math.round((chartMax * (4 - i)) / 4).toLocaleString()}</text>
                       </g>
                     );
                   })}
-                  <line className="md-chart-axis" x1="54" x2="602" y1="190" y2="190" />
+                  <line x1="54" x2="602" y1="190" y2="190" />
                   {chartRows.map((row, index) => {
                     const x = chartRows.length <= 1 ? 328 : 54 + (index / Math.max(1, chartRows.length - 1)) * 548;
                     const financeRaw = moneyValue(row.financialExposure);
@@ -4644,16 +4626,16 @@ export default function ManagementDashboard() {
                     const signalHeight = chartMode === "signals" && signalRaw > 0 ? Math.max(9, (signalRaw / chartMax) * 172) : 0;
                     return (
                       <g key={`bar-${index}`} onMouseEnter={() => setChartHover(index)}>
-                        <rect className="md-chart-hover-band" x={x - 34} y="12" width="68" height="194" rx="12" />
+                        <rect x={x - 34} y="12" width="68" height="194" rx="12" />
                         {chartMode === "money" ? (
                           <>
-                            <rect className="md-chart-bar-finance" x={x - 14} y={190 - financeHeight} width="12" height={financeHeight} rx="6" />
-                            <rect className="md-chart-bar-risk" x={x + 4} y={190 - riskHeight} width="12" height={riskHeight} rx="6" />
+                            <rect x={x - 14} y={190 - financeHeight} width="12" height={financeHeight} rx="6" />
+                            <rect x={x + 4} y={190 - riskHeight} width="12" height={riskHeight} rx="6" />
                           </>
                         ) : chartMode === "signals" ? (
-                          <rect className="md-chart-bar-risk" x={x - 8} y={190 - signalHeight} width="16" height={signalHeight} rx="8" />
+                          <rect x={x - 8} y={190 - signalHeight} width="16" height={signalHeight} rx="8" />
                         ) : null}
-                        <text className="md-chart-label" x={x - 12} y="218">{row.label || row.month}</text>
+                        <text x={x - 12} y="218">{row.label || row.month}</text>
                       </g>
                     );
                   })}
@@ -4664,34 +4646,34 @@ export default function ManagementDashboard() {
                     const boxY = 24;
                     return (
                       <g pointerEvents="none">
-                        <line className="md-chart-active-line" x1={x} x2={x} y1="18" y2="190" />
-                        <rect className="md-chart-tooltip-box" x={boxX} y={boxY} width="182" height="82" rx="14" />
-                        <text className="md-chart-tooltip-title" x={boxX + 14} y={boxY + 22}>{row.label || row.month}</text>
+                        <line x1={x} x2={x} y1="18" y2="190" />
+                        <rect x={boxX} y={boxY} width="182" height="82" rx="14" />
+                        <text x={boxX + 14} y={boxY + 22}>{row.label || row.month}</text>
                         {chartMode === "money" ? (
                           <>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 42}>Financial: {formatMoney(row.financialExposure || 0)}</text>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 59}>Risk: {formatMoney(row.riskExposure || 0)}</text>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 76}>Signals: {Number(row.signals || 0).toLocaleString()}</text>
+                            <text x={boxX + 14} y={boxY + 42}>Financial: {formatMoney(row.financialExposure || 0)}</text>
+                            <text x={boxX + 14} y={boxY + 59}>Risk: {formatMoney(row.riskExposure || 0)}</text>
+                            <text x={boxX + 14} y={boxY + 76}>Signals: {Number(row.signals || 0).toLocaleString()}</text>
                           </>
                         ) : (
                           <>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 42}>Evidence signals: {Number(row.signals || row.serviceRisk || 0).toLocaleString()}</text>
-                            <text className="md-chart-tooltip-text" x={boxX + 14} y={boxY + 59}>Cost source: Not recorded</text>
+                            <text x={boxX + 14} y={boxY + 42}>Evidence signals: {Number(row.signals || row.serviceRisk || 0).toLocaleString()}</text>
+                            <text x={boxX + 14} y={boxY + 59}>Cost source: Not recorded</text>
                           </>
                         )}
                       </g>
                     );
                   })()}
                   {chartRows.length === 0 && (
-                    <text className="md-chart-empty-note" x="190" y="104">No live monthly exposure trend is recorded yet.</text>
+                    <text x="190" y="104">No live monthly exposure trend is recorded yet.</text>
                   )}
                 </svg>
               </div>
             </div>
 
-            <div className="md-exposure-insight-strip" aria-label="Monthly exposure intelligence">
+            <div aria-label="Monthly exposure intelligence">
               {chartInsightCards.map((card) => (
-                <button type="button" key={card.label} className={`md-exposure-insight tone-${normalizeTone(card.tone)}`} onClick={() => openLevel2(card.area, card.title)}>
+                <button type="button" key={card.label} onClick={() => openLevel2(card.area, card.title)}>
                   <span>{card.label}</span>
                   <strong>{card.value}</strong>
                   <small>{card.note}</small>
@@ -4700,27 +4682,27 @@ export default function ManagementDashboard() {
             </div>
           </article>
 
-          <article className="md-card md-domain-card">
-            <div className="md-card-head">
+          <article>
+            <div>
               <div>
-                <span className="md-eyebrow">Domain Risk Matrix</span>
+                <span>Domain Risk Matrix</span>
                 <h2>Risk by Evidence Domain</h2>
                 <p>Hardware, software, network, geolocation and service desk are separated to avoid hardware-only analysis.</p>
               </div>
               <Icon name="target" />
             </div>
-            <div className="md-domain-list">
+            <div>
               {domainMatrix.map((domain) => {
                 const domainHasData = domain.value !== null && Number(domain.value) > 0;
                 return (
-                <button type="button" key={domain.title} className={`md-domain-row ${domainHasData ? "" : "is-muted"}`} disabled={!domainHasData} onClick={() => domainHasData && openLevel2(domain.area, domain.title, domain.key)}>
-                  <span className={`md-domain-icon bg-${domain.tone}`}><Icon name={normalizeIcon(domain.icon)} /></span>
-                  <span className="md-domain-copy">
+                <button type="button" key={domain.title} disabled={!domainHasData} onClick={() => domainHasData && openLevel2(domain.area, domain.title, domain.key)}>
+                  <span><Icon name={normalizeIcon(domain.icon)} /></span>
+                  <span>
                     <strong>{domain.title}</strong>
                     <span>{domain.caption}</span>
                     <span>{domain.meta}</span>
                   </span>
-                  <span className="md-domain-score">
+                  <span>
                     <strong>{domain.value === null ? "Not recorded" : domain.value.toLocaleString()}</strong>
                     <span>{domain.valueLabel}</span>
                     {domain.score !== null && <span>{percentText(domain.score)} {domain.scoreLabel}</span>}
@@ -4732,29 +4714,29 @@ export default function ManagementDashboard() {
           </article>
         </section>
 
-        <section className="md-management-action-grid" aria-label="Decision table and core management modules">
-          <aside className="md-card md-core-module-panel" aria-label="Core management modules">
-            <div className="md-card-head">
+        <section aria-label="Decision table and core management modules">
+          <aside aria-label="Core management modules">
+            <div>
               <div>
-                <span className="md-eyebrow">Core Modules</span>
+                <span>Core Modules</span>
                 <h2>Main Management Lens</h2>
                 <p>Risk, resource, audit and saving lenses are stacked beside the decision queue for faster management review.</p>
               </div>
             </div>
-            <div className="md-pillar-grid md-pillar-stack">
+            <div>
               {pillars.map((pillar, index) => {
                 const tileClass = ["tile-purple", "tile-blue", "tile-teal", "tile-orange"][index % 4];
                 return (
                   <button
                     type="button"
-                    className={`md-pillar-tile ${tileClass}`}
+
                     key={pillar.id || `${pillar.title}-${index}`}
                     onClick={() => openLevel2(pillar.area, pillar.title)}
                   >
-                    <span className="md-tile-icon"><Icon name={normalizeIcon(pillar.icon)} /></span>
+                    <span><Icon name={normalizeIcon(pillar.icon)} /></span>
                     <span>
                       <h3>{pillar.title}</h3>
-                      <span className="md-tile-value">
+                      <span>
                         <strong>{pillar.scoreValue || pillar.secondValue || "-"}</strong>
                         {pillar.scoreUnit && <span>{pillar.scoreUnit}</span>}
                       </span>
@@ -4766,28 +4748,28 @@ export default function ManagementDashboard() {
             </div>
           </aside>
 
-          <article className="md-card md-action-card md-decision-table-card">
-            <div className="md-action-header">
+          <article>
+            <div>
               <div>
-                <span className="md-eyebrow">Decision Table</span>
-                <h2 className="md-section-title">Board Action Queue</h2>
-                <p className="md-section-subtitle">Single actionable table for management decisions. Click a row to open the related evidence.</p>
+                <span>Decision Table</span>
+                <h2>Board Action Queue</h2>
+                <p>Single actionable table for management decisions. Click a row to open the related evidence.</p>
               </div>
-              <div className="md-actions">
-                <button type="button" className="md-action-btn primary" onClick={() => openLevel2("actions", "Board Action Queue")}><Icon name="list" /> View All</button>
-                <button type="button" className="md-action-btn md-action-icon" onClick={refreshDashboard} aria-label="Refresh"><Icon name="refresh" /></button>
+              <div>
+                <button type="button" onClick={() => openLevel2("actions", "Board Action Queue")}><Icon name="list" /> View All</button>
+                <button type="button" onClick={refreshDashboard} aria-label="Refresh"><Icon name="refresh" /></button>
               </div>
             </div>
-            <div className="md-table-wrap">
-              <table className="md-table">
+            <div>
+              <table>
                 <thead>
                   <tr>
-                    <th style={{ width: "90px" }}>Priority</th>
-                    <th style={{ width: "112px" }}>Area</th>
+                    <th>Priority</th>
+                    <th>Area</th>
                     <th>Signal</th>
-                    <th style={{ width: "132px" }}>Impact</th>
+                    <th>Impact</th>
                     <th>Decision</th>
-                    <th style={{ width: "86px" }}>Status</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4798,12 +4780,12 @@ export default function ManagementDashboard() {
                     const priority = String(action.priority || "Low").toLowerCase();
                     return (
                       <tr key={`${action.area}-${action.key}-${index}`} onClick={() => openLevel2(target.area, action.issue, target.key)}>
-                        <td><span className={`md-priority ${priority}`}>{action.priority}</span></td>
+                        <td><span>{action.priority}</span></td>
                         <td>{action.area}</td>
                         <td>{action.issue}</td>
                         <td>{action.impact}</td>
                         <td>{action.decision}</td>
-                        <td><span className="md-status-pill">Open</span></td>
+                        <td><span>Open</span></td>
                       </tr>
                     );
                   })}
@@ -4848,28 +4830,28 @@ export default function ManagementDashboard() {
       : "Open a breakdown item to review the supporting evidence.";
 
     return (
-      <section className="md-view-panel">
-        <div className="md-view-header">
+      <section>
+        <div>
           <div>
-            <span className="md-view-eyebrow">Executive Command Center</span>
+            <span>Executive Command Center</span>
             <h2>{drill.title || "Management Breakdown"}</h2>
             <p>{scopeTotal.toLocaleString()} item(s). Compact view for value, risk, evidence and action priority.</p>
           </div>
-          <div className="md-view-actions">
-            <button type="button" className="md-action-btn primary" onClick={closeDrilldown}><Icon name="back" /> Back to Overview</button>
-            <button type="button" className="md-action-btn" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
+          <div>
+            <button type="button" onClick={closeDrilldown}><Icon name="back" /> Back to Overview</button>
+            <button type="button" onClick={refreshDashboard}><Icon name="refresh" /> Refresh</button>
           </div>
         </div>
-        <div className="md-view-body">
-          {drill.loading ? <div className="md-state-panel">Loading breakdown...</div> : rows.length === 0 ? <div className="md-state-panel">No breakdown item is available for this selection.</div> : (
-            <div className="md-command-lens">
-              <section className="md-command-hero">
-                <div className="md-command-story">
+        <div>
+          {drill.loading ? <div>Loading breakdown...</div> : rows.length === 0 ? <div>No breakdown item is available for this selection.</div> : (
+            <div>
+              <section>
+                <div>
                   <span>{lens.label}</span>
                   <h3>{lens.title}</h3>
                   <p>{lens.description}</p>
                 </div>
-                <div className="md-command-scoreboard">
+                <div>
                   <article>
                     <span>{lens.valueLabel}</span>
                     <strong>{primaryValue}</strong>
@@ -4889,9 +4871,9 @@ export default function ManagementDashboard() {
               </section>
 
               {visual && (
-                <section className="md-command-grid">
-                  <article className="md-command-chart-card">
-                    <div className="md-command-card-head">
+                <section>
+                  <article>
+                    <div>
                       <div>
                         <span>{visual.modeLabel}</span>
                         <h3>{visual.title}</h3>
@@ -4901,19 +4883,19 @@ export default function ManagementDashboard() {
                     </div>
 
                     {visual.type === "donut" ? (
-                      <div className="md-command-donut-layout">
-                        <div className="md-command-donut" style={{ "--donut": visual.gradient } as React.CSSProperties} aria-label={visual.title}>
+                      <div>
+                        <div aria-label={visual.title}>
                           <span>
                             <strong>{visual.totalLabel}</strong>
                             <small>{visual.totalCaption}</small>
                           </span>
                         </div>
-                        <div className="md-command-mini-legend">
+                        <div>
                           {visual.items.slice(0, 5).map((item) => (
                             <button
                               type="button"
                               key={`cmd-donut-${item.row.key || item.label}`}
-                              style={{ "--dot": item.color } as React.CSSProperties}
+
                               onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}
                             >
                               <i />
@@ -4924,29 +4906,29 @@ export default function ManagementDashboard() {
                         </div>
                       </div>
                     ) : (
-                      <div className="md-command-bars">
+                      <div>
                         {visual.items.map((item) => (
                           <button
                             type="button"
                             key={`cmd-bar-${item.row.key || item.label}`}
-                            style={{ "--dot": item.color } as React.CSSProperties}
+
                             onClick={() => openLevel3(item.row.level3Area || drill.area || "risk", item.row.level3Key || item.row.key, item.label)}
                           >
                             <span><b>{item.shortLabel}</b><em>{item.display}</em></span>
-                            <i><u style={{ "--w": `${item.percent}%` } as React.CSSProperties} /></i>
+                            <i><u /></i>
                           </button>
                         ))}
                       </div>
                     )}
                   </article>
 
-                  <article className="md-command-priority-card">
-                    <span className="md-command-pill">Priority signal</span>
+                  <article>
+                    <span>Priority signal</span>
                     <h3>{topRow?.label || "No priority signal"}</h3>
                     <strong>{topPrimary}</strong>
                     <p>{managementRead}</p>
                     {topLens && (
-                      <div className="md-command-chipline">
+                      <div>
                         <span>{topLens.impactType}</span>
                         <span>{topLens.riskType}</span>
                         <span>{topLens.confidence}</span>
@@ -4959,8 +4941,8 @@ export default function ManagementDashboard() {
                     )}
                   </article>
 
-                  <article className="md-command-read-card">
-                    <span className="md-command-pill">Management read</span>
+                  <article>
+                    <span>Management read</span>
                     <h3>What this means</h3>
                     <p>{visual.guidance}</p>
                     <div>
@@ -4972,16 +4954,16 @@ export default function ManagementDashboard() {
                 </section>
               )}
 
-              <section className="md-command-table-card">
-                <div className="md-command-table-head">
+              <section>
+                <div>
                   <div>
-                    <span className="md-command-pill">Decision queue</span>
+                    <span>Decision queue</span>
                     <h3>Management actions by value and evidence</h3>
                   </div>
                   <p>Search, filter and paginate the queue before opening evidence. No assumed values are shown.</p>
                 </div>
-                <div className="md-data-toolbar">
-                  <label className="md-data-search">
+                <div>
+                  <label>
                     <Icon name="search" />
                     <input
                       type="search"
@@ -4999,8 +4981,8 @@ export default function ManagementDashboard() {
                   </select>
                   <span>{filteredCommandRows.length.toLocaleString()} / {sortedRows.length.toLocaleString()} row(s)</span>
                 </div>
-                <div className="md-command-rows">
-                  <div className="md-command-row md-command-row-head" aria-hidden="true">
+                <div>
+                  <div aria-hidden="true">
                     <span>Impact</span>
                     <span>Signal</span>
                     <span>Value</span>
@@ -5009,7 +4991,7 @@ export default function ManagementDashboard() {
                     <span></span>
                   </div>
                   {visibleCommandRows.length === 0 ? (
-                    <div className="md-empty-row">No matching decision row.</div>
+                    <div>No matching decision row.</div>
                   ) : visibleCommandRows.map((row) => {
                     const rowLens = getRowLens(row, drill.area, maxValue, totalCount);
                     const primary = getDrillValue(row, drill.area);
@@ -5018,7 +5000,7 @@ export default function ManagementDashboard() {
                       <button
                         type="button"
                         key={row.key || row.label}
-                        className={`md-command-row tone-${normalizeTone(rowLens.tone)}`}
+
                         onClick={() => openLevel3(row.level3Area || drill.area || "risk", row.level3Key || row.key, row.label)}
                       >
                         <span><i />{rowLens.impactType}</span>
@@ -5031,7 +5013,7 @@ export default function ManagementDashboard() {
                     );
                   })}
                 </div>
-                <div className="md-data-pagination">
+                <div>
                   <span>Showing {filteredCommandRows.length ? (commandPageInfo.start + 1).toLocaleString() : 0} - {commandPageInfo.end.toLocaleString()} of {filteredCommandRows.length.toLocaleString()}</span>
                   <div>
                     <button type="button" onClick={() => setTablePage(1)} disabled={commandPageInfo.safePage <= 1}>First</button>
@@ -5049,7 +5031,6 @@ export default function ManagementDashboard() {
     );
   }
 
-
   function renderEvidenceView() {
     const rows = (drill.rows || []) as EvidenceRow[];
     const kind = evidenceKind(drill.area, drill.key, rows);
@@ -5066,23 +5047,23 @@ export default function ManagementDashboard() {
     const evidencePageInfo = getPageInfo(filteredEvidenceRows.length, tablePage, tablePageSize);
     const visibleEvidenceRows = filteredEvidenceRows.slice(evidencePageInfo.start, evidencePageInfo.end);
     return (
-      <section className="md-view-panel">
-        <div className="md-view-header">
+      <section>
+        <div>
           <div>
-            <span className="md-view-eyebrow">Evidence Detail</span>
+            <span>Evidence Detail</span>
             <h2>{drill.title || "Evidence View"}</h2>
             <p>{drill.loading ? "Loading evidence for this selection..." : `${Number(drill.total || rows.length || 0).toLocaleString()} record(s) found for this selection.`}</p>
           </div>
-          <div className="md-view-actions">
-            <button type="button" className="md-action-btn primary" onClick={backDrilldown}><Icon name="back" /> {drill.parent ? "Back to Breakdown" : "Back to Overview"}</button>
-            <button type="button" className="md-action-btn" onClick={closeDrilldown}>Close</button>
+          <div>
+            <button type="button" onClick={backDrilldown}><Icon name="back" /> {drill.parent ? "Back to Breakdown" : "Back to Overview"}</button>
+            <button type="button" onClick={closeDrilldown}>Close</button>
           </div>
         </div>
-        <div className="md-view-body">
-          {drill.loading ? <div className="md-state-panel">Loading evidence...</div> : (
-            <div className="md-data-table-shell">
-              <div className="md-data-toolbar">
-                <label className="md-data-search">
+        <div>
+          {drill.loading ? <div>Loading evidence...</div> : (
+            <div>
+              <div>
+                <label>
                   <Icon name="search" />
                   <input
                     type="search"
@@ -5100,8 +5081,8 @@ export default function ManagementDashboard() {
                 </select>
                 <span>{filteredEvidenceRows.length.toLocaleString()} / {rows.length.toLocaleString()} record(s)</span>
               </div>
-              <div className="md-table-wrap md-evidence-wrap">
-                <table className="md-table">
+              <div>
+                <table>
                   <thead>
                     <tr>
                       {evidenceColumns.map((column) => <th key={column.label}>{column.label}</th>)}
@@ -5116,7 +5097,7 @@ export default function ManagementDashboard() {
                   </tbody>
                 </table>
               </div>
-              <div className="md-data-pagination">
+              <div>
                 <span>Showing {filteredEvidenceRows.length ? (evidencePageInfo.start + 1).toLocaleString() : 0} - {evidencePageInfo.end.toLocaleString()} of {filteredEvidenceRows.length.toLocaleString()}</span>
                 <div>
                   <button type="button" onClick={() => setTablePage(1)} disabled={evidencePageInfo.safePage <= 1}>First</button>
@@ -5144,13 +5125,12 @@ export default function ManagementDashboard() {
   const shouldRenderDashboard = !error && (hasData || loading);
 
   return (
-    <div className="management-center-page">
-      <style>{MANAGEMENT_DASHBOARD_INLINE_CSS}</style>
-      <main className="management-module-root">
-        <div className="md-content">
-          {!loading && error && <div className="md-state-panel md-state-error">{error}</div>}
+    <div>
+      <main>
+        <div>
+          {!loading && error && <div>{error}</div>}
           {shouldRenderDashboard && (drill.level === 2 ? renderBreakdownView() : drill.level === 3 ? renderEvidenceView() : renderOverview())}
-          {!loading && !error && !hasData && <div className="md-state-panel">No management insight is available right now.</div>}
+          {!loading && !error && !hasData && <div>No management insight is available right now.</div>}
         </div>
       </main>
     </div>

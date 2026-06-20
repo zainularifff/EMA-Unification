@@ -661,7 +661,6 @@ function formatDateLabel(value: unknown) {
   return date.toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-
 function firstTextValue(record: Record<string, unknown>, keys: string[], fallback = '') {
   for (const key of keys) {
     const value = record[key];
@@ -1087,7 +1086,6 @@ async function fetchItOpsDashboardDetailData(view: string, forceRefresh = false)
   return data;
 }
 
-
 function exportJsonFile(name: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -1113,20 +1111,20 @@ function exportCsvFile(name: string, rows: Record<string, unknown>[]) {
 }
 
 function StatusBadge({ status }: { status: 'Healthy' | 'Watch' | 'Action' }) {
-  return <span className={`itops-pro-status itops-pro-status-${status.toLowerCase()}`}>{status}</span>;
+  return <span>{status}</span>;
 }
 
 function ToneBadge({ children, tone = 'neutral' }: { children: ReactNode; tone?: StatusTone }) {
-  return <span className={`itops-pro-pill itops-pro-pill-${tone}`}>{children}</span>;
+  return <span>{children}</span>;
 }
 
 function SeverityBadge({ severity }: { severity: Severity }) {
-  return <span className={`itops-pro-severity itops-pro-severity-${severity.toLowerCase()}`}>{severity}</span>;
+  return <span>{severity}</span>;
 }
 
 function EmptyState({ label = 'No live data available yet.' }: { label?: string }) {
   return (
-    <div className="itops-pro-empty">
+    <div>
       <Database size={18} />
       <span>{label}</span>
     </div>
@@ -1160,19 +1158,19 @@ function DrilldownTablePagination({
   const pages = getCompactPageNumbers(totalPages, safePage);
 
   return (
-    <div className="itops-pro-table-pagination" aria-label="Pagination">
-      <span className="itops-pro-table-page-range">{start}-{end} of {formatNumber(totalCount)}</span>
-      <div className="itops-pro-table-page-controls">
+    <div aria-label="Pagination">
+      <span>{start}-{end} of {formatNumber(totalCount)}</span>
+      <div>
         <button type="button" disabled={safePage === 1} onClick={() => onPageChange(safePage - 1)}>Prev</button>
         {pages.map((pageNumber, index) => {
           const previousPage = pages[index - 1];
           const needsGap = previousPage && pageNumber - previousPage > 1;
           return (
-            <span key={pageNumber} className="itops-pro-table-page-item">
+            <span key={pageNumber}>
               {needsGap ? <em>...</em> : null}
               <button
                 type="button"
-                className={pageNumber === safePage ? 'active' : ''}
+
                 onClick={() => onPageChange(pageNumber)}
                 aria-current={pageNumber === safePage ? 'page' : undefined}
               >
@@ -1187,38 +1185,37 @@ function DrilldownTablePagination({
   );
 }
 
-
 function KpiCard({ card, onOpen }: { card: FocusCard; onOpen: (view: string) => void }) {
   const Icon = card.icon;
 
   return (
-    <button type="button" className={`itops-pro-kpi itops-pro-kpi-${card.tone}`} onClick={() => onOpen(card.view)} aria-haspopup="dialog" data-drilldown-view={card.view}>
-      <div className="itops-pro-kpi-top">
-        <span className="itops-pro-kpi-icon"><Icon size={20} /></span>
+    <button type="button" onClick={() => onOpen(card.view)} aria-haspopup="dialog" data-drilldown-view={card.view}>
+      <div>
+        <span><Icon size={20} /></span>
         <StatusBadge status={card.status} />
       </div>
-      <span className="itops-pro-kpi-label">{card.label}</span>
+      <span>{card.label}</span>
       <strong>{card.value}</strong>
       <small>{card.note}</small>
       {card.progress !== undefined && (
-        <div className="itops-pro-progress" aria-hidden="true"><i style={{ width: `${clampPercent(card.progress)}%` }} /></div>
+        <div aria-hidden="true"><i /></div>
       )}
     </button>
   );
 }
 
-function Panel({ title, subtitle, icon: Icon, action, children, className = '' }: { title: string; subtitle?: string; icon?: LucideIcon; action?: ReactNode; children: ReactNode; className?: string }) {
+function Panel({ title, subtitle, icon: Icon, action, children, }: { title: string; subtitle?: string; icon?: LucideIcon; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={`itops-pro-panel ${className}`}>
-      <div className="itops-pro-panel-head">
-        <div className="itops-pro-panel-title">
+    <section>
+      <div>
+        <div>
           {Icon && <span><Icon size={18} /></span>}
           <div>
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
         </div>
-        {action && <div className="itops-pro-panel-action">{action}</div>}
+        {action && <div>{action}</div>}
       </div>
       {children}
     </section>
@@ -1227,7 +1224,7 @@ function Panel({ title, subtitle, icon: Icon, action, children, className = '' }
 
 function MiniMetric({ label, value, tone = 'slate', note }: { label: string; value: ReactNode; tone?: CardTone; note?: string }) {
   return (
-    <div className={`itops-pro-mini itops-pro-mini-${tone}`}>
+    <div>
       <span>{label}</span>
       <strong>{value}</strong>
       {note && <small>{note}</small>}
@@ -1242,17 +1239,17 @@ function BarList({ items, limit = 7, emptyLabel = 'No breakdown data yet.' }: { 
   if (!visible.length) return <EmptyState label={emptyLabel} />;
 
   return (
-    <div className="itops-pro-bars">
+    <div>
       {visible.map((item) => {
         const raw = numberOrFallback(item.percent, item.value);
         const width = item.percent === undefined ? Math.max(5, (raw / maxValue) * 100) : clampPercent(raw);
         return (
-          <div className="itops-pro-bar" key={item.name}>
+          <div key={item.name}>
             <div>
               <span>{item.name}</span>
               <strong>{item.percent === undefined ? formatNumber(item.value) : formatPercent(item.percent)}</strong>
             </div>
-            <em><i style={{ width: `${width}%` }} /></em>
+            <em><i /></em>
           </div>
         );
       })}
@@ -1268,7 +1265,7 @@ function IncidentTrendChart({ data, summary, showSummaryCards = true }: { data: 
     openBacklog: rows.length ? numberOrFallback(rows[rows.length - 1]?.open) : 0
   };
   const summaryCards = showSummaryCards ? (
-    <div className="itops-pulse-card-grid">
+    <div>
       <MiniMetric label="New" value={formatNumber(summaryValues.newIncidents)} tone="blue" note="Created" />
       <MiniMetric label="Resolved" value={formatNumber(summaryValues.resolved)} tone="green" note="Closed" />
       <MiniMetric label="Open Backlog" value={formatNumber(summaryValues.openBacklog)} tone="amber" note="Current queue" />
@@ -1277,7 +1274,7 @@ function IncidentTrendChart({ data, summary, showSummaryCards = true }: { data: 
 
   if (!rows.length) {
     return (
-      <div className="itops-pulse-flow">
+      <div>
         {summaryCards}
         <EmptyState label="No incident movement found for the selected period." />
       </div>
@@ -1300,19 +1297,19 @@ function IncidentTrendChart({ data, summary, showSummaryCards = true }: { data: 
   }, rows[0]);
   const peakTotal = numberOrFallback(peakDay.newIncidents) + numberOrFallback(peakDay.resolved) + numberOrFallback(peakDay.open);
   const extraCards = showSummaryCards ? (
-    <div className="itops-pulse-card-grid itops-pulse-card-grid-extended">
+    <div>
       <MiniMetric label="Latest Backlog" value={formatNumber(latestBacklog)} tone="cyan" note={previous ? `${backlogDelta >= 0 ? '+' : ''}${formatNumber(backlogDelta)} vs previous day` : 'Current open workload'} />
       <MiniMetric label="Peak Movement" value={formatNumber(peakTotal)} tone="purple" note={peakDay.day} />
     </div>
   ) : null;
 
   return (
-    <div className="itops-pulse-flow">
+    <div>
       {summaryCards}
       {extraCards}
 
-      <div className="itops-pulse-table" role="table" aria-label="Incident movement by day">
-        <div className="itops-pulse-row itops-pulse-head" role="row">
+      <div role="table" aria-label="Incident movement by day">
+        <div role="row">
           <span>Date</span>
           <span>Daily movement</span>
           <span>New</span>
@@ -1328,21 +1325,21 @@ function IncidentTrendChart({ data, summary, showSummaryCards = true }: { data: 
 
           return (
             <div
-              className="itops-pulse-row itops-pulse-data"
+
               key={row.day}
               title={`${row.day}: ${newCount} new, ${resolvedCount} resolved, ${openCount} open`}
             >
-              <span className="itops-pulse-date">{row.day}</span>
-              <span className="itops-pulse-track" aria-hidden="true">
-                <span className="itops-pulse-fill" style={{ width: `${width}%` }}>
-                  {newCount > 0 && <i className="new" style={{ flexGrow: newCount }} />}
-                  {resolvedCount > 0 && <i className="resolved" style={{ flexGrow: resolvedCount }} />}
-                  {openCount > 0 && <i className="open" style={{ flexGrow: openCount }} />}
+              <span>{row.day}</span>
+              <span aria-hidden="true">
+                <span>
+                  {newCount > 0 && <i />}
+                  {resolvedCount > 0 && <i />}
+                  {openCount > 0 && <i />}
                 </span>
               </span>
-              <strong className="new">{formatNumber(newCount)}</strong>
-              <strong className="resolved">{formatNumber(resolvedCount)}</strong>
-              <strong className="open">{formatNumber(openCount)}</strong>
+              <strong>{formatNumber(newCount)}</strong>
+              <strong>{formatNumber(resolvedCount)}</strong>
+              <strong>{formatNumber(openCount)}</strong>
             </div>
           );
         })}
@@ -1390,25 +1387,25 @@ function HealthRadar({ items, onOpen }: { items: DomainHealthItem[]; onOpen?: (v
   if (!visible.length) return <EmptyState label="No operational domain data available yet." />;
 
   return (
-    <div className="itops-pro-health-grid">
+    <div>
       {visible.map((item) => {
         const percent = clampPercent(item.percent);
         const status = healthStatus(percent);
         const view = resolveDomainView(item.name);
         const Icon = resolveDomainIcon(item.name);
         return (
-          <button type="button" className={`itops-pro-health itops-pro-health-${status.toLowerCase()}`} key={item.name} onClick={() => onOpen?.(view, item.name)}>
-            <div className="itops-pro-health-topline">
-              <span className="itops-pro-health-icon"><Icon size={17} /></span>
-              <span className={`itops-pro-status itops-pro-status-${status.toLowerCase()}`}>{status}</span>
+          <button type="button" key={item.name} onClick={() => onOpen?.(view, item.name)}>
+            <div>
+              <span><Icon size={17} /></span>
+              <span>{status}</span>
             </div>
-            <div className="itops-pro-health-main">
+            <div>
               <span>{item.name}</span>
               <strong>{formatPercent(percent, 0)}</strong>
             </div>
             <p>{domainActionLabel(item.name, status)}</p>
-            <div className="itops-pro-health-progress"><i style={{ width: `${percent}%` }} /></div>
-            <div className="itops-pro-health-footer">
+            <div><i /></div>
+            <div>
               <small>{status === 'Healthy' ? 'Stable signal' : 'Review required'}</small>
               <ChevronRight size={15} />
             </div>
@@ -1419,13 +1416,12 @@ function HealthRadar({ items, onOpen }: { items: DomainHealthItem[]; onOpen?: (v
   );
 }
 
-
 function DataConfidenceCard({ score, rows, onOpen }: { score: number; rows: BreakdownItem[]; onOpen: () => void }) {
   const status = healthStatus(score);
   return (
-    <button type="button" className={`itops-data-confidence itops-data-confidence-${status.toLowerCase()}`} onClick={onOpen}>
-      <div className="itops-data-confidence-head">
-        <span className="itops-data-confidence-icon"><Gauge size={18} /></span>
+    <button type="button" onClick={onOpen}>
+      <div>
+        <span><Gauge size={18} /></span>
         <div>
           <span>Data Confidence</span>
           <strong>{formatPercent(score, 0)}</strong>
@@ -1433,8 +1429,8 @@ function DataConfidenceCard({ score, rows, onOpen }: { score: number; rows: Brea
         </div>
         <StatusBadge status={status} />
       </div>
-      <div className="itops-data-confidence-meter" aria-hidden="true"><i style={{ width: `${clampPercent(score)}%` }} /></div>
-      <div className="itops-data-confidence-grid">
+      <div aria-hidden="true"><i /></div>
+      <div>
         {rows.slice(0, 6).map((row) => (
           <div key={row.name}>
             <span>{row.name}</span>
@@ -1448,12 +1444,12 @@ function DataConfidenceCard({ score, rows, onOpen }: { score: number; rows: Brea
 
 function DrilldownTrace({ domain, stage, selected }: { domain: string; stage: 'breakdown' | 'evidence'; selected?: string }) {
   return (
-    <div className="itops-drill-trace" aria-label="Drilldown data flow">
-      <span className="done">KPI</span>
+    <div aria-label="Drilldown data flow">
+      <span>KPI</span>
       <ChevronRight size={13} />
-      <span className={stage === 'breakdown' ? 'active' : 'done'}>Breakdown</span>
+      <span>Breakdown</span>
       <ChevronRight size={13} />
-      <span className={stage === 'evidence' ? 'active' : ''}>Details</span>
+      <span>Details</span>
       <small>{domain}{selected ? ` • ${selected}` : ''}</small>
     </div>
   );
@@ -1464,7 +1460,7 @@ function LocationDistribution({ items, onOpen }: { items: BreakdownItem[]; onOpe
   if (!visible.length) return <EmptyState label="No location data yet." />;
 
   return (
-    <div className="itops-location-list">
+    <div>
       {visible.map((item) => {
         const percent = item.percent === undefined ? 0 : clampPercent(item.percent);
         return (
@@ -1499,9 +1495,9 @@ function ActionQueue({ items, onOpen }: { items: AttentionItem[]; onOpen: (view:
   if (!items.length) return <EmptyState label="No action item generated from current operational signals." />;
 
   return (
-    <div className="itops-pro-queue">
+    <div>
       {items.slice(0, 5).map((item) => (
-        <button type="button" key={item.id} className="itops-pro-queue-row" onClick={() => onOpen('attention')}>
+        <button type="button" key={item.id} onClick={() => onOpen('attention')}>
           <SeverityBadge severity={item.severity} />
           <div>
             <strong>{item.title}</strong>
@@ -1515,12 +1511,12 @@ function ActionQueue({ items, onOpen }: { items: AttentionItem[]; onOpen: (view:
 }
 
 function Sparkline({ values }: { values: number[] }) {
-  if (!values.length) return <span className="itops-pro-sparkline-empty">-</span>;
+  if (!values.length) return <span>-</span>;
   const max = Math.max(1, ...values);
   return (
-    <span className="itops-pro-sparkline">
+    <span>
       {values.slice(-8).map((value, index) => (
-        <i key={`${value}-${index}`} style={{ height: `${Math.max(10, (value / max) * 100)}%` }} />
+        <i key={`${value}-${index}`} />
       ))}
     </span>
   );
@@ -1529,7 +1525,7 @@ function Sparkline({ values }: { values: number[] }) {
 function InsightCard({ icon: Icon, title, value, subtitle, tone = 'blue', onClick }: { icon: LucideIcon; title: string; value: ReactNode; subtitle: string; tone?: CardTone; onClick?: () => void }) {
   const content = (
     <>
-      <span className="itops-pro-insight-icon"><Icon size={19} /></span>
+      <span><Icon size={19} /></span>
       <div>
         <p>{title}</p>
         <strong>{value}</strong>
@@ -1539,12 +1535,11 @@ function InsightCard({ icon: Icon, title, value, subtitle, tone = 'blue', onClic
   );
 
   if (onClick) {
-    return <button type="button" className={`itops-pro-insight itops-pro-insight-${tone}`} onClick={onClick}>{content}</button>;
+    return <button type="button" onClick={onClick}>{content}</button>;
   }
 
-  return <div className={`itops-pro-insight itops-pro-insight-${tone}`}>{content}</div>;
+  return <div>{content}</div>;
 }
-
 
 function DrillCard({
   icon: Icon,
@@ -1562,8 +1557,8 @@ function DrillCard({
   onClick: () => void;
 }) {
   return (
-    <button type="button" className={`itops-pro-drill-card itops-pro-drill-card-${tone}`} onClick={onClick}>
-      {Icon && <span className="itops-pro-drill-icon"><Icon size={18} /></span>}
+    <button type="button" onClick={onClick}>
+      {Icon && <span><Icon size={18} /></span>}
       <div>
         <span>{label}</span>
         <strong>{value}</strong>
@@ -1592,8 +1587,8 @@ function RiskScoreGauge({ value }: { value: number }) {
   const status = riskStatus(score, 35, 70);
 
   return (
-    <div className="itops-pro-gauge-wrap">
-      <div className="itops-pro-gauge" style={{ '--score': `${score}%` } as CSSProperties & Record<string, string>}>
+    <div>
+      <div>
         <div>
           <strong>{score.toFixed(0)}</strong>
           <span>Risk Score</span>
@@ -1864,7 +1859,6 @@ export default function ITOperationsDashboard() {
     return uniqueGeoRows(rows);
   }, [geoEvidenceRows, geolocation.missingGeoRows, geolocation.staleRows, geolocation.trackedRows, geolocation.unknownRows]);
 
-
   const formatLocationStatusLabel = (value?: string) => {
     const text = String(value || '').trim();
     const normalized = text.toLowerCase();
@@ -1988,7 +1982,6 @@ export default function ITOperationsDashboard() {
     },
   ], [endpointOnlinePercent, geolocation.staleLocations, geolocation.trackedDevices, geolocation.unknownLocations, risk.missingGeoDevices, hardware.onlineDevices, hardware.staleSync, hardware.totalDevices, locationFreshPercent, patchComplianceAverage, deviceRiskCount, deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskScore, hasSecurityUpdateScore, securityNeedUpdateDevices, securityUpdateScore, securityUpdateTotalDevices, securityUpdatedDevices, security.criticalVulnerabilities, serviceDesk.overdueTickets, serviceDesk.pendingTickets, serviceDesk.slaAchievement, softwareMappingPercent, software.totalInstallations, software.uniqueSoftware, software.unclassifiedSoftware]);
 
-
   const overviewHealthRows = useMemo<BreakdownItem[]>(() => [
     { name: 'Devices Online', value: endpointOnlinePercent, percent: endpointOnlinePercent },
     { name: 'Updates Done', value: hasSecurityUpdateScore ? securityUpdateScore : 0, percent: hasSecurityUpdateScore ? securityUpdateScore : 0 },
@@ -1997,8 +1990,6 @@ export default function ITOperationsDashboard() {
     { name: 'Software Mapped', value: softwareMappingPercent, percent: softwareMappingPercent },
     { name: 'Network Mapped', value: networkRegistrationPercent, percent: networkRegistrationPercent },
   ], [endpointOnlinePercent, hasSecurityUpdateScore, locationFreshPercent, networkRegistrationPercent, onTrackTicketPercent, securityUpdateScore, softwareMappingPercent]);
-
-
 
   const endpointTrendRows = useMemo(() => {
     type EndpointTrendRow = {
@@ -2176,7 +2167,6 @@ export default function ITOperationsDashboard() {
     ].filter((row) => row.value > 0);
   }, [deviceRiskCriticalCount, deviceRiskHighCount, deviceRiskMediumCount, risk.severityBreakdown]);
 
-
   const resolveTicketRows = useCallback((item = '') => {
     const selected = String(item || '').trim().toLowerCase();
     if (!selected) return activeAlerts;
@@ -2198,8 +2188,8 @@ export default function ITOperationsDashboard() {
   }, [activeAlerts]);
 
   const renderServiceDeskTable = () => (
-    <div className="itops-pro-table-wrap">
-      <table className="itops-pro-table">
+    <div>
+      <table>
         <thead>
           <tr>
             <th>Severity</th>
@@ -2226,8 +2216,8 @@ export default function ITOperationsDashboard() {
   );
 
   const renderDepartmentTable = () => (
-    <div className="itops-pro-table-wrap">
-      <table className="itops-pro-table">
+    <div>
+      <table>
         <thead>
           <tr>
             <th>Branch</th>
@@ -2254,8 +2244,8 @@ export default function ITOperationsDashboard() {
   );
 
   const renderRiskTable = () => (
-    <div className="itops-pro-table-wrap">
-      <table className="itops-pro-table itops-pro-table-risk">
+    <div>
+      <table>
         <thead>
           <tr>
             <th>Severity</th>
@@ -2282,8 +2272,8 @@ export default function ITOperationsDashboard() {
   );
 
   const renderEndpointRiskTable = () => (
-    <div className="itops-pro-table-wrap">
-      <table className="itops-pro-table">
+    <div>
+      <table>
         <thead>
           <tr>
             <th>Device</th>
@@ -2298,7 +2288,7 @@ export default function ITOperationsDashboard() {
         <tbody>
           {deviceRiskRows.slice(0, 8).map((item) => (
             <tr key={`${item.deviceName}-${item.department}`}>
-              <td><strong>{item.deviceName || '-'}</strong><span className="itops-pro-muted-block">{item.model || '-'}</span></td>
+              <td><strong>{item.deviceName || '-'}</strong><span>{item.model || '-'}</span></td>
               <td>{item.platform || '-'}</td>
               <td>{item.department || '-'}</td>
               <td>{item.lastSeen || '-'}</td>
@@ -2313,10 +2303,9 @@ export default function ITOperationsDashboard() {
     </div>
   );
 
-
   const renderProblematicSystems = () => (
-    <div className="itops-pro-table-wrap">
-      <table className="itops-pro-table">
+    <div>
+      <table>
         <thead>
           <tr>
             <th>Rank</th>
@@ -2341,8 +2330,8 @@ export default function ITOperationsDashboard() {
   );
 
   const renderTaskTable = () => (
-    <div className="itops-pro-table-wrap">
-      <table className="itops-pro-table">
+    <div>
+      <table>
         <thead>
           <tr>
             <th>Job ID</th>
@@ -2370,15 +2359,15 @@ export default function ITOperationsDashboard() {
 
   const renderCommandMode = () => (
     <>
-      <section className="itops-pro-kpi-grid itops-main-kpi-grid">
+      <section>
         {focusCards.map((card) => <KpiCard key={card.id} card={card} onOpen={openLevel2} />)}
       </section>
 
-      <section className="itops-main-overview-grid">
-        <Panel title="Operational Trends" subtitle="Analytics style view for devices, tickets and execution." icon={Gauge} className="span-2 main-today-panel main-analytics-panel">
-          <div className="itops-analytics-dashboard">
-            <button type="button" className="itops-analytics-chart-card device" onClick={() => openLevel2('hardware')}>
-              <div className="itops-analytics-card-head">
+      <section>
+        <Panel title="Operational Trends" subtitle="Analytics style view for devices, tickets and execution." icon={Gauge}>
+          <div>
+            <button type="button" onClick={() => openLevel2('hardware')}>
+              <div>
                 <div>
                   <span>Device Availability</span>
                   <strong>{formatNumber(hardware.totalDevices)} devices</strong>
@@ -2386,12 +2375,12 @@ export default function ITOperationsDashboard() {
                 </div>
                 <b>{formatPercent(endpointOnlinePercent, 0)} online</b>
               </div>
-              <div className="itops-analytics-stat-row">
-                <span className="online">{formatNumber(hardware.onlineDevices)} online</span>
-                <span className="offline">{formatNumber(hardware.offlineDevices)} offline</span>
-                <span className="stale">{formatNumber(hardware.staleSync)} old data</span>
+              <div>
+                <span>{formatNumber(hardware.onlineDevices)} online</span>
+                <span>{formatNumber(hardware.offlineDevices)} offline</span>
+                <span>{formatNumber(hardware.staleSync)} old data</span>
               </div>
-              <div className="itops-availability-donut-layout">
+              <div>
                 {(() => {
                   const totalDevices = Math.max(0, numberOrFallback(hardware.totalDevices) || numberOrFallback(hardware.onlineDevices) + numberOrFallback(hardware.offlineDevices));
                   const onlineDevices = Math.max(0, numberOrFallback(hardware.onlineDevices));
@@ -2404,11 +2393,11 @@ export default function ITOperationsDashboard() {
                   const offlineDash = (clampPercent(offlinePercentValue) / 100) * donutCircumference;
 
                   return (
-                    <div className="itops-availability-donut-card" title={`${formatNumber(onlineDevices)} online • ${formatNumber(offlineDevices)} offline • ${formatNumber(hardware.staleSync)} old data`}>
+                    <div title={`${formatNumber(onlineDevices)} online • ${formatNumber(offlineDevices)} offline • ${formatNumber(hardware.staleSync)} old data`}>
                       <svg viewBox="0 0 160 160" role="img" aria-label="Online and offline devices donut chart">
-                        <circle className="base" cx="80" cy="80" r="54" />
+                        <circle cx="80" cy="80" r="54" />
                         <circle
-                          className="online"
+
                           cx="80"
                           cy="80"
                           r="54"
@@ -2418,7 +2407,7 @@ export default function ITOperationsDashboard() {
                           <title>{`${formatNumber(onlineDevices)} online device(s) • ${formatPercent(onlinePercentValue, 0)}`}</title>
                         </circle>
                         <circle
-                          className="offline"
+
                           cx="80"
                           cy="80"
                           r="54"
@@ -2428,11 +2417,11 @@ export default function ITOperationsDashboard() {
                           <title>{`${formatNumber(offlineDevices)} offline device(s) • ${formatPercent(offlinePercentValue, 0)}`}</title>
                         </circle>
                       </svg>
-                      <div className="itops-availability-donut-center">
+                      <div>
                         <strong>{formatPercent(onlinePercentValue, 0)}</strong>
                         <span>online</span>
                       </div>
-                      <div className="itops-availability-donut-hover">
+                      <div>
                         <b>Current device status</b>
                         <span>{formatNumber(onlineDevices)} online</span>
                         <span>{formatNumber(offlineDevices)} offline</span>
@@ -2442,14 +2431,14 @@ export default function ITOperationsDashboard() {
                   );
                 })()}
 
-                <div className="itops-availability-donut-side">
-                  <div className="itops-availability-donut-legend">
-                    <span className="online"><i /> Online</span>
-                    <span className="offline"><i /> Offline</span>
-                    <span className="stale"><i /> Old data</span>
+                <div>
+                  <div>
+                    <span><i /> Online</span>
+                    <span><i /> Offline</span>
+                    <span><i /> Old data</span>
                   </div>
 
-                  <div className="itops-availability-trend-list">
+                  <div>
                     {endpointTrendRows.map((row) => {
                       const safeRowTotal = Math.max(1, row.total);
                       const onlineWidth = (row.online / safeRowTotal) * 100;
@@ -2457,18 +2446,18 @@ export default function ITOperationsDashboard() {
                       const staleWidth = (row.stale / safeRowTotal) * 100;
 
                       return (
-                        <div key={`device-donut-trend-${row.label}`} className="itops-availability-trend-row">
+                        <div key={`device-donut-trend-${row.label}`}>
                           <div>
                             <strong>{row.label}</strong>
                             <span>{formatNumber(row.total)} device{row.total === 1 ? '' : 's'}</span>
                           </div>
                           <em>
-                            <i className="online" style={{ width: `${clampPercent(onlineWidth)}%` }} />
-                            <i className="offline" style={{ width: `${clampPercent(offlineWidth)}%` }} />
-                            <i className="stale" style={{ width: `${clampPercent(staleWidth)}%` }} />
+                            <i />
+                            <i />
+                            <i />
                           </em>
                           <b>{formatNumber(row.online)}/{formatNumber(row.total)}</b>
-                          <span className="itops-availability-row-hover">
+                          <span>
                             {row.label}: {formatNumber(row.online)} online, {formatNumber(row.offline)} offline, {formatNumber(row.stale)} old data
                           </span>
                         </div>
@@ -2479,8 +2468,8 @@ export default function ITOperationsDashboard() {
               </div>
             </button>
 
-            <button type="button" className="itops-analytics-chart-card ticket" onClick={() => openLevel2('serviceDesk')}>
-              <div className="itops-analytics-card-head">
+            <button type="button" onClick={() => openLevel2('serviceDesk')}>
+              <div>
                 <div>
                   <span>Ticket Movement</span>
                   <strong>{formatNumber(trendSummary.openBacklog)} open backlog</strong>
@@ -2488,12 +2477,12 @@ export default function ITOperationsDashboard() {
                 </div>
                 <b>{formatNumber(trendSummary.newIncidents)} new</b>
               </div>
-              <div className="itops-analytics-stat-row">
-                <span className="new">{formatNumber(trendSummary.newIncidents)} new</span>
-                <span className="resolved">{formatNumber(trendSummary.resolved)} closed</span>
-                <span className="open">{formatNumber(trendSummary.openBacklog)} open</span>
+              <div>
+                <span>{formatNumber(trendSummary.newIncidents)} new</span>
+                <span>{formatNumber(trendSummary.resolved)} closed</span>
+                <span>{formatNumber(trendSummary.openBacklog)} open</span>
               </div>
-              <div className="itops-modern-column-chart ticket" aria-label="Ticket movement chart">
+              <div aria-label="Ticket movement chart">
                 {ticketTrendRows.length ? ticketTrendRows.map((row) => {
                   const newCount = numberOrFallback(row.newIncidents);
                   const resolvedCount = numberOrFallback(row.resolved);
@@ -2503,44 +2492,44 @@ export default function ITOperationsDashboard() {
                   const resolvedHeight = ticketTrendMaxTotal > 0 ? (resolvedCount / ticketTrendMaxTotal) * 100 : 0;
                   const openHeight = ticketTrendMaxTotal > 0 ? (openCount / ticketTrendMaxTotal) * 100 : 0;
                   return (
-                    <div key={`ticket-chart-${row.day}`} className="itops-modern-column">
-                      <div className="itops-modern-column-stack">
-                        {newCount > 0 && <i className="new" style={{ height: `${Math.max(8, clampPercent(newHeight))}%` }} />}
-                        {resolvedCount > 0 && <i className="resolved" style={{ height: `${Math.max(8, clampPercent(resolvedHeight))}%` }} />}
-                        {openCount > 0 && <i className="open" style={{ height: `${Math.max(8, clampPercent(openHeight))}%` }} />}
-                        {total <= 0 && <i className="empty" style={{ height: '8%' }} />}
+                    <div key={`ticket-chart-${row.day}`}>
+                      <div>
+                        {newCount > 0 && <i />}
+                        {resolvedCount > 0 && <i />}
+                        {openCount > 0 && <i />}
+                        {total <= 0 && <i />}
                       </div>
                       <span>{row.day}</span>
                       <strong>{formatNumber(total)}</strong>
                     </div>
                   );
-                }) : <div className="itops-analytics-empty-chart"><Database size={18} /><span>No ticket movement found yet.</span></div>}
+                }) : <div><Database size={18} /><span>No ticket movement found yet.</span></div>}
               </div>
             </button>
 
-            <div className="itops-analytics-mini-grid">
-              <button type="button" className="itops-analytics-mini blue" onClick={() => openLevel2('patch')}>
+            <div>
+              <button type="button" onClick={() => openLevel2('patch')}>
                 <span>Updates Done</span><strong>{formatPercent(hasSecurityUpdateScore ? securityUpdateScore : 0, 0)}</strong><small>{formatNumber(securityUpdatedDevices)} device(s) updated</small>
               </button>
-              <button type="button" className="itops-analytics-mini amber" onClick={() => openLevel2('serviceDesk')}>
+              <button type="button" onClick={() => openLevel2('serviceDesk')}>
                 <span>Tickets On Track</span><strong>{formatPercent(onTrackTicketPercent, 0)}</strong><small>{formatNumber(onTrackTicketCount)} currently on SLA</small>
               </button>
-              <button type="button" className="itops-analytics-mini green" onClick={() => openLevel2('tasks')}>
+              <button type="button" onClick={() => openLevel2('tasks')}>
                 <span>Jobs Completed</span><strong>{formatPercent(taskCompletionPercent, 0)}</strong><small>{formatNumber(tasks.completedTasks)} completed jobs</small>
               </button>
-              <button type="button" className="itops-analytics-mini orange" onClick={() => openLevel2('geolocation')}>
+              <button type="button" onClick={() => openLevel2('geolocation')}>
                 <span>Location Ready</span><strong>{formatPercent(locationFreshPercent, 0)}</strong><small>{formatNumber(geolocation.trackedDevices)} tracked devices</small>
               </button>
             </div>
           </div>
         </Panel>
 
-        <Panel title="Need Action" subtitle="Main items to check first." icon={AlertTriangle} className="main-action-panel">
-          <div className="itops-main-action-list">
+        <Panel title="Need Action" subtitle="Main items to check first." icon={AlertTriangle}>
+          <div>
             {overviewActionItems.map((action) => {
               const Icon = action.icon;
               return (
-                <button type="button" key={action.id} className={`itops-main-action-row ${action.tone}`} onClick={() => openLevel3(action.view, action.item)}>
+                <button type="button" key={action.id} onClick={() => openLevel3(action.view, action.item)}>
                   <span><Icon size={17} /></span>
                   <div>
                     <strong>{action.label}</strong>
@@ -2554,13 +2543,13 @@ export default function ITOperationsDashboard() {
         </Panel>
       </section>
 
-      <section className="itops-pro-command-grid itops-main-command-grid itops-main-filled-grid">
-        <Panel title="Branch Check" subtitle="Compact branch score view." icon={Users} className="main-branch-filled-panel">
-          <div className="itops-main-branch-list">
+      <section>
+        <Panel title="Branch Check" subtitle="Compact branch score view." icon={Users}>
+          <div>
             {overviewBranchRows.map((row) => {
               const percent = clampPercent(row.percent ?? row.value);
               return (
-                <button type="button" key={`main-branch-${row.name}`} className={`itops-main-branch-row ${healthStatus(percent).toLowerCase()}`} onClick={() => openLevel3('departments', row.name)}>
+                <button type="button" key={`main-branch-${row.name}`} onClick={() => openLevel3('departments', row.name)}>
                   <div>
                     <strong>{row.name}</strong>
                     <span>{row.value > 0 ? `${formatNumber(row.value)} open ticket(s)` : 'Branch score'}</span>
@@ -2573,24 +2562,24 @@ export default function ITOperationsDashboard() {
           </div>
         </Panel>
 
-        <Panel title="Decision Signals" subtitle="One-row health signals without repeating big panels." icon={Gauge} className="span-2 main-decision-panel">
-          <div className="itops-main-decision-grid">
-            <button type="button" className="itops-main-decision-card blue" onClick={() => openLevel2('overview')}>
+        <Panel title="Decision Signals" subtitle="One-row health signals without repeating big panels." icon={Gauge}>
+          <div>
+            <button type="button" onClick={() => openLevel2('overview')}>
               <span>Overall Health</span><strong>{formatPercent(overallHealth, 0)}</strong><small>{healthStatus(overallHealth)}</small>
             </button>
-            <button type="button" className="itops-main-decision-card cyan" onClick={() => openLevel2('dataConfidence')}>
+            <button type="button" onClick={() => openLevel2('dataConfidence')}>
               <span>Data Confidence</span><strong>{formatPercent(dataConfidenceScore, 0)}</strong><small>Decision readiness</small>
             </button>
-            <button type="button" className="itops-main-decision-card purple" onClick={() => openLevel2('network')}>
+            <button type="button" onClick={() => openLevel2('network')}>
               <span>Network Mapped</span><strong>{formatPercent(networkRegistrationPercent, 0)}</strong><small>{formatNumber(network.registeredDevices)} registered IP(s)</small>
             </button>
-            <button type="button" className="itops-main-decision-card red" onClick={() => openLevel2('risk')}>
+            <button type="button" onClick={() => openLevel2('risk')}>
               <span>Device Risk</span><strong>{formatNumber(deviceRiskCount)}</strong><small>{formatNumber(deviceRiskCriticalCount)} critical</small>
             </button>
-            <button type="button" className="itops-main-decision-card amber" onClick={() => openLevel2('serviceDesk')}>
+            <button type="button" onClick={() => openLevel2('serviceDesk')}>
               <span>Open Tickets</span><strong>{formatNumber(openTicketCount)}</strong><small>{formatNumber(overdueTicketCount)} overdue</small>
             </button>
-            <button type="button" className="itops-main-decision-card green" onClick={() => openLevel2('software')}>
+            <button type="button" onClick={() => openLevel2('software')}>
               <span>Software Mapped</span><strong>{formatPercent(softwareMappingPercent, 0)}</strong><small>{formatNumber(software.uniqueSoftware)} software • {formatNumber(software.unclassifiedSoftware)} unclassified</small>
             </button>
           </div>
@@ -2602,7 +2591,7 @@ export default function ITOperationsDashboard() {
     if (!items.length) return <EmptyState label={emptyLabel} />;
 
     return (
-      <div className="itops-pro-drill-grid compact square">
+      <div>
         {items.slice(0, 10).map((item) => (
           <DrillCard
             key={`${view}-${item.name}`}
@@ -2644,7 +2633,7 @@ export default function ITOperationsDashboard() {
     }
 
     return (
-      <div className="itops-pro-drill-grid compact">
+      <div>
         {rows.map((row) => {
           const dateText = row.eolDate || row.eosDate || '-';
           const daysText = typeof row.daysToEol === 'number'
@@ -2711,8 +2700,8 @@ export default function ITOperationsDashboard() {
     const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Software</th>
@@ -2752,8 +2741,8 @@ export default function ITOperationsDashboard() {
       : filteredDepartments;
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Branch</th>
@@ -2768,7 +2757,7 @@ export default function ITOperationsDashboard() {
             {rows.slice(0, level === 'level3' ? 20 : 10).map((row) => (
               <tr
                 key={row.department}
-                className={level === 'level2' ? 'itops-pro-clickable-row' : ''}
+
                 onClick={level === 'level2' ? () => openLevel3('departments', row.department) : undefined}
               >
                 <td><strong>{row.department}</strong></td>
@@ -2786,7 +2775,6 @@ export default function ITOperationsDashboard() {
     );
   };
 
-
   const renderSecurityUpdateBranchTable = (level: 'level2' | 'level3', item = '') => {
     const selected = String(item || '').trim().toLowerCase();
     const rows = selected && !['updated', 'need update', 'security updates', 'average patch'].includes(selected)
@@ -2794,8 +2782,8 @@ export default function ITOperationsDashboard() {
       : filteredDepartments;
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Branch</th>
@@ -2809,7 +2797,7 @@ export default function ITOperationsDashboard() {
             {rows.slice(0, level === 'level3' ? 20 : 10).map((row) => (
               <tr
                 key={`security-update-${row.department}`}
-                className={level === 'level2' ? 'itops-pro-clickable-row' : ''}
+
                 onClick={level === 'level2' ? () => openLevel3('patch', row.department) : undefined}
               >
                 <td><strong>{row.department}</strong></td>
@@ -2893,8 +2881,8 @@ export default function ITOperationsDashboard() {
     const pageRows = rows.slice(startIndex, startIndex + pageSize);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Device</th>
@@ -2909,13 +2897,13 @@ export default function ITOperationsDashboard() {
           <tbody>
             {pageRows.map((device, index) => (
               <tr key={`security-update-device-${device.deviceId || device.deviceName}-${startIndex + index}`}>
-                <td><strong>{device.deviceName || '-'}</strong><span className="itops-pro-muted-block">{device.deviceId || '-'}</span></td>
+                <td><strong>{device.deviceName || '-'}</strong><span>{device.deviceId || '-'}</span></td>
                 <td>{device.department || 'Unmapped'}</td>
-                <td><strong>{device.osName || device.platform || '-'}</strong><span className="itops-pro-muted-block">{device.osBuild || ''}</span></td>
+                <td><strong>{device.osName || device.platform || '-'}</strong><span>{device.osBuild || ''}</span></td>
                 <td>{device.ipAddress || '-'}</td>
                 <td>{device.lastSeen || '-'}</td>
                 <td><ToneBadge tone={device.updateStatus === 'Updated' ? 'success' : device.updateStatus === 'Need Update' ? 'warning' : 'neutral'}>{device.updateStatus}</ToneBadge></td>
-                <td><strong>{formatPercent(device.updateScore, 1)}</strong><span className="itops-pro-muted-block">{device.updateSource}</span></td>
+                <td><strong>{formatPercent(device.updateScore, 1)}</strong><span>{device.updateSource}</span></td>
               </tr>
             ))}
           </tbody>
@@ -2934,8 +2922,8 @@ export default function ITOperationsDashboard() {
     const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Priority</th>
@@ -2950,7 +2938,7 @@ export default function ITOperationsDashboard() {
             {visibleRows.map((row, index) => (
               <tr
                 key={`${row.alert}-${safePage}-${index}`}
-                className={level === 'level2' ? 'itops-pro-clickable-row' : ''}
+
                 onClick={level === 'level2' ? () => openLevel3('alerts', row.alert) : undefined}
               >
                 <td><SeverityBadge severity={row.severity} /></td>
@@ -2975,8 +2963,8 @@ export default function ITOperationsDashboard() {
       : tasks.recentTasks;
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Job ID</th>
@@ -2991,7 +2979,7 @@ export default function ITOperationsDashboard() {
             {rows.slice(0, level === 'level3' ? 20 : 10).map((task) => (
               <tr
                 key={task.id}
-                className={level === 'level2' ? 'itops-pro-clickable-row' : ''}
+
                 onClick={level === 'level2' ? () => openLevel3('tasks', task.id || task.type) : undefined}
               >
                 <td><strong>{task.id}</strong></td>
@@ -3158,8 +3146,8 @@ export default function ITOperationsDashboard() {
     const visibleRows = level === 'level3' ? rows.slice(0, 12) : rows.slice(0, 8);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table itops-pro-table-risk">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Risk Level</th>
@@ -3174,7 +3162,7 @@ export default function ITOperationsDashboard() {
             {visibleRows.map((itemRow) => (
               <tr
                 key={itemRow.id || `${itemRow.module}-${itemRow.title}`}
-                className={level === 'level2' ? 'itops-pro-clickable-row' : ''}
+
                 onClick={level === 'level2' ? () => openLevel3('risk', itemRow.title || itemRow.module) : undefined}
               >
                 <td><SeverityBadge severity={itemRow.severity} /></td>
@@ -3201,8 +3189,8 @@ export default function ITOperationsDashboard() {
     const visibleRows = rows.slice(startIndex, startIndex + pageSize);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table itops-pro-device-risk-table">
+      <div>
+        <table>
           <thead>
             {level === 'level3' ? (
               <tr>
@@ -3236,14 +3224,14 @@ export default function ITOperationsDashboard() {
               return (
                 <tr
                   key={`${device.deviceName}-${device.department}-${startIndex + index}`}
-                  className={level === 'level2' ? 'itops-pro-clickable-row' : ''}
+
                   onClick={level === 'level2' ? () => openLevel3('risk', device.deviceName || device.department || levelText) : undefined}
                 >
-                  <td><strong>{device.deviceName || '-'}</strong><span className="itops-pro-muted-block">{device.model || '-'}</span></td>
+                  <td><strong>{device.deviceName || '-'}</strong><span>{device.model || '-'}</span></td>
                   <td>{device.department || 'Unmapped'}</td>
                   <td>
                     <strong>{device.osName || device.platform || '-'}</strong>
-                    <span className="itops-pro-muted-block">
+                    <span>
                       {[device.osLifecycleCycle, device.osLifecycleEolDate ? `EOL/EOS: ${device.osLifecycleEolDate}` : ''].filter(Boolean).join(' • ')}
                     </span>
                   </td>
@@ -3251,9 +3239,9 @@ export default function ITOperationsDashboard() {
                   <td><SeverityBadge severity={levelText} /></td>
                   <td><ToneBadge tone={device.riskScore >= 70 ? 'danger' : device.riskScore >= 40 ? 'warning' : 'info'}>{formatNumber(device.riskScore)}</ToneBadge></td>
                   {level === 'level3' ? (
-                    <td className="itops-risk-why-cell">
+                    <td>
                       <strong>{mainIssue}</strong>
-                      <ul className="itops-risk-evidence-list" aria-label={`Risk evidence for ${device.deviceName || 'device'}`}>
+                      <ul aria-label={`Risk evidence for ${device.deviceName || 'device'}`}>
                         {listedEvidenceRows.slice(0, 7).map((evidence) => <li key={evidence}>{evidence}</li>)}
                       </ul>
                     </td>
@@ -3261,7 +3249,7 @@ export default function ITOperationsDashboard() {
                     <>
                       <td>
                         <strong>{mainIssue}</strong>
-                        <span className="itops-pro-muted-block">
+                        <span>
                           {[device.pcAgingStatus, device.pcAgeLabel, device.ageSourceDate ? `Age source: ${device.ageSourceDate}` : ''].filter(Boolean).join(' • ')}
                         </span>
                       </td>
@@ -3307,8 +3295,8 @@ export default function ITOperationsDashboard() {
     const pageRows = rows.slice(startIndex, startIndex + DRILLDOWN_TABLE_PAGE_SIZE);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Device</th>
@@ -3325,9 +3313,9 @@ export default function ITOperationsDashboard() {
           <tbody>
             {pageRows.map((device, index) => (
               <tr key={`${device.deviceId || device.deviceName}-${device.source || 'hardware'}-${startIndex + index}`}>
-                <td><strong>{device.deviceName || '-'}</strong><span className="itops-pro-muted-block">{device.deviceId || '-'}</span></td>
+                <td><strong>{device.deviceName || '-'}</strong><span>{device.deviceId || '-'}</span></td>
                 <td>{device.source || 'Hardware'}</td>
-                <td><strong>{device.platform || device.osName || '-'}</strong><span className="itops-pro-muted-block">{device.osBuild || ''}</span></td>
+                <td><strong>{device.platform || device.osName || '-'}</strong><span>{device.osBuild || ''}</span></td>
                 <td>{device.model || '-'}</td>
                 <td>{device.department || '-'}</td>
                 <td>{device.ipAddress || '-'}</td>
@@ -3347,7 +3335,6 @@ export default function ITOperationsDashboard() {
       </div>
     );
   };
-
 
   const buildEndpointBreakdown = (
     rows: HardwareEndpointRow[],
@@ -3373,16 +3360,16 @@ export default function ITOperationsDashboard() {
   };
 
   const renderEndpointGraphBars = (items: BreakdownItem[], total: number) => (
-    <div className="itops-endpoint-graph-bars">
+    <div>
       {items.map((row) => {
         const percent = total > 0 ? (row.value / total) * 100 : 0;
         return (
-          <div className="itops-endpoint-graph-row" key={row.name}>
+          <div key={row.name}>
             <div>
               <strong>{row.name}</strong>
               <span>{formatNumber(row.value)} device{row.value === 1 ? '' : 's'}</span>
             </div>
-            <em aria-hidden="true"><i style={{ width: `${Math.max(5, percent)}%` }} /></em>
+            <em aria-hidden="true"><i /></em>
             <b>{formatPercent(percent, 0)}</b>
           </div>
         );
@@ -3408,23 +3395,23 @@ export default function ITOperationsDashboard() {
     const modelItems = buildEndpointBreakdown(rows, (row) => row.model, 'Unknown model', 5);
 
     return (
-      <div className="itops-endpoint-graph-grid">
-        <div className="itops-endpoint-graph-card">
-          <div className="itops-endpoint-graph-head">
+      <div>
+        <div>
+          <div>
             <span>Status overview</span>
             <strong>{formatNumber(total)}</strong>
           </div>
           {renderEndpointGraphBars(statusItems, total)}
         </div>
-        <div className="itops-endpoint-graph-card">
-          <div className="itops-endpoint-graph-head">
+        <div>
+          <div>
             <span>Platform mix</span>
             <strong>{formatNumber(platformItems.length)}</strong>
           </div>
           {renderEndpointGraphBars(platformItems, total)}
         </div>
-        <div className="itops-endpoint-graph-card">
-          <div className="itops-endpoint-graph-head">
+        <div>
+          <div>
             <span>Top models</span>
             <strong>{formatNumber(modelItems.length)}</strong>
           </div>
@@ -3461,35 +3448,35 @@ export default function ITOperationsDashboard() {
     const platformItems = hardware.platformBreakdown.slice(0, 8);
 
     return (
-      <div className="itops-endpoint-redesign">
+      <div>
         <button
           type="button"
-          className="itops-endpoint-status-panel"
+
           onClick={() => openLevel3('hardware', 'Total Devices')}
           aria-label="Open device records"
         >
-          <div className="itops-endpoint-status-head">
+          <div>
             <span>Device Status</span>
             <strong>{formatNumber(total)}</strong>
             <small>Total devices</small>
           </div>
 
-          <div className="itops-endpoint-status-body">
-            <div className="itops-device-status-chart" aria-hidden="true">
-              <div className="itops-device-chart-main">
+          <div>
+            <div aria-hidden="true">
+              <div>
                 <span>Online now</span>
                 <strong>{formatPercent(onlinePercent, 0)}</strong>
                 <small>{formatNumber(online)} online from {formatNumber(total)} devices</small>
               </div>
 
-              <div className="itops-device-availability-track">
-                <i className="online" style={{ width: `${clampPercent(onlinePercent)}%` }} />
-                <i className="offline" style={{ width: `${clampPercent(offlinePercent)}%` }} />
+              <div>
+                <i />
+                <i />
               </div>
 
-              <div className="itops-device-status-bars">
+              <div>
                 {statusBars.map((bar) => (
-                  <span className={`itops-device-status-bar itops-device-status-bar-${bar.tone}`} key={bar.label} style={{ '--bar-height': `${Math.max(8, clampPercent(bar.percent))}%` } as CSSProperties & Record<string, string>}>
+                  <span key={bar.label}>
                     <i />
                     <em>{bar.label}</em>
                     <strong>{formatNumber(bar.value)}</strong>
@@ -3497,24 +3484,24 @@ export default function ITOperationsDashboard() {
                 ))}
               </div>
 
-              <div className="itops-device-freshness-strip">
+              <div>
                 <span>Data Freshness</span>
-                <em><i style={{ width: `${clampPercent(freshnessPercent)}%` }} /></em>
+                <em><i /></em>
                 <strong>{formatPercent(freshnessPercent, 0)}</strong>
               </div>
             </div>
           </div>
 
-          <div className="itops-endpoint-status-legend">
-            <span className="online"><i />Online <strong>{formatNumber(online)}</strong></span>
-            <span className="offline"><i />Offline <strong>{formatNumber(offline)}</strong></span>
-            <span className="stale"><i />Not Updated <strong>{formatNumber(stale)}</strong></span>
-            <span className="fresh"><i />Fresh <strong>{formatPercent(freshnessPercent, 0)}</strong></span>
+          <div>
+            <span><i />Online <strong>{formatNumber(online)}</strong></span>
+            <span><i />Offline <strong>{formatNumber(offline)}</strong></span>
+            <span><i />Not Updated <strong>{formatNumber(stale)}</strong></span>
+            <span><i />Fresh <strong>{formatPercent(freshnessPercent, 0)}</strong></span>
           </div>
         </button>
 
-        <section className="itops-endpoint-side-panel" aria-label="Device level 2 details">
-          <div className="itops-endpoint-side-head">
+        <section aria-label="Device level 2 details">
+          <div>
             <div>
               <span>Device Summary</span>
               <strong>Status and OS summary</strong>
@@ -3522,17 +3509,17 @@ export default function ITOperationsDashboard() {
             <small>Click any card to view device list.</small>
           </div>
 
-          <div className="itops-endpoint-mini-metrics">
+          <div>
             {endpointTiles.map((tile) => {
               const Icon = tile.icon;
               return (
                 <button
                   type="button"
-                  className={`itops-endpoint-mini-tile itops-endpoint-mini-tile-${tile.tone}`}
+
                   key={tile.label}
                   onClick={() => openLevel3('hardware', tile.target)}
                 >
-                  <span className="itops-endpoint-mini-icon"><Icon size={16} /></span>
+                  <span><Icon size={16} /></span>
                   <div>
                     <small>{tile.label}</small>
                     <strong>{formatNumber(tile.value)}</strong>
@@ -3544,8 +3531,8 @@ export default function ITOperationsDashboard() {
             })}
           </div>
 
-          <div className="itops-endpoint-platform-compact">
-            <div className="itops-endpoint-platform-head">
+          <div>
+            <div>
               <div>
                 <span>Operating System</span>
                 <strong>{formatNumber(platformItems.length)} OS type{platformItems.length === 1 ? '' : 's'}</strong>
@@ -3554,17 +3541,17 @@ export default function ITOperationsDashboard() {
             </div>
 
             {platformItems.length ? (
-              <div className="itops-endpoint-platform-list">
+              <div>
                 {platformItems.map((item) => {
                   const percent = item.percent === undefined ? (total > 0 ? (item.value / total) * 100 : 0) : item.percent;
                   return (
-                    <button type="button" className="itops-endpoint-platform-chip" key={item.name} onClick={() => openLevel3('hardware', item.name)}>
+                    <button type="button" key={item.name} onClick={() => openLevel3('hardware', item.name)}>
                       <div>
                         <strong>{item.name}</strong>
                         <span>{formatNumber(item.value)} device{item.value === 1 ? '' : 's'}</span>
                       </div>
                       <em>{formatPercent(percent, 1)}</em>
-                      <b aria-hidden="true"><i style={{ width: `${clampPercent(percent)}%` }} /></b>
+                      <b aria-hidden="true"><i /></b>
                     </button>
                   );
                 })}
@@ -3574,7 +3561,7 @@ export default function ITOperationsDashboard() {
             )}
           </div>
 
-          <div className="itops-endpoint-followup-grid">
+          <div>
             <button type="button" onClick={() => openLevel3('hardware', 'Offline Devices')}>
               <span>Need Check</span>
               <strong>{formatNumber(offline)}</strong>
@@ -3605,8 +3592,8 @@ export default function ITOperationsDashboard() {
     const pageRows = rows.slice(startIndex, startIndex + DRILLDOWN_TABLE_PAGE_SIZE);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>Device</th>
@@ -3646,7 +3633,6 @@ export default function ITOperationsDashboard() {
     );
   };
 
-
   const renderLocationLevel2Stats = () => {
     const withLocation = numberOrFallback(geolocation.trackedDevices);
     const notMapped = numberOrFallback(risk.missingGeoDevices);
@@ -3663,9 +3649,9 @@ export default function ITOperationsDashboard() {
     ];
 
     return (
-      <div className="itops-location-level2">
-        <section className="itops-location-status-card">
-          <div className="itops-location-card-head">
+      <div>
+        <section>
+          <div>
             <div>
               <span>Location Status</span>
               <strong>{formatNumber(total)}</strong>
@@ -3674,21 +3660,21 @@ export default function ITOperationsDashboard() {
             <button type="button" onClick={() => openLevel3('geolocation', 'With Location')}>View devices <ChevronRight size={15} /></button>
           </div>
 
-          <div className="itops-location-score-wrap">
-            <div className="itops-location-score" style={{ '--location-score': `${clampPercent(withPercent)}%` } as CSSProperties & Record<string, string>}>
+          <div>
+            <div>
               <strong>{formatPercent(withPercent, 0)}</strong>
               <span>With location</span>
             </div>
-            <div className="itops-location-status-bars">
+            <div>
               {locationRows.map((row) => {
                 const Icon = row.icon;
                 return (
-                  <button type="button" key={row.name} className={`itops-location-status-row itops-location-status-row-${row.tone}`} onClick={() => openLevel3('geolocation', row.name)}>
-                    <span className="itops-location-status-icon"><Icon size={15} /></span>
+                  <button type="button" key={row.name} onClick={() => openLevel3('geolocation', row.name)}>
+                    <span><Icon size={15} /></span>
                     <div>
                       <strong>{row.name}</strong>
                       <small>{row.note}</small>
-                      <em><i style={{ width: `${clampPercent(row.percent)}%` }} /></em>
+                      <em><i /></em>
                     </div>
                     <b>{formatNumber(row.value)}</b>
                   </button>
@@ -3698,8 +3684,8 @@ export default function ITOperationsDashboard() {
           </div>
         </section>
 
-        <section className="itops-location-summary-card">
-          <div className="itops-location-summary-head">
+        <section>
+          <div>
             <div>
               <span>Location Summary</span>
               <strong>Useful checks</strong>
@@ -3707,38 +3693,38 @@ export default function ITOperationsDashboard() {
             <small>Click any card to view device records.</small>
           </div>
 
-          <div className="itops-location-mini-grid">
-            <button type="button" className="itops-location-mini-card" onClick={() => openLevel3('geolocation', 'With Location')}>
+          <div>
+            <button type="button" onClick={() => openLevel3('geolocation', 'With Location')}>
               <span>With Location</span>
               <strong>{formatNumber(withLocation)}</strong>
               <small>Ready records</small>
             </button>
-            <button type="button" className="itops-location-mini-card warning" onClick={() => openLevel3('geolocation', 'Not Mapped')}>
+            <button type="button" onClick={() => openLevel3('geolocation', 'Not Mapped')}>
               <span>Not Mapped</span>
               <strong>{formatNumber(notMapped)}</strong>
               <small>Need branch/location mapping</small>
             </button>
-            <button type="button" className="itops-location-mini-card" onClick={() => openLevel3('geolocation', topLocation?.name || 'With Location')}>
+            <button type="button" onClick={() => openLevel3('geolocation', topLocation?.name || 'With Location')}>
               <span>Top Location</span>
               <strong>{topLocation?.name || '-'}</strong>
               <small>{topLocation ? `${formatNumber(topLocation.value)} device${topLocation.value === 1 ? '' : 's'}` : 'No location list yet'}</small>
             </button>
-            <button type="button" className="itops-location-mini-card" onClick={() => openLevel3('geolocation', 'With Location')}>
+            <button type="button" onClick={() => openLevel3('geolocation', 'With Location')}>
               <span>Location Names</span>
               <strong>{formatNumber(locationCount)}</strong>
               <small>Listed locations</small>
             </button>
           </div>
 
-          <div className="itops-location-action-box">
+          <div>
             <span>Next check</span>
             <strong>{notMapped > 0 ? 'Fix devices without location mapping' : 'Location data looks complete'}</strong>
             <p>{notMapped > 0 ? 'Check branch/location mapping for the devices listed under Not Mapped.' : 'Keep monitoring the location list and device records.'}</p>
           </div>
         </section>
 
-        <section className="itops-location-list-card">
-          <div className="itops-location-list-head">
+        <section>
+          <div>
             <div>
               <span>Location List</span>
               <strong>{formatNumber(locationCount)} location{locationCount === 1 ? '' : 's'}</strong>
@@ -3748,27 +3734,26 @@ export default function ITOperationsDashboard() {
           <LocationDistribution items={geolocation.topLocations} onOpen={(name) => openLevel3('geolocation', name)} />
         </section>
 
-        <section className="itops-location-insight-card">
-          <div className="itops-location-list-head">
+        <section>
+          <div>
             <div>
               <span>Device Records</span>
               <strong>{formatNumber(evidenceCount)}</strong>
             </div>
             <small>Records available for drilldown.</small>
           </div>
-          <div className="itops-location-insight-grid">
+          <div>
             <div><span>Data ready</span><strong>{formatPercent(withPercent, 0)}</strong></div>
             <div><span>Need mapping</span><strong>{formatPercent(notMappedPercent, 0)}</strong></div>
             <div><span>Total checked</span><strong>{formatNumber(total)}</strong></div>
           </div>
-          <div className="itops-location-wide-meter" aria-hidden="true">
-            <i style={{ width: `${clampPercent(withPercent)}%` }} />
+          <div aria-hidden="true">
+            <i />
           </div>
         </section>
       </div>
     );
   };
-
 
   const renderOpenTicketsLevel2Stats = () => {
     const priorityRows = serviceDesk.priorityBreakdown.filter((row) => numberOrFallback(row.value) > 0);
@@ -3790,9 +3775,9 @@ export default function ITOperationsDashboard() {
     const topPriorityValue = numberOrFallback(topPriority?.value);
 
     return (
-      <div className="itops-ticket-layout itops-ticket-layout-clean">
-        <section className="itops-ticket-command-panel">
-          <div className="itops-ticket-command-head">
+      <div>
+        <section>
+          <div>
             <div>
               <span>Ticket Health</span>
               <strong>{queueTone === 'success' ? 'On Track' : 'Need Action'}</strong>
@@ -3801,7 +3786,7 @@ export default function ITOperationsDashboard() {
             <ToneBadge tone={queueTone}>{queueTone === 'success' ? 'Stable' : 'Check Now'}</ToneBadge>
           </div>
 
-          <div className={`itops-ticket-focus-card itops-ticket-focus-${queueTone}`}>
+          <div>
             <div>
               <span>Need Action</span>
               <strong>{formatNumber(needActionCount)}</strong>
@@ -3810,38 +3795,38 @@ export default function ITOperationsDashboard() {
             <button type="button" onClick={() => openLevel3('serviceDesk', 'Need Action')}>Open list</button>
           </div>
 
-          <div className="itops-ticket-health-meter">
-            <div className="itops-ticket-meter-row">
+          <div>
+            <div>
               <span>Healthy queue</span>
               <strong>{formatPercent(healthyPercent, 0)}</strong>
             </div>
-            <div className="itops-ticket-meter-track" aria-hidden="true">
-              <i className="healthy" style={{ width: `${healthyPercent}%` }} />
-              <i className="risk" style={{ width: `${needActionPercent}%` }} />
+            <div aria-hidden="true">
+              <i />
+              <i />
             </div>
-            <div className="itops-ticket-meter-labels">
+            <div>
               <small>{formatNumber(onTrackTicketCount)} on track</small>
               <small>{formatNumber(needActionCount)} need action</small>
             </div>
           </div>
 
-          <div className="itops-ticket-sla-strip-card">
+          <div>
             <div>
               <span>SLA Met</span>
               <strong>{formatPercent(ticketSlaPercent, 0)}</strong>
               <small>Service target</small>
             </div>
-            <em aria-hidden="true"><i style={{ width: `${ticketSlaPercent}%` }} /></em>
+            <em aria-hidden="true"><i /></em>
           </div>
 
-          <div className="itops-ticket-time-grid">
-            <div className="blue"><span>First Reply</span><strong>{serviceDesk.firstResponse || '-'}</strong><small>Average response</small></div>
-            <div className="purple"><span>Resolve Time</span><strong>{serviceDesk.mttr || '-'}</strong><small>Average close time</small></div>
+          <div>
+            <div><span>First Reply</span><strong>{serviceDesk.firstResponse || '-'}</strong><small>Average response</small></div>
+            <div><span>Resolve Time</span><strong>{serviceDesk.mttr || '-'}</strong><small>Average close time</small></div>
           </div>
         </section>
 
-        <section className="itops-ticket-work-panel">
-          <div className="itops-ticket-panel-title">
+        <section>
+          <div>
             <div>
               <span>Work Plan</span>
               <strong>Simple action view</strong>
@@ -3849,27 +3834,27 @@ export default function ITOperationsDashboard() {
             <small>Each section shows a different purpose. No repeated summary cards.</small>
           </div>
 
-          <div className="itops-ticket-plan-grid">
-            <button type="button" className="danger" onClick={() => openLevel3('serviceDesk', 'Overdue')}>
+          <div>
+            <button type="button" onClick={() => openLevel3('serviceDesk', 'Overdue')}>
               <span>Do First</span>
               <strong>{formatNumber(overdueTicketCount)}</strong>
               <small>Overdue tickets</small>
             </button>
-            <button type="button" className="warning" onClick={() => openLevel3('serviceDesk', topPriorityLabel)}>
+            <button type="button" onClick={() => openLevel3('serviceDesk', topPriorityLabel)}>
               <span>Priority Focus</span>
               <strong>{topPriorityLabel}</strong>
               <small>{formatNumber(topPriorityValue)} ticket(s)</small>
             </button>
-            <div className="success">
+            <div>
               <span>Keep Moving</span>
               <strong>{formatNumber(trendSummary.resolved)}</strong>
               <small>Resolved in current view</small>
             </div>
           </div>
 
-          <div className="itops-ticket-board-grid">
-            <section className="itops-ticket-movement-card">
-              <div className="itops-ticket-list-head">
+          <div>
+            <section>
+              <div>
                 <span>Ticket Movement</span>
                 <strong>{movementRows.length ? `${movementRows.length} day view` : 'No trend'}</strong>
               </div>
@@ -3881,26 +3866,26 @@ export default function ITOperationsDashboard() {
                 const width = Math.max(8, (total / movementMax) * 100);
 
                 return (
-                  <div className="itops-ticket-movement-row" key={row.day}>
+                  <div key={row.day}>
                     <span>{row.day}</span>
-                    <em aria-hidden="true" style={{ width: `${width}%` }}>
-                      {newCount > 0 && <i className="new" style={{ flexGrow: newCount }} />}
-                      {resolvedCount > 0 && <i className="resolved" style={{ flexGrow: resolvedCount }} />}
-                      {openCount > 0 && <i className="open" style={{ flexGrow: openCount }} />}
+                    <em aria-hidden="true">
+                      {newCount > 0 && <i />}
+                      {resolvedCount > 0 && <i />}
+                      {openCount > 0 && <i />}
                     </em>
                     <strong>{formatNumber(total)}</strong>
                   </div>
                 );
               }) : <EmptyState label="No ticket movement yet." />}
-              <div className="itops-ticket-movement-legend">
-                <span><i className="new" />New</span>
-                <span><i className="resolved" />Resolved</span>
-                <span><i className="open" />Open</span>
+              <div>
+                <span><i />New</span>
+                <span><i />Resolved</span>
+                <span><i />Open</span>
               </div>
             </section>
 
-            <section className="itops-ticket-priority-clean-card">
-              <div className="itops-ticket-list-head">
+            <section>
+              <div>
                 <span>Priority Workload</span>
                 <strong>{formatNumber(ticketPriorityTotal)}</strong>
               </div>
@@ -3908,9 +3893,9 @@ export default function ITOperationsDashboard() {
                 const value = numberOrFallback(row.value);
                 const tone = String(row.label || '').toLowerCase();
                 return (
-                  <button type="button" className={`itops-ticket-priority-row ${tone}`} key={row.label} onClick={() => openLevel3('serviceDesk', row.label)}>
+                  <button type="button" key={row.label} onClick={() => openLevel3('serviceDesk', row.label)}>
                     <div><strong>{row.label}</strong><span>{formatNumber(value)} ticket(s)</span></div>
-                    <em><i style={{ width: `${Math.max(5, (value / priorityMax) * 100)}%` }} /></em>
+                    <em><i /></em>
                     <b>{formatNumber(value)}</b>
                   </button>
                 );
@@ -3925,12 +3910,12 @@ export default function ITOperationsDashboard() {
   const renderLevel2Drilldown = (view: string) => {
     if (view === 'overview') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel">
+        <div>
+          <div>
             <strong>Dashboard Summary</strong>
             <p>This view shows the main dashboard numbers in a simple action list. Click any item below to open the details.</p>
           </div>
-          <div className="itops-pro-drill-grid">
+          <div>
             <DrillCard icon={Laptop} label="Devices" value={formatNumber(hardware.totalDevices)} note="Online, old sync, OS and model summary" tone="blue" onClick={() => openLevel3('hardware')} />
             <DrillCard icon={Ticket} label="Open Tickets" value={formatNumber(serviceDesk.pendingTickets)} note="Open, overdue and SLA status" tone="amber" onClick={() => openLevel3('serviceDesk')} />
             <DrillCard icon={ShieldCheck} label="Security Updates" value={hasSecurityUpdateScore ? formatPercent(securityUpdateScore, 0) : 'Not Checked'} note={`${formatNumber(securityUpdateTotalDevices)} device baseline`} tone="green" onClick={() => openLevel3('patch')} />
@@ -3939,7 +3924,7 @@ export default function ITOperationsDashboard() {
             <DrillCard icon={ShieldAlert} label="Device Risk" value={formatNumber(deviceRiskCount)} note="EOL/EOS and Management Policy risk" tone="purple" onClick={() => openLevel3('risk')} />
           </div>
           <Panel title="Ticket Movement" subtitle="New, closed and open tickets." icon={Activity}>
-            <div className="itops-pro-summary-row">
+            <div>
               <MiniMetric label="New" value={formatNumber(trendSummary.newIncidents)} tone="blue" />
               <MiniMetric label="Resolved" value={formatNumber(trendSummary.resolved)} tone="green" />
               <MiniMetric label="Open Backlog" value={formatNumber(trendSummary.openBacklog)} tone="amber" />
@@ -3952,9 +3937,9 @@ export default function ITOperationsDashboard() {
 
     if (view === 'hardware') {
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Devices" stage="breakdown" />
-          <div className="itops-pro-story-panel">
+          <div>
             <strong>Device Breakdown</strong>
             <p>Review simple device status first: online, offline, old data and OS type.</p>
           </div>
@@ -3965,9 +3950,9 @@ export default function ITOperationsDashboard() {
 
     if (view === 'serviceDesk' || view === 'alerts') {
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Open Tickets" stage="breakdown" />
-          <div className="itops-pro-story-panel">
+          <div>
             <strong>Open Tickets</strong>
             <p>Check open tickets, overdue items, SLA status and priority workload.</p>
           </div>
@@ -3979,16 +3964,16 @@ export default function ITOperationsDashboard() {
 
     if (view === 'patch' || view === 'departments') {
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Security Updates" stage="breakdown" />
-          <div className="itops-pro-story-panel">
+          <div>
             <strong>Security Updates</strong>
             <p>Simple view: how many devices are updated, how many still need update, and which branch needs attention.</p>
           </div>
 
-          <div className="itops-security-update-layout">
-            <section className="itops-security-update-main">
-              <div className="itops-security-update-head">
+          <div>
+            <section>
+              <div>
                 <span><ShieldCheck size={22} /></span>
                 <div>
                   <small>Update Status</small>
@@ -3997,22 +3982,22 @@ export default function ITOperationsDashboard() {
                 </div>
               </div>
 
-              <div className="itops-security-update-meter" aria-label="Security update score">
-                <i style={{ width: `${hasSecurityUpdateScore ? clampPercent(securityUpdateScore) : 0}%` }} />
+              <div aria-label="Security update score">
+                <i />
               </div>
 
-              <div className="itops-security-update-split">
-                <button type="button" className="updated" onClick={() => openLevel3('patch', 'Updated')}>
+              <div>
+                <button type="button" onClick={() => openLevel3('patch', 'Updated')}>
                   <span>Updated</span>
                   <strong>{hasSecurityUpdateScore ? formatNumber(securityUpdatedDevices) : '-'}</strong>
                   <small>Good device count</small>
                 </button>
-                <button type="button" className="need" onClick={() => openLevel3('patch', 'Need Update')}>
+                <button type="button" onClick={() => openLevel3('patch', 'Need Update')}>
                   <span>Need Update</span>
                   <strong>{hasSecurityUpdateScore ? formatNumber(securityNeedUpdateDevices) : '-'}</strong>
                   <small>Action needed</small>
                 </button>
-                <button type="button" className="critical" onClick={() => openLevel3('risk', 'Critical Update')}>
+                <button type="button" onClick={() => openLevel3('risk', 'Critical Update')}>
                   <span>Critical Issues</span>
                   <strong>{formatNumber(criticalUpdateIssueCount)}</strong>
                   <small>Issue count only</small>
@@ -4020,15 +4005,15 @@ export default function ITOperationsDashboard() {
               </div>
             </section>
 
-            <section className="itops-security-branch-card">
-              <div className="itops-security-branch-head">
+            <section>
+              <div>
                 <div>
                   <small>Branch Score</small>
                   <strong>Lowest score first</strong>
                 </div>
                 <button type="button" onClick={() => openLevel3('departments')}>View All</button>
               </div>
-              <div className="itops-security-branch-list">
+              <div>
                 {(filteredPatchDepartments.length ? filteredPatchDepartments : patchDepartments)
                   .slice()
                   .sort((a, b) => numberOrFallback(a.percent) - numberOrFallback(b.percent))
@@ -4036,7 +4021,7 @@ export default function ITOperationsDashboard() {
                   .map((row) => (
                     <button type="button" key={`security-branch-${row.name}`} onClick={() => openLevel3('patch', row.name)}>
                       <div><strong>{row.name}</strong><span>{formatPercent(row.percent, 0)}</span></div>
-                      <em><i style={{ width: `${clampPercent(row.percent)}%` }} /></em>
+                      <em><i /></em>
                     </button>
                   ))}
                 {!patchDepartments.length && <EmptyState label="No branch update score yet." />}
@@ -4044,7 +4029,7 @@ export default function ITOperationsDashboard() {
             </section>
           </div>
 
-          <div className="itops-pro-filter-row">
+          <div>
             <label><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search branch" /></label>
             <select value={selectedDepartment} onChange={(event) => setSelectedDepartment(event.target.value)}>
               {departments.map((department) => <option key={department}>{department}</option>)}
@@ -4057,12 +4042,12 @@ export default function ITOperationsDashboard() {
 
     if (view === 'tasks') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel">
+        <div>
+          <div>
             <strong>Automation Job Breakdown</strong>
             <p>Validate which jobs failed, which jobs are running and which targets need investigation.</p>
           </div>
-          <div className="itops-pro-drill-grid">
+          <div>
             <DrillCard icon={Wrench} label="Total Tasks" value={formatNumber(tasks.totalTasks)} note="Automation volume" tone="blue" onClick={() => openLevel3('tasks', 'Total Tasks')} />
             <DrillCard icon={Loader2} label="Running" value={formatNumber(tasks.runningTasks)} note="Still in-progress" tone="amber" onClick={() => openLevel3('tasks', 'Running')} />
             <DrillCard icon={ShieldCheck} label="Completed" value={formatNumber(tasks.completedTasks)} note="Successful job execution" tone="green" onClick={() => openLevel3('tasks', 'Completed')} />
@@ -4083,16 +4068,16 @@ export default function ITOperationsDashboard() {
       const hasDeviceRiskRows = deviceRiskCount > 0;
 
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Device Risk" stage="breakdown" />
-          <div className="itops-pro-story-panel">
+          <div>
             <strong>Device Risk</strong>
             <p>Risk is calculated from device EOL/EOS and the score values set in Management Policy.</p>
           </div>
 
-          <div className="itops-critical-risk-layout">
-            <section className="itops-critical-risk-main">
-              <div className="itops-critical-risk-head">
+          <div>
+            <section>
+              <div>
                 <span><ShieldAlert size={22} /></span>
                 <div>
                   <small>Risk Status</small>
@@ -4101,19 +4086,19 @@ export default function ITOperationsDashboard() {
                 </div>
                 <StatusBadge status={riskStatus(deviceRiskCount, 1, 6)} />
               </div>
-              <div className="itops-critical-risk-meter" aria-label="Risk score"><i style={{ width: `${clampPercent(deviceRiskScore)}%` }} /></div>
-              <div className="itops-critical-risk-split">
-                <button type="button" className="critical" onClick={() => openLevel3('risk', 'Critical')}>
+              <div aria-label="Risk score"><i /></div>
+              <div>
+                <button type="button" onClick={() => openLevel3('risk', 'Critical')}>
                   <span>Critical Devices</span>
                   <strong>{formatNumber(criticalDeviceCount)}</strong>
                   <small>Linked device rows</small>
                 </button>
-                <button type="button" className="high" onClick={() => openLevel3('risk', 'High')}>
+                <button type="button" onClick={() => openLevel3('risk', 'High')}>
                   <span>High Devices</span>
                   <strong>{formatNumber(highDeviceCount)}</strong>
                   <small>Linked device rows</small>
                 </button>
-                <button type="button" className="device" onClick={() => openLevel3('risk', 'Device Risk')}>
+                <button type="button" onClick={() => openLevel3('risk', 'Device Risk')}>
                   <span>Total At Risk</span>
                   <strong>{formatNumber(deviceRiskCount)}</strong>
                   <small>{hasDeviceRiskRows ? 'Open device list' : 'No device from policy'}</small>
@@ -4121,21 +4106,21 @@ export default function ITOperationsDashboard() {
               </div>
             </section>
 
-            <section className="itops-critical-risk-driver-card">
-              <div className="itops-critical-risk-driver-head">
+            <section>
+              <div>
                 <div>
                   <small>Main Causes</small>
                   <strong>Top risk causes</strong>
                 </div>
                 <button type="button" onClick={() => openLevel3('risk')}>View All</button>
               </div>
-              <div className="itops-critical-risk-driver-list">
+              <div>
                 {mainRiskRows.length ? mainRiskRows.map((row) => {
                   const value = numberOrFallback(row.value);
                   return (
                     <button type="button" key={`risk-cause-${row.name}`} onClick={() => openLevel3('risk', row.name)}>
                       <div><strong>{row.name}</strong><span>{formatNumber(value)} record(s)</span></div>
-                      <em><i style={{ width: `${Math.max(6, (value / maxRiskDriver) * 100)}%` }} /></em>
+                      <em><i /></em>
                     </button>
                   );
                 }) : <EmptyState label="No EOL/EOS or Management Policy cause returned yet." />}
@@ -4147,7 +4132,7 @@ export default function ITOperationsDashboard() {
             <Panel title="Device Risk List" subtitle="Devices listed from EOL/EOS and Management Policy scoring." icon={Laptop}>{renderEndpointRiskDrillTable('level2')}</Panel>
           ) : (
             <Panel title="Device Risk" subtitle="Device rows appear when EOL/EOS or policy evidence reaches the risk threshold." icon={Laptop}>
-              <div className="itops-risk-empty-note">
+              <div>
                 <strong>No device risk from current policy.</strong>
                 <p>Either no device meets the EOL/EOS criteria, or the Management Policy score values are below the risk threshold.</p>
               </div>
@@ -4160,14 +4145,14 @@ export default function ITOperationsDashboard() {
 
     if (view === 'software') {
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Software" stage="breakdown" />
-          <div className="itops-pro-story-panel">
+          <div>
             <strong>Software Estate & Application Lifecycle</strong>
             <p>Review installed software, classification exposure, remote tools, business applications and major application EOL/EOS signals before escalation.</p>
           </div>
 
-          <div className="itops-pro-drill-grid">
+          <div>
             <DrillCard icon={Database} label="Installations" value={formatNumber(software.totalInstallations)} note="Total software records" tone="purple" onClick={() => openLevel3('software', 'Installations')} />
             <DrillCard icon={Database} label="Unique Software" value={formatNumber(software.uniqueSoftware)} note="Unique titles" tone="blue" onClick={() => openLevel3('software', 'Unique Software')} />
             <DrillCard icon={AlertTriangle} label="Unclassified" value={formatNumber(software.unclassifiedSoftware)} note="Needs cleanup/classification" tone="amber" onClick={() => openLevel3('software', 'Unclassified')} />
@@ -4195,9 +4180,9 @@ export default function ITOperationsDashboard() {
 
     if (view === 'network') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel"><strong>Network Coverage Breakdown</strong><p>Review known IPs, registered devices, active IPs and unregistered exposure before investigation.</p></div>
-          <div className="itops-pro-drill-grid">
+        <div>
+          <div><strong>Network Coverage Breakdown</strong><p>Review known IPs, registered devices, active IPs and unregistered exposure before investigation.</p></div>
+          <div>
             <DrillCard icon={Network} label="Known IPs" value={formatNumber(network.knownIps)} note="Network inventory records" tone="cyan" onClick={() => openLevel3('network', 'Known IPs')} />
             <DrillCard icon={Laptop} label="Registered Devices" value={formatNumber(network.registeredDevices)} note="Mapped devices" tone="green" onClick={() => openLevel3('network', 'Registered Devices')} />
             <DrillCard icon={AlertTriangle} label="Unregistered IPs" value={formatNumber(network.unregisteredIps)} note="Unknown endpoint exposure" tone="amber" onClick={() => openLevel3('network', 'Unregistered IPs')} />
@@ -4210,9 +4195,9 @@ export default function ITOperationsDashboard() {
 
     if (view === 'geolocation') {
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Location" stage="breakdown" />
-          <div className="itops-pro-story-panel"><strong>Location Breakdown</strong><p>See which devices have location data and which devices still need location mapping.</p></div>
+          <div><strong>Location Breakdown</strong><p>See which devices have location data and which devices still need location mapping.</p></div>
           {renderLocationLevel2Stats()}
         </div>
       );
@@ -4220,10 +4205,10 @@ export default function ITOperationsDashboard() {
 
     if (view === 'dataConfidence') {
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Data Confidence" stage="breakdown" />
-          <div className="itops-pro-story-panel"><strong>Data Check</strong><p>This view shows whether the dashboard data is ready to use. Low score means the data needs refresh, mapping or review.</p></div>
-          <div className="itops-pro-drill-grid">
+          <div><strong>Data Check</strong><p>This view shows whether the dashboard data is ready to use. Low score means the data needs refresh, mapping or review.</p></div>
+          <div>
             {dataConfidenceRows.map((row) => (
               <DrillCard key={row.name} icon={Gauge} label={row.name} value={formatPercent(row.percent ?? row.value, 0)} note="Open details" tone={healthStatus(row.percent ?? row.value) === 'Healthy' ? 'green' : healthStatus(row.percent ?? row.value) === 'Watch' ? 'amber' : 'red'} onClick={() => openLevel3('dataConfidence', row.name)} />
             ))}
@@ -4235,11 +4220,11 @@ export default function ITOperationsDashboard() {
 
     if (view === 'attention') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel"><strong>Attention Queue Breakdown</strong><p>These are cross-module items that need operational ownership. Click each item to inspect details.</p></div>
-          <div className="itops-pro-queue">
+        <div>
+          <div><strong>Attention Queue Breakdown</strong><p>These are cross-module items that need operational ownership. Click each item to inspect details.</p></div>
+          <div>
             {attentionQueue.slice(0, 12).map((item) => (
-              <button type="button" key={item.id} className="itops-pro-queue-row" onClick={() => openLevel3('attention', item.title)}>
+              <button type="button" key={item.id} onClick={() => openLevel3('attention', item.title)}>
                 <SeverityBadge severity={item.severity} />
                 <div><strong>{item.title}</strong><span>{item.module} • {item.subtitle}</span></div>
                 <ChevronRight size={16} />
@@ -4259,8 +4244,8 @@ export default function ITOperationsDashboard() {
 
     if (view === 'overview') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel level3">
+        <div>
+          <div>
             <strong>Dashboard Details</strong>
             <p>Selected: {selectedLabel}. This view shows the details behind the dashboard score.</p>
           </div>
@@ -4272,9 +4257,9 @@ export default function ITOperationsDashboard() {
 
     if (view === 'hardware') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel level3"><strong>Device Details</strong><p>Selected: {selectedLabel}. Review device status, inventory details, location and last seen time.</p></div>
-          <div className="itops-pro-summary-row five">
+        <div>
+          <div><strong>Device Details</strong><p>Selected: {selectedLabel}. Review device status, inventory details, location and last seen time.</p></div>
+          <div>
             <MiniMetric label="Total" value={formatNumber(hardware.totalDevices)} tone="blue" />
             <MiniMetric label="Selected Rows" value={formatNumber(resolveHardwareEndpointRows(item).length)} tone="green" />
             <MiniMetric label="Online" value={formatNumber(hardware.onlineDevices)} tone="green" />
@@ -4311,9 +4296,9 @@ export default function ITOperationsDashboard() {
             : 'No matching ticket row returned for this selection.';
 
       return (
-        <div className="itops-pro-drawer-stack itops-ticket-detail-stack">
-          <div className="itops-pro-story-panel level3"><strong>Ticket Details</strong><p>Selected: {selectedLabel}. This page only shows ticket rows and actions for the selected queue.</p></div>
-          <div className="itops-pro-summary-row four">
+        <div>
+          <div><strong>Ticket Details</strong><p>Selected: {selectedLabel}. This page only shows ticket rows and actions for the selected queue.</p></div>
+          <div>
             <MiniMetric label="Selected" value={formatNumber(ticketRows.length)} tone="blue" />
             <MiniMetric label="Overdue" value={formatNumber(selectedOverdueCount)} tone={selectedOverdueCount > 0 ? 'red' : 'green'} />
             <MiniMetric label="High Priority" value={formatNumber(selectedHighCount)} tone={selectedHighCount > 0 ? 'amber' : 'green'} />
@@ -4321,32 +4306,32 @@ export default function ITOperationsDashboard() {
           </div>
           {renderAlertDrillTable('level3', item)}
 
-          <div className="itops-ticket-detail-lower-grid">
-            <section className="itops-ticket-detail-card action">
-              <div className="itops-ticket-detail-card-head">
+          <div>
+            <section>
+              <div>
                 <span>Next Action</span>
                 <strong>{selectedOverdueCount > 0 || selectedHighCount > 0 ? 'Check Now' : 'Monitor'}</strong>
               </div>
               <p>{nextActionText}</p>
-              <div className="itops-ticket-detail-mini-grid">
+              <div>
                 <div><span>Status</span><strong>{statusLabel}</strong></div>
                 <div><span>Systems</span><strong>{formatNumber(selectedSystemList.length)}</strong></div>
               </div>
             </section>
 
-            <section className="itops-ticket-detail-card priority">
-              <div className="itops-ticket-detail-card-head">
+            <section>
+              <div>
                 <span>Priority Mix</span>
                 <strong>{formatNumber(priorityRows.reduce((total, row) => total + numberOrFallback(row.value), 0))}</strong>
               </div>
-              <div className="itops-ticket-detail-priority-list">
+              <div>
                 {priorityRows.length ? priorityRows.map((row) => {
                   const value = numberOrFallback(row.value);
                   const tone = row.name.toLowerCase();
                   return (
-                    <button type="button" key={row.name} className={`itops-ticket-detail-priority ${tone}`} onClick={() => openLevel3('serviceDesk', row.name)}>
+                    <button type="button" key={row.name} onClick={() => openLevel3('serviceDesk', row.name)}>
                       <span>{row.name}</span>
-                      <em><i style={{ width: `${Math.max(6, (value / priorityMax) * 100)}%` }} /></em>
+                      <em><i /></em>
                       <strong>{formatNumber(value)}</strong>
                     </button>
                   );
@@ -4355,7 +4340,7 @@ export default function ITOperationsDashboard() {
             </section>
           </div>
 
-          <div className="itops-ticket-detail-note-card">
+          <div>
             <div>
               <span>Why this section exists</span>
               <strong>{ticketRows.length ? 'Shows selected ticket context only' : 'No ticket detail found'}</strong>
@@ -4368,7 +4353,7 @@ export default function ITOperationsDashboard() {
 
     if (view === 'patch' || view === 'departments') {
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           {(() => {
             const securityDeviceRows = resolveSecurityUpdateDeviceRows(item);
             const selectedUpdatedRows = securityDeviceRows.filter((device) => device.updateStatus === 'Updated').length;
@@ -4377,8 +4362,8 @@ export default function ITOperationsDashboard() {
 
             return (
               <>
-                <div className="itops-pro-story-panel level3"><strong>Security Update Details</strong><p>Selected: {selectedLabel}. Device list is taken from Devices, then matched with the selected update score.</p></div>
-                <div className="itops-pro-summary-row four">
+                <div><strong>Security Update Details</strong><p>Selected: {selectedLabel}. Device list is taken from Devices, then matched with the selected update score.</p></div>
+                <div>
                   <MiniMetric label="Selected Devices" value={formatNumber(securityDeviceRows.length)} tone="blue" />
                   <MiniMetric label="Updated" value={hasSecurityUpdateScore ? formatNumber(selectedUpdatedRows) : '-'} tone="green" />
                   <MiniMetric label="Need Update" value={hasSecurityUpdateScore ? formatNumber(selectedNeedUpdateRows) : '-'} tone="amber" />
@@ -4394,9 +4379,9 @@ export default function ITOperationsDashboard() {
 
     if (view === 'tasks') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel level3"><strong>Automation Job Trace</strong><p>Selected: {selectedLabel}. Confirm job type, target, status and execution time.</p></div>
-          <div className="itops-pro-summary-row five">
+        <div>
+          <div><strong>Automation Job Trace</strong><p>Selected: {selectedLabel}. Confirm job type, target, status and execution time.</p></div>
+          <div>
             <MiniMetric label="Total" value={formatNumber(tasks.totalTasks)} tone="blue" />
             <MiniMetric label="Running" value={formatNumber(tasks.runningTasks)} tone="amber" />
             <MiniMetric label="Completed" value={formatNumber(tasks.completedTasks)} tone="green" />
@@ -4414,8 +4399,8 @@ export default function ITOperationsDashboard() {
       const hasLinkedDeviceRows = selectedRiskDevices.length > 0;
 
       return (
-        <div className="itops-pro-drawer-stack itops-risk-detail-stack itops-risk-selected-device-stack">
-          <div className="itops-pro-story-panel level3">
+        <div>
+          <div>
             <strong>Device Risk Details</strong>
             <p>Selected: {selectedLabel}. This level only shows the selected device record and the reason it appears in the risk list.</p>
           </div>
@@ -4433,13 +4418,13 @@ export default function ITOperationsDashboard() {
       const selectedLifecycle = software.lifecycleWatch.find((row) => String(row.name || '').toLowerCase() === String(item || '').toLowerCase());
 
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Software" stage="evidence" selected={selectedLabel} />
-          <div className="itops-pro-story-panel level3">
+          <div>
             <strong>Software Inventory Evidence</strong>
             <p>Selected: {selectedLabel}. This list shows software records behind the selected statistic, including classification and application lifecycle signals where available.</p>
           </div>
-          <div className="itops-pro-summary-row five">
+          <div>
             <MiniMetric label="Matched Rows" value={formatNumber(selectedRows.length)} tone="blue" />
             <MiniMetric label="Installations" value={formatNumber(software.totalInstallations)} tone="purple" />
             <MiniMetric label="Unique" value={formatNumber(software.uniqueSoftware)} tone="blue" />
@@ -4448,7 +4433,7 @@ export default function ITOperationsDashboard() {
           </div>
           {selectedLifecycle && (
             <Panel title={`${selectedLifecycle.name} Lifecycle`} subtitle="Application lifecycle signal from backend lookup." icon={CalendarDays}>
-              <div className="itops-pro-summary-row four">
+              <div>
                 <MiniMetric label="Installs" value={formatNumber(selectedLifecycle.installs)} tone="purple" />
                 <MiniMetric label="Unique Titles" value={formatNumber(selectedLifecycle.uniqueTitles)} tone="blue" />
                 <MiniMetric label="Status" value={selectedLifecycle.lifecycleStatus || '-'} tone={getSoftwareLifecycleTone(selectedLifecycle)} />
@@ -4468,9 +4453,9 @@ export default function ITOperationsDashboard() {
 
     if (view === 'network') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel level3"><strong>Network Details</strong><p>Selected: {selectedLabel}. Inspect registered coverage, unregistered IP exposure and workgroup distribution.</p></div>
-          <div className="itops-pro-summary-row five">
+        <div>
+          <div><strong>Network Details</strong><p>Selected: {selectedLabel}. Inspect registered coverage, unregistered IP exposure and workgroup distribution.</p></div>
+          <div>
             <MiniMetric label="Known IP" value={formatNumber(network.knownIps)} tone="cyan" />
             <MiniMetric label="Registered" value={formatNumber(network.registeredDevices)} tone="green" />
             <MiniMetric label="Unregistered" value={formatNumber(network.unregisteredIps)} tone="amber" />
@@ -4485,17 +4470,17 @@ export default function ITOperationsDashboard() {
     if (view === 'geolocation') {
       const affectedRows = resolveGeoEvidenceRows(item);
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Location" stage="evidence" selected={selectedLabel} />
-          <div className="itops-pro-story-panel level3"><strong>Device Location Details</strong><p>Selected: {selectedLabel}. This shows the devices behind the selected location status.</p></div>
-          <div className="itops-pro-summary-row four">
+          <div><strong>Device Location Details</strong><p>Selected: {selectedLabel}. This shows the devices behind the selected location status.</p></div>
+          <div>
             <MiniMetric label="Rows" value={formatNumber(affectedRows.length)} tone="blue" note="device records" />
             <MiniMetric label="With Location" value={formatNumber(geolocation.trackedDevices)} tone="green" note="ready records" />
             <MiniMetric label="Not Mapped" value={formatNumber(risk.missingGeoDevices)} tone="purple" note="need mapping" />
             <MiniMetric label="Location Data" value={formatPercent(locationFreshPercent, 0)} tone="cyan" note="ready rate" />
           </div>
           <Panel title="Device Records" subtitle="Device records for the selected location status." icon={MapPin}>{renderGeoDeviceEvidenceTable(item)}</Panel>
-          <div className="itops-evidence-note"><strong>Next action:</strong><span>For not mapped devices, check branch or location mapping. Devices with location can be used for reporting and drilldown.</span></div>
+          <div><strong>Next action:</strong><span>For not mapped devices, check branch or location mapping. Devices with location can be used for reporting and drilldown.</span></div>
         </div>
       );
     }
@@ -4503,10 +4488,10 @@ export default function ITOperationsDashboard() {
     if (view === 'dataConfidence') {
       const selectedRow = dataConfidenceRows.find((row) => row.name === item);
       return (
-        <div className="itops-pro-drawer-stack">
+        <div>
           <DrilldownTrace domain="Data Confidence" stage="evidence" selected={selectedLabel} />
-          <div className="itops-pro-story-panel level3"><strong>Data Check Details</strong><p>Selected: {selectedLabel}. This view explains whether the dashboard data is ready to use.</p></div>
-          <div className="itops-pro-summary-row four">
+          <div><strong>Data Check Details</strong><p>Selected: {selectedLabel}. This view explains whether the dashboard data is ready to use.</p></div>
+          <div>
             <MiniMetric label="Overall Confidence" value={formatPercent(dataConfidenceScore, 0)} tone="blue" />
             <MiniMetric label="Device Data" value={formatPercent(endpointFreshnessPercent, 0)} tone="blue" />
             <MiniMetric label="Location Data" value={formatPercent(locationFreshPercent, 0)} tone="green" />
@@ -4514,15 +4499,15 @@ export default function ITOperationsDashboard() {
           </div>
           {selectedRow && <Panel title="Selected Confidence Driver" subtitle="Selected metric calculation result." icon={Gauge}><BarList items={[selectedRow]} limit={1} /></Panel>}
           <Panel title="All Confidence Drivers" subtitle="This is the data quality layer behind the KPI cards." icon={BarChart3}><BarList items={dataConfidenceRows} limit={6} /></Panel>
-          <div className="itops-evidence-note"><strong>How to read this:</strong><span>Low confidence does not always mean operational failure. It means the data needs refresh, mapping or classification review before the dashboard can be used for final decisions.</span></div>
+          <div><strong>How to read this:</strong><span>Low confidence does not always mean operational failure. It means the data needs refresh, mapping or classification review before the dashboard can be used for final decisions.</span></div>
         </div>
       );
     }
 
     if (view === 'attention') {
       return (
-        <div className="itops-pro-drawer-stack">
-          <div className="itops-pro-story-panel level3"><strong>Action Queue Details</strong><p>Selected: {selectedLabel}. Review the details behind the attention queue.</p></div>
+        <div>
+          <div><strong>Action Queue Details</strong><p>Selected: {selectedLabel}. Review the details behind the attention queue.</p></div>
           <ActionQueue items={attentionQueue} onOpen={(nextView) => openLevel3(nextView)} />
         </div>
       );
@@ -4551,35 +4536,34 @@ export default function ITOperationsDashboard() {
   }, [activeView]);
 
   return (
-    <div ref={pageRef} className="itops-pro-page">
-      <style>{ITOPS_PRO_STYLES}</style>
+    <div ref={pageRef}>
 
-      <div className="itops-pro-bg-grid" />
+      <div />
 
-      <header className="itops-pro-hero">
+      <header>
         <div>
-          <span className="itops-pro-overline"><Sparkles size={15} /> Dashboard</span>
+          <span><Sparkles size={15} /> Dashboard</span>
           <h1>IT Overview</h1>
           <p>Simple view for devices, tickets, updates, jobs, location and risk.</p>
-          <div className="itops-pro-hero-meta">
+          <div>
             <span><CalendarDays size={14} /> Range: {rangeLabel || '-'}</span>
             <span><Activity size={14} /> Generated: {formatDateLabel(generatedAt)}</span>
             <span><Gauge size={14} /> Overall: {formatPercent(overallHealth, 0)}</span>
           </div>
         </div>
 
-        <div className="itops-pro-hero-actions">
-          <button type="button" className="itops-pro-outline-btn" onClick={() => exportJsonFile('itops-dashboard-snapshot.json', dashboardData)}>
+        <div>
+          <button type="button" onClick={() => exportJsonFile('itops-dashboard-snapshot.json', dashboardData)}>
             <Download size={16} /> Export
           </button>
-          <button type="button" className="itops-pro-primary-btn" onClick={() => void loadDashboard(true)} disabled={isLoading}>
-            {isLoading ? <Loader2 size={16} className="itops-pro-spin" /> : <RefreshCw size={16} />} Refresh
+          <button type="button" onClick={() => void loadDashboard(true)} disabled={isLoading}>
+            {isLoading ? <Loader2 size={16} /> : <RefreshCw size={16} />} Refresh
           </button>
         </div>
       </header>
 
       {error && (
-        <div className="itops-pro-error">
+        <div>
           <AlertTriangle size={18} />
           <div>
             <strong>Dashboard data error</strong>
@@ -4590,26 +4574,25 @@ export default function ITOperationsDashboard() {
 
       {renderCommandMode()}
 
-
       {activeView && activeMeta && (
-        <div className="itops-pro-modal-overlay" role="presentation" onMouseDown={(event) => closeDrilldown(event)}>
-          <section className="itops-pro-drill-modal" role="dialog" aria-modal="true" aria-label={activeMeta.title} onMouseDown={(event) => event.stopPropagation()}>
-            <div className="itops-pro-modal-head">
+        <div role="presentation" onMouseDown={(event) => closeDrilldown(event)}>
+          <section role="dialog" aria-modal="true" aria-label={activeMeta.title} onMouseDown={(event) => event.stopPropagation()}>
+            <div>
               <div>
-                <span className="itops-pro-overline"><Filter size={14} /> Details View</span>
+                <span><Filter size={14} /> Details View</span>
                 <h2>{activeMeta.title}</h2>
                 <p>{activeMeta.subtitle}</p>
               </div>
-              <div className="itops-pro-modal-actions">
-                <button type="button" className="itops-pro-back" onClick={handleDrilldownBack}>
+              <div>
+                <button type="button" onClick={handleDrilldownBack}>
                   <ArrowLeft size={18} /> {viewHistory.length > 0 ? 'Back' : parseDrilldownKey(activeView).level === 'level3' ? 'Back to Breakdown' : 'Back to Dashboard'}
                 </button>
-                <button type="button" className="itops-pro-close" onClick={(event) => closeDrilldown(event)} aria-label="Close drilldown modal" title="Close drilldown modal"><X size={18} /> Close</button>
+                <button type="button" onClick={(event) => closeDrilldown(event)} aria-label="Close drilldown modal" title="Close drilldown modal"><X size={18} /> Close</button>
               </div>
             </div>
-            <div className="itops-pro-modal-body">
+            <div>
               {detailLoadingView && normalizeItOpsDetailViewKey(parseDrilldownKey(activeView).view) === detailLoadingView && (
-                <div className="itops-detail-loading"><Loader2 size={15} className="itops-spin" /> Loading full detail records...</div>
+                <div><Loader2 size={15} /> Loading full detail records...</div>
               )}
               {renderDrawerContent()}
             </div>
@@ -4729,7 +4712,6 @@ body.itops-dashboard-page-active .router-content {
 }
 
 .itops-pro-page * { box-sizing: border-box; }
-
 
 .itops-pro-error,
 .itops-pro-loading {
@@ -5065,7 +5047,6 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-status-watch { color: #92400e; background: #fef3c7; }
 .itops-pro-status-action { color: #b91c1c; background: #fee2e2; }
 
-
 .itops-pro-health-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -5269,7 +5250,6 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-command-grid .itops-pro-panel h2 {
   font-size: 17px;
 }
-
 
 .itops-pro-panel-head {
   display: flex;
@@ -5728,7 +5708,6 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-insight-cyan .itops-pro-insight-icon { background: linear-gradient(135deg, #0891b2, #22d3ee); }
 .itops-pro-insight-green .itops-pro-insight-icon { background: linear-gradient(135deg, #059669, #38bdf8); }
 
-
 .itops-pro-error,
 .itops-pro-loading {
   display: flex;
@@ -5963,7 +5942,6 @@ body.itops-dashboard-page-active .router-content {
   text-align: right;
 }
 
-
 .itops-pro-drill-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -6084,7 +6062,6 @@ body.itops-dashboard-page-active .router-content {
 .itops-pro-clickable-row:hover td {
   background: #f8fbff;
 }
-
 
 .itops-risk-command-summary {
   display: grid;
@@ -6217,9 +6194,6 @@ body.itops-dashboard-page-active .router-content {
   margin-top: 12px;
 }
 
-
-
-
 @media (max-width: 760px) {
   .itops-risk-severity-grid { grid-template-columns: 1fr; }
   .itops-risk-command-copy strong { font-size: 34px; }
@@ -6289,7 +6263,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-pro-modal-head { padding: 18px; }
   .itops-pro-modal-body { padding: 16px; }
 }
-
 
 /* Dashboard section balance fix: remove stretched panels and restore readable cards */
 .itops-pro-command-grid {
@@ -6564,7 +6537,6 @@ body.itops-dashboard-page-active .router-content {
   margin-top: 12px;
 }
 
-
 @media (max-width: 760px) {
   .itops-pro-health-grid {
     grid-template-columns: 1fr;
@@ -6606,7 +6578,6 @@ body.itops-dashboard-page-active .router-content {
 @media (max-width: 640px) {
   .itops-pulse-card-grid { grid-template-columns: 1fr; }
 }
-
 
 .itops-data-confidence {
   display: flex;
@@ -6654,7 +6625,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-location-list button { grid-template-columns: minmax(0, 1fr) auto; }
   .itops-location-list button svg { display: none; }
 }
-
 
 /* Location Level 2 layout */
 .itops-location-level2 {
@@ -6830,7 +6800,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-location-mini-grid,
   .itops-location-insight-grid { grid-template-columns: 1fr; }
 }
-
 
 /* Drilldown modal sizing + compact level 2 card layout */
 .itops-pro-modal-overlay {
@@ -7046,7 +7015,6 @@ body.itops-dashboard-page-active .router-content {
     grid-template-columns: 1fr !important;
   }
 }
-
 
 /* Endpoint Fleet level 2 redesign: graph left, compact square cards right */
 .itops-pro-drill-modal .itops-endpoint-level2-layout {
@@ -7321,7 +7289,6 @@ body.itops-dashboard-page-active .router-content {
     height: 142px;
   }
 }
-
 
 /* Endpoint Fleet Level 2 final redesign: balanced graph + compact right-side summary */
 .itops-pro-modal-overlay {
@@ -7710,7 +7677,6 @@ body.itops-dashboard-page-active .router-content {
   }
 }
 
-
 /* Simple Device Level 2 layout update */
 .itops-endpoint-redesign {
   grid-template-columns: minmax(340px, 420px) minmax(0, 1fr) !important;
@@ -7950,7 +7916,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-endpoint-redesign { min-height: auto !important; }
   .itops-endpoint-followup-grid { grid-template-columns: 1fr; }
 }
-
 
 /* Open Tickets Level 2 layout update */
 .itops-ticket-layout {
@@ -8704,7 +8669,6 @@ body.itops-dashboard-page-active .router-content {
 .itops-ticket-priority-row.low em i { background: linear-gradient(90deg, #059669, #22c55e); }
 .itops-ticket-priority-row b { color: #0f172a; font-size: 13px; font-weight: 950; }
 
-
 .itops-ticket-detail-stack {
   gap: 12px !important;
 }
@@ -8894,8 +8858,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-ticket-detail-priority,
   .itops-ticket-detail-mini-grid { grid-template-columns: 1fr; }
 }
-
-
 
 .itops-security-update-layout {
   display: grid;
@@ -9112,7 +9074,6 @@ body.itops-dashboard-page-active .router-content {
   border-radius: inherit;
   background: linear-gradient(90deg, #0ea5e9, #22d3ee);
 }
-
 
 .itops-critical-risk-layout {
   display: grid;
@@ -9507,7 +9468,6 @@ body.itops-dashboard-page-active .router-content {
   background: #64748b;
 }
 
-
 @media (max-width: 1180px) {
   .itops-security-update-layout { grid-template-columns: 1fr; }
 }
@@ -9522,11 +9482,9 @@ body.itops-dashboard-page-active .router-content {
   .itops-risk-detail-mini-grid { grid-template-columns: 1fr; }
 }
 
-
 @media (max-width: 760px) {
   .itops-security-update-split { grid-template-columns: 1fr; }
 }
-
 
 /* Main dashboard simple wording + space usage */
 .itops-main-kpi-grid {
@@ -10170,7 +10128,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-main-health-card { min-height: 170px; }
 }
 
-
 /* FINAL: Header title and KPI cards use the coloured dashboard-card style from the reference image */
 .itops-pro-hero {
   padding: 24px 26px !important;
@@ -10365,7 +10322,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-main-kpi-grid { grid-template-columns: 1fr !important; }
 }
 
-
 /* Main dashboard: endpoint trend replaces duplicate device/update + risk panels */
 .itops-endpoint-trend-layout {
   display: grid;
@@ -10516,7 +10472,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-endpoint-trend-track { width: 100%; }
   .itops-endpoint-trend-values { justify-content: flex-start; }
 }
-
 
 /* Better main dashboard analytics charts */
 .main-analytics-panel .itops-pro-panel-head { margin-bottom: 12px; }
@@ -10764,7 +10719,6 @@ body.itops-dashboard-page-active .router-content {
   .itops-modern-column-chart { gap: 8px; }
 }
 
-
 /* Donut availability chart with hover */
 .itops-availability-donut-layout {
   min-height: 182px;
@@ -11011,7 +10965,6 @@ body.itops-dashboard-page-active .router-content {
   }
 }
 
-
 /* Availability donut custom color override: blue + purple, no red/green */
 .itops-availability-donut-card .online {
   stroke: #0ea5e9;
@@ -11052,7 +11005,6 @@ body.itops-dashboard-page-active .router-content {
   color: #92400e;
   background: #fef3c7;
 }
-
 
 /* Availability donut stronger contrast override */
 .itops-availability-donut-card .online {

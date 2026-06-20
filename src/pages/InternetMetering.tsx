@@ -24,7 +24,6 @@ import {
   Wifi,
   X,
 } from 'lucide-react';
-import clsx from 'clsx';
 
 import internetMeteringService from '../services/internetMeteringService';
 
@@ -261,7 +260,6 @@ body.internet-metering-page-active .settings-helper-card {
   background-color: rgba(255, 255, 255, 0.94) !important;
 }
 
-
 .internet-metering-page .settings-layout.internet-settings-layout {
   grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
 }
@@ -305,7 +303,6 @@ body.internet-metering-page-active .settings-helper-card {
   font-size: 0.82rem;
   padding: 0.75rem;
 }
-
 
 .internet-metering-page .settings-content {
   min-width: 0 !important;
@@ -445,7 +442,6 @@ body.internet-metering-page-active .settings-helper-card {
   }
 }
 `;
-
 
 function readInternetMeteringCache<T>(key: string): T | null {
   try {
@@ -701,28 +697,27 @@ function CompactPagination({ currentPage, totalPages, onPageChange, label, class
   };
 
   return (
-    <div className={clsx('uam-pagination global-style', className)}>
-      <div className="uam-page-summary">Page {formatNumber(safeCurrentPage)} of {formatNumber(safeTotalPages)}</div>
-      <div className="uam-page-status">{label}</div>
-      <div className="uam-pagination-controls global-style" aria-label={label}>
-        <button type="button" className="uam-page-icon" onClick={() => goToPage(1)} disabled={safeCurrentPage <= 1} aria-label="First page">
+    <div>
+      <div>Page {formatNumber(safeCurrentPage)} of {formatNumber(safeTotalPages)}</div>
+      <div>{label}</div>
+      <div aria-label={label}>
+        <button type="button" onClick={() => goToPage(1)} disabled={safeCurrentPage <= 1} aria-label="First page">
           <ChevronsLeft size={14} />
         </button>
-        <button type="button" className="uam-page-icon" onClick={() => goToPage(safeCurrentPage - 1)} disabled={safeCurrentPage <= 1} aria-label="Previous page">
+        <button type="button" onClick={() => goToPage(safeCurrentPage - 1)} disabled={safeCurrentPage <= 1} aria-label="Previous page">
           <ChevronLeft size={14} />
         </button>
-        <span className="uam-page-current">{formatNumber(safeCurrentPage)}</span>
-        <button type="button" className="uam-page-icon" onClick={() => goToPage(safeCurrentPage + 1)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Next page">
+        <span>{formatNumber(safeCurrentPage)}</span>
+        <button type="button" onClick={() => goToPage(safeCurrentPage + 1)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Next page">
           <ChevronRight size={14} />
         </button>
-        <button type="button" className="uam-page-icon" onClick={() => goToPage(safeTotalPages)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Last page">
+        <button type="button" onClick={() => goToPage(safeTotalPages)} disabled={safeCurrentPage >= safeTotalPages} aria-label="Last page">
           <ChevronsRight size={14} />
         </button>
       </div>
     </div>
   );
 }
-
 
 type ImSelectOption = {
   value: string;
@@ -839,14 +834,14 @@ function ImCustomSelect({
   }, [open, updateMenuPosition]);
 
   const menuNode = open && typeof document !== 'undefined' ? createPortal(
-    <div ref={menuRef} className="uam-filter-menu uam-filter-menu-portal setting-select-menu" style={menuStyle} role="listbox" aria-label={ariaLabel}>
+    <div ref={menuRef} role="listbox" aria-label={ariaLabel}>
       {options.map((option) => {
         const selectedOption = option.value === value;
         return (
           <button
             key={`${option.value}-${option.label}`}
             type="button"
-            className={clsx('uam-filter-option', selectedOption && 'selected')}
+
             role="option"
             aria-selected={selectedOption}
             onClick={() => {
@@ -855,7 +850,7 @@ function ImCustomSelect({
             }}
           >
             <span>{option.label}</span>
-            {selectedOption && <span className="uam-filter-check">✓</span>}
+            {selectedOption && <span>✓</span>}
           </button>
         );
       })}
@@ -864,11 +859,11 @@ function ImCustomSelect({
   ) : null;
 
   return (
-    <div className={clsx('uam-filter-dropdown setting-select-dropdown', open && 'open', className)}>
+    <div>
       <button
         ref={triggerRef}
         type="button"
-        className="uam-filter-trigger setting-select-trigger"
+
         aria-expanded={open}
         aria-label={ariaLabel}
         onClick={() => setOpen((current) => !current)}
@@ -922,19 +917,11 @@ function TreeNode({
   };
 
   return (
-    <div className="ema-sidebar-tree-branch">
-      <div className={clsx(
-        'ema-sidebar-tree-node',
-        `depth-${Math.min(level, 8)}`,
-        selected && 'is-selected is-active',
-        canExpand && 'is-expandable',
-        node.type === 'device' && 'is-device-node',
-        node.type === 'url' && 'is-url-node',
-        isRootNode && 'is-internet-root',
-      )}>
+    <div>
+      <div>
         <button
           type="button"
-          className="ema-sidebar-tree-toggle"
+
           onClick={async (event) => {
             event.stopPropagation();
             await loadAndToggle();
@@ -944,19 +931,19 @@ function TreeNode({
           {!isRootNode && canExpand ? open ? <ChevronDown size={14} /> : <ChevronRight size={14} /> : <span />}
         </button>
 
-        <button type="button" className="ema-sidebar-tree-main" onClick={handleMainClick} title={node.label}>
-          <span className="ema-sidebar-tree-icon">
+        <button type="button" onClick={handleMainClick} title={node.label}>
+          <span>
             <Icon size={15} />
           </span>
-          <span className="ema-sidebar-tree-label">{displayLabel}</span>
-          {!isRootNode && count > 0 && <span className="ema-sidebar-tree-count">{formatNumber(count)}</span>}
+          <span>{displayLabel}</span>
+          {!isRootNode && count > 0 && <span>{formatNumber(count)}</span>}
         </button>
 
         <span />
       </div>
 
       {open && Boolean(node.children?.length) && (
-        <div className="ema-sidebar-tree-children is-nested">
+        <div>
           {node.children?.map((child) => (
             <TreeNode
               key={child.id}
@@ -984,32 +971,32 @@ function DetailModal({ row, onClose }: { row: InternetUsageRow; onClose: () => v
   ];
 
   return (
-    <div className="user-modal-backdrop open">
-      <section className="user-modal advanced">
-        <div className="user-modal-head">
+    <div>
+      <section>
+        <div>
           <div>
-            <span className="section-tag">Internet Metering</span>
+            <span>Internet Metering</span>
             <h3>Internet Usage Detail</h3>
             <p>{row.domainName}</p>
           </div>
-          <button type="button" onClick={onClose} className="modal-close" aria-label="Close"><X size={18} /></button>
+          <button type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
-        <div className="user-modal-body content-body">
-          <div className="form-grid wide">
+        <div>
+          <div>
             {fields.map(([label, value]) => (
-              <label key={label} className="form-field">
+              <label key={label}>
                 <span>{label}:</span>
                 <strong>{value}</strong>
               </label>
             ))}
           </div>
-          <label className="form-field wide">
+          <label>
             <span>Full Record:</span>
-            <pre className="settings-helper-card mb-0 text-start overflow-auto">{JSON.stringify(row.raw ?? row, null, 2)}</pre>
+            <pre>{JSON.stringify(row.raw ?? row, null, 2)}</pre>
           </label>
         </div>
-        <div className="user-modal-foot">
-          <button type="button" className="soft-btn" onClick={onClose}>Close</button>
+        <div>
+          <button type="button" onClick={onClose}>Close</button>
         </div>
       </section>
     </div>
@@ -1135,7 +1122,6 @@ export default function InternetMetering() {
       if (requestId === orgLoadSeq.current) setTreeLoading(false);
     }
   }, []);
-
 
   const loadRootDeviceCount = useCallback(async () => {
     const cacheKey = 'internet-metering:root-device-count:v1';
@@ -1326,7 +1312,6 @@ export default function InternetMetering() {
   useEffect(() => {
     loadUrlTree();
   }, [loadUrlTree]);
-
 
   useEffect(() => {
     if (!toast) return;
@@ -1602,63 +1587,62 @@ export default function InternetMetering() {
 
   return (
     <>
-      <style>{INTERNET_METERING_PAGE_CSS}</style>
-      <main data-section="internet-metering" className="settings-module-root ema-settings-pro ema-module-root internet-metering-module internet-metering-page container-fluid p-3 p-xl-4">
+      <main data-section="internet-metering">
       {toast && (
-        <div className="settings-toast-layer">
-          <div className="settings-toast settings-toast-success">
-            <div className="settings-toast-icon">✓</div>
+        <div>
+          <div>
+            <div>✓</div>
             <div>
               <strong>Success</strong>
               <span>{toast}</span>
             </div>
-            <button type="button" className="settings-toast-close" onClick={() => setToast('')} aria-label="Dismiss toast"><X size={14} /></button>
+            <button type="button" onClick={() => setToast('')} aria-label="Dismiss toast"><X size={14} /></button>
           </div>
         </div>
       )}
 
-      <div className="settings-layout internet-settings-layout d-grid gap-3">
-        <aside className="settings-menu internet-left-panel ema-panel-surface">
-          <div className="panel-head">
+      <div>
+        <aside>
+          <div>
             <span>INTERNET METERING</span>
             <strong>Metering Control</strong>
             <small>Device scope and URL rules</small>
           </div>
 
           <nav
-            className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher"
+
             role="tablist"
             aria-label="Internet metering navigation"
           >
             <button
               type="button"
-              className={clsx('setting-btn', sidebarTab === 'organization' && 'active')}
+
               title="Scope - Branches and devices"
               onClick={() => {
                 setSidebarTab('organization');
                 setSidebarSearch('');
               }}
             >
-              <span className="setting-icon"><FolderOpen size={16} /></span>
+              <span><FolderOpen size={16} /></span>
               <span><strong>Scope</strong><small>Branch and device scope</small></span>
             </button>
             <button
               type="button"
-              className={clsx('setting-btn', sidebarTab === 'filters' && 'active')}
+
               title="Rules - Managed and restricted URLs"
               onClick={() => {
                 setSidebarTab('filters');
                 setSidebarSearch('');
               }}
             >
-              <span className="setting-icon"><Globe size={16} /></span>
+              <span><Globe size={16} /></span>
               <span><strong>Rules</strong><small>Managed and restricted URLs</small></span>
             </button>
           </nav>
 
-          <div className="ema-sidebar-content">
-            <div className="ema-sidebar-subpanel">
-              <div className="section-search ema-sidebar-field">
+          <div>
+            <div>
+              <div>
                 <Search size={15} />
                 <input
                   value={sidebarSearch}
@@ -1667,7 +1651,7 @@ export default function InternetMetering() {
                 />
               </div>
 
-              <div className="ema-sidebar-tree" aria-label={sidebarTab === 'filters' ? 'Internet rule tree' : 'Internet metering scope tree'}>
+              <div aria-label={sidebarTab === 'filters' ? 'Internet rule tree' : 'Internet metering scope tree'}>
                 {sidebarTab === 'organization' && (
                   <>
                     <TreeNode
@@ -1679,7 +1663,7 @@ export default function InternetMetering() {
                       defaultOpen
                     />
                     {sidebarSearch && !sidebarOrgTree.children?.length && sidebarOrgTree.id === orgRoot.id && (
-                      <div className="ema-sidebar-empty">No matching scope.</div>
+                      <div>No matching scope.</div>
                     )}
                   </>
                 )}
@@ -1687,9 +1671,9 @@ export default function InternetMetering() {
                 {sidebarTab === 'filters' && (
                   <>
                     <TreeNode node={sidebarDomainTree} selectedId={sidebarSelectedUrlId} onSelect={handleSelectUrlNode} rootDisplayLabel="All Domains" defaultOpen />
-                    {urlLoading && <div className="ema-sidebar-empty"><Loader2 className="me-2" size={14} /> Loading URL rules...</div>}
+                    {urlLoading && <div><Loader2 size={14} /> Loading URL rules...</div>}
                     {sidebarSearch && !sidebarDomainTree.children?.length && (
-                      <div className="ema-sidebar-empty">No matching domain rule.</div>
+                      <div>No matching domain rule.</div>
                     )}
                   </>
                 )}
@@ -1698,73 +1682,73 @@ export default function InternetMetering() {
           </div>
         </aside>
 
-        <section className="settings-content d-grid gap-3">
-          <div className="settings-hero hardware-hero internet-metering-hero ema-panel-surface">
-            <div className="internet-metering-hero-copy">
-              <span className="eyebrow">URL MANAGEMENT</span>
+        <section>
+          <div>
+            <div>
+              <span>URL MANAGEMENT</span>
               <h2>{usagePanelUrl ? 'Metering Results' : 'Internet Metering'}</h2>
               <p>Scope: {selectedScopeLabel} · Domain: {selectedUrlLabel}</p>
             </div>
-            <div className="hardware-hero-score internet-metering-hero-score">
-              <div className="hardware-kpi-card internet-metering-kpi-card">
-                <div className="hardware-kpi-content internet-metering-kpi-content">
-                  <span className="hardware-kpi-label internet-metering-kpi-label">Records</span>
-                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatNumber(stats.totalRecords || totalRecords || filteredRows.length)}</strong>
-                  <small className="hardware-kpi-note internet-metering-kpi-note">Usage rows</small>
+            <div>
+              <div>
+                <div>
+                  <span>Records</span>
+                  <strong>{formatNumber(stats.totalRecords || totalRecords || filteredRows.length)}</strong>
+                  <small>Usage rows</small>
                 </div>
               </div>
-              <div className="hardware-kpi-card internet-metering-kpi-card">
-                <div className="hardware-kpi-content internet-metering-kpi-content">
-                  <span className="hardware-kpi-label internet-metering-kpi-label">Domains</span>
-                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatNumber(stats.totalDomains || visibleUrlRows.length)}</strong>
-                  <small className="hardware-kpi-note internet-metering-kpi-note">Monitored rules</small>
+              <div>
+                <div>
+                  <span>Domains</span>
+                  <strong>{formatNumber(stats.totalDomains || visibleUrlRows.length)}</strong>
+                  <small>Monitored rules</small>
                 </div>
               </div>
-              <div className="hardware-kpi-card internet-metering-kpi-card">
-                <div className="hardware-kpi-content internet-metering-kpi-content">
-                  <span className="hardware-kpi-label internet-metering-kpi-label">Usage Time</span>
-                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatDuration(stats.totalUsageSeconds)}</strong>
-                  <small className="hardware-kpi-note internet-metering-kpi-note">Total duration</small>
+              <div>
+                <div>
+                  <span>Usage Time</span>
+                  <strong>{formatDuration(stats.totalUsageSeconds)}</strong>
+                  <small>Total duration</small>
                 </div>
               </div>
-              <div className="hardware-kpi-card internet-metering-kpi-card">
-                <div className="hardware-kpi-content internet-metering-kpi-content">
-                  <span className="hardware-kpi-label internet-metering-kpi-label">Access Count</span>
-                  <strong className="hardware-kpi-value internet-metering-kpi-value">{formatNumber(stats.totalCounts)}</strong>
-                  <small className="hardware-kpi-note internet-metering-kpi-note">Total hits</small>
+              <div>
+                <div>
+                  <span>Access Count</span>
+                  <strong>{formatNumber(stats.totalCounts)}</strong>
+                  <small>Total hits</small>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="content-shell ema-panel-surface">
-            <div className="content-head d-flex flex-wrap align-items-start justify-content-between gap-3 p-3 pb-2">
+          <div>
+            <div>
               <div>
                 <h3>{usagePanelUrl ? 'Metering Results' : 'URL List'}</h3>
                 <p>{usagePanelUrl ? `${selectedScopeLabel} · ${usagePanelUrl.label}` : `${urlTotalRecords > 0 ? formatNumber(urlTotalRecords) : formatNumber(visibleUrlRows.length)} rules available`}</p>
               </div>
-              <div className="content-actions">
-                <button type="button" onClick={() => setPendingMeteringAction({ action: 'start', node: selectedScope })} disabled={meteringBusy || selectedScopeRunning} className="primary-btn">
-                  {meteringBusy ? <Loader2 size={14} className="animate-spin" /> : <Wifi size={14} />} Start
+              <div>
+                <button type="button" onClick={() => setPendingMeteringAction({ action: 'start', node: selectedScope })} disabled={meteringBusy || selectedScopeRunning}>
+                  {meteringBusy ? <Loader2 size={14} /> : <Wifi size={14} />} Start
                 </button>
-                <button type="button" onClick={() => setPendingMeteringAction({ action: 'stop', node: selectedScope })} disabled={meteringBusy || !selectedScopeRunning} className="danger-btn">
-                  {meteringBusy ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} Stop
+                <button type="button" onClick={() => setPendingMeteringAction({ action: 'stop', node: selectedScope })} disabled={meteringBusy || !selectedScopeRunning}>
+                  {meteringBusy ? <Loader2 size={14} /> : <X size={14} />} Stop
                 </button>
-                <button type="button" onClick={collectResult} disabled={collecting || meteringBusy} className="soft-btn">
-                  {collecting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Collect
+                <button type="button" onClick={collectResult} disabled={collecting || meteringBusy}>
+                  {collecting ? <Loader2 size={14} /> : <Send size={14} />} Collect
                 </button>
-                <button type="button" onClick={() => usagePanelUrl ? setUsagePanelUrl(null) : openResultsLog()} className="soft-btn">
+                <button type="button" onClick={() => usagePanelUrl ? setUsagePanelUrl(null) : openResultsLog()}>
                   <FileText size={14} /> {usagePanelUrl ? 'URL List' : 'Results'}
                 </button>
-                <button type="button" onClick={usagePanelUrl ? () => loadMetering({ force: true }) : loadUrlTree} disabled={usagePanelUrl ? loading : urlLoading} className="soft-btn">
+                <button type="button" onClick={usagePanelUrl ? () => loadMetering({ force: true }) : loadUrlTree} disabled={usagePanelUrl ? loading : urlLoading}>
                   <RefreshCw size={14} /> Refresh
                 </button>
-                <button type="button" onClick={exportCsv} disabled={filteredRows.length === 0} className="soft-btn"><Download size={14} /> Export</button>
+                <button type="button" onClick={exportCsv} disabled={filteredRows.length === 0}><Download size={14} /> Export</button>
               </div>
             </div>
 
-            <div className="user-access-commandbar align-items-center">
-              <label className="section-search user-search-inline">
+            <div>
+              <label>
                 <Search size={15} />
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search domain, device/user, Rule ID or date..." />
               </label>
@@ -1799,18 +1783,18 @@ export default function InternetMetering() {
               )}
             </div>
 
-            <div className="content-body p-3 pt-2">
+            <div>
               {error && (
-                <div className="settings-helper-card is-error d-flex align-items-start justify-content-between gap-3 mb-3">
-                  <span><AlertCircle size={14} className="me-2" />{error}</span>
-                  <button type="button" className="mini-btn icon-only" onClick={() => setError('')}><X size={13} /></button>
+                <div>
+                  <span><AlertCircle size={14} />{error}</span>
+                  <button type="button" onClick={() => setError('')}><X size={13} /></button>
                 </div>
               )}
 
               {usagePanelUrl ? (
                 <>
-                  <div className="pricing-table-card table-responsive">
-                    <table className="table table-hover align-middle mb-0">
+                  <div>
+                    <table>
                       <thead>
                         <tr>
                           <th>No.</th>
@@ -1820,27 +1804,27 @@ export default function InternetMetering() {
                           <th>Used Time</th>
                           <th>Access Count</th>
                           <th>Date</th>
-                          <th className="text-end">Action</th>
+                          <th>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {loading && (
-                          <tr><td colSpan={8}><div className="settings-helper-card text-center py-4"><Loader2 size={18} className="me-2 animate-spin" /> Loading records...</div></td></tr>
+                          <tr><td colSpan={8}><div><Loader2 size={18} /> Loading records...</div></td></tr>
                         )}
                         {!loading && filteredRows.map((row, index) => (
                           <tr key={`${row.id}-${row.domainName}-${row.device}-${row.date}`}>
-                            <td><span className="row-index-pill">{formatRowNumber((page - 1) * limit + index + 1)}</span></td>
+                            <td><span>{formatRowNumber((page - 1) * limit + index + 1)}</span></td>
                             <td><strong>{row.domainName}</strong></td>
                             <td>{row.device || '-'}</td>
                             <td>{row.urlMainIdn || '-'}</td>
                             <td>{formatDuration(row.usedTime)}</td>
                             <td>{formatNumber(row.counts)}</td>
                             <td>{row.date || '-'}</td>
-                            <td className="text-end"><button type="button" onClick={() => setDetailRow(row)} className="mini-btn"><Eye size={13} /> Detail</button></td>
+                            <td><button type="button" onClick={() => setDetailRow(row)}><Eye size={13} /> Detail</button></td>
                           </tr>
                         ))}
                         {!loading && filteredRows.length === 0 && (
-                          <tr><td colSpan={8}><div className="settings-helper-card text-center py-4"><strong>No metering records found</strong><span>Use Start Metering or Collect Result, then refresh after the job completes.</span></div></td></tr>
+                          <tr><td colSpan={8}><div><strong>No metering records found</strong><span>Use Start Metering or Collect Result, then refresh after the job completes.</span></div></td></tr>
                         )}
                       </tbody>
                     </table>
@@ -1849,8 +1833,8 @@ export default function InternetMetering() {
                 </>
               ) : (
                 <>
-                  <div className="form-grid mb-3">
-                    <label className="form-field">
+                  <div>
+                    <label>
                       <span>Rule Type:</span>
                       <ImCustomSelect
                         value={String(urlEntryType)}
@@ -1859,35 +1843,35 @@ export default function InternetMetering() {
                         ariaLabel="URL rule type"
                       />
                     </label>
-                    <label className="form-field">
+                    <label>
                       <span>URL / Domain:</span>
-                      <input value={newUrl} onChange={(event) => setNewUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveUrl(); }} placeholder="example.com" className="setting-input" />
+                      <input value={newUrl} onChange={(event) => setNewUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveUrl(); }} placeholder="example.com" />
                     </label>
-                    <label className="form-field justify-content-end">
+                    <label>
                       <span>&nbsp;</span>
-                      <button type="button" onClick={saveUrl} disabled={urlLoading || !newUrl.trim()} className="primary-btn"><Plus size={14} /> Add URL</button>
+                      <button type="button" onClick={saveUrl} disabled={urlLoading || !newUrl.trim()}><Plus size={14} /> Add URL</button>
                     </label>
                   </div>
 
-                  <div className="pricing-table-card table-responsive">
-                    <table className="table table-hover align-middle mb-0">
+                  <div>
+                    <table>
                       <thead>
                         <tr>
                           <th>No.</th>
                           <th>URL / Domain</th>
                           <th>Status</th>
-                          <th className="text-end">Rule ID</th>
-                          <th className="text-end">Action</th>
+                          <th>Rule ID</th>
+                          <th>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {pagedUrlRows.map((node, index) => (
-                          <tr key={node.id} onClick={() => { handleSelectUrlNode(node); openResultsLog(node); }} className={clsx(selectedUrl.id === node.id && 'table-primary')}>
-                            <td><span className="row-index-pill">{formatRowNumber((urlPage - 1) * URL_RULE_PAGE_SIZE + index + 1)}</span></td>
+                          <tr key={node.id} onClick={() => { handleSelectUrlNode(node); openResultsLog(node); }}>
+                            <td><span>{formatRowNumber((urlPage - 1) * URL_RULE_PAGE_SIZE + index + 1)}</span></td>
                             <td><strong>{node.label}</strong></td>
-                            <td><span className={clsx('user-pill', node.restrict === 1 ? 'locked' : 'active')}>{node.restrict === 1 ? 'Restricted' : 'Managed'}</span></td>
-                            <td className="text-end">{node.urlMainIdn || '-'}</td>
-                            <td className="text-end" onClick={(event) => event.stopPropagation()}>
+                            <td><span>{node.restrict === 1 ? 'Restricted' : 'Managed'}</span></td>
+                            <td>{node.urlMainIdn || '-'}</td>
+                            <td onClick={(event) => event.stopPropagation()}>
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -1899,7 +1883,7 @@ export default function InternetMetering() {
                                   const y = Math.min(Math.max(12, rect.bottom + 8), window.innerHeight - menuHeight - 12);
                                   setActionMenuId((value) => value?.node.id === node.id ? null : { node, x, y });
                                 }}
-                                className="mini-btn icon-only"
+
                                 aria-label="Open URL actions"
                               >
                                 <MoreVertical size={14} />
@@ -1908,7 +1892,7 @@ export default function InternetMetering() {
                           </tr>
                         ))}
                         {pagedUrlRows.length === 0 && (
-                          <tr><td colSpan={5}><div className="settings-helper-card text-center py-4">No URL rule found.</div></td></tr>
+                          <tr><td colSpan={5}><div>No URL rule found.</div></td></tr>
                         )}
                       </tbody>
                     </table>
@@ -1922,56 +1906,54 @@ export default function InternetMetering() {
       </div>
 
       {actionMenuId && (
-        <div className="user-modal-backdrop open" onClick={() => setActionMenuId(null)} style={{ background: 'transparent', backdropFilter: 'none', pointerEvents: 'auto' }}>
+        <div onClick={() => setActionMenuId(null)}>
           <div
-            className="settings-confirm-modal"
-            style={{ position: 'fixed', left: actionMenuId.x, top: actionMenuId.y, width: 230, padding: '0.75rem' }}
+
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="mb-2">URL Actions</h3>
-            <div className="d-grid gap-2">
-              <button type="button" className="soft-btn justify-content-start" onClick={() => { openResultsLog(actionMenuId.node); setActionMenuId(null); }}>View Results</button>
+            <h3>URL Actions</h3>
+            <div>
+              <button type="button" onClick={() => { openResultsLog(actionMenuId.node); setActionMenuId(null); }}>View Results</button>
               {actionMenuId.node.restrict === 1 ? (
-                <button type="button" className="soft-btn justify-content-start" onClick={() => { setPendingUrlAction({ action: 'manage', node: actionMenuId.node }); setActionMenuId(null); }}>Set as Managed</button>
+                <button type="button" onClick={() => { setPendingUrlAction({ action: 'manage', node: actionMenuId.node }); setActionMenuId(null); }}>Set as Managed</button>
               ) : (
-                <button type="button" className="danger-btn justify-content-start" onClick={() => { setPendingUrlAction({ action: 'restrict', node: actionMenuId.node }); setActionMenuId(null); }}>Set as Restricted</button>
+                <button type="button" onClick={() => { setPendingUrlAction({ action: 'restrict', node: actionMenuId.node }); setActionMenuId(null); }}>Set as Restricted</button>
               )}
-              <button type="button" className="danger-btn justify-content-start" onClick={() => { setPendingUrlAction({ action: 'remove', node: actionMenuId.node }); setActionMenuId(null); }}>Remove</button>
+              <button type="button" onClick={() => { setPendingUrlAction({ action: 'remove', node: actionMenuId.node }); setActionMenuId(null); }}>Remove</button>
             </div>
           </div>
         </div>
       )}
 
       {scopeMenu && (
-        <div className="user-modal-backdrop open" onClick={() => setScopeMenu(null)} style={{ background: 'transparent', backdropFilter: 'none', pointerEvents: 'auto' }}>
+        <div onClick={() => setScopeMenu(null)}>
           <div
-            className="settings-confirm-modal"
-            style={{ position: 'fixed', left: Math.min(Math.max(12, scopeMenu.x), window.innerWidth - 270), top: Math.min(Math.max(12, scopeMenu.y), window.innerHeight - 230), width: 250, padding: '0.75rem' }}
+
             onClick={(event) => event.stopPropagation()}
           >
             <h3>{scopeMenu.node.label}</h3>
             <p>{getScopeTypeLabel(scopeMenu.node)}</p>
-            <div className="d-grid gap-2 mt-3">
-              <button type="button" className="primary-btn justify-content-start" onClick={() => { setPendingMeteringAction({ action: 'start', node: scopeMenu.node }); setScopeMenu(null); }} disabled={isScopeRunning(scopeMenu.node)}>Start Metering</button>
-              <button type="button" className="soft-btn justify-content-start" onClick={() => { setPendingMeteringAction({ action: 'collect', node: scopeMenu.node }); setScopeMenu(null); }}>Collect Result</button>
-              <button type="button" className="danger-btn justify-content-start" onClick={() => { setPendingMeteringAction({ action: 'stop', node: scopeMenu.node }); setScopeMenu(null); }} disabled={!isScopeRunning(scopeMenu.node)}>Stop Metering</button>
+            <div>
+              <button type="button" onClick={() => { setPendingMeteringAction({ action: 'start', node: scopeMenu.node }); setScopeMenu(null); }} disabled={isScopeRunning(scopeMenu.node)}>Start Metering</button>
+              <button type="button" onClick={() => { setPendingMeteringAction({ action: 'collect', node: scopeMenu.node }); setScopeMenu(null); }}>Collect Result</button>
+              <button type="button" onClick={() => { setPendingMeteringAction({ action: 'stop', node: scopeMenu.node }); setScopeMenu(null); }} disabled={!isScopeRunning(scopeMenu.node)}>Stop Metering</button>
             </div>
           </div>
         </div>
       )}
 
       {pendingMeteringAction && (
-        <div className="settings-confirm-backdrop">
-          <div className="settings-confirm-modal">
+        <div>
+          <div>
             <h3>Confirm metering action</h3>
             <p>
               {pendingMeteringAction.action === 'start' ? 'Start metering for' : pendingMeteringAction.action === 'stop' ? 'Stop metering for' : 'Collect result for'} <strong>{pendingMeteringAction.node.label}</strong>
             </p>
             <p>{getScopeTypeLabel(pendingMeteringAction.node)}</p>
-            <div className="settings-confirm-actions">
-              <button type="button" onClick={() => setPendingMeteringAction(null)} disabled={meteringBusy} className="soft-btn">Cancel</button>
-              <button type="button" onClick={confirmMeteringAction} disabled={meteringBusy} className={clsx(pendingMeteringAction.action === 'stop' ? 'danger-btn' : 'primary-btn')}>
-                {meteringBusy && <Loader2 size={14} className="animate-spin" />} Confirm
+            <div>
+              <button type="button" onClick={() => setPendingMeteringAction(null)} disabled={meteringBusy}>Cancel</button>
+              <button type="button" onClick={confirmMeteringAction} disabled={meteringBusy}>
+                {meteringBusy && <Loader2 size={14} />} Confirm
               </button>
             </div>
           </div>
@@ -1979,13 +1961,13 @@ export default function InternetMetering() {
       )}
 
       {pendingUrlAction && (
-        <div className="settings-confirm-backdrop">
-          <div className="settings-confirm-modal">
+        <div>
+          <div>
             <h3>Confirm URL action</h3>
             <p>{pendingUrlAction.node.url}</p>
-            <div className="settings-confirm-actions">
-              <button type="button" onClick={() => setPendingUrlAction(null)} className="soft-btn">Cancel</button>
-              <button type="button" onClick={applyUrlAction} className={clsx(pendingUrlAction.action === 'remove' || pendingUrlAction.action === 'restrict' ? 'danger-btn' : 'primary-btn')}>Confirm</button>
+            <div>
+              <button type="button" onClick={() => setPendingUrlAction(null)}>Cancel</button>
+              <button type="button" onClick={applyUrlAction}>Confirm</button>
             </div>
           </div>
         </div>

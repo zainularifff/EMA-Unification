@@ -48,7 +48,7 @@ function AppButton({
   variant = "primary",
   loading = false,
   leftIcon,
-  className = "",
+,
   disabled,
   children,
   type = "button",
@@ -57,11 +57,11 @@ function AppButton({
   return (
     <button
       type={type}
-      className={`${getGlobalButtonClass(variant)} ${className}`.trim()}
+
       disabled={disabled || loading}
       {...props}
     >
-      {loading ? <Loader2 className="task-spin" size={15} /> : leftIcon}
+      {loading ? <Loader2 size={15} /> : leftIcon}
       <span>{children}</span>
     </button>
   );
@@ -81,14 +81,14 @@ function AppToast({ show, tone = "info", title, message, onClose }: AppToastProp
   const icon = tone === "success" ? "✓" : tone === "error" ? "!" : "i";
 
   return (
-    <div className="settings-toast-layer task-toast-layer">
-      <div className={`settings-toast settings-toast-${tone} task-toast task-toast-${tone}`} role="status" aria-live="polite">
-        <div className="settings-toast-icon" aria-hidden="true">{icon}</div>
+    <div>
+      <div role="status" aria-live="polite">
+        <div aria-hidden="true">{icon}</div>
         <div>
           <strong>{title || "Notification"}</strong>
           <span>{message}</span>
         </div>
-        <button type="button" className="settings-toast-close" aria-label="Close" onClick={onClose}>
+        <button type="button" aria-label="Close" onClick={onClose}>
           ×
         </button>
       </div>
@@ -116,7 +116,7 @@ function AppPagination({
   pageSize = 10,
   showInfo = false,
   disabled = false,
-  className = "",
+,
   onPageChange,
 }: AppPaginationProps) {
   const safeTotalPages = Math.max(totalPages, 1);
@@ -125,16 +125,16 @@ function AppPagination({
   const lastItem = totalItems ? Math.min(firstItem + pageSize - 1, totalItems) : 0;
 
   return (
-    <div className={`uam-pagination global-style task-settings-pagination ${className}`.trim()}>
-      <div className="uam-page-summary">
+    <div>
+      <div>
         {showInfo ? `Showing ${firstItem}-${lastItem} of ${totalItems}` : `Page ${safeCurrentPage} of ${safeTotalPages}`}
       </div>
-      <div className="uam-pagination-controls global-style" aria-label="Task List pagination">
-        <button className="uam-page-icon" type="button" onClick={() => onPageChange(1)} disabled={disabled || safeCurrentPage === 1} aria-label="First page">«</button>
-        <button className="uam-page-icon" type="button" onClick={() => onPageChange(Math.max(1, safeCurrentPage - 1))} disabled={disabled || safeCurrentPage === 1} aria-label="Previous page">‹</button>
-        <span className="uam-page-current">{safeCurrentPage}</span>
-        <button className="uam-page-icon" type="button" onClick={() => onPageChange(Math.min(safeTotalPages, safeCurrentPage + 1))} disabled={disabled || safeCurrentPage === safeTotalPages} aria-label="Next page">›</button>
-        <button className="uam-page-icon" type="button" onClick={() => onPageChange(safeTotalPages)} disabled={disabled || safeCurrentPage === safeTotalPages} aria-label="Last page">»</button>
+      <div aria-label="Task List pagination">
+        <button type="button" onClick={() => onPageChange(1)} disabled={disabled || safeCurrentPage === 1} aria-label="First page">«</button>
+        <button type="button" onClick={() => onPageChange(Math.max(1, safeCurrentPage - 1))} disabled={disabled || safeCurrentPage === 1} aria-label="Previous page">‹</button>
+        <span>{safeCurrentPage}</span>
+        <button type="button" onClick={() => onPageChange(Math.min(safeTotalPages, safeCurrentPage + 1))} disabled={disabled || safeCurrentPage === safeTotalPages} aria-label="Next page">›</button>
+        <button type="button" onClick={() => onPageChange(safeTotalPages)} disabled={disabled || safeCurrentPage === safeTotalPages} aria-label="Last page">»</button>
       </div>
     </div>
   );
@@ -157,19 +157,19 @@ function AppModal({ show, size, onHide, eyebrow, title, footer, children }: AppM
 
   return (
     <>
-      <div className="modal-backdrop fade show" />
-      <div className="modal fade show d-block app-modal task-confirm-modal" role="dialog" aria-modal="true" tabIndex={-1}>
-        <div className={`modal-dialog modal-dialog-centered ${sizeClass}`.trim()}>
-          <div className="modal-content">
-            <div className="modal-header">
+      <div />
+      <div role="dialog" aria-modal="true" tabIndex={-1}>
+        <div>
+          <div>
+            <div>
               <div>
-                {eyebrow ? <div className="section-tag mb-1">{eyebrow}</div> : null}
-                <h5 className="modal-title mb-0">{title}</h5>
+                {eyebrow ? <div>{eyebrow}</div> : null}
+                <h5>{title}</h5>
               </div>
-              <button type="button" className="btn-close" aria-label="Close" onClick={onHide} />
+              <button type="button" aria-label="Close" onClick={onHide} />
             </div>
-            <div className="modal-body">{children}</div>
-            {footer ? <div className="modal-footer">{footer}</div> : null}
+            <div>{children}</div>
+            {footer ? <div>{footer}</div> : null}
           </div>
         </div>
       </div>
@@ -332,7 +332,6 @@ function getStateClass(state: TaskState) {
   return `is-${String(state || "unknown").toLowerCase().replace(/\s+/g, "-")}`;
 }
 
-
 function normalizeBoolean(value: unknown, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
   if (typeof value === "boolean") return value;
@@ -364,7 +363,6 @@ function getTaskActionDisabledTitle(action: TaskAction, task: TaskItem) {
 
   return task.actionDisabledReason || "Action disabled because this task is already completed, stopped, or cancelled.";
 }
-
 
 function getSortValue(task: TaskItem, key: SortKey) {
   if (key === "id") return task.id;
@@ -851,7 +849,7 @@ const TaskList = () => {
   };
 
   const sortButton = (label: string, key: SortKey) => (
-    <button type="button" className="task-clean-sort" onClick={() => handleSort(key)}>
+    <button type="button" onClick={() => handleSort(key)}>
       <span>{label}</span>
       <i aria-hidden="true">{renderSortIndicator(key)}</i>
     </button>
@@ -867,28 +865,28 @@ const TaskList = () => {
         onClose={() => setToast(null)}
       />
 
-      <main className="settings-module-root ema-settings-pro ema-module-root task-list-module container-fluid p-3 p-xl-4" data-section="task-list">
+      <main data-section="task-list">
         <input aria-hidden="true" id="globalSearch" type="hidden" />
         <button hidden id="themeBtn" type="button">
           <span id="themeLabel">Dark Mode</span>
         </button>
 
-        <div className="settings-layout task-list-layout d-grid gap-3">
-          <section className="settings-content d-grid gap-3 task-list-settings-content">
-            <div className="settings-hero task-list-hero ema-panel-surface">
+        <div>
+          <section>
+            <div>
               <div>
-                <span className="eyebrow">OPERATIONS CONTROL</span>
+                <span>OPERATIONS CONTROL</span>
                 <h2>Task List</h2>
                 <p>Monitor command jobs, task execution state, endpoint delivery status and operational controls in one Settings-style workspace.</p>
               </div>
 
-              <div className="settings-score task-hero-score task-hero-score-balanced" aria-label="Task summary">
-                <button type="button" className={`score-box task-score-box ${state === "All" ? "active" : ""}`} onClick={() => setState("All")}>
+              <div aria-label="Task summary">
+                <button type="button" onClick={() => setState("All")}>
                   <span>Total Tasks</span>
                   <strong>{taskStats.total}</strong>
                   <small>{filteredTasks.length} visible records</small>
                 </button>
-                <button type="button" className={`score-box task-score-box ${state === "Running" ? "active" : ""}`} onClick={() => setState("Running")}>
+                <button type="button" onClick={() => setState("Running")}>
                   <span>Running</span>
                   <strong>{taskStats.running}</strong>
                   <small>Active execution</small>
@@ -896,9 +894,9 @@ const TaskList = () => {
               </div>
             </div>
 
-            <section className="content-shell task-list-content-shell task-list-settings-table-shell ema-panel-surface">
-              <div className="content-toolbar task-list-settings-toolbar">
-                <label className="section-search task-list-search">
+            <section>
+              <div>
+                <label>
                   <Search size={15} />
                   <input
                     value={searchTerm}
@@ -906,110 +904,110 @@ const TaskList = () => {
                     placeholder="Search job ID, command, task, state or ordered by..."
                   />
                   {searchTerm ? (
-                    <button type="button" className="task-search-clear" onClick={() => setSearchTerm("")} aria-label="Clear search">
+                    <button type="button" onClick={() => setSearchTerm("")} aria-label="Clear search">
                       <X size={14} />
                     </button>
                   ) : null}
                 </label>
 
-                <div className="content-actions toolbar-actions task-list-settings-actions">
-                  <button className="soft-btn task-inline-button" type="button" onClick={loadTasks} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="task-spin" size={15} /> : <RefreshCw size={15} />}
+                <div>
+                  <button type="button" onClick={loadTasks} disabled={isLoading}>
+                    {isLoading ? <Loader2 size={15} /> : <RefreshCw size={15} />}
                     <span>{isLoading ? "Loading..." : "Refresh"}</span>
                   </button>
-                  <button className="primary-btn task-inline-button" type="button" onClick={exportTasks} disabled={!filteredTasks.length}>
+                  <button type="button" onClick={exportTasks} disabled={!filteredTasks.length}>
                     <Download size={15} />
                     <span>Export CSV</span>
                   </button>
                 </div>
               </div>
 
-              <div className="task-list-filter-strip">
-                <label className="form-field">
+              <div>
+                <label>
                   <span>Classification</span>
-                  <select className="setting-select form-select" value={classification} onChange={(event) => setClassification(event.target.value)}>
+                  <select value={classification} onChange={(event) => setClassification(event.target.value)}>
                     {classificationOptions.map((item) => <option key={item.code} value={item.label}>{item.label}</option>)}
                   </select>
                 </label>
 
-                <label className="form-field">
+                <label>
                   <span>State</span>
-                  <select className="setting-select form-select" value={state} onChange={(event) => setState(event.target.value)}>
+                  <select value={state} onChange={(event) => setState(event.target.value)}>
                     {stateOptions.map((item) => <option key={item.code} value={item.label}>{item.label}</option>)}
                   </select>
                 </label>
 
-                <label className="form-field">
+                <label>
                   <span>From</span>
-                  <input className="setting-input form-control" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+                  <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
                 </label>
 
-                <label className="form-field task-page-size-control compact">
+                <label>
                   <span>Rows</span>
-                  <select className="setting-select form-select" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+                  <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
                     {pageSizeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                   </select>
                 </label>
 
-                <div className="task-toolbar-actions settings-task-filter-actions">
-                  <button className="soft-btn task-inline-button" type="button" onClick={resetFilters} disabled={!hasFilters}>
+                <div>
+                  <button type="button" onClick={resetFilters} disabled={!hasFilters}>
                     <X size={14} />
                     <span>Reset</span>
                   </button>
-                  <button className="primary-btn task-inline-button" type="button" onClick={loadTasks} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="task-spin" size={15} /> : <RefreshCw size={15} />}
+                  <button type="button" onClick={loadTasks} disabled={isLoading}>
+                    {isLoading ? <Loader2 size={15} /> : <RefreshCw size={15} />}
                     <span>Apply</span>
                   </button>
                 </div>
               </div>
 
-              <div className="content-body task-list-content-body settings-task-body">
+              <div>
                 {errorMessage && (
-                  <div className="settings-inline-alert error task-api-error">
+                  <div>
                     <AlertCircle size={18} />
                     <span>{errorMessage}</span>
                   </div>
                 )}
 
-                <div className="task-table-utility-row">
-                  <div className="uam-pagination-info">
+                <div>
+                  <div>
                     Showing <strong>{pageStart}-{pageEnd}</strong> of <strong>{filteredTasks.length}</strong> Task List records
                   </div>
-                  <div className="task-table-state-summary" aria-label="Task quick summary">
+                  <div aria-label="Task quick summary">
                     <span>Completed <strong>{taskStats.transferred}</strong></span>
                     <span>Transferring <strong>{taskStats.transferring}</strong></span>
                     <span>Stopped <strong>{taskStats.stopped}</strong></span>
                   </div>
                 </div>
 
-                <div className="user-access-table advanced clean-table task-standard-table">
-                  <div className="user-row head advanced clean-table-row task-standard-row">
-                    <div className="user-cell">No</div>
-                    <div className="user-cell">{sortButton("Job", "id")}</div>
-                    <div className="user-cell">{sortButton("Classification", "classification")}</div>
-                    <div className="user-cell">{sortButton("State", "state")}</div>
-                    <div className="user-cell">{sortButton("Schedule", "startTime")}</div>
-                    <div className="user-cell">{sortButton("Ordered By", "orderedBy")}</div>
-                    <div className="user-cell">Action</div>
+                <div>
+                  <div>
+                    <div>No</div>
+                    <div>{sortButton("Job", "id")}</div>
+                    <div>{sortButton("Classification", "classification")}</div>
+                    <div>{sortButton("State", "state")}</div>
+                    <div>{sortButton("Schedule", "startTime")}</div>
+                    <div>{sortButton("Ordered By", "orderedBy")}</div>
+                    <div>Action</div>
                   </div>
 
-                  {isLoading && <div className="settings-empty-state task-empty-state"><Loader2 className="task-spin" size={18} /> Loading task records...</div>}
-                  {!isLoading && filteredTasks.length === 0 && <div className="settings-empty-state task-empty-state">No task records available.</div>}
+                  {isLoading && <div><Loader2 size={18} /> Loading task records...</div>}
+                  {!isLoading && filteredTasks.length === 0 && <div>No task records available.</div>}
 
                   {!isLoading && paginatedTasks.map((task, index) => (
                     <div
-                      className={`user-row advanced clean-table-row task-standard-row ${selectedTask?.id === task.id ? "is-selected" : ""}`}
+
                       key={task.id}
                       onClick={() => openTaskDetails(task.id)}
                     >
-                      <div className="user-cell row-number">
-                        <span className="row-index-pill">{String(pageStart + index).padStart(2, "0")}</span>
+                      <div>
+                        <span>{String(pageStart + index).padStart(2, "0")}</span>
                       </div>
-                      <div className="user-cell">
-                        <div className="task-job-cell">
+                      <div>
+                        <div>
                           <button
                             type="button"
-                            className="task-job-id-pill"
+
                             onClick={(event) => {
                               event.stopPropagation();
                               openTaskDetails(task.id);
@@ -1024,33 +1022,33 @@ const TaskList = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="user-cell">
-                        <div className="task-classification-cell">
+                      <div>
+                        <div>
                           <strong>{task.classification}</strong>
                         </div>
                       </div>
-                      <div className="user-cell">
-                        <div className="task-state-stack clean">
-                          <span className={`task-status-pill ${getStateClass(task.state)}`}>{task.state}</span>
+                      <div>
+                        <div>
+                          <span>{task.state}</span>
                           {/* {task.rawState && task.rawState !== task.state ? <small>raw: {task.rawState}</small> : null} 
-                          <div className="task-mini-progress" aria-label={`Completion ${task.completionRate}%`}>
-                            <progress className="task-progress-native" value={Math.min(100, Math.max(0, task.completionRate))} max={100} />
+                          <div aria-label={`Completion ${task.completionRate}%`}>
+                            <progress value={Math.min(100, Math.max(0, task.completionRate))} max={100} />
                           </div> */}
                         </div>
                       </div>
-                      <div className="user-cell">
-                        <div className="task-schedule-cell">
+                      <div>
+                        <div>
                           <strong>{task.startTime || "-"}</strong>
                           <small>{task.endTime && task.endTime !== "-" ? task.endTime : "No end time"}</small>
                         </div>
                       </div>
-                      <div className="user-cell">
-                        <span className="muted-cell">{task.orderedBy || "-"}</span>
+                      <div>
+                        <span>{task.orderedBy || "-"}</span>
                       </div>
-                      <div className="user-cell">
-                        <div className="row-actions user-row-action-wrap clean task-clean-actions" onClick={(event) => event.stopPropagation()}>
+                      <div>
+                        <div onClick={(event) => event.stopPropagation()}>
                           <button
-                            className="mini-btn icon-only task-action stop"
+
                             type="button"
                             title={getTaskActionDisabledTitle("stop", task)}
                             aria-label={getTaskActionDisabledTitle("stop", task)}
@@ -1060,7 +1058,7 @@ const TaskList = () => {
                             <Square size={14} />
                           </button>
                           <button
-                            className="mini-btn icon-only task-action cancel"
+
                             type="button"
                             title={getTaskActionDisabledTitle("cancel", task)}
                             aria-label={getTaskActionDisabledTitle("cancel", task)}
@@ -1070,7 +1068,7 @@ const TaskList = () => {
                             <X size={14} />
                           </button>
                           <button
-                            className="mini-btn icon-only delete task-action delete"
+
                             type="button"
                             title={getTaskActionDisabledTitle("delete", task)}
                             aria-label={getTaskActionDisabledTitle("delete", task)}
@@ -1132,10 +1130,10 @@ function TaskProcedureStatus({ task, progress }: { task: TaskItem | null; progre
   const display = progress || (task ? normalizeProgress({}, task) : null);
 
   return (
-    <section className="task-card task-procedure-card">
-      <div className="task-panel-head">
-        <div className="task-panel-title">
-          <div className="task-panel-icon"><CheckCircle2 size={19} /></div>
+    <section>
+      <div>
+        <div>
+          <div><CheckCircle2 size={19} /></div>
           <div>
             <h3>Task Procedure Status</h3>
             <p>Live progress returned by /status and /detail</p>
@@ -1143,12 +1141,12 @@ function TaskProcedureStatus({ task, progress }: { task: TaskItem | null; progre
         </div>
       </div>
 
-      <div className="task-status-body">
+      <div>
         {display ? (
           <>
             {task ? (
-              <div className={`task-procedure-alert ${task.isTerminal ? "is-locked" : "is-live"}`}>
-                <span className={`task-status-pill ${getStateClass(task.state)}`}>{task.state}</span>
+              <div>
+                <span>{task.state}</span>
                 <p>{getTaskStateInsight(task)}</p>
               </div>
             ) : null}
@@ -1159,7 +1157,7 @@ function TaskProcedureStatus({ task, progress }: { task: TaskItem | null; progre
             <StatusField label="Task Completion Rate" value={`${display.completionRate}%`} />
             <ProgressBar value={display.completionRate} />
 
-            <div className="task-divider" />
+            <div />
 
             <StatusField label="Total Objects" value={display.totalObjects} />
             <StatusField label="Command Completed" value={display.commandCompleted} />
@@ -1169,7 +1167,7 @@ function TaskProcedureStatus({ task, progress }: { task: TaskItem | null; progre
             <StatusField label="Task End" value={display.taskEnd} />
           </>
         ) : (
-          <div className="task-empty-state compact">Select one task to view procedure status.</div>
+          <div>Select one task to view procedure status.</div>
         )}
       </div>
     </section>
@@ -1265,20 +1263,20 @@ function TaskTargetList({
     const visibleRows = filteredTargetRows;
 
     return (
-      <section className="task-card task-target-card task-target-side-card task-target-density-card">
-        <div className="task-panel-head task-panel-head-between task-target-side-head">
-          <div className="task-panel-title">
-            <div className="task-panel-icon"><UserRound size={19} /></div>
+      <section>
+        <div>
+          <div>
+            <div><UserRound size={19} /></div>
             <div>
               <h3>Target Endpoint List</h3>
               <p>Compact endpoint registry for large target batches.</p>
             </div>
           </div>
-          <span className="task-badge-outline">{totalRows} target{totalRows === 1 ? "" : "s"}</span>
+          <span>{totalRows} target{totalRows === 1 ? "" : "s"}</span>
         </div>
 
-        <div className="task-target-side-toolbar" aria-label="Target endpoint filters">
-          <label className="section-search task-target-side-search">
+        <div aria-label="Target endpoint filters">
+          <label>
             <Search size={15} />
             <input
               type="search"
@@ -1289,39 +1287,39 @@ function TaskTargetList({
             />
           </label>
           {targetSearch ? (
-            <button type="button" onClick={() => setTargetSearch("")} className="soft-btn task-target-clear-btn">Clear</button>
+            <button type="button" onClick={() => setTargetSearch("")}>Clear</button>
           ) : null}
         </div>
 
-        <div className="task-target-side-body task-target-compact-list" role="list" aria-label="Target endpoint compact list">
+        <div role="list" aria-label="Target endpoint compact list">
           {isBusy ? (
-            <div className="task-empty-state compact"><Loader2 size={20} className="task-spin" /> Loading target status...</div>
+            <div><Loader2 size={20} /> Loading target status...</div>
           ) : task && visibleRows.length ? visibleRows.map((row, index) => (
-            <article className="task-target-compact-row" key={row.key} role="listitem">
-              <div className="task-target-compact-index">{String(index + 1).padStart(2, "0")}</div>
-              <div className="task-target-compact-main">
-                <div className="task-target-compact-titleline">
+            <article key={row.key} role="listitem">
+              <div>{String(index + 1).padStart(2, "0")}</div>
+              <div>
+                <div>
                   <strong title={row.name}>{row.name}</strong>
-                  <span className={`task-status-pill ${getStateClass(row.status)}`}>{row.status}</span>
+                  <span>{row.status}</span>
                 </div>
-                <div className="task-target-compact-meta">
+                <div>
                   <span title={row.department}><b>Dept</b>{row.department}</span>
                   <span title={row.ipAddress}><b>IP</b>{row.ipAddress}</span>
                   <span title={row.type}><b>Type</b>{row.type}</span>
                   <span title={row.lastActivity}><b>{hasExecutionRows ? "Changed" : "Connected"}</b>{row.lastActivity}</span>
                 </div>
-                <div className="task-target-device-line" title={row.deviceId}>
+                <div title={row.deviceId}>
                   <b>Device ID</b>
                   <code>{row.deviceId}</code>
                 </div>
               </div>
             </article>
           )) : (
-            <div className="task-empty-state compact">{targetSearch ? "No target matches your search." : emptyMessage}</div>
+            <div>{targetSearch ? "No target matches your search." : emptyMessage}</div>
           )}
         </div>
 
-        <div className="task-combined-table-foot task-target-side-foot">
+        <div>
           <span>
             Showing {visibleRows.length} of {totalRows} endpoint row{totalRows === 1 ? "" : "s"}.
           </span>
@@ -1331,22 +1329,22 @@ function TaskTargetList({
   }
 
   return (
-    <section className={`task-card task-target-card task-combined-target-card ${compactHeader ? "is-compact-table-card" : ""}`}>
+    <section>
       {!compactHeader ? (
-        <div className="task-panel-head task-panel-head-between">
-          <div className="task-panel-title">
-            <div className="task-panel-icon"><UserRound size={19} /></div>
+        <div>
+          <div>
+            <div><UserRound size={19} /></div>
             <div>
               <h3>Target Endpoint List</h3>
               <p>Assigned scope with endpoint delivery status</p>
             </div>
           </div>
-          {task && <span className="task-badge-outline">Task #{task.id}</span>}
+          {task && <span>Task #{task.id}</span>}
         </div>
       ) : null}
 
-      <div className="task-target-table-wrap">
-        <table className="task-target-table task-combined-target-table task-target-status-table">
+      <div>
+        <table>
           <thead>
             <tr>
               <th>{hasExecutionRows ? "Device / Target" : "Assigned Scope"}</th>
@@ -1362,7 +1360,7 @@ function TaskTargetList({
             {isBusy ? (
               <tr>
                 <td colSpan={7}>
-                  <div className="task-empty-state compact"><Loader2 size={20} className="task-spin" /> Loading target status...</div>
+                  <div><Loader2 size={20} /> Loading target status...</div>
                 </td>
               </tr>
             ) : task && displayRows.length ? displayRows.map((row) => (
@@ -1371,14 +1369,14 @@ function TaskTargetList({
                 <td>{row.department}</td>
                 <td>{row.ipAddress}</td>
                 <td>{row.type}</td>
-                <td><span className={`task-status-pill ${getStateClass(row.status)}`}>{row.status}</span></td>
+                <td><span>{row.status}</span></td>
                 <td>{row.lastActivity}</td>
-                <td className="task-device-id-cell">{row.deviceId}</td>
+                <td>{row.deviceId}</td>
               </tr>
             )) : (
               <tr>
                 <td colSpan={7}>
-                  <div className="task-empty-state compact">{emptyMessage}</div>
+                  <div>{emptyMessage}</div>
                 </td>
               </tr>
             )}
@@ -1386,7 +1384,7 @@ function TaskTargetList({
         </table>
       </div>
 
-      <div className="task-combined-table-foot">
+      <div>
         <span>
           Showing {totalRows} {hasExecutionRows ? "endpoint status row" : "assigned scope row"}{totalRows === 1 ? "" : "s"}.
         </span>
@@ -1419,17 +1417,17 @@ function TaskDetailModal({
   onAction: (action: TaskAction, task: TaskItem) => void;
 }) {
   return (
-    <div className="task-detail-modal-layer" onClick={onClose} role="presentation">
-      <section className="task-detail-modal ema-panel-surface" role="dialog" aria-modal="true" aria-label={`Task ${task.id} detail`} onClick={(event) => event.stopPropagation()}>
-        <div className="task-detail-modal-toolbar">
+    <div onClick={onClose} role="presentation">
+      <section role="dialog" aria-modal="true" aria-label={`Task ${task.id} detail`} onClick={(event) => event.stopPropagation()}>
+        <div>
           <div>
-            <span className="section-tag">TASK DETAIL</span>
+            <span>TASK DETAIL</span>
             <h3>Task #{task.id}</h3>
             <p>Command summary, target endpoints and execution progress.</p>
           </div>
-          <div className="task-row-actions">
+          <div>
             <button type="button" onClick={onRefresh} title="Refresh task detail" disabled={isLoading}>
-              {isLoading ? <Loader2 size={16} className="task-spin" /> : <RefreshCw size={16} />}
+              {isLoading ? <Loader2 size={16} /> : <RefreshCw size={16} />}
             </button>
             <button type="button" onClick={onClose} aria-label="Close task details">
               <X size={18} />
@@ -1437,8 +1435,8 @@ function TaskDetailModal({
           </div>
         </div>
 
-        <div className="task-detail-modal-body task-detail-workspace task-detail-side-workspace">
-          <section className="task-card task-detail-action-card task-detail-left-column">
+        <div>
+          <section>
             <TaskRightPanel task={task} onAction={onAction} />
           </section>
 
@@ -1468,7 +1466,7 @@ function TaskRightPanel({
 }) {
   if (!task) {
     return (
-      <div className="task-right-empty">
+      <div>
         <ClipboardList size={34} />
         <strong>No task selected</strong>
         <span>Select a task from registry to view details.</span>
@@ -1477,16 +1475,16 @@ function TaskRightPanel({
   }
 
   return (
-    <div className="task-right-content">
-      <div className="task-right-header">
-        <div className="task-right-icon"><ClipboardList size={22} /></div>
+    <div>
+      <div>
+        <div><ClipboardList size={22} /></div>
         <div>
           <h3>Task #{task.id}</h3>
           <p>{task.classification} • {task.commandType}</p>
         </div>
       </div>
 
-      <div className="task-right-info">
+      <div>
         <div><span>State</span><strong>{task.state}</strong></div>
         {task.rawState && task.rawState !== task.state ? <div><span>Raw State</span><strong>{task.rawState}</strong></div> : null}
         <div><span>Task Type</span><strong>{task.taskType}</strong></div>
@@ -1496,23 +1494,23 @@ function TaskRightPanel({
         <div><span>Targets</span><strong>{task.totalObjects}</strong></div>
       </div>
 
-      <div className={`task-note-box ${task.isTerminal ? "is-terminal" : "is-active"}`}>
+      <div>
         <h4>{task.isTerminal ? "Operational Lock" : "Operational Note"}</h4>
         <p>{task.description}</p>
-        <span className="task-lock-note">{getTaskStateInsight(task)}</span>
+        <span>{getTaskStateInsight(task)}</span>
       </div>
 
-      <div className="task-action-list">
-        <button type="button" className="task-action-item" title={getTaskActionDisabledTitle("stop", task)} disabled={!canRunTaskAction("stop", task)} onClick={() => onAction("stop", task)}>
-          <div className="task-action-icon"><Square size={16} /></div>
+      <div>
+        <button type="button" title={getTaskActionDisabledTitle("stop", task)} disabled={!canRunTaskAction("stop", task)} onClick={() => onAction("stop", task)}>
+          <div><Square size={16} /></div>
           <div><strong>Stop Command</strong><span>{canRunTaskAction("stop", task) ? "Update task state to Stop" : getTaskActionDisabledTitle("stop", task)}</span></div>
         </button>
-        <button type="button" className="task-action-item" title={getTaskActionDisabledTitle("cancel", task)} disabled={!canRunTaskAction("cancel", task)} onClick={() => onAction("cancel", task)}>
-          <div className="task-action-icon"><X size={16} /></div>
+        <button type="button" title={getTaskActionDisabledTitle("cancel", task)} disabled={!canRunTaskAction("cancel", task)} onClick={() => onAction("cancel", task)}>
+          <div><X size={16} /></div>
           <div><strong>Cancel Task</strong><span>{canRunTaskAction("cancel", task) ? "Update task state to Cancelled" : getTaskActionDisabledTitle("cancel", task)}</span></div>
         </button>
-        <button type="button" className="task-action-item" title={getTaskActionDisabledTitle("delete", task)} disabled={!canRunTaskAction("delete", task)} onClick={() => onAction("delete", task)}>
-          <div className="task-action-icon danger"><Trash2 size={16} /></div>
+        <button type="button" title={getTaskActionDisabledTitle("delete", task)} disabled={!canRunTaskAction("delete", task)} onClick={() => onAction("delete", task)}>
+          <div><Trash2 size={16} /></div>
           <div><strong>Delete Task</strong><span>Archive and remove active task rows</span></div>
         </button>
       </div>
@@ -1545,7 +1543,7 @@ function TaskActionModal({
       onHide={onCancel}
       eyebrow="Confirmation"
       title={
-        <span className="task-modal-title-inline">
+        <span>
           <AlertCircle size={18} /> {title}
         </span>
       }
@@ -1558,8 +1556,8 @@ function TaskActionModal({
         </>
       }
     >
-      <p className="task-confirm-copy">{description}</p>
-      <div className="task-note-box">
+      <p>{description}</p>
+      <div>
         <h4>{pendingAction.task.classification}</h4>
         <p>{pendingAction.task.description}</p>
       </div>
@@ -1569,7 +1567,7 @@ function TaskActionModal({
 
 function StatusField({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="task-status-field">
+    <div>
       <span>{label}</span>
       <strong>{value || "-"}</strong>
     </div>
@@ -1580,8 +1578,8 @@ function ProgressBar({ value }: { value: number }) {
   const progressValue = Math.min(Math.max(value, 0), 100);
 
   return (
-    <div className="task-progress-bar">
-      <progress className="task-progress-native" value={progressValue} max={100} aria-label={`Progress ${progressValue}%`} />
+    <div>
+      <progress value={progressValue} max={100} aria-label={`Progress ${progressValue}%`} />
     </div>
   );
 }
