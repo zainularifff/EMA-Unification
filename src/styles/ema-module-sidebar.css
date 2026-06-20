@@ -374,7 +374,9 @@ body .ema-module-root .settings-layout > aside > .ema-sidebar-content {
 }
 
 .ema-empty-state,
-.settings-empty-state.ema-empty-state {
+.settings-empty-state,
+.settings-empty-state.ema-empty-state,
+.settings-empty-state.is-loading {
   min-height: 11.5rem;
   display: flex !important;
   flex-direction: column;
@@ -391,7 +393,9 @@ body .ema-module-root .settings-layout > aside > .ema-sidebar-content {
 }
 
 .ema-empty-state::before,
-.settings-empty-state.ema-empty-state::before {
+.settings-empty-state::before,
+.settings-empty-state.ema-empty-state::before,
+.settings-empty-state.is-loading::before {
   content: "";
   width: 2rem;
   height: 2rem;
@@ -402,7 +406,9 @@ body .ema-module-root .settings-layout > aside > .ema-sidebar-content {
 }
 
 .ema-empty-state::after,
-.settings-empty-state.ema-empty-state::after {
+.settings-empty-state::after,
+.settings-empty-state.ema-empty-state::after,
+.settings-empty-state.is-loading::after {
   content: "LOADING DATA...";
   color: #94a3b8;
   font-size: 0.72rem;
