@@ -415,6 +415,45 @@ body .ema-module-root .settings-layout > aside > .ema-sidebar-content {
   line-height: 1.2;
 }
 
+/* EMA generic loading state for table/sidebar placeholders that are still rendered with utility classes. */
+body main.settings-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"],
+body .ema-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"],
+body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][class*="tracking"] {
+  min-height: 11.5rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.7rem !important;
+  color: #94a3b8 !important;
+  font-size: 0 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.12em !important;
+  text-align: center !important;
+  text-transform: uppercase !important;
+}
+
+body main.settings-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::before,
+body .ema-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::before,
+body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::before {
+  content: "";
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid rgba(37, 99, 235, 0.16);
+  border-top-color: #3b82f6;
+  border-radius: 999px;
+  animation: ema-spin 0.8s linear infinite;
+}
+
+body main.settings-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::after,
+body .ema-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::after,
+body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::after {
+  content: "LOADING DATA...";
+  color: #94a3b8;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
 @media (max-width: 1100px) {
   body main.settings-module-root .settings-layout,
   body .ema-module-root .settings-layout,
