@@ -436,15 +436,136 @@ main[data-section="users"] th {
   text-transform: uppercase !important;
 }
 
-main[data-section="users"] > div:has(> section[role="dialog"]) {
+main[data-section="users"] > div:not(:has(> aside)):has(> section),
+main[data-section="users"] > div:not(:has(> aside)):has(> form),
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) {
   position: fixed !important;
   inset: 0 !important;
   z-index: 2147483400 !important;
   display: grid !important;
   place-items: center !important;
-  background: rgba(15, 23, 42, .5) !important;
+  background: rgba(15, 23, 42, .58) !important;
   padding: 1rem !important;
-  backdrop-filter: blur(4px) !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) > section,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) > form,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div {
+  width: min(58rem, 96vw) !important;
+  max-height: 88vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 1rem !important;
+  background: #ffffff !important;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, .28) !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) > section > div:first-child,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) > form > div:first-child,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div > div:first-child {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 1rem !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%) !important;
+  color: #ffffff !important;
+  padding: 1rem 1.1rem !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) > section > div:first-child span,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) > form > div:first-child span,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div > div:first-child span {
+  color: rgba(255, 255, 255, .72) !important;
+  font-size: .7rem !important;
+  font-weight: 950 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) > section h2,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) > form h2,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div h2 {
+  margin: .25rem 0 .15rem !important;
+  color: #ffffff !important;
+  font-size: 1.2rem !important;
+  font-weight: 950 !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) > section p,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) > form p,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div p {
+  margin: 0 !important;
+  color: rgba(255, 255, 255, .75) !important;
+  font-size: .82rem !important;
+  font-weight: 650 !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) > section > div:first-child > button,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) > form > div:first-child > button,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div > div:first-child > button {
+  width: 2.3rem !important;
+  height: 2.3rem !important;
+  flex: 0 0 2.3rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-radius: .75rem !important;
+  background: rgba(255, 255, 255, .16) !important;
+  color: #ffffff !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) > section > div:nth-child(n+2),
+main[data-section="users"] > div:not(:has(> aside)):has(> form) > form > div:nth-child(n+2),
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div > form,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) > div > div:nth-child(n+2) {
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 1rem !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) table {
+  table-layout: fixed !important;
+  border-radius: .85rem !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) footer,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) footer,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) footer {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: .75rem !important;
+  border-top: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+  padding: .75rem 1rem !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) footer nav,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) footer nav,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) footer nav {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: .35rem !important;
+}
+
+main[data-section="users"] > div:not(:has(> aside)):has(> section) footer button,
+main[data-section="users"] > div:not(:has(> aside)):has(> form) footer button,
+main[data-section="users"] > div:not(:has(> aside)):has(> div > form) footer button {
+  min-width: 2.1rem !important;
+  height: 2.1rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: .65rem !important;
+  background: #ffffff !important;
+  color: #2563eb !important;
+  font-weight: 950 !important;
 }
 
 main[data-section="users"] section[role="dialog"] {
@@ -456,13 +577,6 @@ main[data-section="users"] section[role="dialog"] {
   background: #ffffff !important;
   padding: 1rem !important;
   box-shadow: 0 24px 60px rgba(15, 23, 42, .22) !important;
-}
-
-main[data-section="users"] section[role="dialog"] h3 {
-  margin: 0 0 .4rem !important;
-  color: #020617 !important;
-  font-size: 1rem !important;
-  font-weight: 950 !important;
 }
 
 body > div[role="listbox"] {
