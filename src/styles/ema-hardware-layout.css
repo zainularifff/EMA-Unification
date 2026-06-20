@@ -1,0 +1,43 @@
+/* Temporary bridge while Hardware.tsx is migrated to Tailwind.
+   Keeps the selected-device action panel beside the registry table, not below it. */
+
+@media (min-width: 1280px) {
+  .hardware-main-grid.has-inspector,
+  .hardware-main-grid:has(.hardware-right-panel) {
+    grid-template-columns: minmax(0, 1fr) 18.5rem;
+    align-items: start;
+  }
+
+  .hardware-main-grid.has-inspector .hardware-registry-card,
+  .hardware-main-grid:has(.hardware-right-panel) .hardware-registry-card {
+    min-width: 0;
+  }
+
+  .hardware-main-grid.has-inspector .hardware-right-panel,
+  .hardware-main-grid:has(.hardware-right-panel) .hardware-right-panel {
+    position: sticky;
+    top: 0.4rem;
+    align-self: start;
+    max-height: calc(100vh - 7rem);
+    overflow: auto;
+  }
+
+  .hardware-main-grid.has-inspector .hardware-right-info,
+  .hardware-main-grid:has(.hardware-right-panel) .hardware-right-info,
+  .hardware-main-grid.has-inspector .hardware-action-list,
+  .hardware-main-grid:has(.hardware-right-panel) .hardware-action-list {
+    grid-template-columns: 1fr;
+  }
+
+  .hardware-main-grid.has-inspector .hardware-action-item,
+  .hardware-main-grid:has(.hardware-right-panel) .hardware-action-item {
+    min-height: 3.65rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .hardware-main-grid.has-inspector,
+  .hardware-main-grid:has(.hardware-right-panel) {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
+}
