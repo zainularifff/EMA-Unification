@@ -1,3 +1,5 @@
+/* EMA shared module sidebar, tree, loading and statistic states. */
+
 .ema-module-sidebar-nav {
   width: 100%;
   display: grid;
@@ -116,8 +118,7 @@
   display: none !important;
 }
 
-.ema-sidebar-tree,
-[class*="-tree"]:is(.ema-sidebar-tree) {
+.ema-sidebar-tree {
   width: 100%;
   min-height: 0 !important;
   flex: 1 1 auto;
@@ -129,14 +130,12 @@
   padding: 0.08rem 0.08rem 0.12rem;
 }
 
-.ema-sidebar-tree-branch,
-[class*="-tree-branch"] {
+.ema-sidebar-tree-branch {
   position: relative;
   overflow: visible;
 }
 
-.ema-sidebar-tree-node,
-[class*="-tree-node"] {
+.ema-sidebar-tree-node {
   position: relative;
   width: 100%;
   display: grid;
@@ -148,24 +147,19 @@
   overflow: visible;
 }
 
-.ema-sidebar-tree-node:hover,
-[class*="-tree-node"]:hover {
+.ema-sidebar-tree-node:hover {
   border-color: #dbe7f6;
   background: #f8fafc;
 }
 
 .ema-sidebar-tree-node.is-selected,
-.ema-sidebar-tree-node.is-active,
-[class*="-tree-node"].is-selected,
-[class*="-tree-node"].is-active {
+.ema-sidebar-tree-node.is-active {
   border-color: #93c5fd;
   background: #eff6ff;
   box-shadow: inset 3px 0 0 #2563eb;
 }
 
-.ema-sidebar-tree-toggle,
-[class*="-tree-toggle"],
-[class*="-tree-node-chevron"] {
+.ema-sidebar-tree-toggle {
   width: 1.25rem;
   min-width: 1.25rem;
   height: 2.15rem;
@@ -177,9 +171,7 @@
   color: #64748b;
 }
 
-.ema-sidebar-tree-main,
-[class*="-tree-main"],
-[class*="-tree-node-main"] {
+.ema-sidebar-tree-main {
   width: 100%;
   min-width: 0;
   min-height: 2.15rem;
@@ -193,18 +185,42 @@
   text-align: left;
 }
 
-.ema-sidebar-tree-label,
-[class*="-tree-label"],
-[class*="-tree-main"] > span:last-child {
+.ema-sidebar-tree-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.ema-sidebar-tree-label {
   min-width: 0;
   overflow: hidden;
+  color: #0f172a;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ema-sidebar-tree-menu-wrap,
-[class*="-tree-menu-wrap"] {
+.ema-sidebar-tree-count {
+  margin-left: auto;
+  color: #64748b;
+  font-weight: 850;
+}
+
+.ema-sidebar-tree-children {
+  display: grid;
+  gap: 0.16rem;
+  margin-left: 1.15rem;
+  padding-left: 0.35rem;
+  border-left: 1px solid #e2e8f0;
+}
+
+.ema-sidebar-tree-menu-wrap {
   position: relative;
   width: 1.75rem;
   height: 2.15rem;
@@ -213,15 +229,31 @@
   justify-content: center;
   justify-self: end;
   overflow: visible;
-  z-index: 5;
+  z-index: 20;
 }
 
-.ema-sidebar-tree-menu,
-[class*="-tree-menu"] {
+.ema-sidebar-tree-menu-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #475569;
+}
+
+.ema-sidebar-tree-menu-btn:hover {
+  background: #eaf2ff;
+  color: #1d4ed8;
+}
+
+.ema-sidebar-tree-menu {
   position: absolute;
   top: calc(100% + 0.25rem);
   right: 0;
-  z-index: 80;
+  z-index: 90;
   width: 10.25rem;
   display: grid;
   gap: 0.15rem;
@@ -232,8 +264,7 @@
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
 }
 
-.ema-sidebar-tree-menu button,
-[class*="-tree-menu"] button {
+.ema-sidebar-tree-menu button {
   width: 100%;
   min-height: 2rem;
   display: flex;
@@ -250,16 +281,19 @@
   white-space: nowrap;
 }
 
-.ema-sidebar-tree-menu button:hover,
-[class*="-tree-menu"] button:hover {
+.ema-sidebar-tree-menu button:hover {
   background: #eff6ff;
   color: #1d4ed8;
 }
 
 .ema-sidebar-tree-menu button.danger,
-[class*="-tree-menu"] button.danger,
 .ema-btn-danger {
   color: #dc2626;
+}
+
+.ema-sidebar-tree-menu button.danger:hover {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .ema-empty-state,
