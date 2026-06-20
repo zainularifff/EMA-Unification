@@ -8,7 +8,9 @@
 }
 
 body .ema-module-root .settings-layout,
-body .ema-module-root > .grid.min-w-0 {
+body .hardware-module-root .settings-layout,
+body .ema-module-root > .grid.min-w-0,
+body .software-inventory-module > .grid.min-w-0 {
   grid-template-columns: minmax(var(--ema-module-sidebar-width-min), var(--ema-module-sidebar-width-max)) minmax(0, 1fr) !important;
   gap: var(--ema-module-gap) !important;
   height: 100% !important;
@@ -18,7 +20,11 @@ body .ema-module-root > .grid.min-w-0 {
 
 body .ema-module-root .settings-menu.ema-panel-surface,
 body .ema-module-root .settings-menu,
-body .ema-module-root > .grid.min-w-0 > aside {
+body .hardware-module-root .settings-menu.ema-panel-surface,
+body .hardware-module-root .settings-menu,
+body .hardware-module-root .hardware-left-panel,
+body .ema-module-root > .grid.min-w-0 > aside,
+body .software-inventory-module > .grid.min-w-0 > aside {
   min-width: 0 !important;
   max-width: none !important;
   width: 100% !important;
@@ -81,7 +87,8 @@ body .ema-module-root > .grid.min-w-0 > aside {
 }
 
 .ema-sidebar-content,
-body .ema-module-root > .grid.min-w-0 > aside > div:last-child {
+body .ema-module-root > .grid.min-w-0 > aside > div:last-child,
+body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
@@ -599,7 +606,9 @@ body .ema-module-root > .grid.min-w-0 > aside > div:last-child {
 
 @media (max-width: 1100px) {
   body .ema-module-root .settings-layout,
-  body .ema-module-root > .grid.min-w-0 {
+  body .hardware-module-root .settings-layout,
+  body .ema-module-root > .grid.min-w-0,
+  body .software-inventory-module > .grid.min-w-0 {
     grid-template-columns: 1fr !important;
   }
 }
