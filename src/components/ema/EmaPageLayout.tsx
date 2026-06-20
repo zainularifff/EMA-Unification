@@ -39,8 +39,8 @@ export function EmaPageLayout({
 
       <div className={cx("flex min-h-0 gap-3 overflow-hidden p-3", fullHeight ? (hasHeader ? "h-[calc(100vh-4.5rem)]" : "h-full") : "") }>
         {sidebar ? <aside className="w-80 shrink-0 overflow-hidden">{sidebar}</aside> : null}
-        <main className="min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="h-full overflow-auto p-4">{children}</div>
+        <main className="min-w-0 flex-1 overflow-hidden">
+          <div className="h-full overflow-auto pr-1">{children}</div>
         </main>
       </div>
     </section>
