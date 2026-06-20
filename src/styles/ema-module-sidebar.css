@@ -1,128 +1,178 @@
 /* EMA shared module layout, sidebar, tree, loading and statistic states. */
 
 :root {
+  --ema-module-outer-gap: 0.75rem;
+  --ema-module-gap: 0.75rem;
   --ema-module-sidebar-width-min: 300px;
   --ema-module-sidebar-width-max: 322px;
-  --ema-module-gap: 0.75rem;
+  --ema-module-panel-radius: 0.95rem;
+  --ema-module-border: #dbe7f6;
+  --ema-module-bg: #eef3f9;
 }
 
 body main.settings-module-root,
 body .ema-module-root {
-  min-height: 0;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+  padding: var(--ema-module-outer-gap) !important;
+  background: var(--ema-module-bg) !important;
+  overflow: hidden !important;
 }
 
-body main.settings-module-root .settings-layout,
-body .ema-module-root .settings-layout,
+body main.settings-module-root > .settings-layout,
+body main.settings-module-root > .ema-module-layout,
+body main.settings-module-root > .grid,
+body .ema-module-root > .settings-layout,
+body .ema-module-root > .ema-module-layout,
+body .ema-module-root > .grid,
 body .ema-module-layout {
   width: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
+  height: 100% !important;
+  flex: 1 1 auto !important;
   display: grid !important;
   grid-template-columns: minmax(var(--ema-module-sidebar-width-min), var(--ema-module-sidebar-width-max)) minmax(0, 1fr) !important;
-  gap: var(--ema-module-gap) !important;
   align-items: stretch !important;
+  gap: var(--ema-module-gap) !important;
+  margin: 0 !important;
+  padding: 0 !important;
   overflow: hidden !important;
+  box-sizing: border-box !important;
 }
 
-body main.settings-module-root .settings-layout > .settings-menu,
-body main.settings-module-root .settings-layout > aside,
-body .ema-module-root .settings-layout > .settings-menu,
-body .ema-module-root .settings-layout > aside,
+body main.settings-module-root > .settings-layout > .settings-menu,
+body main.settings-module-root > .settings-layout > aside,
+body main.settings-module-root > .ema-module-layout > .settings-menu,
+body main.settings-module-root > .ema-module-layout > aside,
+body main.settings-module-root > .grid > .settings-menu,
+body main.settings-module-root > .grid > aside,
+body .ema-module-root > .settings-layout > .settings-menu,
+body .ema-module-root > .settings-layout > aside,
+body .ema-module-root > .ema-module-layout > .settings-menu,
+body .ema-module-root > .ema-module-layout > aside,
+body .ema-module-root > .grid > .settings-menu,
+body .ema-module-root > .grid > aside,
 body .ema-module-layout > .settings-menu,
 body .ema-module-layout > aside {
+  width: 100% !important;
   min-width: 0 !important;
   max-width: none !important;
-  width: 100% !important;
   min-height: 0 !important;
+  height: 100% !important;
   display: flex !important;
   flex-direction: column !important;
-  overflow: visible !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
   padding: 0.65rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: var(--ema-module-panel-radius) !important;
+  background: #ffffff !important;
 }
 
-body main.settings-module-root .settings-layout > .settings-content,
-body main.settings-module-root .settings-layout > section,
-body .ema-module-root .settings-layout > .settings-content,
-body .ema-module-root .settings-layout > section,
+body main.settings-module-root > .settings-layout > .settings-content,
+body main.settings-module-root > .settings-layout > section,
+body main.settings-module-root > .ema-module-layout > .settings-content,
+body main.settings-module-root > .ema-module-layout > section,
+body main.settings-module-root > .grid > .settings-content,
+body main.settings-module-root > .grid > section,
+body .ema-module-root > .settings-layout > .settings-content,
+body .ema-module-root > .settings-layout > section,
+body .ema-module-root > .ema-module-layout > .settings-content,
+body .ema-module-root > .ema-module-layout > section,
+body .ema-module-root > .grid > .settings-content,
+body .ema-module-root > .grid > section,
 body .ema-module-layout > .settings-content,
 body .ema-module-layout > section {
   min-width: 0 !important;
   min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
 }
 
-.ema-module-root .panel-head {
-  display: grid;
-  gap: 0.15rem;
-  margin: 0 0 0.7rem;
+.ema-module-root .panel-head,
+body main.settings-module-root .panel-head {
+  display: grid !important;
+  gap: 0.15rem !important;
+  margin: 0 0 0.7rem !important;
 }
 
-.ema-module-root .panel-head span {
-  color: #64748b;
-  font-size: 0.65rem;
-  font-weight: 950;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
+.ema-module-root .panel-head span,
+body main.settings-module-root .panel-head span {
+  color: #64748b !important;
+  font-size: 0.65rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.08em !important;
+  line-height: 1 !important;
+  text-transform: uppercase !important;
 }
 
-.ema-module-root .panel-head strong {
-  color: #0f172a;
-  font-size: 0.92rem;
-  font-weight: 950;
-  line-height: 1.15;
+.ema-module-root .panel-head strong,
+body main.settings-module-root .panel-head strong {
+  color: #0f172a !important;
+  font-size: 0.92rem !important;
+  font-weight: 950 !important;
+  line-height: 1.15 !important;
 }
 
-.ema-module-root .panel-head small {
-  color: #64748b;
-  font-size: 0.75rem;
-  font-weight: 750;
-  line-height: 1.25;
+.ema-module-root .panel-head small,
+body main.settings-module-root .panel-head small {
+  color: #64748b !important;
+  font-size: 0.75rem !important;
+  font-weight: 750 !important;
+  line-height: 1.25 !important;
 }
 
 .ema-module-sidebar-nav {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
-  margin: 0 0 0.7rem;
-  padding: 0.22rem;
-  border: 1px solid #dbe7f6;
-  border-radius: 0.9rem;
-  background: #f8fbff;
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  margin: 0 0 0.7rem !important;
+  padding: 0.22rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: 0.9rem !important;
+  background: #f8fbff !important;
 }
 
 .ema-module-sidebar-nav .setting-btn,
 .ema-module-sidebar-nav button {
-  min-width: 0;
-  min-height: 2.55rem;
+  min-width: 0 !important;
+  min-height: 2.55rem !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 0.45rem;
+  gap: 0.45rem !important;
   border: 0 !important;
-  border-radius: 0.72rem;
-  background: transparent;
-  color: #475569;
+  border-radius: 0.72rem !important;
+  background: transparent !important;
+  color: #475569 !important;
   box-shadow: none !important;
 }
 
 .ema-module-sidebar-nav .setting-btn.active,
 .ema-module-sidebar-nav button[aria-selected="true"],
 .ema-module-sidebar-nav button.is-active {
-  background: #ffffff;
-  color: #1d4ed8;
+  background: #ffffff !important;
+  color: #1d4ed8 !important;
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12) !important;
 }
 
 .ema-module-sidebar-nav .setting-btn strong,
 .ema-module-sidebar-nav button strong {
-  display: block;
-  overflow: hidden;
-  color: inherit;
-  font-size: 0.8rem;
-  line-height: 1.05;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: block !important;
+  overflow: hidden !important;
+  color: inherit !important;
+  font-size: 0.8rem !important;
+  line-height: 1.05 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .ema-module-sidebar-nav .setting-btn small,
@@ -131,119 +181,82 @@ body .ema-module-layout > section {
 }
 
 .ema-sidebar-content,
-body main.settings-module-root .settings-layout > aside > .ema-sidebar-content,
-body .ema-module-root .settings-layout > aside > .ema-sidebar-content {
-  min-height: 0;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
+.ema-sidebar-subpanel {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.55rem !important;
+  overflow: hidden !important;
 }
 
-.ema-sidebar-subpanel {
-  min-height: 0;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  overflow: visible;
+.ema-sidebar-field,
+.ema-module-root .section-search.ema-sidebar-field,
+body main.settings-module-root .section-search.ema-sidebar-field {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  min-height: 2.25rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.75rem !important;
+  background: #ffffff !important;
+  padding: 0 0.65rem !important;
+  color: #64748b !important;
+  box-sizing: border-box !important;
+}
+
+.ema-sidebar-field input,
+.ema-module-root .section-search.ema-sidebar-field input,
+body main.settings-module-root .section-search.ema-sidebar-field input {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  font-size: 0.78rem !important;
+  font-weight: 750 !important;
+  outline: none !important;
 }
 
 .ema-panel-surface .soft-btn,
 .ema-sidebar-action-btn {
-  width: 100%;
-  min-height: 2.25rem;
-  justify-content: center;
-  border-color: #bfdbfe;
-  border-radius: 0.75rem;
-  background: #ffffff;
-  color: #0f172a;
-  font-weight: 900;
+  width: 100% !important;
+  min-height: 2.25rem !important;
+  justify-content: center !important;
+  border-color: #bfdbfe !important;
+  border-radius: 0.75rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 900 !important;
 }
 
 .ema-panel-surface .soft-btn:hover:not(:disabled),
 .ema-sidebar-action-btn:hover:not(:disabled) {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.ema-sidebar-field,
-.ema-module-root .section-search.ema-sidebar-field {
-  flex: 0 0 auto;
-  width: 100%;
-  min-height: 2.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  background: #ffffff;
-  padding: 0 0.65rem;
-  color: #64748b;
-}
-
-.ema-sidebar-field input,
-.ema-module-root .section-search.ema-sidebar-field input {
-  min-width: 0;
-  flex: 1 1 auto;
-  border: 0;
-  background: transparent;
-  color: #0f172a;
-  font-size: 0.78rem;
-  font-weight: 750;
-  outline: none;
-}
-
-.ema-sidebar-search-clear {
-  width: 1.55rem;
-  height: 1.55rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #64748b;
-}
-
-.ema-sidebar-search-clear:hover {
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
 }
 
 .ema-sidebar-scope-card {
-  width: 100%;
-  display: grid;
-  gap: 0.18rem;
-  margin: 0 0 0.1rem;
-  padding: 0.68rem 0.78rem;
-  border: 1px solid #dbe7f6;
-  border-radius: 0.82rem;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  width: 100% !important;
+  display: grid !important;
+  gap: 0.18rem !important;
+  margin: 0 0 0.1rem !important;
+  padding: 0.68rem 0.78rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: 0.82rem !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
 }
 
 .ema-sidebar-scope-card strong,
 .ema-sidebar-scope-card span {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ema-sidebar-scope-card strong {
-  color: #0f172a;
-  font-size: 0.92rem;
-  font-weight: 950;
-  line-height: 1.15;
-}
-
-.ema-sidebar-scope-card span {
-  color: #64748b;
-  font-size: 0.76rem;
-  font-weight: 750;
-  line-height: 1.2;
+  display: block !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .ema-sidebar-tree > .ema-sidebar-section-title {
@@ -251,246 +264,242 @@ body .ema-module-root .settings-layout > aside > .ema-sidebar-content {
 }
 
 .ema-sidebar-tree {
-  width: 100%;
+  width: 100% !important;
   min-height: 0 !important;
-  flex: 1 1 auto;
-  display: grid;
-  align-content: start;
-  gap: 0.22rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 0.08rem 0.08rem 0.12rem;
+  flex: 1 1 auto !important;
+  display: grid !important;
+  align-content: start !important;
+  gap: 0.22rem !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0.08rem 0.08rem 0.12rem !important;
 }
 
 .ema-sidebar-tree-level,
 .ema-sidebar-tree-children {
-  display: grid;
-  gap: 0.16rem;
-  min-width: 0;
+  display: grid !important;
+  gap: 0.16rem !important;
+  min-width: 0 !important;
 }
 
 .ema-sidebar-tree-branch {
-  position: relative;
-  overflow: visible;
-}
-
-.ema-sidebar-tree-branch:has(.ema-sidebar-tree-menu) {
-  z-index: 120;
+  position: relative !important;
+  overflow: visible !important;
 }
 
 .ema-sidebar-tree-node {
-  position: relative;
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr) 1.75rem;
-  align-items: center;
-  border: 1px solid transparent;
-  border-radius: 0.7rem;
-  background: transparent;
-  overflow: visible;
+  position: relative !important;
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 1.75rem !important;
+  align-items: center !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.7rem !important;
+  background: transparent !important;
+  overflow: visible !important;
 }
 
 .ema-sidebar-tree-node:hover {
-  border-color: #dbe7f6;
-  background: #f8fafc;
+  border-color: var(--ema-module-border) !important;
+  background: #f8fafc !important;
 }
 
 .ema-sidebar-tree-node.is-selected,
 .ema-sidebar-tree-node.is-active {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  box-shadow: inset 3px 0 0 #2563eb;
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+  box-shadow: inset 3px 0 0 #2563eb !important;
 }
 
 .ema-sidebar-tree-toggle {
-  width: 1.25rem;
-  min-width: 1.25rem;
-  height: 2.15rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  color: #64748b;
+  width: 1.25rem !important;
+  min-width: 1.25rem !important;
+  height: 2.15rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #64748b !important;
 }
 
 .ema-sidebar-tree-main {
-  width: 100%;
-  min-width: 0;
-  min-height: 2.15rem;
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  border: 0;
-  border-radius: 0.6rem;
-  padding: 0.35rem 0.25rem;
-  background: transparent;
-  text-align: left;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 2.15rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  border: 0 !important;
+  border-radius: 0.6rem !important;
+  padding: 0.35rem 0.25rem !important;
+  background: transparent !important;
+  text-align: left !important;
 }
 
 .ema-sidebar-tree-icon {
-  width: 1.55rem;
-  height: 1.55rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  border-radius: 0.5rem;
-  background: #f1f5f9;
-  color: #475569;
+  width: 1.55rem !important;
+  height: 1.55rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto !important;
+  border-radius: 0.5rem !important;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
 }
 
 .ema-sidebar-tree-label {
-  min-width: 0;
-  overflow: hidden;
-  color: #0f172a;
-  font-weight: 900;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  color: #0f172a !important;
+  font-weight: 900 !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .ema-sidebar-tree-count {
-  margin-left: auto;
-  color: #64748b;
-  font-weight: 850;
+  margin-left: auto !important;
+  color: #64748b !important;
+  font-weight: 850 !important;
 }
 
 .ema-sidebar-tree-children {
-  margin-left: 1.15rem;
-  padding-left: 0.35rem;
-  border-left: 1px solid #e2e8f0;
+  margin-left: 1.15rem !important;
+  padding-left: 0.35rem !important;
+  border-left: 1px solid #e2e8f0 !important;
 }
 
 .ema-sidebar-tree-menu-wrap {
-  position: relative;
-  width: 1.75rem;
-  height: 2.15rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  justify-self: end;
-  overflow: visible;
-  z-index: 150;
+  position: relative !important;
+  width: 1.75rem !important;
+  height: 2.15rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  justify-self: end !important;
+  overflow: visible !important;
+  z-index: 20 !important;
 }
 
 .ema-sidebar-tree-menu-btn {
-  width: 1.75rem;
-  height: 1.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #475569;
+  width: 1.75rem !important;
+  height: 1.75rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: #475569 !important;
 }
 
 .ema-sidebar-tree-menu-btn:hover {
-  background: #eaf2ff;
-  color: #1d4ed8;
+  background: #eaf2ff !important;
+  color: #1d4ed8 !important;
 }
 
 .ema-sidebar-tree-menu {
-  position: absolute;
-  right: 0.2rem;
-  top: calc(100% + 0.2rem);
-  z-index: 999;
-  width: min(11rem, calc(var(--ema-module-sidebar-width-max) - 2.25rem));
-  max-width: calc(100vw - 2rem);
-  display: grid;
-  gap: 0.12rem;
-  border: 1px solid #dbe7f6;
-  border-radius: 0.72rem;
-  background: #ffffff;
-  padding: 0.32rem;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+  position: absolute !important;
+  right: 0.2rem !important;
+  top: calc(100% + 0.2rem) !important;
+  z-index: 50 !important;
+  width: min(11rem, calc(var(--ema-module-sidebar-width-max) - 2.25rem)) !important;
+  max-width: calc(100vw - 2rem) !important;
+  display: grid !important;
+  gap: 0.12rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: 0.72rem !important;
+  background: #ffffff !important;
+  padding: 0.32rem !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16) !important;
 }
 
 .ema-sidebar-tree-menu button {
-  width: 100%;
-  min-height: 1.9rem;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  border: 0;
-  border-radius: 0.5rem;
-  background: transparent;
-  padding: 0.32rem 0.52rem;
-  color: #334155;
-  font-size: 0.76rem;
-  font-weight: 850;
-  line-height: 1.1;
-  text-align: left;
-  white-space: nowrap;
+  width: 100% !important;
+  min-height: 1.9rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  border: 0 !important;
+  border-radius: 0.5rem !important;
+  background: transparent !important;
+  padding: 0.32rem 0.52rem !important;
+  color: #334155 !important;
+  font-size: 0.76rem !important;
+  font-weight: 850 !important;
+  line-height: 1.1 !important;
+  text-align: left !important;
+  white-space: nowrap !important;
 }
 
 .ema-sidebar-tree-menu button:hover {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
 }
 
 .ema-sidebar-tree-menu button.danger,
 .ema-btn-danger {
-  color: #dc2626;
+  color: #dc2626 !important;
 }
 
 .ema-sidebar-tree-menu button.danger:hover {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
 }
 
 .ema-sidebar-empty {
-  min-height: 7rem;
-  display: grid;
-  place-items: center;
-  border: 1px dashed #cbd5e1;
-  border-radius: 0.8rem;
-  color: #64748b;
-  font-size: 0.78rem;
-  font-weight: 800;
-  text-align: center;
+  min-height: 7rem !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1px dashed #cbd5e1 !important;
+  border-radius: 0.8rem !important;
+  color: #64748b !important;
+  font-size: 0.78rem !important;
+  font-weight: 800 !important;
+  text-align: center !important;
 }
 
 .ema-empty-state,
 .settings-empty-state,
 .settings-empty-state.ema-empty-state,
 .settings-empty-state.is-loading {
-  min-height: 11.5rem;
+  min-height: 11.5rem !important;
   display: flex !important;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.7rem;
-  border-top: 1px solid #e2e8f0;
-  color: #94a3b8;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.7rem !important;
+  border-top: 1px solid #e2e8f0 !important;
+  color: #94a3b8 !important;
   font-size: 0 !important;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-align: center;
-  text-transform: uppercase;
+  font-weight: 900 !important;
+  letter-spacing: 0.12em !important;
+  text-align: center !important;
+  text-transform: uppercase !important;
 }
 
 .ema-empty-state::before,
 .settings-empty-state::before,
 .settings-empty-state.ema-empty-state::before,
 .settings-empty-state.is-loading::before {
-  content: "";
-  width: 2rem;
-  height: 2rem;
-  border: 3px solid rgba(37, 99, 235, 0.16);
-  border-top-color: #3b82f6;
-  border-radius: 999px;
-  animation: ema-spin 0.8s linear infinite;
+  content: "" !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  border: 3px solid rgba(37, 99, 235, 0.16) !important;
+  border-top-color: #3b82f6 !important;
+  border-radius: 999px !important;
+  animation: ema-spin 0.8s linear infinite !important;
 }
 
 .ema-empty-state::after,
 .settings-empty-state::after,
 .settings-empty-state.ema-empty-state::after,
 .settings-empty-state.is-loading::after {
-  content: "LOADING DATA...";
-  color: #94a3b8;
-  font-size: 0.72rem;
-  line-height: 1.2;
+  content: "LOADING DATA..." !important;
+  color: #94a3b8 !important;
+  font-size: 0.72rem !important;
+  line-height: 1.2 !important;
 }
 
 body main.settings-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"],
@@ -513,27 +522,27 @@ body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][c
 body main.settings-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::before,
 body .ema-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::before,
 body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::before {
-  content: "";
-  width: 2rem;
-  height: 2rem;
-  border: 3px solid rgba(37, 99, 235, 0.16);
-  border-top-color: #3b82f6;
-  border-radius: 999px;
-  animation: ema-spin 0.8s linear infinite;
+  content: "" !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  border: 3px solid rgba(37, 99, 235, 0.16) !important;
+  border-top-color: #3b82f6 !important;
+  border-radius: 999px !important;
+  animation: ema-spin 0.8s linear infinite !important;
 }
 
 body main.settings-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::after,
 body .ema-module-root [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::after,
 body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][class*="tracking"]::after {
-  content: "LOADING DATA...";
-  color: #94a3b8;
-  font-size: 0.72rem;
-  line-height: 1.2;
+  content: "LOADING DATA..." !important;
+  color: #94a3b8 !important;
+  font-size: 0.72rem !important;
+  line-height: 1.2 !important;
 }
 
 .ema-stat-workbench,
 [class*="stat-workbench"] {
-  min-height: 22rem;
+  min-height: 22rem !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 0.75rem !important;
@@ -541,14 +550,14 @@ body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][c
 
 .ema-stat-commandbar,
 [class*="stat-commandbar"] {
-  min-height: 4.15rem;
+  min-height: 4.15rem !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
   gap: 1rem !important;
   padding: 0.85rem 1rem !important;
-  border: 1px solid #dbe7f6 !important;
-  border-radius: 0.95rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: var(--ema-module-panel-radius) !important;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
 }
@@ -609,8 +618,8 @@ body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][c
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
-  border: 1px solid #dbe7f6 !important;
-  border-radius: 0.95rem !important;
+  border: 1px solid var(--ema-module-border) !important;
+  border-radius: var(--ema-module-panel-radius) !important;
   background: #ffffff !important;
 }
 
@@ -653,7 +662,7 @@ body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][c
   overflow: hidden !important;
   border-collapse: separate !important;
   border-spacing: 0 !important;
-  border: 1px solid #dbe7f6 !important;
+  border: 1px solid var(--ema-module-border) !important;
   border-radius: 0.85rem !important;
   color: #0f172a !important;
   font-size: 0.78rem !important;
@@ -694,8 +703,12 @@ body .ema-module-layout [class*="place-items-center"][class*="text-slate-400"][c
 }
 
 @media (max-width: 1100px) {
-  body main.settings-module-root .settings-layout,
-  body .ema-module-root .settings-layout,
+  body main.settings-module-root > .settings-layout,
+  body main.settings-module-root > .ema-module-layout,
+  body main.settings-module-root > .grid,
+  body .ema-module-root > .settings-layout,
+  body .ema-module-root > .ema-module-layout,
+  body .ema-module-root > .grid,
   body .ema-module-layout {
     grid-template-columns: 1fr !important;
   }
