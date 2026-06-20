@@ -1,4 +1,5 @@
 const STYLE_ID = "ema-table-runtime-styles";
+const OBSERVER_FLAG = "emaTableRuntimeObserver";
 
 const css = `
 html body .ema-module-root table {
@@ -15,6 +16,109 @@ html body .ema-module-root th * {
   white-space: normal !important;
   overflow-wrap: anywhere !important;
   word-break: break-word !important;
+}
+
+html body .ema-module-root .ema-standard-table {
+  max-height: min(52vh, 34rem) !important;
+  overflow: auto !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  margin-bottom: 0 !important;
+  scrollbar-gutter: stable !important;
+}
+
+html body .ema-module-root .ema-pagination {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 80 !important;
+  min-height: 3.75rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: .85rem !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: .7rem .9rem !important;
+  border: 1px solid #dbe7f5 !important;
+  border-top: 0 !important;
+  border-radius: 0 0 1rem 1rem !important;
+  background: rgba(255,255,255,.98) !important;
+  box-shadow: 0 -14px 26px rgba(15,23,42,.08) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+html body .ema-module-root .ema-page-summary {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  color: #334155 !important;
+  font-size: .82rem !important;
+  font-weight: 850 !important;
+}
+
+html body .ema-module-root .ema-pagination-actions {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: .35rem !important;
+}
+
+html body .ema-module-root .ema-pagination .uam-page-icon,
+html body .ema-module-root .ema-pagination-current {
+  width: 2.1rem !important;
+  height: 2.1rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: .65rem !important;
+  background: #fff !important;
+  color: #0f172a !important;
+  font-size: .78rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+html body .ema-module-root .ema-pagination-current {
+  border-color: #60a5fa !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html body .ema-module-root .ema-pagination .uam-page-icon:disabled {
+  opacity: .42 !important;
+  cursor: not-allowed !important;
+}
+
+html body .ema-module-root .ema-empty-state,
+html body .ema-module-root .ema-loading-state {
+  min-height: 13rem !important;
+  display: grid !important;
+  place-items: center !important;
+  align-content: center !important;
+  justify-items: center !important;
+  gap: .65rem !important;
+  color: #64748b !important;
+  font-size: .78rem !important;
+  font-weight: 900 !important;
+  letter-spacing: .08em !important;
+  text-align: center !important;
+  text-transform: uppercase !important;
+}
+
+html body .ema-module-root .ema-empty-state.is-loading::before,
+html body .ema-module-root .ema-loading-state::before {
+  content: "" !important;
+  width: 2.15rem !important;
+  height: 2.15rem !important;
+  display: block !important;
+  border-radius: 999px !important;
+  border: .22rem solid #dbeafe !important;
+  border-top-color: #2563eb !important;
+  animation: ema-spin .8s linear infinite !important;
+}
+
+html body .ema-module-root .ema-empty-state.is-loading {
+  color: #64748b !important;
 }
 
 html body .ema-module-root .ema-device-main-cell,
@@ -130,6 +234,14 @@ html body .ema-module-root .ema-status-dot[class*="not" i] {
 }
 `;
 
+const syncLoadingState = () => {
+  if (typeof document === "undefined") return;
+  document.querySelectorAll<HTMLElement>(".ema-empty-state").forEach((element) => {
+    const text = (element.textContent || "").toLowerCase();
+    element.classList.toggle("is-loading", text.includes("loading"));
+  });
+};
+
 if (typeof document !== "undefined") {
   const existing = document.getElementById(STYLE_ID);
   if (existing) {
@@ -139,6 +251,14 @@ if (typeof document !== "undefined") {
     style.id = STYLE_ID;
     style.textContent = css;
     document.head.appendChild(style);
+  }
+
+  syncLoadingState();
+  const win = window as typeof window & { [OBSERVER_FLAG]?: MutationObserver };
+  if (!win[OBSERVER_FLAG]) {
+    const observer = new MutationObserver(syncLoadingState);
+    observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    win[OBSERVER_FLAG] = observer;
   }
 }
 
