@@ -3,17 +3,17 @@
 
 .hardware-settings-layout,
 .settings-module-root.hardware-module-root .hardware-settings-layout {
-  align-items: flex-start !important;
+  align-items: stretch !important;
 }
 
 .hardware-left-panel,
 .settings-module-root.hardware-module-root .hardware-left-panel {
-  align-self: flex-start !important;
-  height: min(46rem, calc(100vh - 7rem)) !important;
-  min-height: 34rem !important;
-  max-height: min(46rem, calc(100vh - 7rem)) !important;
-  position: sticky !important;
-  top: 0.65rem !important;
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  position: relative !important;
+  top: auto !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
