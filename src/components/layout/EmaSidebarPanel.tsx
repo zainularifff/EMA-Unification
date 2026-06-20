@@ -30,7 +30,7 @@ const sidebarStyles = {
   searchInput:
     "min-w-0 flex-1 border-0 bg-transparent text-xs font-semibold text-slate-700 outline-none placeholder:text-slate-400",
   actionButton:
-    "inline-flex h-8 w-fit items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 shadow-sm shadow-slate-100 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50",
+    "inline-flex h-8 w-full min-w-0 items-center justify-start gap-2 rounded-lg border border-slate-200 bg-white px-3 text-left text-xs font-black text-slate-700 shadow-sm shadow-slate-100 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50",
   actionIcon: "grid shrink-0 place-items-center text-slate-500",
   tree: "min-h-0 flex-1 overflow-auto rounded-xl bg-white p-0",
   treeRow:
