@@ -1,15 +1,62 @@
 /* Hardware selected-device layout bridge while Hardware.tsx is migrated to Tailwind. */
 
+/* KPI cards: keep label/value/note stacked, not one long sentence. */
+.hardware-hero-score .hardware-kpi-content,
+.hardware-hero-score .ema-kpi-content {
+  display: grid !important;
+  grid-template-columns: 1.55rem minmax(0, 1fr) !important;
+  grid-template-areas:
+    "icon label"
+    "icon value"
+    "icon note" !important;
+  align-items: center !important;
+  column-gap: 0.45rem !important;
+  row-gap: 0.06rem !important;
+}
+
+.hardware-hero-score .hardware-kpi-icon,
+.hardware-hero-score .ema-kpi-icon {
+  grid-area: icon;
+  width: 1.45rem !important;
+  height: 1.45rem !important;
+}
+
+.hardware-hero-score .hardware-kpi-label,
+.hardware-hero-score .ema-kpi-label {
+  grid-area: label;
+  display: block !important;
+  margin: 0 !important;
+  line-height: 1.05 !important;
+  white-space: normal !important;
+}
+
+.hardware-hero-score .hardware-kpi-value,
+.hardware-hero-score .ema-kpi-value {
+  grid-area: value;
+  display: block !important;
+  margin: 0.08rem 0 0 !important;
+  line-height: 1 !important;
+}
+
+.hardware-hero-score .hardware-kpi-note,
+.hardware-hero-score .ema-kpi-note {
+  grid-area: note;
+  display: block !important;
+  margin: 0.08rem 0 0 !important;
+  line-height: 1.15 !important;
+  white-space: normal !important;
+}
+
 .hardware-right-device {
   min-width: 0;
   display: block !important;
 }
 
 .hardware-right-panel .hardware-right-header {
-  display: flex !important;
-  align-items: flex-start !important;
-  justify-content: space-between !important;
-  gap: 0.6rem !important;
+  display: grid !important;
+  grid-template-columns: 1.8rem minmax(0, 1fr) 2rem !important;
+  align-items: start !important;
+  gap: 0.55rem !important;
 }
 
 .hardware-right-panel .hardware-right-title {
@@ -26,38 +73,44 @@
 .hardware-right-panel .hardware-action-list {
   display: grid !important;
   grid-template-columns: 1fr !important;
-  gap: 0.45rem !important;
-  margin-top: 0.6rem !important;
+  gap: 0.4rem !important;
+  margin-top: 0.55rem !important;
 }
 
 .hardware-right-panel .hardware-action-item {
   width: 100%;
   min-width: 0;
-  min-height: 3.5rem;
+  min-height: 3.15rem !important;
   display: grid !important;
-  grid-template-columns: 1.9rem minmax(0, 1fr) !important;
+  grid-template-columns: 1.7rem minmax(0, 1fr) !important;
   align-items: center !important;
-  gap: 0.55rem !important;
+  gap: 0.5rem !important;
+  padding: 0.48rem !important;
+}
+
+.hardware-right-panel .hardware-action-icon {
+  width: 1.7rem !important;
+  height: 1.7rem !important;
 }
 
 .hardware-right-panel .hardware-action-item > div:last-child {
   min-width: 0;
   display: grid;
-  gap: 0.12rem;
+  gap: 0.1rem;
 }
 
 .hardware-right-panel .hardware-action-item strong,
 .hardware-right-panel .hardware-action-item span {
   min-width: 0;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
   white-space: normal;
 }
 
 @media (min-width: 1280px) {
   .hardware-main-grid.has-inspector,
   .hardware-main-grid:has(.hardware-right-panel) {
-    grid-template-columns: minmax(0, 1fr) minmax(21rem, 23rem);
+    grid-template-columns: minmax(0, 1fr) minmax(16.5rem, 18rem) !important;
     align-items: start;
   }
 
@@ -85,6 +138,6 @@
 @media (min-width: 1536px) {
   .hardware-main-grid.has-inspector,
   .hardware-main-grid:has(.hardware-right-panel) {
-    grid-template-columns: minmax(0, 1fr) minmax(22rem, 24rem);
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 18.5rem) !important;
   }
 }
