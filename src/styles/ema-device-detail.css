@@ -85,6 +85,11 @@
   padding: 0.35rem 0.7rem;
 }
 
+/* User information is already shown inside Overview > Operational Context. */
+.hardware-detail-tabs button:nth-child(4) {
+  display: none;
+}
+
 .hardware-detail-body,
 .hardware-detail-drawer-body {
   flex: 1 1 auto;
