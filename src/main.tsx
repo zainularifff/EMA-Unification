@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import "./index.css";
-import "./styles/ema-module-sidebar.css";
 import "./styles/ema-device-detail.css";
 import "./styles/ema-modal.css";
 
