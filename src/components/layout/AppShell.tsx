@@ -15,7 +15,7 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopNavbar />
 
-        <main className="min-w-0 flex-1 overflow-auto p-4 md:p-6">
+        <main className="min-w-0 flex-1 overflow-auto p-2">
           <Outlet />
         </main>
       </div>
