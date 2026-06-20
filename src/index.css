@@ -36,7 +36,10 @@ textarea {
   font: inherit;
 }
 
-button { cursor: pointer; }
+button {
+  cursor: pointer;
+}
+
 button:disabled,
 input:disabled,
 select:disabled,
@@ -51,34 +54,9 @@ a {
 }
 
 img,
-svg { display: block; }
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 0.8rem;
+svg {
+  display: block;
 }
-
-thead th {
-  border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
-  padding: 0.45rem 0.6rem;
-  color: #475569;
-  font-size: 0.68rem;
-  font-weight: 850;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-tbody td {
-  border-bottom: 1px solid #f1f5f9;
-  padding: 0.45rem 0.6rem;
-  color: #334155;
-  vertical-align: middle;
-}
-
-tbody tr:hover td { background: #f8fafc; }
 
 .ema-shell {
   display: flex;
@@ -101,145 +79,44 @@ tbody tr:hover td { background: #f8fafc; }
   padding: 0.55rem 0.65rem;
 }
 
-.ema-card,
-.settings-card,
-.settings-panel,
-.hardware-registry-card,
-.software-registry-card,
-.module-card,
-.registry-card,
-.content-card,
-.ema-notification-card,
-.ema-panel-surface {
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.btn,
-.ema-btn,
-.primary-btn,
-.soft-btn,
-.danger-btn,
-.hardware-btn,
-.settings-action-btn,
-.module-action-btn,
-.ema-notification-btn,
-.hardware-command-btn,
-.hardware-icon-btn,
-.hardware-clear-filters-btn {
-  min-height: 2.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.65rem;
-  background: #ffffff;
-  padding: 0.35rem 0.65rem;
-  color: #334155;
-  font-size: 0.76rem;
-  font-weight: 800;
-  line-height: 1;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.btn:hover,
-.ema-btn:hover,
-.primary-btn:hover,
-.soft-btn:hover,
-.danger-btn:hover,
-.hardware-btn:hover,
-.settings-action-btn:hover,
-.module-action-btn:hover,
-.ema-notification-btn:hover,
-.hardware-command-btn:hover:not(:disabled),
-.hardware-icon-btn:hover:not(:disabled),
-.hardware-clear-filters-btn:hover:not(:disabled) {
-  background: #f8fafc;
-  color: #0f172a;
-}
-
-.btn-primary,
-.primary-btn,
-.ema-btn-primary,
-.hardware-btn.primary,
-.ema-notification-btn-primary,
-.hardware-command-btn:nth-of-type(3),
-.hardware-toolbar-export {
-  border-color: #2563eb;
-  background: #2563eb;
-  color: #ffffff;
-}
-
-.danger-btn,
-.ema-btn-danger,
-.hardware-btn.danger,
-.ema-notification-btn-danger {
-  border-color: #fecaca;
-  background: #fef2f2;
-  color: #b91c1c;
-}
-
-.settings-content,
-.hardware-settings-content,
-.software-settings-content,
-.module-content,
-.settings-with-notifications,
-.settings-module-root,
-.hardware-module-root,
-.software-module-root,
-.network-module-root,
-.dashboard-page,
-.report-page {
+/* Hardware remains as the reference module while other page CSS is cleared. */
+.hardware-module-root {
   min-width: 0;
-}
-
-.hardware-module-root,
-.settings-module-root,
-.software-module-root {
   height: 100%;
 }
 
-.settings-content > * + *,
-.hardware-settings-content > * + *,
-.software-settings-content > * + *,
-.module-content > * + *,
-.settings-with-notifications > * + *,
-.settings-module-root > * + *,
-.hardware-module-root > * + *,
-.software-module-root > * + *,
-.network-module-root > * + *,
-.dashboard-page > * + *,
-.report-page > * + * {
+.hardware-module-root > * + * {
   margin-top: 0.5rem;
 }
 
-.settings-layout,
-.hardware-settings-layout,
-.software-settings-layout,
-.module-layout {
+.hardware-module-root .settings-layout,
+.hardware-module-root .hardware-settings-layout {
   min-width: 0;
   display: grid;
   gap: 0.55rem;
 }
 
 @media (min-width: 1024px) {
-  .settings-layout,
-  .hardware-settings-layout,
-  .software-settings-layout,
-  .module-layout {
+  .hardware-module-root .settings-layout,
+  .hardware-module-root .hardware-settings-layout {
     grid-template-columns: 16.25rem minmax(0, 1fr);
     align-items: stretch;
   }
 }
 
-.settings-sidebar,
-.settings-menu,
-.hardware-left-panel,
-.software-left-panel,
-.module-left-panel {
+.hardware-module-root .settings-sidebar,
+.hardware-module-root .settings-menu,
+.hardware-module-root .hardware-left-panel,
+.hardware-module-root .hardware-right-panel,
+.hardware-module-root .hardware-inspector,
+.hardware-module-root .detail-panel,
+.hardware-registry-card,
+.hardware-detail-card,
+.hardware-detail-summary-card,
+.hardware-detail-item,
+.hardware-preview-card,
+.hardware-info-banner,
+.hardware-option-card {
   min-width: 0;
   border: 1px solid #dbe4f0;
   border-radius: 0.75rem;
@@ -248,16 +125,21 @@ tbody tr:hover td { background: #f8fafc; }
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.035);
 }
 
-.panel-head,
+.hardware-module-root .settings-content,
+.hardware-module-root .hardware-settings-content {
+  min-width: 0;
+}
+
+.hardware-module-root .panel-head,
 .hardware-panel-head {
   display: grid;
   gap: 0.1rem;
   margin-bottom: 0.5rem;
 }
 
-.panel-head span,
+.hardware-module-root .panel-head span,
 .hardware-panel-head span,
-.eyebrow {
+.hardware-module-root .eyebrow {
   color: #64748b;
   font-size: 0.65rem;
   font-weight: 900;
@@ -265,14 +147,14 @@ tbody tr:hover td { background: #f8fafc; }
   text-transform: uppercase;
 }
 
-.panel-head strong,
+.hardware-module-root .panel-head strong,
 .hardware-panel-head strong {
   color: #0f172a;
   font-size: 0.88rem;
   font-weight: 900;
 }
 
-.panel-head small,
+.hardware-module-root .panel-head small,
 .hardware-panel-head small {
   color: #64748b;
   font-size: 0.72rem;
@@ -280,14 +162,14 @@ tbody tr:hover td { background: #f8fafc; }
   line-height: 1.25;
 }
 
-.settings-menu-list,
-.ema-module-sidebar-nav {
+.hardware-module-root .settings-menu-list,
+.hardware-module-root .ema-module-sidebar-nav {
   display: grid;
   gap: 0.3rem;
   margin-bottom: 0.55rem;
 }
 
-.setting-btn {
+.hardware-module-root .setting-btn {
   width: 100%;
   display: flex;
   align-items: center;
@@ -300,15 +182,15 @@ tbody tr:hover td { background: #f8fafc; }
   text-align: left;
 }
 
-.setting-btn:hover,
-.setting-btn.active {
+.hardware-module-root .setting-btn:hover,
+.hardware-module-root .setting-btn.active {
   border-color: #dbeafe;
   background: #eff6ff;
   color: #1d4ed8;
 }
 
-.setting-icon,
-.ema-sidebar-tree-icon {
+.hardware-module-root .setting-icon,
+.hardware-module-root .ema-sidebar-tree-icon {
   width: 1.6rem;
   height: 1.6rem;
   flex: 0 0 auto;
@@ -320,14 +202,26 @@ tbody tr:hover td { background: #f8fafc; }
   color: #475569;
 }
 
-.setting-btn strong,
-.setting-btn small { display: block; }
-.setting-btn strong { color: inherit; font-size: 0.78rem; font-weight: 900; }
-.setting-btn small { color: #64748b; font-size: 0.68rem; font-weight: 600; }
+.hardware-module-root .setting-btn strong,
+.hardware-module-root .setting-btn small {
+  display: block;
+}
 
-.section-search,
+.hardware-module-root .setting-btn strong {
+  color: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.hardware-module-root .setting-btn small {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.hardware-module-root .section-search,
 .hardware-search-box,
-.ema-sidebar-field {
+.hardware-module-root .ema-sidebar-field {
   min-height: 2.1rem;
   display: flex;
   align-items: center;
@@ -339,9 +233,9 @@ tbody tr:hover td { background: #f8fafc; }
   color: #64748b;
 }
 
-.section-search input,
+.hardware-module-root .section-search input,
 .hardware-search-box input,
-.ema-sidebar-field input {
+.hardware-module-root .ema-sidebar-field input {
   min-width: 0;
   flex: 1 1 0%;
   border: 0;
@@ -352,18 +246,22 @@ tbody tr:hover td { background: #f8fafc; }
   font-weight: 600;
 }
 
-.ema-sidebar-content,
-.ema-sidebar-subpanel,
-.ema-sidebar-tree,
+.hardware-module-root .ema-sidebar-content,
+.hardware-module-root .ema-sidebar-subpanel,
+.hardware-module-root .ema-sidebar-tree,
 .hardware-tree,
-.hardware-stat-tree { min-width: 0; }
+.hardware-stat-tree {
+  min-width: 0;
+}
 
-.ema-sidebar-subpanel > * + *,
-.ema-sidebar-tree > * + *,
+.hardware-module-root .ema-sidebar-subpanel > * + *,
+.hardware-module-root .ema-sidebar-tree > * + *,
 .hardware-tree > * + *,
-.hardware-stat-tree > * + * { margin-top: 0.3rem; }
+.hardware-stat-tree > * + * {
+  margin-top: 0.3rem;
+}
 
-.ema-sidebar-tree,
+.hardware-module-root .ema-sidebar-tree,
 .hardware-tree,
 .hardware-stat-tree {
   max-height: calc(100vh - 17rem);
@@ -371,7 +269,7 @@ tbody tr:hover td { background: #f8fafc; }
   padding-right: 0.1rem;
 }
 
-.ema-sidebar-tree-node,
+.hardware-module-root .ema-sidebar-tree-node,
 .hardware-tree-node,
 .hardware-stat-tree-node {
   display: flex;
@@ -381,15 +279,17 @@ tbody tr:hover td { background: #f8fafc; }
   padding: 0.1rem;
 }
 
-.ema-sidebar-tree-node:hover,
-.ema-sidebar-tree-node.is-selected,
-.ema-sidebar-tree-node.is-active,
+.hardware-module-root .ema-sidebar-tree-node:hover,
+.hardware-module-root .ema-sidebar-tree-node.is-selected,
+.hardware-module-root .ema-sidebar-tree-node.is-active,
 .hardware-tree-node:hover,
 .hardware-tree-node.is-selected,
 .hardware-stat-tree-node:hover,
-.hardware-stat-tree-node.is-selected { background: #f8fafc; }
+.hardware-stat-tree-node.is-selected {
+  background: #f8fafc;
+}
 
-.ema-sidebar-tree-toggle,
+.hardware-module-root .ema-sidebar-tree-toggle,
 .hardware-tree-node-chevron,
 .hardware-stat-tree-toggle {
   width: 1.25rem;
@@ -399,8 +299,8 @@ tbody tr:hover td { background: #f8fafc; }
   justify-content: center;
 }
 
-.ema-sidebar-tree-toggle,
-.ema-sidebar-tree-main,
+.hardware-module-root .ema-sidebar-tree-toggle,
+.hardware-module-root .ema-sidebar-tree-main,
 .hardware-tree-node-chevron,
 .hardware-tree-node-main,
 .hardware-stat-tree-toggle,
@@ -410,7 +310,7 @@ tbody tr:hover td { background: #f8fafc; }
   color: #475569;
 }
 
-.ema-sidebar-tree-main,
+.hardware-module-root .ema-sidebar-tree-main,
 .hardware-tree-node-main,
 .hardware-stat-tree-main {
   min-width: 0;
@@ -422,7 +322,7 @@ tbody tr:hover td { background: #f8fafc; }
   text-align: left;
 }
 
-.ema-sidebar-tree-label,
+.hardware-module-root .ema-sidebar-tree-label,
 .hardware-tree-node-label,
 .hardware-stat-tree-main > span:last-child {
   min-width: 0;
@@ -434,9 +334,7 @@ tbody tr:hover td { background: #f8fafc; }
   white-space: nowrap;
 }
 
-.settings-hero,
-.hardware-hero,
-.software-hero {
+.hardware-hero {
   display: grid;
   gap: 0.5rem;
   border: 1px solid #dbe4f0;
@@ -446,9 +344,7 @@ tbody tr:hover td { background: #f8fafc; }
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.035);
 }
 
-.hardware-hero h2,
-.settings-hero h2,
-.software-hero h2 {
+.hardware-hero h2 {
   margin: 0;
   color: #0f172a;
   font-size: 0.98rem;
@@ -456,9 +352,7 @@ tbody tr:hover td { background: #f8fafc; }
   letter-spacing: -0.02em;
 }
 
-.hardware-hero p,
-.settings-hero p,
-.software-hero p {
+.hardware-hero p {
   margin: 0.1rem 0 0;
   color: #64748b;
   font-size: 0.76rem;
@@ -471,11 +365,7 @@ tbody tr:hover td { background: #f8fafc; }
   grid-template-columns: repeat(auto-fit, minmax(9.8rem, 1fr));
 }
 
-.ema-kpi-card,
-.hardware-kpi-card,
-.software-kpi-card,
-.metric-card,
-.stat-card {
+.hardware-kpi-card {
   min-width: 0;
   border: 1px solid #dbe4f0;
   border-radius: 0.7rem;
@@ -485,11 +375,7 @@ tbody tr:hover td { background: #f8fafc; }
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
 }
 
-.ema-kpi-card:hover,
 .hardware-kpi-card:hover,
-.software-kpi-card:hover,
-.metric-card:hover,
-.stat-card:hover,
 .hardware-kpi-card.is-active {
   border-color: #93c5fd;
   box-shadow: 0 5px 12px rgba(15, 23, 42, 0.055);
@@ -515,12 +401,12 @@ tbody tr:hover td { background: #f8fafc; }
   font-style: normal;
 }
 
-.hardware-kpi-icon svg { width: 0.85rem; height: 0.85rem; }
+.hardware-kpi-icon svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
 
-.ema-kpi-label,
-.hardware-kpi-label,
-.software-kpi-label,
-.metric-label {
+.hardware-kpi-label {
   color: #64748b;
   font-size: 0.62rem;
   font-weight: 900;
@@ -528,10 +414,7 @@ tbody tr:hover td { background: #f8fafc; }
   text-transform: uppercase;
 }
 
-.ema-kpi-value,
-.hardware-kpi-value,
-.software-kpi-value,
-.metric-value {
+.hardware-kpi-value {
   color: #0f172a;
   font-size: 1.1rem;
   font-weight: 950;
@@ -539,10 +422,7 @@ tbody tr:hover td { background: #f8fafc; }
   letter-spacing: -0.03em;
 }
 
-.ema-kpi-note,
-.hardware-kpi-note,
-.software-kpi-note,
-.metric-note {
+.hardware-kpi-note {
   color: #64748b;
   font-size: 0.66rem;
   font-weight: 600;
@@ -554,7 +434,9 @@ tbody tr:hover td { background: #f8fafc; }
   gap: 0.5rem;
 }
 
-.hardware-main-grid.has-inspector { grid-template-columns: minmax(0, 1fr) 18rem; }
+.hardware-main-grid.has-inspector {
+  grid-template-columns: minmax(0, 1fr) 18rem;
+}
 
 .hardware-registry-card {
   min-width: 0;
@@ -593,7 +475,10 @@ tbody tr:hover td { background: #f8fafc; }
   color: #94a3b8;
 }
 
-.hardware-search-clear:hover { background: #f1f5f9; color: #0f172a; }
+.hardware-search-clear:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
 
 .hardware-registry-filter-row {
   display: grid;
@@ -616,7 +501,10 @@ tbody tr:hover td { background: #f8fafc; }
   text-transform: uppercase;
 }
 
-.hardware-custom-select { position: relative; min-width: 0; }
+.hardware-custom-select {
+  position: relative;
+  min-width: 0;
+}
 
 .hardware-custom-select-trigger {
   width: 100%;
@@ -665,7 +553,10 @@ tbody tr:hover td { background: #f8fafc; }
 }
 
 .hardware-custom-select-option:hover,
-.hardware-custom-select-option.is-selected { background: #eff6ff; color: #1d4ed8; }
+.hardware-custom-select-option.is-selected {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
 
 .hardware-registry-subhead {
   margin-bottom: 0.4rem;
@@ -687,7 +578,7 @@ tbody tr:hover td { background: #f8fafc; }
 
 .hardware-standard-row,
 .hardware-device-table-row,
-.user-row {
+.hardware-module-root .user-row {
   min-width: 720px;
   display: grid;
   grid-template-columns: 3rem minmax(12rem, 1.45fr) minmax(8rem, 1fr) minmax(9rem, 1fr) minmax(6.5rem, 0.8fr) minmax(8.5rem, 0.9fr) minmax(6.5rem, 0.8fr);
@@ -697,7 +588,7 @@ tbody tr:hover td { background: #f8fafc; }
 
 .hardware-standard-row.head,
 .hardware-device-table-row.head,
-.user-row.head {
+.hardware-module-root .user-row.head {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -706,12 +597,16 @@ tbody tr:hover td { background: #f8fafc; }
 
 .hardware-standard-row:not(.head):hover,
 .hardware-device-table-row:not(.head):hover,
-.user-row:not(.head):hover { background: #f8fafc; }
+.hardware-module-root .user-row:not(.head):hover {
+  background: #f8fafc;
+}
 
 .hardware-standard-row.is-selected,
-.hardware-device-row.is-selected { background: #eff6ff; }
+.hardware-device-row.is-selected {
+  background: #eff6ff;
+}
 
-.user-cell {
+.hardware-module-root .user-cell {
   min-width: 0;
   padding: 0.43rem 0.55rem;
   color: #334155;
@@ -719,8 +614,8 @@ tbody tr:hover td { background: #f8fafc; }
   font-weight: 650;
 }
 
-.head .user-cell,
-.head .hardware-sort-btn {
+.hardware-module-root .head .user-cell,
+.hardware-module-root .head .hardware-sort-btn {
   color: #475569;
   font-size: 0.62rem;
   font-weight: 900;
@@ -738,9 +633,11 @@ tbody tr:hover td { background: #f8fafc; }
   color: inherit;
 }
 
-.hardware-sort-icon { color: #94a3b8; }
+.hardware-sort-icon {
+  color: #94a3b8;
+}
 
-.row-index-pill {
+.hardware-module-root .row-index-pill {
   min-width: 1.55rem;
   height: 1.2rem;
   display: inline-flex;
@@ -754,7 +651,7 @@ tbody tr:hover td { background: #f8fafc; }
 }
 
 .hardware-user-name,
-.user-name {
+.hardware-module-root .user-name {
   min-width: 0;
   display: flex;
   align-items: center;
@@ -762,7 +659,9 @@ tbody tr:hover td { background: #f8fafc; }
 }
 
 .hardware-user-name > div,
-.user-name > div { min-width: 0; }
+.hardware-module-root .user-name > div {
+  min-width: 0;
+}
 
 .hardware-user-name strong,
 .hardware-location-cell strong,
@@ -815,28 +714,38 @@ tbody tr:hover td { background: #f8fafc; }
 .hardware-status-dot.is-online,
 .hardware-status-dot.online,
 .hardware-status-pill.is-online,
-.hardware-status-pill.online { background: #dcfce7; color: #166534; }
+.hardware-status-pill.online {
+  background: #dcfce7;
+  color: #166534;
+}
 
 .hardware-status-dot.is-offline,
 .hardware-status-dot.offline,
 .hardware-status-pill.is-offline,
-.hardware-status-pill.offline { background: #f1f5f9; color: #475569; }
+.hardware-status-pill.offline {
+  background: #f1f5f9;
+  color: #475569;
+}
 
 .hardware-status-dot.is-stale,
 .hardware-status-dot.stale,
 .hardware-status-pill.is-stale,
-.hardware-status-pill.stale { background: #fef3c7; color: #92400e; }
+.hardware-status-pill.stale {
+  background: #fef3c7;
+  color: #92400e;
+}
 
 .hardware-status-dot.is-locked,
 .hardware-status-dot.locked,
 .hardware-status-pill.is-locked,
-.hardware-status-pill.locked { background: #fee2e2; color: #991b1b; }
+.hardware-status-pill.locked {
+  background: #fee2e2;
+  color: #991b1b;
+}
 
-.uam-pagination,
 .hardware-pagination,
 .hardware-geo-pagination,
-.pagination,
-.ema-pagination {
+.hardware-module-root .uam-pagination {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -848,22 +757,18 @@ tbody tr:hover td { background: #f8fafc; }
   font-weight: 700;
 }
 
-.uam-pagination-controls,
 .hardware-pagination-actions,
 .hardware-geo-pagination-actions,
-.pagination-controls,
-.ema-pagination-controls {
+.hardware-module-root .uam-pagination-controls {
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
 
-.uam-page-icon,
 .hardware-pagination-actions button,
 .hardware-geo-pagination-actions button,
-.pagination-controls button,
-.ema-pagination-controls button,
-.uam-page-current,
+.hardware-module-root .uam-page-icon,
+.hardware-module-root .uam-page-current,
 .hardware-pagination-current,
 .hardware-geo-pagination-current {
   min-width: 1.75rem;
@@ -879,7 +784,7 @@ tbody tr:hover td { background: #f8fafc; }
   font-weight: 850;
 }
 
-.uam-page-current,
+.hardware-module-root .uam-page-current,
 .hardware-pagination-current,
 .hardware-geo-pagination-current {
   border-color: #0f172a;
@@ -887,15 +792,54 @@ tbody tr:hover td { background: #f8fafc; }
   color: #ffffff;
 }
 
-.hardware-right-panel,
-.hardware-inspector,
-.detail-panel {
-  min-width: 0;
-  border: 1px solid #dbe4f0;
-  border-radius: 0.75rem;
+.hardware-btn,
+.hardware-command-btn,
+.hardware-icon-btn,
+.hardware-clear-filters-btn,
+.hardware-module-root .soft-btn,
+.hardware-module-root .primary-btn,
+.hardware-module-root .danger-btn {
+  min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
   background: #ffffff;
-  padding: 0.65rem;
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.035);
+  padding: 0.35rem 0.65rem;
+  color: #334155;
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.hardware-btn:hover,
+.hardware-command-btn:hover:not(:disabled),
+.hardware-icon-btn:hover:not(:disabled),
+.hardware-clear-filters-btn:hover:not(:disabled),
+.hardware-module-root .soft-btn:hover,
+.hardware-module-root .primary-btn:hover,
+.hardware-module-root .danger-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.hardware-btn.primary,
+.hardware-toolbar-export,
+.hardware-command-btn:nth-of-type(3),
+.hardware-module-root .primary-btn {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.hardware-btn.danger,
+.hardware-module-root .danger-btn {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .hardware-right-header,
@@ -922,9 +866,30 @@ tbody tr:hover td { background: #f8fafc; }
   color: #2563eb;
 }
 
-.hardware-right-title { min-width: 0; flex: 1 1 0%; }
-.hardware-right-title h3 { margin: 0; overflow: hidden; color: #0f172a; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; font-weight: 900; }
-.hardware-right-title p { margin: 0.12rem 0 0; overflow: hidden; color: #64748b; text-overflow: ellipsis; white-space: nowrap; font-size: 0.68rem; font-weight: 600; }
+.hardware-right-title {
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.hardware-right-title h3 {
+  margin: 0;
+  overflow: hidden;
+  color: #0f172a;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.hardware-right-title p {
+  margin: 0.12rem 0 0;
+  overflow: hidden;
+  color: #64748b;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
 
 .hardware-right-close,
 .hardware-detail-close,
@@ -940,7 +905,12 @@ tbody tr:hover td { background: #f8fafc; }
   color: #64748b;
 }
 
-.hardware-action-list { display: grid; gap: 0.4rem; margin-top: 0.55rem; }
+.hardware-action-list {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
 .hardware-action-item {
   width: 100%;
   display: flex;
@@ -953,28 +923,42 @@ tbody tr:hover td { background: #f8fafc; }
   color: #334155;
   text-align: left;
 }
-.hardware-action-item:hover:not(:disabled) { border-color: #bfdbfe; background: #eff6ff; }
-.hardware-action-item strong,
-.hardware-action-item span { display: block; }
-.hardware-action-item strong { color: #0f172a; font-size: 0.74rem; font-weight: 900; }
-.hardware-action-item span { color: #64748b; font-size: 0.64rem; font-weight: 600; }
 
-.form-field,
-.settings-field,
-.ema-field,
-.hardware-form-group,
-.ema-notification-field {
+.hardware-action-item:hover:not(:disabled) {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.hardware-action-item strong,
+.hardware-action-item span {
+  display: block;
+}
+
+.hardware-action-item strong {
+  color: #0f172a;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.hardware-action-item span {
+  color: #64748b;
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.hardware-module-root .form-field,
+.hardware-module-root .settings-field,
+.hardware-module-root .ema-field,
+.hardware-form-group {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.form-field label,
-.settings-field label,
-.ema-field label,
-.hardware-form-group label,
-.ema-notification-field label,
-.ema-notification-label {
+.hardware-module-root .form-field label,
+.hardware-module-root .settings-field label,
+.hardware-module-root .ema-field label,
+.hardware-form-group label {
   color: #64748b;
   font-size: 0.66rem;
   font-weight: 800;
@@ -982,21 +966,18 @@ tbody tr:hover td { background: #f8fafc; }
   text-transform: uppercase;
 }
 
-.form-field input,
-.form-field select,
-.form-field textarea,
-.settings-field input,
-.settings-field select,
-.settings-field textarea,
-.ema-field input,
-.ema-field select,
-.ema-field textarea,
+.hardware-module-root .form-field input,
+.hardware-module-root .form-field select,
+.hardware-module-root .form-field textarea,
+.hardware-module-root .settings-field input,
+.hardware-module-root .settings-field select,
+.hardware-module-root .settings-field textarea,
+.hardware-module-root .ema-field input,
+.hardware-module-root .ema-field select,
+.hardware-module-root .ema-field textarea,
 .hardware-form-group input,
 .hardware-form-group select,
-.hardware-form-group textarea,
-.ema-notification-field input,
-.ema-notification-field select,
-.ema-notification-field textarea {
+.hardware-form-group textarea {
   width: 100%;
   border: 1px solid #e2e8f0;
   border-radius: 0.65rem;
@@ -1008,30 +989,8 @@ tbody tr:hover td { background: #f8fafc; }
   outline: none;
 }
 
-.form-field input:focus,
-.form-field select:focus,
-.form-field textarea:focus,
-.settings-field input:focus,
-.settings-field select:focus,
-.settings-field textarea:focus,
-.ema-field input:focus,
-.ema-field select:focus,
-.ema-field textarea:focus,
-.hardware-form-group input:focus,
-.hardware-form-group select:focus,
-.hardware-form-group textarea:focus,
-.ema-notification-field input:focus,
-.ema-notification-field select:focus,
-.ema-notification-field textarea:focus {
-  border-color: #94a3b8;
-  box-shadow: 0 0 0 3px #f1f5f9;
-}
-
-.modal-overlay,
-.ema-modal-overlay,
 .hardware-modal-overlay,
-.hardware-detail-drawer-overlay,
-.settings-modal-overlay {
+.hardware-detail-drawer-overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -1043,11 +1002,8 @@ tbody tr:hover td { background: #f8fafc; }
   backdrop-filter: blur(6px);
 }
 
-.modal,
-.ema-modal,
 .hardware-modal,
-.hardware-detail-drawer,
-.settings-modal {
+.hardware-detail-drawer {
   width: min(48rem, calc(100vw - 1.3rem));
   max-height: 92vh;
   overflow: hidden;
@@ -1057,12 +1013,11 @@ tbody tr:hover td { background: #f8fafc; }
   box-shadow: 0 20px 42px rgba(15, 23, 42, 0.22);
 }
 
-.hardware-detail-drawer { width: min(58rem, calc(100vw - 1.3rem)); }
+.hardware-detail-drawer {
+  width: min(58rem, calc(100vw - 1.3rem));
+}
 
-.modal-header,
-.ema-modal-header,
 .hardware-modal-header,
-.settings-modal-header,
 .hardware-detail-drawer-header {
   display: flex;
   align-items: center;
@@ -1072,20 +1027,14 @@ tbody tr:hover td { background: #f8fafc; }
   padding: 0.65rem 0.8rem;
 }
 
-.modal-body,
-.ema-modal-body,
 .hardware-modal-body,
-.settings-modal-body,
 .hardware-detail-body {
   max-height: 72vh;
   overflow: auto;
   padding: 0.7rem 0.8rem;
 }
 
-.modal-footer,
-.ema-modal-footer,
 .hardware-modal-footer,
-.settings-modal-footer,
 .hardware-detail-form-footer {
   display: flex;
   flex-wrap: wrap;
@@ -1105,19 +1054,12 @@ tbody tr:hover td { background: #f8fafc; }
   padding: 0.65rem 0.8rem 0;
 }
 
-.hardware-detail-card,
-.hardware-detail-summary-card,
-.hardware-detail-item,
-.hardware-preview-card,
-.hardware-info-banner,
-.hardware-option-card {
-  border: 1px solid #e2e8f0;
-  border-radius: 0.65rem;
-  background: #ffffff;
-  padding: 0.55rem;
+.hardware-detail-card h3 {
+  margin: 0 0 0.45rem;
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 900;
 }
-
-.hardware-detail-card h3 { margin: 0 0 0.45rem; color: #0f172a; font-size: 0.78rem; font-weight: 900; }
 
 .hardware-detail-tabs {
   display: flex;
@@ -1137,7 +1079,11 @@ tbody tr:hover td { background: #f8fafc; }
   font-weight: 800;
 }
 
-.hardware-detail-tabs button.is-active { border-color: #0f172a; background: #0f172a; color: #ffffff; }
+.hardware-detail-tabs button.is-active {
+  border-color: #0f172a;
+  background: #0f172a;
+  color: #ffffff;
+}
 
 .hardware-detail-item span,
 .hardware-detail-summary-card span,
@@ -1160,11 +1106,7 @@ tbody tr:hover td { background: #f8fafc; }
   word-break: break-word;
 }
 
-.toast-container,
-.ema-toast-layer,
-.settings-toast-layer,
-.hardware-toast-layer,
-.module-toast-layer {
+.hardware-toast-layer {
   position: fixed;
   top: 0.65rem;
   right: 0.65rem;
@@ -1175,13 +1117,7 @@ tbody tr:hover td { background: #f8fafc; }
   gap: 0.5rem;
 }
 
-.toast,
-.ema-toast,
-.settings-toast,
-.hardware-toast,
-.module-toast,
-.toast-message,
-.toast-card {
+.hardware-toast {
   position: fixed;
   top: 4.2rem;
   right: 0.65rem;
@@ -1200,9 +1136,21 @@ tbody tr:hover td { background: #f8fafc; }
 }
 
 .hardware-toast strong,
-.hardware-toast span { display: block; }
-.hardware-toast strong { color: #0f172a; font-weight: 900; }
-.hardware-toast span { color: #64748b; font-size: 0.7rem; font-weight: 600; }
+.hardware-toast span {
+  display: block;
+}
+
+.hardware-toast strong {
+  color: #0f172a;
+  font-weight: 900;
+}
+
+.hardware-toast span {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
 .hardware-toast-icon {
   width: 1.8rem;
   height: 1.8rem;
@@ -1214,103 +1162,53 @@ tbody tr:hover td { background: #f8fafc; }
   background: #eff6ff;
   color: #2563eb;
 }
-.hardware-toast button { border: 0; background: transparent; color: #94a3b8; }
-.toast-success,
-.ema-toast-success,
-.settings-toast-success,
-.hardware-toast-success { border-color: #a7f3d0; }
-.toast-error,
-.toast-delete,
-.ema-toast-error,
-.ema-toast-delete,
-.settings-toast-error,
+
+.hardware-toast button {
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+}
+
+.hardware-toast-success {
+  border-color: #a7f3d0;
+}
+
 .hardware-toast-error,
-.hardware-toast-delete { border-color: #fecaca; }
-
-.ema-notification-shell { width: 100%; }
-.ema-notification-shell > * + *,
-.ema-notification-body > * + *,
-.ema-notification-section > * + * { margin-top: 0.55rem; }
-
-.ema-notification-topbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.75rem;
-  background: #ffffff;
-  padding: 0.65rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+.hardware-toast-delete {
+  border-color: #fecaca;
 }
-
-.ema-notification-title { margin: 0; color: #0f172a; font-size: 0.95rem; font-weight: 900; }
-.ema-notification-subtitle { margin: 0; color: #64748b; font-size: 0.76rem; font-weight: 600; }
-
-.ema-notification-actions,
-.ema-notification-tabs,
-.ema-notification-form-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.ema-notification-tab {
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  background: #ffffff;
-  padding: 0.35rem 0.6rem;
-  color: #475569;
-  font-size: 0.74rem;
-  font-weight: 850;
-}
-
-.ema-notification-tab-active { border-color: #0f172a; background: #0f172a; color: #ffffff; }
-.ema-notification-card,
-.ema-notification-section,
-.ema-notification-panel { padding: 0.65rem; }
-.ema-notification-grid,
-.ema-notification-section-grid { display: grid; gap: 0.55rem; }
-
-@media (min-width: 768px) {
-  .ema-notification-grid,
-  .ema-notification-section-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-.ema-notification-alert {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  border: 1px solid #dbeafe;
-  border-radius: 0.65rem;
-  background: #eff6ff;
-  padding: 0.55rem 0.65rem;
-  color: #1d4ed8;
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.ema-notification-alert-success { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
-.ema-notification-alert-error { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
 
 @media (max-width: 1200px) {
   .hardware-scan-command-row,
-  .hardware-registry-filter-row { grid-template-columns: 1fr; justify-content: stretch; }
-  .hardware-main-grid.has-inspector { grid-template-columns: 1fr; }
+  .hardware-registry-filter-row {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
+  .hardware-main-grid.has-inspector {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
-  .ema-page { padding: 0.45rem; }
-  .hardware-hero-score { grid-template-columns: 1fr 1fr; }
-  .uam-pagination,
+  .ema-page {
+    padding: 0.45rem;
+  }
+
+  .hardware-hero-score {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .hardware-pagination,
   .hardware-geo-pagination,
-  .pagination,
-  .ema-pagination { align-items: flex-start; flex-direction: column; }
+  .hardware-module-root .uam-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 560px) {
-  .hardware-hero-score { grid-template-columns: 1fr; }
+  .hardware-hero-score {
+    grid-template-columns: 1fr;
+  }
 }
