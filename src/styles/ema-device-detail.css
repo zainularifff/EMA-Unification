@@ -8,6 +8,20 @@
   --ema-detail-muted: #64748b;
   --ema-detail-strong: #0f172a;
   --ema-detail-soft: #f8fafc;
+  --ema-detail-overlay-z: 2147483000;
+  --ema-detail-modal-z: 2147483001;
+}
+
+:is(.ema-detail-overlay, .hardware-detail-drawer-overlay, .hardware-detail-form-overlay) {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: var(--ema-detail-overlay-z) !important;
+  isolation: isolate !important;
+}
+
+:is(.ema-detail-modal, .hardware-detail-drawer, .hardware-detail-form-modal) {
+  position: relative !important;
+  z-index: var(--ema-detail-modal-z) !important;
 }
 
 .hardware-detail-drawer {
