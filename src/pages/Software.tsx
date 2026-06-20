@@ -97,10 +97,6 @@ type ToastState = {
 const PAGE_SIZE = 10;
 const EMPTY_VALUE = "-";
 
-function cx(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
-}
-
 function resolveApiBaseUrl() {
   const envUrl = ((import.meta.env.VITE_API_BASE_URL as string | undefined) || (import.meta.env.VITE_API_URL as string | undefined) || "").trim();
   return envUrl ? envUrl.replace(/\/$/, "") : "";
@@ -666,7 +662,7 @@ function Software() {
   };
 
   const renderTree = (nodes: TreeNode[], depth = 0, mode: SidebarTab = "branch") => (
-    <div className={depth > 0 ? "grid gap-1 border-l border-slate-200 pl-3 ml-4" : "grid gap-1"}>
+    <div>
       {nodes.map((node) => {
         const hasChildren = Boolean(node.children?.length);
         const isExpanded = expandedGroups.has(node.id);
@@ -684,33 +680,16 @@ function Software() {
         const isActive = isStat ? node.id === activeStatId : selectedNode.id === node.id;
 
         return (
-          <div key={node.id} className="relative">
-            <div
-              className={cx(
-                "grid grid-cols-[1.35rem_minmax(0,1fr)] items-center rounded-xl border border-transparent",
-                isActive && "border-blue-300 bg-blue-50 shadow-[inset_3px_0_0_#2563eb]",
-                !isActive && "hover:border-slate-200 hover:bg-slate-50"
-              )}
-            >
-              <button
-                type="button"
-                className="flex h-9 w-7 items-center justify-center text-slate-500"
-                onClick={() => (hasChildren ? toggleNode(node) : handleNodeSelect(node))}
-                aria-label={hasChildren ? (isExpanded ? "Collapse" : "Expand") : "Open"}
-              >
-                {hasChildren ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : <span aria-hidden="true" />}
-              </button>
-
-              <button type="button" className="flex min-w-0 items-center gap-2 py-2 pr-2 text-left" onClick={() => handleNodeSelect(node)}>
-                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                  {isDevice ? <MonitorSmartphone size={13} /> : isStat ? <Database size={13} /> : hasChildren && isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[0.82rem] font-black text-slate-900">{node.label}</span>
-                {node.type !== "org" && getTreeCount(node) > 0 && <span className="text-[0.78rem] font-black text-slate-500">{getTreeCount(node).toLocaleString()}</span>}
-              </button>
-            </div>
-
-            {hasChildren && isExpanded && <div className="mt-1">{renderTree(node.children || [], depth + 1, mode)}</div>}
+          <div key={node.id}>
+            <button type="button" onClick={() => (hasChildren ? toggleNode(node) : handleNodeSelect(node))} aria-label={hasChildren ? (isExpanded ? "Collapse" : "Expand") : "Open"}>
+              {hasChildren ? (isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />) : null}
+            </button>
+            <button type="button" onClick={() => handleNodeSelect(node)}>
+              {isDevice ? <MonitorSmartphone size={13} /> : isStat ? <Database size={13} /> : hasChildren && isExpanded ? <FolderOpen size={15} /> : <Folder size={15} />}
+              {" "}{node.label}{isActive ? " *" : ""}
+              {node.type !== "org" && getTreeCount(node) > 0 ? ` (${getTreeCount(node).toLocaleString()})` : ""}
+            </button>
+            {hasChildren && isExpanded ? <div>{renderTree(node.children || [], depth + 1, mode)}</div> : null}
           </div>
         );
       })}
@@ -718,89 +697,58 @@ function Software() {
   );
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root ema-page container-fluid p-3 p-xl-4" data-section="software">
+    <main data-section="software">
       {toast && (
-        <div className="fixed right-6 top-[86px] z-[2147483647] max-w-[26rem] rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl">
-          <div className="flex items-start gap-3">
-            <div className={cx("flex h-10 w-10 flex-none items-center justify-center rounded-xl border", toast.type === "error" ? "border-red-200 bg-red-50 text-red-600" : "border-blue-200 bg-blue-50 text-blue-600")}>
-              {toast.type === "error" ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <strong className="block text-sm font-black text-slate-900">{toast.title}</strong>
-              <span className="mt-1 block text-xs font-semibold text-slate-600">{toast.message}</span>
-            </div>
-            <button type="button" className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setToast(null)} aria-label="Close notification">
-              <X size={15} />
-            </button>
-          </div>
-        </div>
+        <section>
+          <strong>{toast.title}</strong>
+          <p>{toast.message}</p>
+          <button type="button" onClick={() => setToast(null)} aria-label="Close notification"><X size={15} /></button>
+        </section>
       )}
 
-      <div className="settings-layout grid min-w-0 gap-3">
-        <aside className="settings-menu ema-panel-surface rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="mb-3 grid gap-0.5">
-            <span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-slate-500">SOFTWARE</span>
-            <strong className="text-[0.92rem] font-black text-slate-950">Software Inventory</strong>
-            <small className="text-[0.75rem] font-semibold leading-5 text-slate-600">Browse software records, devices and statistics.</small>
-          </div>
+      <section>
+        <aside>
+          <header>
+            <span>SOFTWARE</span>
+            <h2>Software Inventory</h2>
+            <p>Browse software records, devices and statistics.</p>
+          </header>
 
-          <nav className="ema-module-sidebar-nav" role="tablist" aria-label="Software navigation">
-            <button type="button" className={cx(sidebarTab === "branch" && "is-active")} aria-selected={sidebarTab === "branch"} onClick={() => setSidebarTab("branch")}>
-              <FolderOpen size={16} />
-              <strong>Branch</strong>
+          <nav role="tablist" aria-label="Software navigation">
+            <button type="button" aria-selected={sidebarTab === "branch"} onClick={() => setSidebarTab("branch")}>
+              <FolderOpen size={16} /> Branch
             </button>
-            <button type="button" className={cx(sidebarTab === "statistics" && "is-active")} aria-selected={sidebarTab === "statistics"} onClick={() => setSidebarTab("statistics")}>
-              <Database size={16} />
-              <strong>Statistics</strong>
+            <button type="button" aria-selected={sidebarTab === "statistics"} onClick={() => setSidebarTab("statistics")}>
+              <Database size={16} /> Statistics
             </button>
           </nav>
 
-          <div className="ema-sidebar-field mb-3 flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500">
+          <label>
             <Search size={15} />
-            <input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder={sidebarTab === "branch" ? "Search branches..." : "Search statistics..."}
-              className="min-w-0 flex-1 border-0 bg-transparent text-[0.78rem] font-semibold text-slate-900 outline-none placeholder:text-slate-400"
-            />
-            {searchTerm && (
-              <button type="button" className="rounded-md p-1 hover:bg-slate-100" onClick={() => setSearchTerm("")} aria-label="Clear search">
-                <X size={14} />
-              </button>
-            )}
-          </div>
+            <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={sidebarTab === "branch" ? "Search branches..." : "Search statistics..."} />
+          </label>
+          {searchTerm && <button type="button" onClick={() => setSearchTerm("")} aria-label="Clear search"><X size={14} /></button>}
 
-          <div className="ema-sidebar-content">
-            <div className="ema-sidebar-tree pr-1">
-              {sidebarTab === "branch" ? (
-                <>
-                  {treeLoading && (
-                    <div className="grid min-h-[9rem] place-items-center text-center">
-                      <div>
-                        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-100 border-t-blue-500" />
-                        <div className="mt-3 text-[0.72rem] font-black uppercase tracking-[0.12em] text-slate-400">Loading Data...</div>
-                      </div>
-                    </div>
-                  )}
-                  {!treeLoading && treeError && <div className="ema-sidebar-empty is-error">{treeError}</div>}
-                  {!treeLoading && renderTree(filteredTree, 0, "branch")}
-                </>
-              ) : (
-                renderTree(filteredTree, 0, "statistics")
-              )}
-            </div>
-          </div>
+          <section>
+            {sidebarTab === "branch" ? (
+              <>
+                {treeLoading && <p>Loading Data...</p>}
+                {!treeLoading && treeError && <p>{treeError}</p>}
+                {!treeLoading && renderTree(filteredTree, 0, "branch")}
+              </>
+            ) : (
+              renderTree(filteredTree, 0, "statistics")
+            )}
+          </section>
         </aside>
 
-        <section className="grid min-w-0 gap-3">
-          <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="mb-3">
-              <span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-slate-500">SOFTWARE</span>
-              <h2 className="mt-1 text-lg font-black leading-tight text-slate-950">{selectedStat ? "Software Statistics" : "Software Registry"}</h2>
-              <p className="mt-1 text-[0.82rem] font-semibold text-slate-600">Live software inventory with package records, classification, device scope and scan controls.</p>
-            </div>
+        <section>
+          <section>
+            <span>SOFTWARE</span>
+            <h2>{selectedStat ? "Software Statistics" : "Software Registry"}</h2>
+            <p>Live software inventory with package records, classification, device scope and scan controls.</p>
 
-            <div className="grid gap-2 md:grid-cols-5">
+            <div>
               {[
                 { key: "all" as ActiveView, title: "Total Records", value: summary.totalRecords, subtitle: `${filteredRecords.length} shown`, icon: <Package size={16} /> },
                 { key: "unique" as ActiveView, title: "Unique Software", value: summary.uniqueSoftware, subtitle: "unique names", icon: <BarChart3 size={16} /> },
@@ -808,188 +756,133 @@ function Software() {
                 { key: "categories" as ActiveView, title: "Categories", value: summary.categories, subtitle: "class types", icon: <Layers size={16} /> },
                 { key: "unclassified" as ActiveView, title: "Unclassified", value: summary.unclassified, subtitle: "no category", icon: <AlertTriangle size={16} /> },
               ].map((card) => (
-                <button
-                  key={card.key}
-                  type="button"
-                  className={cx("rounded-xl border bg-white p-3 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50/40", activeView === card.key && !selectedStat ? "border-blue-400 ring-1 ring-blue-200" : "border-slate-200")}
-                  onClick={() => activateView(card.key)}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-blue-50 text-blue-600">{card.icon}</span>
-                    <div className="min-w-0">
-                      <span className="block text-[0.68rem] font-black uppercase tracking-[0.05em] text-slate-500">{card.title}</span>
-                      <strong className="mt-0.5 block text-lg font-black leading-none text-slate-950">{card.value}</strong>
-                      <small className="mt-1 block text-[0.68rem] font-bold text-slate-500">{card.subtitle}</small>
-                    </div>
-                  </div>
+                <button key={card.key} type="button" onClick={() => activateView(card.key)}>
+                  {card.icon} {card.title}: <strong>{card.value}</strong> <small>{card.subtitle}</small>
                 </button>
               ))}
             </div>
           </section>
 
-          <section className="flex min-h-[28rem] min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="grid gap-3 p-3">
-              <div className="grid items-center gap-2 xl:grid-cols-[max-content_max-content_max-content_max-content_minmax(260px,1fr)_2.5rem_max-content]">
-                <button type="button" className="flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-[0.78rem] font-black text-slate-950 shadow-sm hover:bg-blue-50" onClick={() => setShowInsightsModal(true)}>
-                  <FileText size={15} />
-                  Insights <span className="font-black text-blue-600">{classificationCoverage}%</span>
-                </button>
-                <button type="button" className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[0.78rem] font-black text-slate-500 shadow-sm hover:bg-slate-50 disabled:opacity-50" onClick={() => void handleSoftwareScan("device")} disabled={selectedNode.type !== "device" || scanLoading}>
-                  <MonitorSmartphone size={15} className={scanLoading ? "animate-spin" : ""} />
-                  Scan Device
-                </button>
-                <button type="button" className="flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[0.78rem] font-black text-slate-500 shadow-sm hover:bg-slate-50 disabled:opacity-50" onClick={() => void handleSoftwareScan("folder")} disabled={selectedRelationId <= 0 || scanLoading}>
-                  <FolderOpen size={15} className={scanLoading ? "animate-spin" : ""} />
-                  Scan Folder
-                </button>
-                <button type="button" className="flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-300 bg-white px-4 text-[0.78rem] font-black text-blue-600 shadow-sm hover:bg-blue-50 disabled:opacity-50" onClick={() => void handleSoftwareScan("all")} disabled={scanLoading}>
-                  <RefreshCw size={15} className={scanLoading ? "animate-spin" : ""} />
-                  Scan All
-                </button>
-                <div className="flex h-10 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500">
-                  <Search size={15} />
-                  <input
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search software records..."
-                    className="min-w-0 flex-1 border-0 bg-transparent text-[0.8rem] font-semibold text-slate-900 outline-none placeholder:text-slate-400"
-                  />
-                  {searchTerm && (
-                    <button type="button" className="rounded-md p-1 hover:bg-slate-100" onClick={() => setSearchTerm("")} aria-label="Clear search">
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-                <button type="button" className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" onClick={() => void refreshCurrentView()} title="Refresh" aria-label="Refresh software records">
-                  <RefreshCw size={15} />
-                </button>
-                <button type="button" className="flex h-10 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-[0.78rem] font-black text-white shadow-sm hover:bg-blue-700 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400" onClick={exportCurrentView} disabled={(selectedStat ? statLoading || statRows.length === 0 : loading || filteredRecords.length === 0)}>
-                  <Download size={15} />
-                  Export
-                </button>
+          <section>
+            <div>
+              <button type="button" onClick={() => setShowInsightsModal(true)}><FileText size={15} /> Insights {classificationCoverage}%</button>
+              <button type="button" onClick={() => void handleSoftwareScan("device")} disabled={selectedNode.type !== "device" || scanLoading}><MonitorSmartphone size={15} /> Scan Device</button>
+              <button type="button" onClick={() => void handleSoftwareScan("folder")} disabled={selectedRelationId <= 0 || scanLoading}><FolderOpen size={15} /> Scan Folder</button>
+              <button type="button" onClick={() => void handleSoftwareScan("all")} disabled={scanLoading}><RefreshCw size={15} /> Scan All</button>
+              <label>
+                <Search size={15} />
+                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search software records..." />
+              </label>
+              <button type="button" onClick={() => void refreshCurrentView()} title="Refresh" aria-label="Refresh software records"><RefreshCw size={15} /></button>
+              <button type="button" onClick={exportCurrentView} disabled={(selectedStat ? statLoading || statRows.length === 0 : loading || filteredRecords.length === 0)}><Download size={15} /> Export</button>
+            </div>
+
+            {!selectedStat && (
+              <div>
+                <label>
+                  Category
+                  <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                    <option value="all">All category</option>
+                    {categoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Device Type
+                  <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                    <option value="all">All type</option>
+                    {typeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={() => { setCategoryFilter("all"); setTypeFilter("all"); setSearchTerm(""); setActiveView("all"); }}>Reset</button>
               </div>
+            )}
 
-              {!selectedStat && (
-                <div className="grid justify-end gap-3 md:grid-cols-[minmax(210px,230px)_minmax(210px,230px)_max-content]">
-                  <label className="grid gap-1">
-                    <span className="text-[0.66rem] font-black uppercase tracking-[0.06em] text-slate-500">Category</span>
-                    <select className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[0.8rem] font-bold text-slate-900 outline-none focus:border-blue-300" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                      <option value="all">All category</option>
-                      {categoryOptions.map((category) => (
-                        <option key={category} value={category}>{category}</option>
+            {selectedStat ? (
+              <section>
+                <h3>{currentStatTitle}</h3>
+                {statLoading && <p>Loading Data...</p>}
+                {!statLoading && statError && <p>{statError}</p>}
+                {!statLoading && !statError && currentStatRows.length === 0 && <p>No data found</p>}
+                {!statLoading && !statError && currentStatRows.length > 0 && (
+                  <table>
+                    <thead>
+                      <tr>{["No", "Name", "Version", "Publisher", "Reference", "Count"].map((header) => <th key={header}>{header}</th>)}</tr>
+                    </thead>
+                    <tbody>
+                      {currentStatRows.map((row, index) => (
+                        <tr key={`${selectedStat}-${index}`}>
+                          <td>{(page - 1) * PAGE_SIZE + index + 1}</td>
+                          <td>{pickStatValue(row, ["Name", "SoftwareName", "Software", "FileName", "Application", "Item", "column1"])}</td>
+                          <td>{pickStatValue(row, ["Version", "SoftwareVersion", "column2"])}</td>
+                          <td>{pickStatValue(row, ["Publisher", "Manufacturer", "Vendor", "column3"])}</td>
+                          <td>{pickStatValue(row, ["Reference", "Path", "DeviceName", "ComputerName", "column4"])}</td>
+                          <td>{pickStatValue(row, ["Count", "Total", "Cnt", "column5"])}</td>
+                        </tr>
                       ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-[0.66rem] font-black uppercase tracking-[0.06em] text-slate-500">Device Type</span>
-                    <select className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[0.8rem] font-bold text-slate-900 outline-none focus:border-blue-300" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-                      <option value="all">All type</option>
-                      {typeOptions.map((type) => (
-                        <option key={type} value={type}>{type}</option>
+                    </tbody>
+                  </table>
+                )}
+              </section>
+            ) : (
+              <section>
+                {loading && <p>Loading Data...</p>}
+                {!loading && error && <p>{error}</p>}
+                {!loading && !error && currentRows.length === 0 && <p>No data found</p>}
+                {!loading && !error && currentRows.length > 0 && (
+                  <table>
+                    <thead>
+                      <tr>
+                        {[
+                          ["Software Name", "softwareName" as SortKey],
+                          ["Category", "category" as SortKey],
+                          ["Publisher / Description", "softwareName" as SortKey],
+                          ["Version", "version" as SortKey],
+                          ["Device", "deviceName" as SortKey],
+                          ["Type", "machineType" as SortKey],
+                          ["IP Address", "deviceName" as SortKey],
+                          ["Last Updated", "lastUpdated" as SortKey],
+                        ].map(([label, key]) => <th key={String(label)}><button type="button" onClick={() => handleSort(key as SortKey)}>{label}{renderSort(key as SortKey)}</button></th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentRows.map((record) => (
+                        <tr key={record.id}>
+                          <td>{record.softwareName}</td>
+                          <td>{record.category}</td>
+                          <td>{record.publisher}<br /><small>{record.description || EMPTY_VALUE}</small></td>
+                          <td>{record.version}</td>
+                          <td>{record.deviceName}<br /><small>{record.department}</small></td>
+                          <td>{record.machineType}</td>
+                          <td>{record.ip}</td>
+                          <td>{record.lastUpdated}</td>
+                        </tr>
                       ))}
-                    </select>
-                  </label>
-                  <button type="button" className="mt-auto flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[0.78rem] font-black text-slate-600 hover:bg-slate-50" onClick={() => { setCategoryFilter("all"); setTypeFilter("all"); setSearchTerm(""); setActiveView("all"); }}>
-                    Reset
-                  </button>
-                </div>
-              )}
-            </div>
+                    </tbody>
+                  </table>
+                )}
+              </section>
+            )}
 
-            <div className="min-h-[22rem] flex-1 overflow-auto border-t border-slate-100">
-              {selectedStat ? (
-                <>
-                  <div className="sticky top-0 z-10 grid min-w-[900px] grid-cols-[4rem_2fr_1fr_1.2fr_1.5fr_1fr] bg-slate-100 text-[0.68rem] font-black uppercase tracking-[0.06em] text-slate-600">
-                    {["No", "Name", "Version", "Publisher", "Reference", "Count"].map((header) => <div key={header} className="px-3 py-3">{header}</div>)}
-                  </div>
-                  {statLoading && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">Loading Data...</div>}
-                  {!statLoading && statError && <div className="grid min-h-[18rem] place-items-center p-6 text-center text-sm font-bold text-red-600">{statError}</div>}
-                  {!statLoading && !statError && currentStatRows.length === 0 && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">No data found</div>}
-                  {!statLoading && !statError && currentStatRows.map((row, index) => (
-                    <div key={`${selectedStat}-${index}`} className="grid min-w-[900px] grid-cols-[4rem_2fr_1fr_1.2fr_1.5fr_1fr] border-t border-slate-100 text-[0.78rem] font-bold text-slate-700 hover:bg-slate-50">
-                      <div className="px-3 py-3">{(page - 1) * PAGE_SIZE + index + 1}</div>
-                      <div className="px-3 py-3 font-black text-slate-950">{pickStatValue(row, ["Name", "SoftwareName", "Software", "FileName", "Application", "Item", "column1"])}</div>
-                      <div className="px-3 py-3">{pickStatValue(row, ["Version", "SoftwareVersion", "column2"])}</div>
-                      <div className="px-3 py-3">{pickStatValue(row, ["Publisher", "Manufacturer", "Vendor", "column3"])}</div>
-                      <div className="px-3 py-3">{pickStatValue(row, ["Reference", "Path", "DeviceName", "ComputerName", "column4"])}</div>
-                      <div className="px-3 py-3">{pickStatValue(row, ["Count", "Total", "Cnt", "column5"])}</div>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <div className="sticky top-0 z-10 grid min-w-[1160px] grid-cols-[2fr_1.1fr_1.6fr_1fr_1.35fr_1fr_1fr_1.2fr] bg-slate-100 text-[0.68rem] font-black uppercase tracking-[0.06em] text-slate-600">
-                    {[
-                      ["Software Name", "softwareName" as SortKey],
-                      ["Category", "category" as SortKey],
-                      ["Publisher / Description", "softwareName" as SortKey],
-                      ["Version", "version" as SortKey],
-                      ["Device", "deviceName" as SortKey],
-                      ["Type", "machineType" as SortKey],
-                      ["IP Address", "deviceName" as SortKey],
-                      ["Last Updated", "lastUpdated" as SortKey],
-                    ].map(([label, key]) => (
-                      <button key={String(label)} type="button" className="px-3 py-3 text-left" onClick={() => handleSort(key as SortKey)}>{label}{renderSort(key as SortKey)}</button>
-                    ))}
-                  </div>
-                  {loading && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">Loading Data...</div>}
-                  {!loading && error && <div className="grid min-h-[18rem] place-items-center p-6 text-center text-sm font-bold text-red-600">{error}</div>}
-                  {!loading && !error && currentRows.length === 0 && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">No data found</div>}
-                  {!loading && !error && currentRows.map((record) => (
-                    <div key={record.id} className="grid min-w-[1160px] grid-cols-[2fr_1.1fr_1.6fr_1fr_1.35fr_1fr_1fr_1.2fr] border-t border-slate-100 text-[0.78rem] font-bold text-slate-700 hover:bg-slate-50">
-                      <div className="px-3 py-3 font-black text-slate-950">{record.softwareName}</div>
-                      <div className="px-3 py-3">{record.category}</div>
-                      <div className="px-3 py-3"><span className="block text-slate-900">{record.publisher}</span><small className="text-slate-500">{record.description || EMPTY_VALUE}</small></div>
-                      <div className="px-3 py-3">{record.version}</div>
-                      <div className="px-3 py-3"><span className="block text-slate-900">{record.deviceName}</span><small className="text-slate-500">{record.department}</small></div>
-                      <div className="px-3 py-3">{record.machineType}</div>
-                      <div className="px-3 py-3 font-mono">{record.ip}</div>
-                      <div className="px-3 py-3">{record.lastUpdated}</div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-3 py-3 text-[0.78rem] font-bold text-slate-500">
-              <span>
-                Showing page {page} of {pageCount} • {(selectedStat ? statRows.length : filteredRecords.length).toLocaleString()} records
-              </span>
-              <div className="flex items-center gap-2">
-                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage(1)} disabled={page <= 1}>First</button>
-                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Prev</button>
-                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount}>Next</button>
-                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage(pageCount)} disabled={page >= pageCount}>Last</button>
-              </div>
-            </div>
+            <footer>
+              <span>Showing page {page} of {pageCount} • {(selectedStat ? statRows.length : filteredRecords.length).toLocaleString()} records</span>
+              <button type="button" onClick={() => setPage(1)} disabled={page <= 1}>First</button>
+              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Prev</button>
+              <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount}>Next</button>
+              <button type="button" onClick={() => setPage(pageCount)} disabled={page >= pageCount}>Last</button>
+            </footer>
           </section>
         </section>
-      </div>
+      </section>
 
       {showInsightsModal && (
-        <div className="fixed inset-0 z-[2147483000] grid place-items-center bg-slate-950/40 p-4" onClick={() => setShowInsightsModal(false)}>
-          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <span className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-blue-600">Software Insights</span>
-                <h3 className="mt-1 text-lg font-black text-slate-950">Classification Coverage</h3>
-                <p className="mt-1 text-sm font-semibold text-slate-600">{classificationCoverage}% of software records are categorized.</p>
-              </div>
-              <button type="button" className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" onClick={() => setShowInsightsModal(false)} aria-label="Close insights">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Unclassified</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.unclassified}</strong></div>
-              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Categories</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.categories}</strong></div>
-              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Unique Software</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.uniqueSoftware}</strong></div>
-              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Linked Devices</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.uniqueDevices}</strong></div>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button type="button" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white" onClick={() => setShowInsightsModal(false)}>Done</button>
-            </div>
-          </div>
-        </div>
+        <dialog open>
+          <h3>Software Insights</h3>
+          <p>Classification coverage: {classificationCoverage}%</p>
+          <p>Total records: {summary.totalRecords}</p>
+          <p>Unique software: {summary.uniqueSoftware}</p>
+          <p>Unclassified: {summary.unclassified}</p>
+          <button type="button" onClick={() => setShowInsightsModal(false)}>Close</button>
+        </dialog>
       )}
     </main>
   );
