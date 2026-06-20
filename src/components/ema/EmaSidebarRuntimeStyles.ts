@@ -1,15 +1,12 @@
 const STYLE_ID = "ema-sidebar-runtime-styles";
 
 const css = `
-.ema-sidebar-content,
-.ema-sidebar-subpanel,
 .ema-module-root .ema-sidebar-content,
 .ema-module-root .ema-sidebar-subpanel {
   width: 100% !important;
   min-width: 0 !important;
 }
 
-.ema-sidebar-content > p,
 .ema-module-root .ema-sidebar-content > p {
   display: none !important;
 }
