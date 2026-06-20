@@ -9,12 +9,18 @@
 .hardware-left-panel,
 .settings-module-root.hardware-module-root .hardware-left-panel {
   align-self: flex-start !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
+  height: min(46rem, calc(100vh - 7rem)) !important;
+  min-height: 34rem !important;
+  max-height: min(46rem, calc(100vh - 7rem)) !important;
+  position: sticky !important;
+  top: 0.65rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
 }
 
 .hardware-left-panel .panel-head {
+  flex: 0 0 auto;
   margin-bottom: 0.65rem;
 }
 
@@ -22,6 +28,7 @@
 #hardwareMenu.settings-menu-list,
 #hardwareMenu.ema-module-sidebar-nav {
   width: 100%;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
@@ -82,18 +89,24 @@
 }
 
 .hardware-left-panel .ema-sidebar-subpanel {
-  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   gap: 0.55rem;
+  overflow: hidden;
 }
 
 .hardware-left-panel .section-search,
 .hardware-left-panel .ema-sidebar-field {
   width: 100%;
+  flex: 0 0 auto;
 }
 
 .hardware-left-panel .soft-btn {
   width: 100%;
   min-height: 2.25rem;
+  flex: 0 0 auto;
   justify-content: center;
   border-color: #bfdbfe;
   border-radius: 0.75rem;
@@ -113,8 +126,10 @@
 .hardware-left-panel .hardware-stat-tree {
   width: 100%;
   min-height: 0 !important;
-  max-height: min(28rem, calc(100vh - 22rem));
+  max-height: none !important;
+  flex: 1 1 auto;
   display: grid;
+  align-content: start;
   gap: 0.22rem;
   overflow-y: auto;
   padding: 0.08rem 0.08rem 0.12rem;
@@ -200,7 +215,7 @@
 
 .hardware-device-table .hardware-empty-state,
 .hardware-standard-table .hardware-empty-state,
-.hardware-registry-card .hardware-empty-state,
+hardware-registry-card .hardware-empty-state,
 .hardware-registry-card .settings-empty-state.hardware-empty-state {
   min-height: 10rem;
   display: grid;
@@ -224,6 +239,14 @@
 }
 
 @media (max-width: 1100px) {
+  .hardware-left-panel,
+  .settings-module-root.hardware-module-root .hardware-left-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    position: static !important;
+  }
+
   #hardwareMenu.settings-menu-list,
   #hardwareMenu.ema-module-sidebar-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
