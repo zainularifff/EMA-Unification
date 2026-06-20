@@ -9,8 +9,6 @@ import {
   FileText,
   Folder,
   FolderOpen,
-  FolderPlus,
-  HardDrive,
   Layers,
   MonitorSmartphone,
   Package,
@@ -51,35 +49,14 @@ type DepartmentNode = {
   children?: DepartmentNode[];
 };
 
-type AssetItem = Record<string, unknown> & {
-  _Idn?: number;
-  id?: number;
-  MDM_Asset_Idn?: number;
-  Object_Root_Idn?: number;
-  Object_Agent?: string;
-  objectAgent?: string;
-  ComputerName?: string;
-  DeviceName?: string;
-  AssetName?: string;
-  Object_DeviceID?: string;
-  DeviceID?: string;
-  PlatformType?: string;
-  ConnectionStatus?: string;
-  IP?: string;
-};
-
 type TreeNode = {
   id: string;
   label: string;
   type: "org" | "branch" | "dept" | "device" | "category" | "sub";
   children?: TreeNode[];
   relationId?: number;
-  assetId?: number;
-  objectAgent?: string;
+  assetId?: string;
   objectDeviceId?: string;
-  platformType?: string;
-  connectionStatus?: string;
-  ip?: string;
   count?: number;
 };
 
@@ -110,14 +87,12 @@ type ActiveView = "all" | "unique" | "installed" | "categories" | "unclassified"
 type SortKey = "softwareName" | "category" | "deviceName" | "version" | "machineType" | "lastUpdated";
 type SortDirection = "asc" | "desc";
 type StatView = "installed" | "license" | "exe" | "dll" | "ini";
-
+type StatRow = Record<string, unknown>;
 type ToastState = {
   type: "success" | "error" | "info";
   title: string;
   message: string;
 } | null;
-
-type StatRow = Record<string, unknown>;
 
 const PAGE_SIZE = 10;
 const EMPTY_VALUE = "-";
@@ -192,13 +167,13 @@ function formatDateTime(value: unknown) {
 function getStoredToken() {
   const directKeys = ["ema-access-token", "accessToken", "token", "jwtToken", "bearerToken"];
   for (const key of directKeys) {
-    const value = localStorage.getItem(key);
+    const value = localStorage.getItem(key) || sessionStorage.getItem(key);
     if (value && value.trim()) return value.trim();
   }
 
-  const objectKeys = ["ema-auth", "auth", "user", "ema-user"];
+  const objectKeys = ["ema-auth", "auth", "user", "ema-user", "currentUser", "authUser", "ema-current-user"];
   for (const key of objectKeys) {
-    const value = localStorage.getItem(key);
+    const value = localStorage.getItem(key) || sessionStorage.getItem(key);
     if (!value) continue;
 
     try {
@@ -207,7 +182,7 @@ function getStoredToken() {
       const token = parsed.accessToken || parsed.token || parsed.jwtToken || parsed.bearerToken || data?.accessToken || data?.token;
       if (typeof token === "string" && token.trim()) return token.trim();
     } catch {
-      // Ignore malformed storage values.
+      if (value.startsWith("eyJ")) return value;
     }
   }
 
@@ -231,8 +206,8 @@ async function readJsonResponse<T>(response: Response, url: string): Promise<T> 
   }
 
   if (!response.ok) {
-    const apiPayload = payload as { message?: string; error?: string } | null;
-    throw new Error(apiPayload?.message || apiPayload?.error || `API request failed with status ${response.status} at ${url}.`);
+    const apiPayload = payload as { message?: string; error?: string; errorMessage?: string } | null;
+    throw new Error(apiPayload?.message || apiPayload?.error || apiPayload?.errorMessage || `API request failed with status ${response.status} at ${url}.`);
   }
 
   return payload as T;
@@ -279,14 +254,14 @@ function normalizeSoftwareRecord(record: ApiSoftwareRecord, index: number): Soft
     description,
     version: safeString(record.Version),
     username: safeString(record.Username),
-    lastUpdated: safeString(record.LastUpdated),
+    lastUpdated: formatDateTime(record.LastUpdated),
     assetId: safeString(record.AssetID),
     assetTag,
     deviceName,
     machineType: safeString(record.MachineType, "Unknown"),
     os: safeString(record.OS || record.MachineType),
     ip: safeString(record.IP),
-    department: safeString(record.Department),
+    department: safeString(record.Department, "Unassigned"),
     agentStatus: safeString(record.AgentStatus),
     objectAgent: safeString(record.Object_Agent, "MDM"),
     objectDeviceId: safeString(record.Object_DeviceID || record.AssetTag),
@@ -338,30 +313,43 @@ function mapDepartmentsToTree(departments: DepartmentNode[], depth = 0): TreeNod
   });
 }
 
-function mapAssetToDeviceNode(asset: AssetItem, relationId?: number): TreeNode {
-  const assetId = Number(asset._Idn ?? asset.MDM_Asset_Idn ?? asset.Object_Root_Idn ?? asset.id ?? 0);
-  const objectAgent = safeString(asset.Object_Agent || asset.objectAgent, "EM");
-  const label = safeString(asset.ComputerName || asset.DeviceName || asset.AssetName || asset.Object_DeviceID || asset.DeviceID || asset.IP, `Device ${assetId}`);
+function buildTreeFromRecords(records: SoftwareRecord[]): TreeNode[] {
+  const branchMap = new Map<string, SoftwareRecord[]>();
+  records.forEach((record) => {
+    const key = record.department || "Unassigned";
+    const list = branchMap.get(key) || [];
+    list.push(record);
+    branchMap.set(key, list);
+  });
 
-  return {
-    id: `device-${objectAgent}-${assetId}`,
-    label,
-    type: "device",
-    assetId,
-    objectAgent,
-    objectDeviceId: safeString(asset.Object_DeviceID || asset.DeviceID, ""),
-    platformType: safeString(asset.PlatformType, ""),
-    connectionStatus: safeString(asset.ConnectionStatus, ""),
-    ip: safeString(asset.IP, ""),
-    relationId,
-    count: 1,
-  };
-}
+  const children = Array.from(branchMap.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([department, rows]) => {
+      const deviceMap = new Map<string, SoftwareRecord[]>();
+      rows.forEach((record) => {
+        const key = record.objectDeviceId || record.assetId || record.deviceName;
+        const list = deviceMap.get(key) || [];
+        list.push(record);
+        deviceMap.set(key, list);
+      });
 
-function collectDepartmentRelationIds(departments: DepartmentNode[]): number[] {
-  return departments
-    .flatMap((department) => [department.Object_Rel_Idn, ...collectDepartmentRelationIds(department.children || [])])
-    .filter((id) => Number.isFinite(Number(id)) && Number(id) > 0);
+      return {
+        id: `dept-fallback-${department}`,
+        label: department,
+        type: "branch" as const,
+        count: rows.length,
+        children: Array.from(deviceMap.entries()).map(([deviceKey, deviceRows]) => ({
+          id: `device-${deviceKey}`,
+          label: deviceRows[0]?.deviceName || deviceKey,
+          type: "device" as const,
+          assetId: deviceRows[0]?.assetId,
+          objectDeviceId: deviceRows[0]?.objectDeviceId,
+          count: deviceRows.length,
+        })),
+      };
+    });
+
+  return [{ id: "all", label: "All Branches", type: "org", relationId: -1, children, count: records.length }];
 }
 
 function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
@@ -421,6 +409,15 @@ function statEndpoint(stat: StatView) {
   return "/api/software/statistics/ini-files";
 }
 
+function statTitle(stat: StatView | null) {
+  if (stat === "installed") return "Installed Software";
+  if (stat === "license") return "License Status";
+  if (stat === "exe") return "EXE File Extension";
+  if (stat === "dll") return "DLL File Extension";
+  if (stat === "ini") return "INI File Extension";
+  return "";
+}
+
 function Software() {
   const [records, setRecords] = useState<SoftwareRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -434,7 +431,7 @@ function Software() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [activeView, setActiveView] = useState<ActiveView>("all");
   const [selectedNode, setSelectedNode] = useState<TreeNode>({ id: "all", label: "All Branches", type: "org", relationId: -1 });
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(["all", "stat-root", "stat-installed", "stat-license", "stat-exe", "stat-dll", "stat-ini"]));
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(["all", "stat-root"]));
   const [departmentTree, setDepartmentTree] = useState<TreeNode[]>([]);
   const [treeLoading, setTreeLoading] = useState(true);
   const [treeError, setTreeError] = useState("");
@@ -471,36 +468,14 @@ function Software() {
     setTreeLoading(true);
     setTreeError("");
     try {
-      const [departmentsPayload, assetsPayload] = await Promise.all([
-        apiGet<DepartmentNode[] | { data?: DepartmentNode[] }>("/api/departments/tree"),
-        apiGet<AssetItem[] | { data?: AssetItem[] }>("/api/hardware-inventory").catch(() => [] as AssetItem[]),
-      ]);
-      const departments = Array.isArray(departmentsPayload) ? departmentsPayload : departmentsPayload?.data || [];
-      const assets = Array.isArray(assetsPayload) ? assetsPayload : (assetsPayload as { data?: AssetItem[] })?.data || [];
-      const baseChildren = mapDepartmentsToTree(departments);
-      const relationIds = new Set(collectDepartmentRelationIds(departments));
-      const looseAssets = assets
-        .filter((asset) => {
-          const relationId = Number(asset.Object_Root_Idn ?? 0);
-          return !relationId || !relationIds.has(relationId);
-        })
-        .slice(0, 400)
-        .map((asset) => mapAssetToDeviceNode(asset));
-      const children = looseAssets.length ? [...baseChildren, { id: "unassigned-devices", label: "Unassigned Devices", type: "branch" as const, children: looseAssets, count: looseAssets.length }] : baseChildren;
-      setDepartmentTree([
-        {
-          id: "all",
-          label: "All Branches",
-          type: "org",
-          relationId: -1,
-          children,
-          count: records.length,
-        },
-      ]);
+      const payload = await apiGet<DepartmentNode[] | { data?: DepartmentNode[] }>("/api/departments/tree");
+      const departments = Array.isArray(payload) ? payload : payload?.data || [];
+      const children = mapDepartmentsToTree(departments);
+      setDepartmentTree(children.length ? [{ id: "all", label: "All Branches", type: "org", relationId: -1, children, count: records.length }] : buildTreeFromRecords(records));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load branch tree.";
       setTreeError(message);
-      setDepartmentTree([{ id: "all", label: "All Branches", type: "org", relationId: -1, children: [], count: records.length }]);
+      setDepartmentTree(buildTreeFromRecords(records));
     } finally {
       setTreeLoading(false);
     }
@@ -523,11 +498,8 @@ function Software() {
   }, [records]);
 
   const statTree = useMemo(() => [{ id: "stat-root", label: "Software Statistics", type: "category" as const, count: summary.totalRecords, children: buildStatTree(summary) }], [summary]);
-
   const filteredTree = useMemo(() => filterTree(sidebarTab === "branch" ? departmentTree : statTree, searchTerm), [departmentTree, searchTerm, sidebarTab, statTree]);
-
   const selectedRelationId = selectedNode.relationId ?? -1;
-
   const categoryOptions = useMemo(() => [...new Set(records.map((record) => record.category).filter(Boolean))].sort(), [records]);
   const typeOptions = useMemo(() => [...new Set(records.map((record) => record.machineType).filter(Boolean))].sort(), [records]);
 
@@ -535,11 +507,11 @@ function Software() {
     let next = [...records];
     const term = searchTerm.trim().toLowerCase();
 
-    if (selectedRelationId > 0) {
+    if (selectedNode.type === "device") {
+      next = next.filter((record) => record.assetId === selectedNode.assetId || record.objectDeviceId === selectedNode.objectDeviceId || record.deviceName === selectedNode.label);
+    } else if (selectedRelationId > 0 || selectedNode.type === "branch" || selectedNode.type === "dept") {
       const selectedLabel = selectedNode.label.toLowerCase();
       next = next.filter((record) => record.department.toLowerCase().includes(selectedLabel));
-    } else if (selectedNode.type === "device") {
-      next = next.filter((record) => record.assetId === String(selectedNode.assetId) || record.objectDeviceId === selectedNode.objectDeviceId || record.deviceName === selectedNode.label);
     }
 
     if (activeView === "unique") {
@@ -562,7 +534,6 @@ function Software() {
     }
     if (activeView === "categories") next = next.filter((record) => record.category.toLowerCase() !== "unclassified");
     if (activeView === "unclassified") next = next.filter((record) => record.category.toLowerCase() === "unclassified");
-
     if (categoryFilter !== "all") next = next.filter((record) => record.category === categoryFilter);
     if (typeFilter !== "all") next = next.filter((record) => record.machineType === typeFilter);
     if (term) {
@@ -581,8 +552,8 @@ function Software() {
   const pageCount = Math.max(1, Math.ceil((selectedStat ? statRows.length : filteredRecords.length) / PAGE_SIZE));
   const currentRows = useMemo(() => filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filteredRecords, page]);
   const currentStatRows = useMemo(() => statRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [statRows, page]);
-
   const classificationCoverage = summary.totalRecords ? Math.round(((summary.totalRecords - summary.unclassified) / summary.totalRecords) * 100) : 0;
+  const currentStatTitle = statTitle(selectedStat);
 
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
@@ -655,6 +626,45 @@ function Software() {
     });
   };
 
+  const handleSoftwareScan = async (scanMode: "all" | "folder" | "device") => {
+    setScanLoading(true);
+    try {
+      await apiPost("/api/software-inventory/scan", {
+        scanMode,
+        objectRelIdn: scanMode === "folder" ? selectedRelationId : undefined,
+        Object_Rel_Idn: scanMode === "folder" ? selectedRelationId : undefined,
+        objectDeviceID: scanMode === "device" ? selectedNode.objectDeviceId : undefined,
+        Object_DeviceID: scanMode === "device" ? selectedNode.objectDeviceId : undefined,
+        assetId: scanMode === "device" ? selectedNode.assetId : undefined,
+      });
+      showToast({ type: "success", title: "Scan requested", message: "Software inventory scan has been submitted." });
+      await fetchSoftwareRecords();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to start software scan.";
+      showToast({ type: "error", title: "Scan failed", message });
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const refreshCurrentView = async () => {
+    if (selectedStat) await loadStatRows(selectedStat);
+    else await fetchSoftwareRecords();
+  };
+
+  const exportCurrentView = () => {
+    if (selectedStat) {
+      const columns = Array.from(new Set(statRows.flatMap((row) => Object.keys(row)))).slice(0, 12);
+      const safeColumns = columns.length ? columns : ["Name", "Version", "Publisher", "Count"];
+      downloadCsv(`software-${selectedStat}-statistics.csv`, [safeColumns, ...statRows.map((row) => safeColumns.map((column) => safeString(row[column], "")))]);
+      return;
+    }
+
+    const columns = ["Software Name", "Category", "Publisher", "Version", "Device", "Type", "IP Address", "Branch", "Last Updated"];
+    const rows = filteredRecords.map((record) => [record.softwareName, record.category, record.publisher, record.version, record.deviceName, record.machineType, record.ip, record.department, record.lastUpdated]);
+    downloadCsv("software-inventory.csv", [columns, ...rows]);
+  };
+
   const renderTree = (nodes: TreeNode[], depth = 0, mode: SidebarTab = "branch") => (
     <div className={depth > 0 ? "grid gap-1 border-l border-slate-200 pl-3 ml-4" : "grid gap-1"}>
       {nodes.map((node) => {
@@ -707,16 +717,6 @@ function Software() {
     </div>
   );
 
-  const statTitle = selectedStat
-    ? {
-        installed: "Installed Software",
-        license: "License Status",
-        exe: "EXE File Extension",
-        dll: "DLL File Extension",
-        ini: "INI File Extension",
-      }[selectedStat]
-    : "";
-
   return (
     <main className="settings-module-root ema-settings-pro ema-module-root ema-page container-fluid p-3 p-xl-4" data-section="software">
       {toast && (
@@ -744,26 +744,18 @@ function Software() {
             <small className="text-[0.75rem] font-semibold leading-5 text-slate-600">Browse software records, devices and statistics.</small>
           </div>
 
-          <nav className="mb-3 grid grid-cols-2 rounded-2xl border border-blue-100 bg-slate-50 p-1" role="tablist" aria-label="Software navigation">
-            <button
-              type="button"
-              className={cx("flex h-10 items-center justify-center gap-2 rounded-xl text-[0.82rem] font-black", sidebarTab === "branch" ? "bg-white text-blue-600 shadow-sm" : "text-slate-700 hover:bg-white/70")}
-              onClick={() => setSidebarTab("branch")}
-            >
+          <nav className="ema-module-sidebar-nav" role="tablist" aria-label="Software navigation">
+            <button type="button" className={cx(sidebarTab === "branch" && "is-active")} aria-selected={sidebarTab === "branch"} onClick={() => setSidebarTab("branch")}>
               <FolderOpen size={16} />
-              Branch
+              <strong>Branch</strong>
             </button>
-            <button
-              type="button"
-              className={cx("flex h-10 items-center justify-center gap-2 rounded-xl text-[0.82rem] font-black", sidebarTab === "statistics" ? "bg-white text-blue-600 shadow-sm" : "text-slate-700 hover:bg-white/70")}
-              onClick={() => setSidebarTab("statistics")}
-            >
+            <button type="button" className={cx(sidebarTab === "statistics" && "is-active")} aria-selected={sidebarTab === "statistics"} onClick={() => setSidebarTab("statistics")}>
               <Database size={16} />
-              Statistics
+              <strong>Statistics</strong>
             </button>
           </nav>
 
-          <div className="mb-3 flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500">
+          <div className="ema-sidebar-field mb-3 flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500">
             <Search size={15} />
             <input
               value={searchTerm}
@@ -778,33 +770,25 @@ function Software() {
             )}
           </div>
 
-          {sidebarTab === "branch" && (
-            <button
-              type="button"
-              className="mb-3 flex h-9 w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white text-[0.78rem] font-black text-slate-950 shadow-sm hover:bg-blue-50"
-              onClick={() => showToast({ type: "info", title: "Branch management", message: "Use the branch tree to browse software by location." })}
-            >
-              <FolderPlus size={13} />
-              New Branch Path
-            </button>
-          )}
-
-          <div className="max-h-[calc(100vh-18rem)] overflow-auto pr-1">
-            {sidebarTab === "branch" ? (
-              <>
-                {treeLoading && (
-                  <div className="grid min-h-[9rem] place-items-center text-center">
-                    <div>
-                      <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-100 border-t-blue-500" />
-                      <div className="mt-3 text-[0.72rem] font-black uppercase tracking-[0.12em] text-slate-400">Loading Data...</div>
+          <div className="ema-sidebar-content">
+            <div className="ema-sidebar-tree pr-1">
+              {sidebarTab === "branch" ? (
+                <>
+                  {treeLoading && (
+                    <div className="grid min-h-[9rem] place-items-center text-center">
+                      <div>
+                        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-blue-100 border-t-blue-500" />
+                        <div className="mt-3 text-[0.72rem] font-black uppercase tracking-[0.12em] text-slate-400">Loading Data...</div>
+                      </div>
                     </div>
-                  </div>
-                )}
-                {!treeLoading && renderTree(deviceTree, 0, "branch")}
-              </>
-            ) : (
-              renderTree(statTree, 0, "statistics")
-            )}
+                  )}
+                  {!treeLoading && treeError && <div className="ema-sidebar-empty is-error">{treeError}</div>}
+                  {!treeLoading && renderTree(filteredTree, 0, "branch")}
+                </>
+              ) : (
+                renderTree(filteredTree, 0, "statistics")
+              )}
+            </div>
           </div>
         </aside>
 
@@ -919,68 +903,63 @@ function Software() {
                     {["No", "Name", "Version", "Publisher", "Reference", "Count"].map((header) => <div key={header} className="px-3 py-3">{header}</div>)}
                   </div>
                   {statLoading && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">Loading Data...</div>}
-                  {!statLoading && statError && <div className="grid min-h-[18rem] place-items-center text-sm font-bold text-red-600">{statError}</div>}
+                  {!statLoading && statError && <div className="grid min-h-[18rem] place-items-center p-6 text-center text-sm font-bold text-red-600">{statError}</div>}
+                  {!statLoading && !statError && currentStatRows.length === 0 && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">No data found</div>}
                   {!statLoading && !statError && currentStatRows.map((row, index) => (
-                    <div key={`${selectedStat}-${index}`} className="grid min-w-[900px] grid-cols-[4rem_2fr_1fr_1.2fr_1.5fr_1fr] border-t border-slate-100 bg-white text-[0.76rem] text-slate-700 hover:bg-blue-50/40">
-                      <div className="px-3 py-3 font-black text-slate-400">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
-                      <div className="px-3 py-3 font-black text-slate-900">{pickStatValue(row, ["SoftwareName", "Name", "FileName", "ProgramName", "ApplicationName", "ProductName"])}</div>
-                      <div className="px-3 py-3 font-semibold">{pickStatValue(row, ["Version", "FileVersion", "ProductVersion"])}</div>
-                      <div className="px-3 py-3 font-semibold">{pickStatValue(row, ["Publisher", "Company", "Vendor", "Manufacturer"])}</div>
-                      <div className="px-3 py-3 font-semibold">{pickStatValue(row, ["Path", "InstallPath", "FilePath", "Location", "LicenseStatus", "Category"])}</div>
-                      <div className="px-3 py-3 font-black text-blue-600">{pickStatValue(row, ["Count", "Total", "InstallCount", "DeviceCount", "NoOfDevices"])}</div>
+                    <div key={`${selectedStat}-${index}`} className="grid min-w-[900px] grid-cols-[4rem_2fr_1fr_1.2fr_1.5fr_1fr] border-t border-slate-100 text-[0.78rem] font-bold text-slate-700 hover:bg-slate-50">
+                      <div className="px-3 py-3">{(page - 1) * PAGE_SIZE + index + 1}</div>
+                      <div className="px-3 py-3 font-black text-slate-950">{pickStatValue(row, ["Name", "SoftwareName", "Software", "FileName", "Application", "Item", "column1"])}</div>
+                      <div className="px-3 py-3">{pickStatValue(row, ["Version", "SoftwareVersion", "column2"])}</div>
+                      <div className="px-3 py-3">{pickStatValue(row, ["Publisher", "Manufacturer", "Vendor", "column3"])}</div>
+                      <div className="px-3 py-3">{pickStatValue(row, ["Reference", "Path", "DeviceName", "ComputerName", "column4"])}</div>
+                      <div className="px-3 py-3">{pickStatValue(row, ["Count", "Total", "Cnt", "column5"])}</div>
                     </div>
                   ))}
-                  {!statLoading && !statError && !currentStatRows.length && <div className="grid min-h-[18rem] place-items-center text-sm font-bold text-slate-500">No statistic record found.</div>}
                 </>
               ) : (
                 <>
-                  <div className="sticky top-0 z-10 grid min-w-[1050px] grid-cols-[4rem_2fr_1.2fr_1.5fr_0.9fr_1fr_1.2fr] bg-slate-100 text-[0.68rem] font-black uppercase tracking-[0.06em] text-slate-600">
+                  <div className="sticky top-0 z-10 grid min-w-[1160px] grid-cols-[2fr_1.1fr_1.6fr_1fr_1.35fr_1fr_1fr_1.2fr] bg-slate-100 text-[0.68rem] font-black uppercase tracking-[0.06em] text-slate-600">
                     {[
-                      ["No", null],
-                      ["Software Name", "softwareName"],
-                      ["Category", "category"],
-                      ["Publisher", null],
-                      ["Version", "version"],
-                      ["Device", "deviceName"],
-                      ["Last Updated", "lastUpdated"],
+                      ["Software Name", "softwareName" as SortKey],
+                      ["Category", "category" as SortKey],
+                      ["Publisher / Description", "softwareName" as SortKey],
+                      ["Version", "version" as SortKey],
+                      ["Device", "deviceName" as SortKey],
+                      ["Type", "machineType" as SortKey],
+                      ["IP Address", "deviceName" as SortKey],
+                      ["Last Updated", "lastUpdated" as SortKey],
                     ].map(([label, key]) => (
-                      <button key={String(label)} type="button" className="px-3 py-3 text-left" onClick={() => key && handleSort(key as SortKey)}>
-                        {label}{key ? renderSort(key as SortKey) : ""}
-                      </button>
+                      <button key={String(label)} type="button" className="px-3 py-3 text-left" onClick={() => handleSort(key as SortKey)}>{label}{renderSort(key as SortKey)}</button>
                     ))}
                   </div>
                   {loading && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">Loading Data...</div>}
-                  {!loading && error && <div className="grid min-h-[18rem] place-items-center px-6 text-center text-sm font-bold text-red-600">{error}</div>}
-                  {!loading && !error && currentRows.map((record, index) => (
-                    <div key={record.id} className="grid min-w-[1050px] grid-cols-[4rem_2fr_1.2fr_1.5fr_0.9fr_1fr_1.2fr] border-t border-slate-100 bg-white text-[0.76rem] text-slate-700 hover:bg-blue-50/40">
-                      <div className="px-3 py-3 font-black text-slate-400">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
-                      <div className="px-3 py-3">
-                        <strong className="block text-[0.82rem] text-slate-900">{record.softwareName}</strong>
-                        <small className="block truncate text-[0.68rem] font-semibold text-slate-500">{record.description}</small>
-                      </div>
-                      <div className="px-3 py-3"><span className="rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-black text-slate-600">{record.category}</span></div>
-                      <div className="px-3 py-3 font-semibold text-slate-700">{record.publisher}</div>
-                      <div className="px-3 py-3 font-mono text-[0.72rem] font-bold text-slate-600">{record.version}</div>
-                      <div className="px-3 py-3">
-                        <strong className="block text-slate-900">{record.deviceName}</strong>
-                        <small className="block text-[0.68rem] font-semibold text-slate-500">{record.ip}</small>
-                      </div>
-                      <div className="px-3 py-3 font-semibold text-slate-600">{formatDateTime(record.lastUpdated)}</div>
+                  {!loading && error && <div className="grid min-h-[18rem] place-items-center p-6 text-center text-sm font-bold text-red-600">{error}</div>}
+                  {!loading && !error && currentRows.length === 0 && <div className="grid min-h-[18rem] place-items-center text-[0.78rem] font-black uppercase tracking-[0.1em] text-slate-400">No data found</div>}
+                  {!loading && !error && currentRows.map((record) => (
+                    <div key={record.id} className="grid min-w-[1160px] grid-cols-[2fr_1.1fr_1.6fr_1fr_1.35fr_1fr_1fr_1.2fr] border-t border-slate-100 text-[0.78rem] font-bold text-slate-700 hover:bg-slate-50">
+                      <div className="px-3 py-3 font-black text-slate-950">{record.softwareName}</div>
+                      <div className="px-3 py-3">{record.category}</div>
+                      <div className="px-3 py-3"><span className="block text-slate-900">{record.publisher}</span><small className="text-slate-500">{record.description || EMPTY_VALUE}</small></div>
+                      <div className="px-3 py-3">{record.version}</div>
+                      <div className="px-3 py-3"><span className="block text-slate-900">{record.deviceName}</span><small className="text-slate-500">{record.department}</small></div>
+                      <div className="px-3 py-3">{record.machineType}</div>
+                      <div className="px-3 py-3 font-mono">{record.ip}</div>
+                      <div className="px-3 py-3">{record.lastUpdated}</div>
                     </div>
                   ))}
-                  {!loading && !error && !currentRows.length && <div className="grid min-h-[18rem] place-items-center text-sm font-bold text-slate-500">No software record found.</div>}
                 </>
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-slate-100 p-3 text-[0.78rem] font-black text-slate-500">
-              <span>Page {page} of {pageCount}</span>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-3 py-3 text-[0.78rem] font-bold text-slate-500">
+              <span>
+                Showing page {page} of {pageCount} • {(selectedStat ? statRows.length : filteredRecords.length).toLocaleString()} records
+              </span>
               <div className="flex items-center gap-2">
-                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === 1} onClick={() => setPage(1)}>First</button>
-                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Prev</button>
-                <span className="rounded-lg bg-blue-600 px-3 py-2 text-white">{page}</span>
-                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))}>Next</button>
-                <button type="button" className="rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:opacity-40" disabled={page === pageCount} onClick={() => setPage(pageCount)}>Last</button>
+                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage(1)} disabled={page <= 1}>First</button>
+                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Prev</button>
+                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount}>Next</button>
+                <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 disabled:opacity-40" onClick={() => setPage(pageCount)} disabled={page >= pageCount}>Last</button>
               </div>
             </div>
           </section>
@@ -988,39 +967,26 @@ function Software() {
       </div>
 
       {showInsightsModal && (
-        <div className="fixed inset-0 z-[2147483600] grid place-items-center bg-slate-950/45 p-4" role="dialog" aria-modal="true">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+        <div className="fixed inset-0 z-[2147483000] grid place-items-center bg-slate-950/40 p-4" onClick={() => setShowInsightsModal(false)}>
+          <div className="w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <span className="text-[0.68rem] font-black uppercase tracking-[0.08em] text-blue-600">Software Intelligence</span>
-                <h3 className="mt-1 text-xl font-black text-slate-950">Inventory Insights</h3>
-                <p className="mt-1 text-sm font-semibold text-slate-600">Summary based on current software inventory records.</p>
+                <span className="text-[0.68rem] font-black uppercase tracking-[0.12em] text-blue-600">Software Insights</span>
+                <h3 className="mt-1 text-lg font-black text-slate-950">Classification Coverage</h3>
+                <p className="mt-1 text-sm font-semibold text-slate-600">{classificationCoverage}% of software records are categorized.</p>
               </div>
-              <button type="button" className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" onClick={() => setShowInsightsModal(false)} aria-label="Close insights">
+              <button type="button" className="rounded-xl p-2 text-slate-500 hover:bg-slate-100" onClick={() => setShowInsightsModal(false)} aria-label="Close insights">
                 <X size={18} />
               </button>
             </div>
-            <div className="grid gap-3 p-5 md:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Classification Coverage</span>
-                <strong className="mt-2 block text-3xl font-black text-slate-950">{classificationCoverage}%</strong>
-                <p className="mt-2 text-sm font-semibold text-slate-600">{summary.unclassified} records are still unclassified.</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Device Reach</span>
-                <strong className="mt-2 block text-3xl font-black text-slate-950">{summary.uniqueDevices}</strong>
-                <p className="mt-2 text-sm font-semibold text-slate-600">Devices currently mapped with installed software records.</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Unique Software</span>
-                <strong className="mt-2 block text-3xl font-black text-slate-950">{summary.uniqueSoftware}</strong>
-                <p className="mt-2 text-sm font-semibold text-slate-600">Distinct software names detected across inventory.</p>
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <span className="text-[0.7rem] font-black uppercase tracking-[0.08em] text-slate-500">Categories</span>
-                <strong className="mt-2 block text-3xl font-black text-slate-950">{summary.categories}</strong>
-                <p className="mt-2 text-sm font-semibold text-slate-600">Known category groups available for governance review.</p>
-              </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Unclassified</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.unclassified}</strong></div>
+              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Categories</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.categories}</strong></div>
+              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Unique Software</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.uniqueSoftware}</strong></div>
+              <div className="rounded-xl border border-slate-200 p-4"><span className="text-xs font-black uppercase text-slate-500">Linked Devices</span><strong className="mt-2 block text-2xl font-black text-slate-950">{summary.uniqueDevices}</strong></div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button type="button" className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white" onClick={() => setShowInsightsModal(false)}>Done</button>
             </div>
           </div>
         </div>
