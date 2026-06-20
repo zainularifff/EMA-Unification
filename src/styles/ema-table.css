@@ -1,0 +1,28 @@
+/* EMA shared table cleanup styles.
+   Keep table display rules reusable across modules while pages migrate to ema-* markup. */
+
+.ema-clean-table,
+.advanced.clean-table {
+  min-width: 0;
+}
+
+/* Device column should only show the primary asset name and identifier.
+   Branch/location belongs in the dedicated Branch column. */
+.ema-clean-table .ema-table-row:not(.head) > .ema-table-cell:nth-child(2) small,
+.advanced.clean-table .clean-table-row:not(.head) > .user-cell:nth-child(2) small {
+  display: none !important;
+}
+
+.ema-clean-table .ema-table-row:not(.head) > .ema-table-cell:nth-child(2) em,
+.advanced.clean-table .clean-table-row:not(.head) > .user-cell:nth-child(2) em {
+  display: block;
+  margin-top: 0.12rem;
+  color: #475569;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
