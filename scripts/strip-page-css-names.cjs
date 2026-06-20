@@ -16,6 +16,7 @@ const targetFiles = [
   'src/pages/NetworkInventory.tsx',
   'src/pages/SoftwareDistribution.tsx',
   'src/pages/ManagementDashboard.tsx',
+  'src/pages/ServiceDesk.tsx',
 ];
 
 const jsxAttributeNamesToRemove = new Set(['className', 'style', 'css']);
