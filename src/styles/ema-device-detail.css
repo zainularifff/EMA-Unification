@@ -181,6 +181,93 @@
   display: none;
 }
 
+.hardware-detail-timeline {
+  width: min(34rem, 100%);
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.15rem 0 0.45rem;
+}
+
+.hardware-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.15rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: flex-start;
+  border: 1px solid var(--ema-detail-border);
+  border-radius: 0.9rem;
+  background: #ffffff;
+  padding: 0.75rem 0.85rem;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+}
+
+.hardware-timeline-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 1.38rem;
+  top: 2rem;
+  bottom: -0.72rem;
+  width: 2px;
+  border-radius: 999px;
+  background: #dbeafe;
+}
+
+.hardware-timeline-item > span {
+  width: 0.72rem;
+  height: 0.72rem;
+  margin-top: 0.28rem;
+  border: 2px solid #bfdbfe;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px #eff6ff;
+  z-index: 1;
+}
+
+.hardware-timeline-item.is-current {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 100%);
+}
+
+.hardware-timeline-item.is-current > span {
+  border-color: #2563eb;
+  background: #2563eb;
+  box-shadow: 0 0 0 4px #dbeafe;
+}
+
+.hardware-timeline-item > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.hardware-timeline-item strong {
+  color: var(--ema-detail-strong);
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.hardware-timeline-item p {
+  margin: 0;
+  color: #0f172a;
+  font-size: 0.94rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.hardware-timeline-item small {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #f1f5f9;
+  padding: 0.2rem 0.5rem;
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 850;
+}
+
 @media (max-width: 760px) {
   .hardware-detail-drawer {
     max-height: calc(100vh - 1rem);
@@ -198,5 +285,9 @@
   .hardware-detail-header-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .hardware-detail-timeline {
+    width: 100%;
   }
 }
