@@ -126,13 +126,17 @@
   align-content: start;
   gap: 0.22rem;
   overflow-y: auto;
-  overflow-x: visible;
+  overflow-x: hidden;
   padding: 0.08rem 0.08rem 0.12rem;
 }
 
 .ema-sidebar-tree-branch {
   position: relative;
   overflow: visible;
+}
+
+.ema-sidebar-tree-branch:has(.ema-sidebar-tree-menu) {
+  z-index: 80;
 }
 
 .ema-sidebar-tree-node {
@@ -229,7 +233,7 @@
   justify-content: center;
   justify-self: end;
   overflow: visible;
-  z-index: 20;
+  z-index: 60;
 }
 
 .ema-sidebar-tree-menu-btn {
@@ -251,32 +255,32 @@
 
 .ema-sidebar-tree-menu {
   position: absolute;
-  top: calc(100% + 0.25rem);
   right: 0;
-  z-index: 90;
-  width: 10.25rem;
+  bottom: calc(100% + 0.25rem);
+  z-index: 120;
+  width: min(9.75rem, calc(100vw - 2rem));
   display: grid;
-  gap: 0.15rem;
+  gap: 0.12rem;
   border: 1px solid #dbe7f6;
-  border-radius: 0.75rem;
+  border-radius: 0.72rem;
   background: #ffffff;
-  padding: 0.35rem;
+  padding: 0.32rem;
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
 }
 
 .ema-sidebar-tree-menu button {
   width: 100%;
-  min-height: 2rem;
+  min-height: 1.9rem;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   border: 0;
-  border-radius: 0.55rem;
+  border-radius: 0.5rem;
   background: transparent;
-  padding: 0.35rem 0.55rem;
+  padding: 0.32rem 0.52rem;
   color: #334155;
-  font-size: 0.8rem;
-  font-weight: 800;
+  font-size: 0.76rem;
+  font-weight: 850;
   text-align: left;
   white-space: nowrap;
 }
