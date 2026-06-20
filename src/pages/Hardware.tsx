@@ -3683,18 +3683,7 @@ export default function HardwareInventory() {
   return (
     <main className={`settings-module-root hardware-module-root ema-settings-pro container-fluid p-3 p-xl-4 ${hasSelectedDevice ? "has-selected-device" : "no-selected-device"}`} data-section={activeTab}>
       <style>{`
-
-
-        /* Hardware sidebar fix: wider panel + keep Branch/Statistics switcher compact. */
-        .hardware-module-root .settings-layout.hardware-settings-layout {
-          grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
-        }
-
-        .hardware-module-root .settings-menu.hardware-left-panel {
-          min-width: 300px !important;
-        }
-
-        .hardware-module-root .settings-menu > .ema-module-sidebar-switcher {
+.hardware-module-root .settings-menu > .ema-module-sidebar-switcher {
           flex: 0 0 auto !important;
           margin: 0 !important;
         }
@@ -3866,20 +3855,7 @@ export default function HardwareInventory() {
           font-weight: 800 !important;
           line-height: 1.15 !important;
         }
-
-        @media (max-width: 1100px) {
-          .hardware-module-root .settings-layout.hardware-settings-layout {
-            grid-template-columns: 1fr !important;
-          }
-
-          .hardware-module-root .settings-menu.hardware-left-panel {
-            min-width: 0 !important;
-          }
-        }
-
-
-
-        /* Hardware registry table vertical-scroll fix.
+/* Hardware registry table vertical-scroll fix.
            Keep toolbar + summary + pagination visible, and scroll only the device rows/table area. */
         .hardware-module-root .hardware-settings-content,
         .hardware-module-root .hardware-main-grid {
