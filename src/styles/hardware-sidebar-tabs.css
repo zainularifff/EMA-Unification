@@ -1,0 +1,39 @@
+#hardwareMenu.settings-menu-list,
+#hardwareMenu.ema-module-sidebar-nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+#hardwareMenu .setting-btn {
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.4rem;
+  padding: 0.5rem 0.45rem;
+}
+
+#hardwareMenu .setting-btn > span:last-child {
+  min-width: 0;
+}
+
+#hardwareMenu .setting-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 1.5rem;
+}
+
+#hardwareMenu .setting-btn strong,
+#hardwareMenu .setting-btn small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#hardwareMenu .setting-btn strong {
+  white-space: nowrap;
+}
+
+#hardwareMenu .setting-btn small {
+  display: block;
+  white-space: normal;
+  line-height: 1.2;
+}
