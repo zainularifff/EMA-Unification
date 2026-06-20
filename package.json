@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "clean:page-css": "node scripts/strip-page-css-names.cjs",
+    "clean:hardware-sidebar": "node scripts/remove-hardware-sidebar-copy.cjs",
     "normalize:ema-names": "node scripts/normalize-hardware-ema-names.cjs",
-    "prepare:ui": "npm run clean:page-css && npm run normalize:ema-names",
+    "prepare:ui": "npm run clean:page-css && npm run clean:hardware-sidebar && npm run normalize:ema-names",
     "predev": "npm run prepare:ui",
     "dev": "vite --host 0.0.0.0",
     "predev:frontend": "npm run prepare:ui",
