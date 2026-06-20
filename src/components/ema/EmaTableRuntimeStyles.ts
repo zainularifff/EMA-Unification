@@ -2,6 +2,36 @@ const STYLE_ID = "ema-table-runtime-styles";
 const OBSERVER_FLAG = "emaTableRuntimeObserver";
 
 const css = `
+html body .ema-page {
+  overflow: auto !important;
+}
+
+html body .ema-module-root {
+  height: auto !important;
+  min-height: calc(100dvh - 4.5rem) !important;
+  overflow: visible !important;
+  padding-bottom: 1.5rem !important;
+}
+
+html body .ema-module-root .ema-settings-layout,
+html body .ema-module-root .settings-layout {
+  height: auto !important;
+  min-height: calc(100dvh - 5.8rem) !important;
+  max-height: none !important;
+  overflow: visible !important;
+  align-items: stretch !important;
+}
+
+html body .ema-module-root .settings-content,
+html body .ema-module-root .ema-settings-content,
+html body .ema-module-root .content-shell,
+html body .ema-module-root .ema-registry-card {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
 html body .ema-module-root table {
   width: 100% !important;
   table-layout: fixed !important;
@@ -18,8 +48,11 @@ html body .ema-module-root th * {
   word-break: break-word !important;
 }
 
-html body .ema-module-root .ema-standard-table {
-  max-height: min(52vh, 34rem) !important;
+html body .ema-module-root .ema-standard-table,
+html body .ema-module-root .ema-device-table {
+  flex: 0 0 auto !important;
+  min-height: 18rem !important;
+  max-height: clamp(18rem, calc(100dvh - 31rem), 34rem) !important;
   overflow: auto !important;
   border-bottom-left-radius: 0 !important;
   border-bottom-right-radius: 0 !important;
@@ -28,23 +61,22 @@ html body .ema-module-root .ema-standard-table {
 }
 
 html body .ema-module-root .ema-pagination {
-  position: sticky !important;
-  bottom: 0 !important;
-  z-index: 80 !important;
+  position: static !important;
+  z-index: 1 !important;
+  flex: 0 0 auto !important;
   min-height: 3.75rem !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
   gap: .85rem !important;
-  width: 100% !important;
-  margin: 0 !important;
+  width: auto !important;
+  margin: 0 .85rem .85rem !important;
   padding: .7rem .9rem !important;
   border: 1px solid #dbe7f5 !important;
   border-top: 0 !important;
   border-radius: 0 0 1rem 1rem !important;
-  background: rgba(255,255,255,.98) !important;
-  box-shadow: 0 -14px 26px rgba(15,23,42,.08) !important;
-  backdrop-filter: blur(8px) !important;
+  background: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .06) !important;
 }
 
 html body .ema-module-root .ema-page-summary {
