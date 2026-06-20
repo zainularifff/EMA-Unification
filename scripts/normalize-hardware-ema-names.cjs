@@ -10,6 +10,8 @@ const targets = [
 const replacements = [
   [/hardware-/g, 'ema-'],
   [/Hardware remains as the reference module while other page CSS is cleared\./g, 'EMA module layout reference styles.'],
+  [/<small>Branch device scope<\/small>/g, ''],
+  [/<small>Hardware operational views<\/small>/g, ''],
 ];
 
 function normalizeFile(relativePath) {
