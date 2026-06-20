@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+export { EmaModuleSidebar, EmaSidebarButton, EmaSidebarSearch, EmaSidebarTabButton, EmaSidebarTabs, EmaSidebarTree, EmaSidebarTreeRow } from "./EmaSidebarPanel";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -7,15 +8,6 @@ function cx(...classes: Array<string | false | null | undefined>) {
 type EmaModuleLayoutProps = {
   children: ReactNode;
   section?: string;
-  className?: string;
-};
-
-type EmaModuleSidebarProps = {
-  eyebrow?: string;
-  title: string;
-  description?: string;
-  children: ReactNode;
-  actions?: ReactNode;
   className?: string;
 };
 
@@ -67,20 +59,6 @@ export function EmaModuleLayout({ children, section, className }: EmaModuleLayou
     >
       <div className="grid min-w-0 items-stretch gap-3 lg:grid-cols-[16.25rem_minmax(0,1fr)]">{children}</div>
     </main>
-  );
-}
-
-export function EmaModuleSidebar({ eyebrow, title, description, children, actions, className }: EmaModuleSidebarProps) {
-  return (
-    <aside className={cx("min-w-0 rounded-xl border border-slate-200 bg-white p-3 shadow-sm", className)}>
-      <div className="mb-3 grid gap-1">
-        {eyebrow ? <span className="text-[0.65rem] font-black uppercase tracking-wider text-slate-500">{eyebrow}</span> : null}
-        <strong className="text-sm font-black text-slate-950">{title}</strong>
-        {description ? <small className="text-xs font-semibold leading-5 text-slate-500">{description}</small> : null}
-        {actions ? <div className="mt-2">{actions}</div> : null}
-      </div>
-      <div className="min-w-0">{children}</div>
-    </aside>
   );
 }
 
