@@ -5,12 +5,12 @@ html body .ema-module-root .ema-registry-toolbar,
 html body .ema-module-root .ema-registry-toolbar.ema-registry-toolbar-stacked {
   width: 100% !important;
   display: grid !important;
-  gap: .75rem !important;
-  border: 1px solid #dbe7f5 !important;
-  border-radius: 1rem !important;
-  background: #ffffff !important;
-  padding: .75rem !important;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, .055) !important;
+  gap: .7rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 0 .75rem !important;
+  box-shadow: none !important;
 }
 
 html body .ema-module-root .ema-scan-command-row {
@@ -104,7 +104,7 @@ html body .ema-module-root .ema-registry-filter-row {
   align-items: flex-end !important;
   justify-content: flex-end !important;
   gap: .65rem !important;
-  padding-top: .7rem !important;
+  padding-top: .65rem !important;
   border-top: 1px solid #edf2f8 !important;
 }
 
