@@ -1,10 +1,16 @@
 /* EMA shared module sidebar, tree, loading and statistic states.
    Keep this file global. No module-owned sidebar CSS files. */
 
+:root {
+  --ema-module-sidebar-width-min: 300px;
+  --ema-module-sidebar-width-max: 322px;
+  --ema-module-gap: 0.55rem;
+}
+
 body .ema-module-root .settings-layout,
 body .ema-module-root > .grid.min-w-0 {
-  grid-template-columns: 16.25rem minmax(0, 1fr) !important;
-  gap: 0.55rem !important;
+  grid-template-columns: minmax(var(--ema-module-sidebar-width-min), var(--ema-module-sidebar-width-max)) minmax(0, 1fr) !important;
+  gap: var(--ema-module-gap) !important;
   height: 100% !important;
   min-height: 0 !important;
   overflow: hidden !important;
