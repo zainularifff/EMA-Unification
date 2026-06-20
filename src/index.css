@@ -79,44 +79,44 @@ svg {
   padding: 0.55rem 0.65rem;
 }
 
-/* Hardware remains as the reference module while other page CSS is cleared. */
-.hardware-module-root {
+/* EMA module layout reference styles. */
+.ema-module-root {
   min-width: 0;
   height: 100%;
 }
 
-.hardware-module-root > * + * {
+.ema-module-root > * + * {
   margin-top: 0.5rem;
 }
 
-.hardware-module-root .settings-layout,
-.hardware-module-root .hardware-settings-layout {
+.ema-module-root .settings-layout,
+.ema-module-root .ema-settings-layout {
   min-width: 0;
   display: grid;
   gap: 0.55rem;
 }
 
 @media (min-width: 1024px) {
-  .hardware-module-root .settings-layout,
-  .hardware-module-root .hardware-settings-layout {
+  .ema-module-root .settings-layout,
+  .ema-module-root .ema-settings-layout {
     grid-template-columns: 16.25rem minmax(0, 1fr);
     align-items: stretch;
   }
 }
 
-.hardware-module-root .settings-sidebar,
-.hardware-module-root .settings-menu,
-.hardware-module-root .hardware-left-panel,
-.hardware-module-root .hardware-right-panel,
-.hardware-module-root .hardware-inspector,
-.hardware-module-root .detail-panel,
-.hardware-registry-card,
-.hardware-detail-card,
-.hardware-detail-summary-card,
-.hardware-detail-item,
-.hardware-preview-card,
-.hardware-info-banner,
-.hardware-option-card {
+.ema-module-root .settings-sidebar,
+.ema-module-root .settings-menu,
+.ema-module-root .ema-left-panel,
+.ema-module-root .ema-right-panel,
+.ema-module-root .ema-inspector,
+.ema-module-root .detail-panel,
+.ema-registry-card,
+.ema-detail-card,
+.ema-detail-summary-card,
+.ema-detail-item,
+.ema-preview-card,
+.ema-info-banner,
+.ema-option-card {
   min-width: 0;
   border: 1px solid #dbe4f0;
   border-radius: 0.75rem;
@@ -125,21 +125,21 @@ svg {
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.035);
 }
 
-.hardware-module-root .settings-content,
-.hardware-module-root .hardware-settings-content {
+.ema-module-root .settings-content,
+.ema-module-root .ema-settings-content {
   min-width: 0;
 }
 
-.hardware-module-root .panel-head,
-.hardware-panel-head {
+.ema-module-root .panel-head,
+.ema-panel-head {
   display: grid;
   gap: 0.1rem;
   margin-bottom: 0.5rem;
 }
 
-.hardware-module-root .panel-head span,
-.hardware-panel-head span,
-.hardware-module-root .eyebrow {
+.ema-module-root .panel-head span,
+.ema-panel-head span,
+.ema-module-root .eyebrow {
   color: #64748b;
   font-size: 0.65rem;
   font-weight: 900;
@@ -147,29 +147,29 @@ svg {
   text-transform: uppercase;
 }
 
-.hardware-module-root .panel-head strong,
-.hardware-panel-head strong {
+.ema-module-root .panel-head strong,
+.ema-panel-head strong {
   color: #0f172a;
   font-size: 0.88rem;
   font-weight: 900;
 }
 
-.hardware-module-root .panel-head small,
-.hardware-panel-head small {
+.ema-module-root .panel-head small,
+.ema-panel-head small {
   color: #64748b;
   font-size: 0.72rem;
   font-weight: 600;
   line-height: 1.25;
 }
 
-.hardware-module-root .settings-menu-list,
-.hardware-module-root .ema-module-sidebar-nav {
+.ema-module-root .settings-menu-list,
+.ema-module-root .ema-module-sidebar-nav {
   display: grid;
   gap: 0.3rem;
   margin-bottom: 0.55rem;
 }
 
-.hardware-module-root .setting-btn {
+.ema-module-root .setting-btn {
   width: 100%;
   display: flex;
   align-items: center;
@@ -182,15 +182,15 @@ svg {
   text-align: left;
 }
 
-.hardware-module-root .setting-btn:hover,
-.hardware-module-root .setting-btn.active {
+.ema-module-root .setting-btn:hover,
+.ema-module-root .setting-btn.active {
   border-color: #dbeafe;
   background: #eff6ff;
   color: #1d4ed8;
 }
 
-.hardware-module-root .setting-icon,
-.hardware-module-root .ema-sidebar-tree-icon {
+.ema-module-root .setting-icon,
+.ema-module-root .ema-sidebar-tree-icon {
   width: 1.6rem;
   height: 1.6rem;
   flex: 0 0 auto;
@@ -202,26 +202,26 @@ svg {
   color: #475569;
 }
 
-.hardware-module-root .setting-btn strong,
-.hardware-module-root .setting-btn small {
+.ema-module-root .setting-btn strong,
+.ema-module-root .setting-btn small {
   display: block;
 }
 
-.hardware-module-root .setting-btn strong {
+.ema-module-root .setting-btn strong {
   color: inherit;
   font-size: 0.78rem;
   font-weight: 900;
 }
 
-.hardware-module-root .setting-btn small {
+.ema-module-root .setting-btn small {
   color: #64748b;
   font-size: 0.68rem;
   font-weight: 600;
 }
 
-.hardware-module-root .section-search,
-.hardware-search-box,
-.hardware-module-root .ema-sidebar-field {
+.ema-module-root .section-search,
+.ema-search-box,
+.ema-module-root .ema-sidebar-field {
   min-height: 2.1rem;
   display: flex;
   align-items: center;
@@ -233,9 +233,9 @@ svg {
   color: #64748b;
 }
 
-.hardware-module-root .section-search input,
-.hardware-search-box input,
-.hardware-module-root .ema-sidebar-field input {
+.ema-module-root .section-search input,
+.ema-search-box input,
+.ema-module-root .ema-sidebar-field input {
   min-width: 0;
   flex: 1 1 0%;
   border: 0;
@@ -246,32 +246,32 @@ svg {
   font-weight: 600;
 }
 
-.hardware-module-root .ema-sidebar-content,
-.hardware-module-root .ema-sidebar-subpanel,
-.hardware-module-root .ema-sidebar-tree,
-.hardware-tree,
-.hardware-stat-tree {
+.ema-module-root .ema-sidebar-content,
+.ema-module-root .ema-sidebar-subpanel,
+.ema-module-root .ema-sidebar-tree,
+.ema-tree,
+.ema-stat-tree {
   min-width: 0;
 }
 
-.hardware-module-root .ema-sidebar-subpanel > * + *,
-.hardware-module-root .ema-sidebar-tree > * + *,
-.hardware-tree > * + *,
-.hardware-stat-tree > * + * {
+.ema-module-root .ema-sidebar-subpanel > * + *,
+.ema-module-root .ema-sidebar-tree > * + *,
+.ema-tree > * + *,
+.ema-stat-tree > * + * {
   margin-top: 0.3rem;
 }
 
-.hardware-module-root .ema-sidebar-tree,
-.hardware-tree,
-.hardware-stat-tree {
+.ema-module-root .ema-sidebar-tree,
+.ema-tree,
+.ema-stat-tree {
   max-height: calc(100vh - 17rem);
   overflow: auto;
   padding-right: 0.1rem;
 }
 
-.hardware-module-root .ema-sidebar-tree-node,
-.hardware-tree-node,
-.hardware-stat-tree-node {
+.ema-module-root .ema-sidebar-tree-node,
+.ema-tree-node,
+.ema-stat-tree-node {
   display: flex;
   align-items: center;
   gap: 0.2rem;
@@ -279,19 +279,19 @@ svg {
   padding: 0.1rem;
 }
 
-.hardware-module-root .ema-sidebar-tree-node:hover,
-.hardware-module-root .ema-sidebar-tree-node.is-selected,
-.hardware-module-root .ema-sidebar-tree-node.is-active,
-.hardware-tree-node:hover,
-.hardware-tree-node.is-selected,
-.hardware-stat-tree-node:hover,
-.hardware-stat-tree-node.is-selected {
+.ema-module-root .ema-sidebar-tree-node:hover,
+.ema-module-root .ema-sidebar-tree-node.is-selected,
+.ema-module-root .ema-sidebar-tree-node.is-active,
+.ema-tree-node:hover,
+.ema-tree-node.is-selected,
+.ema-stat-tree-node:hover,
+.ema-stat-tree-node.is-selected {
   background: #f8fafc;
 }
 
-.hardware-module-root .ema-sidebar-tree-toggle,
-.hardware-tree-node-chevron,
-.hardware-stat-tree-toggle {
+.ema-module-root .ema-sidebar-tree-toggle,
+.ema-tree-node-chevron,
+.ema-stat-tree-toggle {
   width: 1.25rem;
   height: 1.25rem;
   display: inline-flex;
@@ -299,20 +299,20 @@ svg {
   justify-content: center;
 }
 
-.hardware-module-root .ema-sidebar-tree-toggle,
-.hardware-module-root .ema-sidebar-tree-main,
-.hardware-tree-node-chevron,
-.hardware-tree-node-main,
-.hardware-stat-tree-toggle,
-.hardware-stat-tree-main {
+.ema-module-root .ema-sidebar-tree-toggle,
+.ema-module-root .ema-sidebar-tree-main,
+.ema-tree-node-chevron,
+.ema-tree-node-main,
+.ema-stat-tree-toggle,
+.ema-stat-tree-main {
   border: 0;
   background: transparent;
   color: #475569;
 }
 
-.hardware-module-root .ema-sidebar-tree-main,
-.hardware-tree-node-main,
-.hardware-stat-tree-main {
+.ema-module-root .ema-sidebar-tree-main,
+.ema-tree-node-main,
+.ema-stat-tree-main {
   min-width: 0;
   flex: 1 1 0%;
   display: flex;
@@ -322,9 +322,9 @@ svg {
   text-align: left;
 }
 
-.hardware-module-root .ema-sidebar-tree-label,
-.hardware-tree-node-label,
-.hardware-stat-tree-main > span:last-child {
+.ema-module-root .ema-sidebar-tree-label,
+.ema-tree-node-label,
+.ema-stat-tree-main > span:last-child {
   min-width: 0;
   overflow: hidden;
   color: #0f172a;
@@ -334,7 +334,7 @@ svg {
   white-space: nowrap;
 }
 
-.hardware-hero {
+.ema-hero {
   display: grid;
   gap: 0.5rem;
   border: 1px solid #dbe4f0;
@@ -344,7 +344,7 @@ svg {
   box-shadow: 0 3px 10px rgba(15, 23, 42, 0.035);
 }
 
-.hardware-hero h2 {
+.ema-hero h2 {
   margin: 0;
   color: #0f172a;
   font-size: 0.98rem;
@@ -352,20 +352,20 @@ svg {
   letter-spacing: -0.02em;
 }
 
-.hardware-hero p {
+.ema-hero p {
   margin: 0.1rem 0 0;
   color: #64748b;
   font-size: 0.76rem;
   font-weight: 600;
 }
 
-.hardware-hero-score {
+.ema-hero-score {
   display: grid;
   gap: 0.45rem;
   grid-template-columns: repeat(auto-fit, minmax(9.8rem, 1fr));
 }
 
-.hardware-kpi-card {
+.ema-kpi-card {
   min-width: 0;
   border: 1px solid #dbe4f0;
   border-radius: 0.7rem;
@@ -375,20 +375,20 @@ svg {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
 }
 
-.hardware-kpi-card:hover,
-.hardware-kpi-card.is-active {
+.ema-kpi-card:hover,
+.ema-kpi-card.is-active {
   border-color: #93c5fd;
   box-shadow: 0 5px 12px rgba(15, 23, 42, 0.055);
 }
 
-.hardware-kpi-content {
+.ema-kpi-content {
   display: grid;
   grid-template-columns: 1.45rem 1fr;
   align-items: center;
   gap: 0.12rem 0.45rem;
 }
 
-.hardware-kpi-icon {
+.ema-kpi-icon {
   grid-row: span 3;
   width: 1.45rem;
   height: 1.45rem;
@@ -401,12 +401,12 @@ svg {
   font-style: normal;
 }
 
-.hardware-kpi-icon svg {
+.ema-kpi-icon svg {
   width: 0.85rem;
   height: 0.85rem;
 }
 
-.hardware-kpi-label {
+.ema-kpi-label {
   color: #64748b;
   font-size: 0.62rem;
   font-weight: 900;
@@ -414,7 +414,7 @@ svg {
   text-transform: uppercase;
 }
 
-.hardware-kpi-value {
+.ema-kpi-value {
   color: #0f172a;
   font-size: 1.1rem;
   font-weight: 950;
@@ -422,47 +422,47 @@ svg {
   letter-spacing: -0.03em;
 }
 
-.hardware-kpi-note {
+.ema-kpi-note {
   color: #64748b;
   font-size: 0.66rem;
   font-weight: 600;
 }
 
-.hardware-main-grid {
+.ema-main-grid {
   min-width: 0;
   display: grid;
   gap: 0.5rem;
 }
 
-.hardware-main-grid.has-inspector {
+.ema-main-grid.has-inspector {
   grid-template-columns: minmax(0, 1fr) 18rem;
 }
 
-.hardware-registry-card {
+.ema-registry-card {
   min-width: 0;
   padding: 0.6rem;
 }
 
-.hardware-registry-toolbar,
-.hardware-registry-toolbar-stacked {
+.ema-registry-toolbar,
+.ema-registry-toolbar-stacked {
   display: grid;
   gap: 0.45rem;
   margin-bottom: 0.5rem;
 }
 
-.hardware-scan-command-row {
+.ema-scan-command-row {
   display: grid;
   grid-template-columns: repeat(3, max-content) minmax(14rem, 1fr) 2.1rem max-content;
   align-items: center;
   gap: 0.45rem;
 }
 
-.hardware-toolbar-refresh {
+.ema-toolbar-refresh {
   width: 2.1rem;
   padding: 0;
 }
 
-.hardware-search-clear {
+.ema-search-clear {
   width: 1.45rem;
   height: 1.45rem;
   flex: 0 0 auto;
@@ -475,12 +475,12 @@ svg {
   color: #94a3b8;
 }
 
-.hardware-search-clear:hover {
+.ema-search-clear:hover {
   background: #f1f5f9;
   color: #0f172a;
 }
 
-.hardware-registry-filter-row {
+.ema-registry-filter-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(8rem, 11rem)) max-content;
   justify-content: end;
@@ -488,12 +488,12 @@ svg {
   gap: 0.45rem;
 }
 
-.hardware-filter-group {
+.ema-filter-group {
   display: grid;
   gap: 0.18rem;
 }
 
-.hardware-filter-group label {
+.ema-filter-group label {
   color: #64748b;
   font-size: 0.62rem;
   font-weight: 900;
@@ -501,12 +501,12 @@ svg {
   text-transform: uppercase;
 }
 
-.hardware-custom-select {
+.ema-custom-select {
   position: relative;
   min-width: 0;
 }
 
-.hardware-custom-select-trigger {
+.ema-custom-select-trigger {
   width: 100%;
   min-height: 2.1rem;
   display: flex;
@@ -522,7 +522,7 @@ svg {
   font-weight: 700;
 }
 
-.hardware-custom-select-menu {
+.ema-custom-select-menu {
   position: absolute;
   top: calc(100% + 0.25rem);
   left: 0;
@@ -537,7 +537,7 @@ svg {
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
 }
 
-.hardware-custom-select-option {
+.ema-custom-select-option {
   width: 100%;
   display: flex;
   align-items: center;
@@ -552,21 +552,21 @@ svg {
   font-weight: 700;
 }
 
-.hardware-custom-select-option:hover,
-.hardware-custom-select-option.is-selected {
+.ema-custom-select-option:hover,
+.ema-custom-select-option.is-selected {
   background: #eff6ff;
   color: #1d4ed8;
 }
 
-.hardware-registry-subhead {
+.ema-registry-subhead {
   margin-bottom: 0.4rem;
   color: #64748b;
   font-size: 0.76rem;
   font-weight: 700;
 }
 
-.hardware-standard-table,
-.hardware-device-table {
+.ema-standard-table,
+.ema-device-table {
   width: 100%;
   min-width: 720px;
   max-height: calc(100vh - 23rem);
@@ -576,9 +576,9 @@ svg {
   background: #ffffff;
 }
 
-.hardware-standard-row,
-.hardware-device-table-row,
-.hardware-module-root .user-row {
+.ema-standard-row,
+.ema-device-table-row,
+.ema-module-root .user-row {
   min-width: 720px;
   display: grid;
   grid-template-columns: 3rem minmax(12rem, 1.45fr) minmax(8rem, 1fr) minmax(9rem, 1fr) minmax(6.5rem, 0.8fr) minmax(8.5rem, 0.9fr) minmax(6.5rem, 0.8fr);
@@ -586,27 +586,27 @@ svg {
   border-bottom: 1px solid #eef2f7;
 }
 
-.hardware-standard-row.head,
-.hardware-device-table-row.head,
-.hardware-module-root .user-row.head {
+.ema-standard-row.head,
+.ema-device-table-row.head,
+.ema-module-root .user-row.head {
   position: sticky;
   top: 0;
   z-index: 1;
   background: #f8fafc;
 }
 
-.hardware-standard-row:not(.head):hover,
-.hardware-device-table-row:not(.head):hover,
-.hardware-module-root .user-row:not(.head):hover {
+.ema-standard-row:not(.head):hover,
+.ema-device-table-row:not(.head):hover,
+.ema-module-root .user-row:not(.head):hover {
   background: #f8fafc;
 }
 
-.hardware-standard-row.is-selected,
-.hardware-device-row.is-selected {
+.ema-standard-row.is-selected,
+.ema-device-row.is-selected {
   background: #eff6ff;
 }
 
-.hardware-module-root .user-cell {
+.ema-module-root .user-cell {
   min-width: 0;
   padding: 0.43rem 0.55rem;
   color: #334155;
@@ -614,8 +614,8 @@ svg {
   font-weight: 650;
 }
 
-.hardware-module-root .head .user-cell,
-.hardware-module-root .head .hardware-sort-btn {
+.ema-module-root .head .user-cell,
+.ema-module-root .head .ema-sort-btn {
   color: #475569;
   font-size: 0.62rem;
   font-weight: 900;
@@ -623,7 +623,7 @@ svg {
   text-transform: uppercase;
 }
 
-.hardware-sort-btn {
+.ema-sort-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.18rem;
@@ -633,11 +633,11 @@ svg {
   color: inherit;
 }
 
-.hardware-sort-icon {
+.ema-sort-icon {
   color: #94a3b8;
 }
 
-.hardware-module-root .row-index-pill {
+.ema-module-root .row-index-pill {
   min-width: 1.55rem;
   height: 1.2rem;
   display: inline-flex;
@@ -650,22 +650,22 @@ svg {
   font-weight: 900;
 }
 
-.hardware-user-name,
-.hardware-module-root .user-name {
+.ema-user-name,
+.ema-module-root .user-name {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.45rem;
 }
 
-.hardware-user-name > div,
-.hardware-module-root .user-name > div {
+.ema-user-name > div,
+.ema-module-root .user-name > div {
   min-width: 0;
 }
 
-.hardware-user-name strong,
-.hardware-location-cell strong,
-.hardware-network-cell strong {
+.ema-user-name strong,
+.ema-location-cell strong,
+.ema-network-cell strong {
   display: block;
   overflow: hidden;
   color: #0f172a;
@@ -675,14 +675,14 @@ svg {
   font-weight: 900;
 }
 
-.hardware-user-name small,
-.hardware-user-name em,
-.hardware-location-cell small,
-.hardware-model-text,
-.hardware-date-cell,
-.hardware-device-id-cell,
-.hardware-group-cell,
-.hardware-ip-cell {
+.ema-user-name small,
+.ema-user-name em,
+.ema-location-cell small,
+.ema-model-text,
+.ema-date-cell,
+.ema-device-id-cell,
+.ema-group-cell,
+.ema-ip-cell {
   display: block;
   overflow: hidden;
   color: #64748b;
@@ -693,7 +693,7 @@ svg {
   font-weight: 650;
 }
 
-.hardware-status-dot {
+.ema-status-dot {
   width: 0.5rem;
   height: 0.5rem;
   flex: 0 0 auto;
@@ -701,7 +701,7 @@ svg {
   background: #94a3b8;
 }
 
-.hardware-status-pill {
+.ema-status-pill {
   width: fit-content;
   display: inline-flex;
   align-items: center;
@@ -711,41 +711,41 @@ svg {
   font-weight: 900;
 }
 
-.hardware-status-dot.is-online,
-.hardware-status-dot.online,
-.hardware-status-pill.is-online,
-.hardware-status-pill.online {
+.ema-status-dot.is-online,
+.ema-status-dot.online,
+.ema-status-pill.is-online,
+.ema-status-pill.online {
   background: #dcfce7;
   color: #166534;
 }
 
-.hardware-status-dot.is-offline,
-.hardware-status-dot.offline,
-.hardware-status-pill.is-offline,
-.hardware-status-pill.offline {
+.ema-status-dot.is-offline,
+.ema-status-dot.offline,
+.ema-status-pill.is-offline,
+.ema-status-pill.offline {
   background: #f1f5f9;
   color: #475569;
 }
 
-.hardware-status-dot.is-stale,
-.hardware-status-dot.stale,
-.hardware-status-pill.is-stale,
-.hardware-status-pill.stale {
+.ema-status-dot.is-stale,
+.ema-status-dot.stale,
+.ema-status-pill.is-stale,
+.ema-status-pill.stale {
   background: #fef3c7;
   color: #92400e;
 }
 
-.hardware-status-dot.is-locked,
-.hardware-status-dot.locked,
-.hardware-status-pill.is-locked,
-.hardware-status-pill.locked {
+.ema-status-dot.is-locked,
+.ema-status-dot.locked,
+.ema-status-pill.is-locked,
+.ema-status-pill.locked {
   background: #fee2e2;
   color: #991b1b;
 }
 
-.hardware-pagination,
-.hardware-geo-pagination,
-.hardware-module-root .uam-pagination {
+.ema-pagination,
+.ema-geo-pagination,
+.ema-module-root .uam-pagination {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -757,20 +757,20 @@ svg {
   font-weight: 700;
 }
 
-.hardware-pagination-actions,
-.hardware-geo-pagination-actions,
-.hardware-module-root .uam-pagination-controls {
+.ema-pagination-actions,
+.ema-geo-pagination-actions,
+.ema-module-root .uam-pagination-controls {
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
 
-.hardware-pagination-actions button,
-.hardware-geo-pagination-actions button,
-.hardware-module-root .uam-page-icon,
-.hardware-module-root .uam-page-current,
-.hardware-pagination-current,
-.hardware-geo-pagination-current {
+.ema-pagination-actions button,
+.ema-geo-pagination-actions button,
+.ema-module-root .uam-page-icon,
+.ema-module-root .uam-page-current,
+.ema-pagination-current,
+.ema-geo-pagination-current {
   min-width: 1.75rem;
   height: 1.75rem;
   display: inline-flex;
@@ -784,21 +784,21 @@ svg {
   font-weight: 850;
 }
 
-.hardware-module-root .uam-page-current,
-.hardware-pagination-current,
-.hardware-geo-pagination-current {
+.ema-module-root .uam-page-current,
+.ema-pagination-current,
+.ema-geo-pagination-current {
   border-color: #0f172a;
   background: #0f172a;
   color: #ffffff;
 }
 
-.hardware-btn,
-.hardware-command-btn,
-.hardware-icon-btn,
-.hardware-clear-filters-btn,
-.hardware-module-root .soft-btn,
-.hardware-module-root .primary-btn,
-.hardware-module-root .danger-btn {
+.ema-btn,
+.ema-command-btn,
+.ema-icon-btn,
+.ema-clear-filters-btn,
+.ema-module-root .soft-btn,
+.ema-module-root .primary-btn,
+.ema-module-root .danger-btn {
   min-height: 2.1rem;
   display: inline-flex;
   align-items: center;
@@ -815,36 +815,36 @@ svg {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.hardware-btn:hover,
-.hardware-command-btn:hover:not(:disabled),
-.hardware-icon-btn:hover:not(:disabled),
-.hardware-clear-filters-btn:hover:not(:disabled),
-.hardware-module-root .soft-btn:hover,
-.hardware-module-root .primary-btn:hover,
-.hardware-module-root .danger-btn:hover {
+.ema-btn:hover,
+.ema-command-btn:hover:not(:disabled),
+.ema-icon-btn:hover:not(:disabled),
+.ema-clear-filters-btn:hover:not(:disabled),
+.ema-module-root .soft-btn:hover,
+.ema-module-root .primary-btn:hover,
+.ema-module-root .danger-btn:hover {
   background: #f8fafc;
   color: #0f172a;
 }
 
-.hardware-btn.primary,
-.hardware-toolbar-export,
-.hardware-command-btn:nth-of-type(3),
-.hardware-module-root .primary-btn {
+.ema-btn.primary,
+.ema-toolbar-export,
+.ema-command-btn:nth-of-type(3),
+.ema-module-root .primary-btn {
   border-color: #2563eb;
   background: #2563eb;
   color: #ffffff;
 }
 
-.hardware-btn.danger,
-.hardware-module-root .danger-btn {
+.ema-btn.danger,
+.ema-module-root .danger-btn {
   border-color: #fecaca;
   background: #fef2f2;
   color: #b91c1c;
 }
 
-.hardware-right-header,
-.hardware-detail-drawer-header,
-.hardware-modal-header {
+.ema-right-header,
+.ema-detail-drawer-header,
+.ema-modal-header {
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -852,9 +852,9 @@ svg {
   padding-bottom: 0.55rem;
 }
 
-.hardware-right-icon,
-.hardware-action-icon,
-.hardware-detail-device-icon {
+.ema-right-icon,
+.ema-action-icon,
+.ema-detail-device-icon {
   width: 1.8rem;
   height: 1.8rem;
   flex: 0 0 auto;
@@ -866,12 +866,12 @@ svg {
   color: #2563eb;
 }
 
-.hardware-right-title {
+.ema-right-title {
   min-width: 0;
   flex: 1 1 0%;
 }
 
-.hardware-right-title h3 {
+.ema-right-title h3 {
   margin: 0;
   overflow: hidden;
   color: #0f172a;
@@ -881,7 +881,7 @@ svg {
   font-weight: 900;
 }
 
-.hardware-right-title p {
+.ema-right-title p {
   margin: 0.12rem 0 0;
   overflow: hidden;
   color: #64748b;
@@ -891,9 +891,9 @@ svg {
   font-weight: 600;
 }
 
-.hardware-right-close,
-.hardware-detail-close,
-.hardware-modal-close {
+.ema-right-close,
+.ema-detail-close,
+.ema-modal-close {
   width: 1.65rem;
   height: 1.65rem;
   display: inline-flex;
@@ -905,13 +905,13 @@ svg {
   color: #64748b;
 }
 
-.hardware-action-list {
+.ema-action-list {
   display: grid;
   gap: 0.4rem;
   margin-top: 0.55rem;
 }
 
-.hardware-action-item {
+.ema-action-item {
   width: 100%;
   display: flex;
   align-items: center;
@@ -924,41 +924,41 @@ svg {
   text-align: left;
 }
 
-.hardware-action-item:hover:not(:disabled) {
+.ema-action-item:hover:not(:disabled) {
   border-color: #bfdbfe;
   background: #eff6ff;
 }
 
-.hardware-action-item strong,
-.hardware-action-item span {
+.ema-action-item strong,
+.ema-action-item span {
   display: block;
 }
 
-.hardware-action-item strong {
+.ema-action-item strong {
   color: #0f172a;
   font-size: 0.74rem;
   font-weight: 900;
 }
 
-.hardware-action-item span {
+.ema-action-item span {
   color: #64748b;
   font-size: 0.64rem;
   font-weight: 600;
 }
 
-.hardware-module-root .form-field,
-.hardware-module-root .settings-field,
-.hardware-module-root .ema-field,
-.hardware-form-group {
+.ema-module-root .form-field,
+.ema-module-root .settings-field,
+.ema-module-root .ema-field,
+.ema-form-group {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
 }
 
-.hardware-module-root .form-field label,
-.hardware-module-root .settings-field label,
-.hardware-module-root .ema-field label,
-.hardware-form-group label {
+.ema-module-root .form-field label,
+.ema-module-root .settings-field label,
+.ema-module-root .ema-field label,
+.ema-form-group label {
   color: #64748b;
   font-size: 0.66rem;
   font-weight: 800;
@@ -966,18 +966,18 @@ svg {
   text-transform: uppercase;
 }
 
-.hardware-module-root .form-field input,
-.hardware-module-root .form-field select,
-.hardware-module-root .form-field textarea,
-.hardware-module-root .settings-field input,
-.hardware-module-root .settings-field select,
-.hardware-module-root .settings-field textarea,
-.hardware-module-root .ema-field input,
-.hardware-module-root .ema-field select,
-.hardware-module-root .ema-field textarea,
-.hardware-form-group input,
-.hardware-form-group select,
-.hardware-form-group textarea {
+.ema-module-root .form-field input,
+.ema-module-root .form-field select,
+.ema-module-root .form-field textarea,
+.ema-module-root .settings-field input,
+.ema-module-root .settings-field select,
+.ema-module-root .settings-field textarea,
+.ema-module-root .ema-field input,
+.ema-module-root .ema-field select,
+.ema-module-root .ema-field textarea,
+.ema-form-group input,
+.ema-form-group select,
+.ema-form-group textarea {
   width: 100%;
   border: 1px solid #e2e8f0;
   border-radius: 0.65rem;
@@ -989,8 +989,8 @@ svg {
   outline: none;
 }
 
-.hardware-modal-overlay,
-.hardware-detail-drawer-overlay {
+.ema-modal-overlay,
+.ema-detail-drawer-overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -1002,8 +1002,8 @@ svg {
   backdrop-filter: blur(6px);
 }
 
-.hardware-modal,
-.hardware-detail-drawer {
+.ema-modal,
+.ema-detail-drawer {
   width: min(48rem, calc(100vw - 1.3rem));
   max-height: 92vh;
   overflow: hidden;
@@ -1013,12 +1013,12 @@ svg {
   box-shadow: 0 20px 42px rgba(15, 23, 42, 0.22);
 }
 
-.hardware-detail-drawer {
+.ema-detail-drawer {
   width: min(58rem, calc(100vw - 1.3rem));
 }
 
-.hardware-modal-header,
-.hardware-detail-drawer-header {
+.ema-modal-header,
+.ema-detail-drawer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1027,15 +1027,15 @@ svg {
   padding: 0.65rem 0.8rem;
 }
 
-.hardware-modal-body,
-.hardware-detail-body {
+.ema-modal-body,
+.ema-detail-body {
   max-height: 72vh;
   overflow: auto;
   padding: 0.7rem 0.8rem;
 }
 
-.hardware-modal-footer,
-.hardware-detail-form-footer {
+.ema-modal-footer,
+.ema-detail-form-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1045,23 +1045,23 @@ svg {
   padding: 0.65rem 0.8rem;
 }
 
-.hardware-detail-summary-grid,
-.hardware-detail-section-grid,
-.hardware-storage-grid {
+.ema-detail-summary-grid,
+.ema-detail-section-grid,
+.ema-storage-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
   gap: 0.45rem;
   padding: 0.65rem 0.8rem 0;
 }
 
-.hardware-detail-card h3 {
+.ema-detail-card h3 {
   margin: 0 0 0.45rem;
   color: #0f172a;
   font-size: 0.78rem;
   font-weight: 900;
 }
 
-.hardware-detail-tabs {
+.ema-detail-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
@@ -1069,7 +1069,7 @@ svg {
   padding: 0.5rem 0.8rem;
 }
 
-.hardware-detail-tabs button {
+.ema-detail-tabs button {
   border: 1px solid #e2e8f0;
   border-radius: 999px;
   background: #ffffff;
@@ -1079,15 +1079,15 @@ svg {
   font-weight: 800;
 }
 
-.hardware-detail-tabs button.is-active {
+.ema-detail-tabs button.is-active {
   border-color: #0f172a;
   background: #0f172a;
   color: #ffffff;
 }
 
-.hardware-detail-item span,
-.hardware-detail-summary-card span,
-.hardware-preview-card span {
+.ema-detail-item span,
+.ema-detail-summary-card span,
+.ema-preview-card span {
   display: block;
   color: #64748b;
   font-size: 0.62rem;
@@ -1095,9 +1095,9 @@ svg {
   text-transform: uppercase;
 }
 
-.hardware-detail-item strong,
-.hardware-detail-summary-card strong,
-.hardware-preview-card strong {
+.ema-detail-item strong,
+.ema-detail-summary-card strong,
+.ema-preview-card strong {
   display: block;
   margin-top: 0.2rem;
   color: #0f172a;
@@ -1106,7 +1106,7 @@ svg {
   word-break: break-word;
 }
 
-.hardware-toast-layer {
+.ema-toast-layer {
   position: fixed;
   top: 0.65rem;
   right: 0.65rem;
@@ -1117,7 +1117,7 @@ svg {
   gap: 0.5rem;
 }
 
-.hardware-toast {
+.ema-toast {
   position: fixed;
   top: 4.2rem;
   right: 0.65rem;
@@ -1135,23 +1135,23 @@ svg {
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.16);
 }
 
-.hardware-toast strong,
-.hardware-toast span {
+.ema-toast strong,
+.ema-toast span {
   display: block;
 }
 
-.hardware-toast strong {
+.ema-toast strong {
   color: #0f172a;
   font-weight: 900;
 }
 
-.hardware-toast span {
+.ema-toast span {
   color: #64748b;
   font-size: 0.7rem;
   font-weight: 600;
 }
 
-.hardware-toast-icon {
+.ema-toast-icon {
   width: 1.8rem;
   height: 1.8rem;
   flex: 0 0 auto;
@@ -1163,29 +1163,29 @@ svg {
   color: #2563eb;
 }
 
-.hardware-toast button {
+.ema-toast button {
   border: 0;
   background: transparent;
   color: #94a3b8;
 }
 
-.hardware-toast-success {
+.ema-toast-success {
   border-color: #a7f3d0;
 }
 
-.hardware-toast-error,
-.hardware-toast-delete {
+.ema-toast-error,
+.ema-toast-delete {
   border-color: #fecaca;
 }
 
 @media (max-width: 1200px) {
-  .hardware-scan-command-row,
-  .hardware-registry-filter-row {
+  .ema-scan-command-row,
+  .ema-registry-filter-row {
     grid-template-columns: 1fr;
     justify-content: stretch;
   }
 
-  .hardware-main-grid.has-inspector {
+  .ema-main-grid.has-inspector {
     grid-template-columns: 1fr;
   }
 }
@@ -1195,20 +1195,20 @@ svg {
     padding: 0.45rem;
   }
 
-  .hardware-hero-score {
+  .ema-hero-score {
     grid-template-columns: 1fr 1fr;
   }
 
-  .hardware-pagination,
-  .hardware-geo-pagination,
-  .hardware-module-root .uam-pagination {
+  .ema-pagination,
+  .ema-geo-pagination,
+  .ema-module-root .uam-pagination {
     align-items: flex-start;
     flex-direction: column;
   }
 }
 
 @media (max-width: 560px) {
-  .hardware-hero-score {
+  .ema-hero-score {
     grid-template-columns: 1fr;
   }
 }

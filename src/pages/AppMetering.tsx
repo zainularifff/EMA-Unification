@@ -1332,7 +1332,7 @@ export default function AppMetering() {
               <span>APPLICATION COMMAND CENTER</span>
               <h2>Application Metering</h2>
               {/* <p>{kpiScopeType}: {kpiScopeLabel} · {kpiPeriodLabel} · {kpiFilterLabel}</p>
-        {selectedScopeMetering ? <p>Active metering started {formatMeteringStartedAt(selectedScopeMetering.startedAt)} · {selectedScopeMetering.scopeLabel}</p> : null} */}
+{selectedScopeMetering ? <p>Active metering started {formatMeteringStartedAt(selectedScopeMetering.startedAt)} · {selectedScopeMetering.scopeLabel}</p> : null} */}
             </div>
             <div>
               <button type="button" onClick={loadUsage}>
@@ -1438,12 +1438,12 @@ export default function AppMetering() {
                   </select>
                 </label>
                 {/* <label className="form-field col-12 col-md-6 col-xl">
-          <span>Page Mode</span>
-          <select className="setting-select" value={nextPageMode ? "nextpage" : "first"} onChange={(event) => setNextPageMode(event.target.value === "nextpage")} disabled={!oneYearMode}>
-            <option value="first">First Page</option>
-            <option value="nextpage">Next Page</option>
-          </select>
-        </label> */}
+<span>Page Mode</span>
+<select className="setting-select" value={nextPageMode ? "nextpage" : "first"} onChange={(event) => setNextPageMode(event.target.value === "nextpage")} disabled={!oneYearMode}>
+<option value="first">First Page</option>
+<option value="nextpage">Next Page</option>
+</select>
+</label> */}
               </div>
 
               {error ? <div><AlertCircle size={15}/> {error}</div> : null}

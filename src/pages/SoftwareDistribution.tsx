@@ -1330,18 +1330,18 @@ export default function SoftwareDistribution() {
 
           <div>
             {/* <button
-          type="button"
-          className="primary-btn"
-          onClick={() => {
-            setOpenTreeMenuId(null);
-            setOpenVersionMenuId(null);
-            setOpenRowMenuId(null);
-            setModal({ type: "new" });
-          }}
-        >
-          <Plus size={14} />
-          New Package
-        </button> */}
+  type="button"
+  className="primary-btn"
+  onClick={() => {
+    setOpenTreeMenuId(null);
+    setOpenVersionMenuId(null);
+    setOpenRowMenuId(null);
+    setModal({ type: "new" });
+  }}
+>
+  <Plus size={14} />
+  New Package
+</button> */}
 
             <label>
               <Search size={15}/>

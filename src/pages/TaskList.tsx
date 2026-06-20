@@ -850,9 +850,9 @@ const TaskList = () => {
                         <div>
                           <span>{task.state}</span>
                           {/* {task.rawState && task.rawState !== task.state ? <small>raw: {task.rawState}</small> : null}
-            <div className="task-mini-progress" aria-label={`Completion ${task.completionRate}%`}>
-              <progress className="task-progress-native" value={Math.min(100, Math.max(0, task.completionRate))} max={100} />
-            </div> */}
+<div className="task-mini-progress" aria-label={`Completion ${task.completionRate}%`}>
+<progress className="task-progress-native" value={Math.min(100, Math.max(0, task.completionRate))} max={100} />
+</div> */}
                         </div>
                       </div>
                       <div>
