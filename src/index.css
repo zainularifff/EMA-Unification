@@ -84,3 +84,1039 @@ svg {
     padding: 0.5rem;
   }
 }
+
+/* EMA Hardware compatibility layout. Keep this scoped to the Hardware root while the page is moved into shared components. */
+.ema-module-root {
+  width: 100%;
+  min-height: calc(100dvh - 4.5rem);
+  background: #eef4fa;
+  color: #0f172a;
+  overflow: hidden;
+}
+
+.ema-module-root.container-fluid,
+.ema-module-root.p-3,
+.ema-module-root.p-xl-4 {
+  padding: 0.75rem !important;
+  max-width: none !important;
+}
+
+.ema-module-root .ema-settings-layout,
+.ema-module-root .settings-layout {
+  display: grid !important;
+  grid-template-columns: 20rem minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+  width: 100% !important;
+  min-height: calc(100dvh - 5.8rem) !important;
+  max-height: calc(100dvh - 5.8rem) !important;
+  overflow: hidden !important;
+}
+
+.ema-module-root .ema-panel-surface,
+.ema-module-root .settings-menu,
+.ema-module-root .settings-content,
+.ema-module-root .content-shell,
+.ema-module-root .ema-card {
+  border: 1px solid #d7e2ef;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.ema-module-root .settings-menu,
+.ema-module-root .ema-left-panel {
+  min-width: 0 !important;
+  width: 20rem !important;
+  max-width: 20rem !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border-radius: 1rem !important;
+  padding: 0.9rem !important;
+}
+
+.ema-module-root .panel-head {
+  flex: 0 0 auto;
+  display: grid;
+  gap: 0.12rem;
+  margin-bottom: 0.75rem;
+}
+
+.ema-module-root .panel-head span {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ema-module-root .panel-head strong {
+  color: #0f172a;
+  font-size: 0.96rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.ema-module-root .panel-head small {
+  max-width: 16.5rem;
+  color: #51637c;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.ema-module-root .ema-module-sidebar-switcher,
+.ema-module-root .settings-menu-list {
+  flex: 0 0 auto !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 0.5rem !important;
+  width: 100% !important;
+  margin: 0 0 0.75rem !important;
+  padding: 0.25rem !important;
+  border: 1px solid #d9e5f4 !important;
+  border-radius: 0.9rem !important;
+  background: #f4f8fd !important;
+}
+
+.ema-module-root .setting-btn {
+  min-width: 0 !important;
+  width: 100% !important;
+  min-height: 2.75rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+  padding: 0.45rem 0.5rem !important;
+  border: 0 !important;
+  border-radius: 0.75rem !important;
+  background: transparent !important;
+  color: #334155 !important;
+  font-size: 0.78rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  box-shadow: none !important;
+}
+
+.ema-module-root .setting-btn.active {
+  background: #ffffff !important;
+  color: #155dff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.11), 0 0 0 1px #dbeafe !important;
+}
+
+.ema-module-root .setting-btn span:last-child,
+.ema-module-root .setting-btn span:last-child strong {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.ema-module-root .setting-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  flex: 0 0 1.55rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: #eef4fb;
+  color: #52637a;
+}
+
+.ema-module-root .setting-btn.active .setting-icon {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.ema-module-root .ema-sidebar-content,
+.ema-module-root .ema-sidebar-subpanel {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.ema-module-root .section-search,
+.ema-module-root .ema-sidebar-field,
+.ema-module-root .ema-search-box {
+  width: 100% !important;
+  height: 2.55rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  border: 1px solid #d9e5f4 !important;
+  border-radius: 0.85rem !important;
+  background: #ffffff !important;
+  padding: 0 0.75rem !important;
+  color: #64748b !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+}
+
+.ema-module-root .section-search input,
+.ema-module-root .ema-search-box input {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+}
+
+.ema-module-root .section-search input::placeholder,
+.ema-module-root .ema-search-box input::placeholder {
+  color: #94a3b8 !important;
+}
+
+.ema-module-root .soft-btn,
+.ema-module-root .ema-sidebar-create-branch {
+  width: 100% !important;
+  min-height: 2.35rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0.45rem !important;
+  margin-top: 0.65rem !important;
+  border: 1px solid #d9e5f4 !important;
+  border-radius: 0.8rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+}
+
+.ema-module-root .soft-btn:hover,
+.ema-module-root .ema-sidebar-create-branch:hover {
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+.ema-module-root .ema-sidebar-tree {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  overflow: auto !important;
+  margin-top: 0.75rem !important;
+  padding-right: 0.2rem !important;
+}
+
+.ema-module-root .ema-sidebar-tree-node {
+  width: 100% !important;
+  min-height: 2.55rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  margin-bottom: 0.3rem !important;
+  border-radius: 0.8rem !important;
+  background: #f7f9fc !important;
+  color: #0f172a !important;
+  padding-right: 0.35rem !important;
+}
+
+.ema-module-root .ema-sidebar-tree-node.is-selected,
+.ema-module-root .ema-sidebar-tree-node.is-active {
+  background: #eff6ff !important;
+  box-shadow: inset 3px 0 0 #2563eb, 0 0 0 1px #bfdbfe !important;
+}
+
+.ema-module-root .ema-sidebar-tree-toggle,
+.ema-module-root .ema-sidebar-tree-main,
+.ema-module-root .folder-menu-trigger {
+  border: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+}
+
+.ema-module-root .ema-sidebar-tree-toggle {
+  width: 1.6rem !important;
+  height: 1.6rem !important;
+  flex: 0 0 1.6rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 0.5rem !important;
+}
+
+.ema-module-root .ema-sidebar-tree-main {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  padding: 0.2rem 0 !important;
+  text-align: left !important;
+  font-size: 0.82rem !important;
+  font-weight: 900 !important;
+}
+
+.ema-module-root .ema-sidebar-tree-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 1.6rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: #edf3fb;
+  color: #475569;
+}
+
+.ema-module-root .ema-sidebar-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ema-module-root .ema-sidebar-tree-count {
+  color: #64748b;
+  font-weight: 800;
+}
+
+.ema-module-root .settings-content,
+.ema-module-root .ema-settings-content {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.75rem !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.ema-module-root .settings-hero,
+.ema-module-root .ema-hero {
+  flex: 0 0 auto !important;
+  display: grid !important;
+  grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 0.75rem !important;
+  border-radius: 1rem !important;
+  padding: 0.85rem !important;
+}
+
+.ema-module-root .eyebrow {
+  display: block;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ema-module-root .settings-hero h2,
+.ema-module-root .ema-hero h2 {
+  margin: 0.2rem 0 0;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.ema-module-root .settings-hero p,
+.ema-module-root .ema-hero p {
+  margin: 0.3rem 0 0;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.ema-module-root .ema-hero-score {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.ema-module-root .ema-kpi-card {
+  min-width: 0;
+  min-height: 4.7rem;
+  border: 1px solid #dbe7f5;
+  border-radius: 0.9rem;
+  background: #ffffff;
+  color: #0f172a;
+  text-align: left;
+  padding: 0.65rem;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+}
+
+.ema-module-root .ema-kpi-card.is-active {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25), 0 12px 26px rgba(37, 99, 235, 0.13);
+}
+
+.ema-module-root .ema-kpi-content {
+  display: grid;
+  grid-template-columns: 1.7rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.2rem 0.55rem;
+}
+
+.ema-module-root .ema-kpi-icon {
+  grid-row: span 3;
+  width: 1.7rem;
+  height: 1.7rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 0.55rem;
+  background: #eef5ff;
+  color: #2563eb;
+}
+
+.ema-module-root .ema-kpi-label {
+  min-width: 0;
+  color: #475569;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ema-module-root .ema-kpi-value {
+  color: #0f172a;
+  font-size: 1.12rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.ema-module-root .ema-kpi-note {
+  min-width: 0;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ema-module-root .ema-main-grid {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+  overflow: hidden !important;
+}
+
+.ema-module-root .ema-main-grid.has-inspector {
+  grid-template-columns: minmax(0, 1fr) 20rem !important;
+}
+
+.ema-module-root .content-shell,
+.ema-module-root .ema-registry-card {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border-radius: 1rem !important;
+  padding: 0 !important;
+}
+
+.ema-module-root .ema-registry-toolbar {
+  flex: 0 0 auto !important;
+  display: grid !important;
+  gap: 0.7rem !important;
+  padding: 0.8rem !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+}
+
+.ema-module-root .ema-scan-command-row {
+  display: grid !important;
+  grid-template-columns: max-content max-content max-content minmax(18rem, 1fr) 2.55rem max-content !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.ema-module-root .ema-command-btn,
+.ema-module-root .ema-icon-btn {
+  height: 2.35rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+  border: 1px solid #bfd0ff !important;
+  border-radius: 0.8rem !important;
+  background: #ffffff !important;
+  color: #155dff !important;
+  padding: 0 1rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08) !important;
+}
+
+.ema-module-root .ema-icon-btn {
+  width: 2.55rem !important;
+  padding: 0 !important;
+}
+
+.ema-module-root .ema-command-btn:disabled,
+.ema-module-root .ema-icon-btn:disabled {
+  color: #9fb0d4 !important;
+  background: #f8fbff !important;
+  border-color: #dbe5f4 !important;
+  box-shadow: none !important;
+}
+
+.ema-module-root .ema-toolbar-export {
+  border-color: #0b7ed7 !important;
+  background: linear-gradient(135deg, #1d6fd7 0%, #0b83c7 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 26px rgba(11, 126, 215, 0.23) !important;
+}
+
+.ema-module-root .ema-search-box-with-clear {
+  position: relative;
+}
+
+.ema-module-root .ema-search-clear {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: #64748b;
+}
+
+.ema-module-root .ema-registry-filter-row {
+  display: grid !important;
+  grid-template-columns: minmax(11rem, 14rem) minmax(11rem, 14rem) max-content !important;
+  justify-content: end !important;
+  align-items: end !important;
+  gap: 0.65rem !important;
+  width: 100% !important;
+}
+
+.ema-module-root .ema-filter-group {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.ema-module-root .ema-filter-group label {
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ema-module-root .ema-custom-select-trigger,
+.ema-module-root select {
+  width: 100%;
+  min-height: 2.25rem;
+  border: 1px solid #d9e5f4;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.ema-module-root .ema-clear-filters-btn {
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 1px solid #d9e5f4;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  color: #64748b;
+  padding: 0 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.ema-module-root .ema-registry-subhead {
+  flex: 0 0 auto;
+  padding: 0.75rem 0.85rem 0.35rem;
+  color: #0f172a;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.ema-module-root .ema-standard-table,
+.ema-module-root .ema-device-table {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  margin: 0 0.85rem !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.85rem !important;
+  background: #ffffff !important;
+}
+
+.ema-module-root .ema-device-table-row {
+  display: grid !important;
+  grid-template-columns: 3.25rem minmax(17rem, 1.45fr) minmax(11rem, 0.9fr) minmax(16rem, 1.2fr) minmax(7rem, 0.7fr) minmax(12rem, 0.9fr) minmax(10rem, 0.75fr) !important;
+  align-items: center !important;
+  min-width: 76rem !important;
+  width: 100% !important;
+}
+
+.ema-module-root .ema-device-table-row.head {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5 !important;
+  min-height: 3rem !important;
+  background: #f3f6fb !important;
+  border-bottom: 1px solid #cfd9e8 !important;
+}
+
+.ema-module-root .ema-device-row {
+  min-height: 3.6rem !important;
+  border-bottom: 1px solid #e8eef6 !important;
+  background: #ffffff !important;
+}
+
+.ema-module-root .ema-device-row:hover,
+.ema-module-root .ema-device-row.is-selected {
+  background: #f5f9ff !important;
+}
+
+.ema-module-root .user-cell {
+  min-width: 0 !important;
+  padding: 0.65rem 0.8rem !important;
+  color: #0f172a !important;
+  overflow: hidden !important;
+}
+
+.ema-module-root .head .user-cell {
+  color: #334155 !important;
+  font-size: 0.74rem !important;
+  font-weight: 900 !important;
+}
+
+.ema-module-root .ema-sort-btn {
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.ema-module-root .ema-user-name {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 0.55rem minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+}
+
+.ema-module-root .ema-user-name strong,
+.ema-module-root .ema-location-cell strong,
+.ema-module-root .ema-network-cell strong {
+  display: block;
+  min-width: 0;
+  color: #061b3a;
+  font-size: 0.86rem;
+  font-weight: 950;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ema-module-root .ema-user-name small,
+.ema-module-root .ema-user-name em,
+.ema-module-root .ema-location-cell small,
+.ema-module-root .ema-model-text,
+.ema-module-root .ema-date-cell {
+  display: block;
+  min-width: 0;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ema-module-root .ema-user-name em {
+  font-style: italic;
+  color: #0f172a;
+  opacity: 0.9;
+}
+
+.ema-module-root .ema-status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: 0.25rem;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.ema-module-root .ema-status-dot.online,
+.ema-module-root .ema-status-pill.online {
+  background: #dcfce7;
+  color: #047857;
+}
+
+.ema-module-root .ema-status-dot.offline,
+.ema-module-root .ema-status-pill.offline {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.ema-module-root .ema-status-dot.locked,
+.ema-module-root .ema-status-pill.locked {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.ema-module-root .ema-status-dot.stale,
+.ema-module-root .ema-status-pill.stale {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.ema-module-root .ema-status-pill {
+  display: inline-flex;
+  min-height: 1.55rem;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.ema-module-root .row-index-pill {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.ema-module-root .ema-pagination {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+  padding: 0.7rem 0.85rem 0.8rem !important;
+}
+
+.ema-module-root .ema-page-summary {
+  color: #0f172a;
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.ema-module-root .ema-pagination-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+}
+
+.ema-module-root .uam-page-icon,
+.ema-module-root .ema-pagination-current {
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #d9e5f4;
+  border-radius: 0.65rem;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.ema-module-root .ema-pagination-current {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.ema-module-root .ema-right-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-radius: 1rem;
+  padding: 0.9rem;
+}
+
+.ema-toast {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  width: min(24rem, calc(100vw - 2rem));
+  display: grid;
+  grid-template-columns: 2.3rem minmax(0, 1fr) 1.75rem;
+  gap: 0.75rem;
+  align-items: start;
+  border: 1px solid #dbe7f5;
+  border-radius: 1rem;
+  background: #ffffff;
+  padding: 0.8rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.16);
+}
+
+.ema-toast-icon {
+  width: 2.3rem;
+  height: 2.3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.ema-toast strong,
+.ema-toast span {
+  display: block;
+}
+
+.ema-toast strong {
+  color: #0f172a;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.ema-toast span {
+  margin-top: 0.15rem;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.ema-toast > button {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0.55rem;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.ema-toast-success .ema-toast-icon { background: #dcfce7; color: #16a34a; }
+.ema-toast-error .ema-toast-icon,
+.ema-toast-delete .ema-toast-icon { background: #fee2e2; color: #dc2626; }
+
+.ema-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.48);
+  padding: 1rem;
+}
+
+.ema-modal {
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  border: 1px solid #dbe7f5;
+  border-radius: 1rem;
+  background: #ffffff;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.28);
+}
+
+.ema-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%);
+  color: #ffffff;
+}
+
+.ema-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ema-modal-title strong,
+.ema-modal-title span {
+  display: block;
+}
+
+.ema-modal-title strong {
+  font-size: 0.85rem;
+  font-weight: 950;
+  letter-spacing: 0.06em;
+}
+
+.ema-modal-title span {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  opacity: 0.9;
+}
+
+.ema-modal-close {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.ema-modal-body {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.ema-form-group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.ema-form-group label {
+  color: #334155;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.ema-form-group input,
+.ema-form-group textarea,
+.ema-form-group select {
+  width: 100%;
+  min-height: 2.5rem;
+  border: 1px solid #d9e5f4;
+  border-radius: 0.8rem;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 0.75rem;
+  outline: 0;
+}
+
+.ema-preview-card {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid #dbe7f5;
+  border-radius: 0.9rem;
+  background: #f8fbff;
+  padding: 0.8rem;
+}
+
+.ema-preview-card span {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ema-preview-card strong {
+  color: #0f172a;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.ema-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.ema-btn {
+  min-height: 2.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  padding: 0 0.9rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.ema-btn.link {
+  border: 1px solid #d9e5f4;
+  background: #ffffff;
+  color: #2563eb;
+}
+
+.ema-btn.primary {
+  border: 1px solid #0b7ed7;
+  background: #1683d8;
+  color: #ffffff;
+}
+
+.ema-empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+@media (max-width: 1280px) {
+  .ema-module-root .ema-settings-layout,
+  .ema-module-root .settings-layout {
+    grid-template-columns: 18rem minmax(0, 1fr) !important;
+  }
+
+  .ema-module-root .settings-menu,
+  .ema-module-root .ema-left-panel {
+    width: 18rem !important;
+    max-width: 18rem !important;
+  }
+
+  .ema-module-root .ema-hero-score {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ema-module-root .ema-scan-command-row {
+    grid-template-columns: repeat(3, max-content) minmax(16rem, 1fr) 2.55rem max-content !important;
+  }
+}
+
+@media (max-width: 980px) {
+  .ema-module-root .ema-settings-layout,
+  .ema-module-root .settings-layout {
+    grid-template-columns: 1fr !important;
+    max-height: none !important;
+    overflow: auto !important;
+  }
+
+  .ema-module-root .settings-menu,
+  .ema-module-root .ema-left-panel {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 24rem !important;
+  }
+
+  .ema-module-root .settings-hero,
+  .ema-module-root .ema-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ema-module-root .ema-scan-command-row,
+  .ema-module-root .ema-registry-filter-row {
+    grid-template-columns: 1fr !important;
+  }
+}
