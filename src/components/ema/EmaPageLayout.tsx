@@ -60,19 +60,23 @@ export function EmaSection({
   action?: ReactNode;
   children: ReactNode;
 }) {
+  const hasHeader = Boolean(eyebrow || title || description || action);
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      {(eyebrow || title || description || action) ? (
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div className="min-w-0">
+      {hasHeader ? (
+        <div className="grid gap-4 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)] lg:items-stretch">
+          <div className="flex min-w-0 flex-col justify-center">
             {eyebrow ? <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-500">{eyebrow}</p> : null}
-            {title ? <h2 className="mt-1 text-base font-extrabold text-slate-950">{title}</h2> : null}
-            {description ? <p className="mt-1 text-sm font-medium text-slate-600">{description}</p> : null}
+            {title ? <h2 className="mt-1 text-base font-extrabold leading-tight text-slate-950">{title}</h2> : null}
+            {description ? <p className="mt-1 text-sm font-medium leading-snug text-slate-600">{description}</p> : null}
+            {action ? <div className="mt-3">{action}</div> : null}
           </div>
-          {action ? <div className="shrink-0">{action}</div> : null}
+          <div className="min-w-0">{children}</div>
         </div>
-      ) : null}
-      {children}
+      ) : (
+        children
+      )}
     </section>
   );
 }
