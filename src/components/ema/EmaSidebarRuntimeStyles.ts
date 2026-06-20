@@ -7,6 +7,10 @@ const css = `
   min-width: 0 !important;
 }
 
+.ema-module-root .ema-sidebar-content > p {
+  display: none !important;
+}
+
 .ema-module-root .ema-sidebar-scope-card {
   width: 100% !important;
   display: grid !important;
