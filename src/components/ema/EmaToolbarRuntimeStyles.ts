@@ -10,7 +10,7 @@ html body .ema-module-root .ema-registry-toolbar.ema-registry-toolbar-stacked {
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
-  padding: 0 0 .9rem !important;
+  padding: 0 0 .85rem !important;
   margin: 0 !important;
   box-shadow: none !important;
 }
@@ -19,7 +19,7 @@ html body .ema-module-root .ema-scan-command-row {
   width: 100% !important;
   min-width: 0 !important;
   display: grid !important;
-  grid-template-columns: 8.7rem 8.7rem 8.7rem minmax(18rem, 1fr) 2.75rem 6.9rem !important;
+  grid-template-columns: 8.8rem 8.8rem 8.8rem minmax(20rem, 1fr) 2.75rem 6.75rem !important;
   align-items: center !important;
   gap: .62rem !important;
 }
@@ -27,14 +27,14 @@ html body .ema-module-root .ema-scan-command-row {
 html body .ema-module-root .ema-command-btn,
 html body .ema-module-root .ema-icon-btn,
 html body .ema-module-root .ema-clear-filters-btn {
-  height: 2.5rem !important;
-  min-height: 2.5rem !important;
+  height: 2.55rem !important;
+  min-height: 2.55rem !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: .45rem !important;
-  border: 1px solid #d7e4f5 !important;
-  border-radius: .92rem !important;
+  gap: .48rem !important;
+  border: 1px solid #cfe0f6 !important;
+  border-radius: .9rem !important;
   background: #ffffff !important;
   color: #0f172a !important;
   padding: 0 .9rem !important;
@@ -42,14 +42,18 @@ html body .ema-module-root .ema-clear-filters-btn {
   font-weight: 900 !important;
   line-height: 1 !important;
   white-space: nowrap !important;
-  box-shadow: 0 7px 18px rgba(15, 23, 42, .045) !important;
-  transition: border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease, transform .16s ease !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, .045) !important;
+  opacity: 1 !important;
+  transition: border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease !important;
 }
 
 html body .ema-module-root .ema-command-btn svg,
 html body .ema-module-root .ema-icon-btn svg,
 html body .ema-module-root .ema-clear-filters-btn svg {
+  width: 1rem !important;
+  height: 1rem !important;
   flex: 0 0 auto !important;
+  stroke-width: 2.25 !important;
 }
 
 html body .ema-module-root .ema-command-btn:not(:disabled):hover,
@@ -65,21 +69,28 @@ html body .ema-module-root .ema-command-btn:disabled,
 html body .ema-module-root .ema-icon-btn:disabled,
 html body .ema-module-root .ema-clear-filters-btn:disabled {
   cursor: not-allowed !important;
-  border-color: #e2eaf6 !important;
+  border-color: #dce7f5 !important;
   background: #f8fbff !important;
-  color: #b7c4d9 !important;
+  color: #94a3b8 !important;
   box-shadow: none !important;
-  opacity: 1 !important;
+  opacity: .92 !important;
+}
+
+html body .ema-module-root .ema-command-btn:disabled svg,
+html body .ema-module-root .ema-icon-btn:disabled svg,
+html body .ema-module-root .ema-clear-filters-btn:disabled svg {
+  color: #a9b8cf !important;
 }
 
 html body .ema-module-root .ema-scan-command-row > .ema-command-btn:nth-of-type(3):not(:disabled) {
   border-color: #93b8ff !important;
   background: #ffffff !important;
   color: #0b63ff !important;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, .08) !important;
 }
 
 html body .ema-module-root .ema-toolbar-export {
-  min-width: 6.9rem !important;
+  min-width: 6.75rem !important;
   border-color: #0284c7 !important;
   background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%) !important;
   color: #ffffff !important;
@@ -87,9 +98,9 @@ html body .ema-module-root .ema-toolbar-export {
 }
 
 html body .ema-module-root .ema-toolbar-export:disabled {
-  border-color: #dbe7f5 !important;
+  border-color: #dce7f5 !important;
   background: #f8fbff !important;
-  color: #b7c4d9 !important;
+  color: #94a3b8 !important;
   box-shadow: none !important;
 }
 
@@ -105,13 +116,13 @@ html body .ema-module-root .ema-search-box,
 html body .ema-module-root .ema-toolbar-search {
   width: 100% !important;
   min-width: 0 !important;
-  height: 2.5rem !important;
-  min-height: 2.5rem !important;
+  height: 2.55rem !important;
+  min-height: 2.55rem !important;
   display: flex !important;
   align-items: center !important;
   gap: .55rem !important;
-  border: 1px solid #d7e4f5 !important;
-  border-radius: .92rem !important;
+  border: 1px solid #cfe0f6 !important;
+  border-radius: .9rem !important;
   background: #ffffff !important;
   padding: 0 .85rem !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.85) !important;
@@ -201,7 +212,7 @@ html body .ema-module-root .ema-filter-group select {
   align-items: center !important;
   justify-content: space-between !important;
   gap: .6rem !important;
-  border: 1px solid #d7e4f5 !important;
+  border: 1px solid #cfe0f6 !important;
   border-radius: .85rem !important;
   background: #ffffff !important;
   color: #0f172a !important;
@@ -266,7 +277,7 @@ html body .ema-module-root .ema-clear-filters-btn {
 
 @media (max-width: 1250px) {
   html body .ema-module-root .ema-scan-command-row {
-    grid-template-columns: repeat(3, minmax(7.5rem, max-content)) minmax(18rem, 1fr) 2.75rem 6.9rem !important;
+    grid-template-columns: repeat(3, minmax(7.5rem, max-content)) minmax(18rem, 1fr) 2.75rem 6.75rem !important;
   }
 }
 
