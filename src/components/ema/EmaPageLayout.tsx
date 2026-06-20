@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
 
 type EmaPageLayoutProps = {
-  title: string;
+  title?: string;
   subtitle?: string;
   sidebar?: ReactNode;
   headerActions?: ReactNode;
   children: ReactNode;
   fullHeight?: boolean;
+  showHeader?: boolean;
 };
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -20,18 +21,23 @@ export function EmaPageLayout({
   headerActions,
   children,
   fullHeight = true,
+  showHeader = false,
 }: EmaPageLayoutProps) {
+  const hasHeader = showHeader && Boolean(title || subtitle || headerActions);
+
   return (
     <section className={cx("min-h-screen bg-slate-100 text-slate-950", fullHeight && "h-screen overflow-hidden")}>
-      <header className="sticky top-0 z-20 flex min-h-[4.5rem] items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 shadow-sm backdrop-blur">
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-extrabold tracking-tight text-slate-950">{title}</h1>
-          {subtitle ? <p className="mt-1 truncate text-sm font-medium text-slate-500">{subtitle}</p> : null}
-        </div>
-        {headerActions ? <div className="flex shrink-0 items-center gap-2">{headerActions}</div> : null}
-      </header>
+      {hasHeader ? (
+        <header className="sticky top-0 z-20 flex min-h-[4.5rem] items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 shadow-sm backdrop-blur">
+          <div className="min-w-0">
+            {title ? <h1 className="truncate text-xl font-extrabold tracking-tight text-slate-950">{title}</h1> : null}
+            {subtitle ? <p className="mt-1 truncate text-sm font-medium text-slate-500">{subtitle}</p> : null}
+          </div>
+          {headerActions ? <div className="flex shrink-0 items-center gap-2">{headerActions}</div> : null}
+        </header>
+      ) : null}
 
-      <div className="flex h-[calc(100vh-4.5rem)] min-h-0 gap-3 overflow-hidden p-3">
+      <div className={cx("flex min-h-0 gap-3 overflow-hidden p-3", fullHeight ? (hasHeader ? "h-[calc(100vh-4.5rem)]" : "h-full") : "") }>
         {sidebar ? <aside className="w-80 shrink-0 overflow-hidden">{sidebar}</aside> : null}
         <main className="min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="h-full overflow-auto p-4">{children}</div>
