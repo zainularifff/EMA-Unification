@@ -215,7 +215,7 @@
 
 .hardware-device-table .hardware-empty-state,
 .hardware-standard-table .hardware-empty-state,
-hardware-registry-card .hardware-empty-state,
+.hardware-registry-card .hardware-empty-state,
 .hardware-registry-card .settings-empty-state.hardware-empty-state {
   min-height: 10rem;
   display: grid;
