@@ -7,10 +7,10 @@
   --ema-module-gap: 0.55rem;
 }
 
+body .ema-page main .settings-layout,
+body .ema-page main > .grid.min-w-0,
 body .ema-module-root .settings-layout,
-body .hardware-module-root .settings-layout,
-body .ema-module-root > .grid.min-w-0,
-body .software-inventory-module > .grid.min-w-0 {
+body .ema-module-root > .grid.min-w-0 {
   grid-template-columns: minmax(var(--ema-module-sidebar-width-min), var(--ema-module-sidebar-width-max)) minmax(0, 1fr) !important;
   gap: var(--ema-module-gap) !important;
   height: 100% !important;
@@ -18,13 +18,12 @@ body .software-inventory-module > .grid.min-w-0 {
   overflow: hidden !important;
 }
 
+body .ema-page main .settings-menu.ema-panel-surface,
+body .ema-page main .settings-menu,
+body .ema-page main > .grid.min-w-0 > aside,
 body .ema-module-root .settings-menu.ema-panel-surface,
 body .ema-module-root .settings-menu,
-body .hardware-module-root .settings-menu.ema-panel-surface,
-body .hardware-module-root .settings-menu,
-body .hardware-module-root .hardware-left-panel,
-body .ema-module-root > .grid.min-w-0 > aside,
-body .software-inventory-module > .grid.min-w-0 > aside {
+body .ema-module-root > .grid.min-w-0 > aside {
   min-width: 0 !important;
   max-width: none !important;
   width: 100% !important;
@@ -87,8 +86,8 @@ body .software-inventory-module > .grid.min-w-0 > aside {
 }
 
 .ema-sidebar-content,
-body .ema-module-root > .grid.min-w-0 > aside > div:last-child,
-body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
+body .ema-page main > .grid.min-w-0 > aside > div:last-child,
+body .ema-module-root > .grid.min-w-0 > aside > div:last-child {
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
@@ -389,8 +388,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   color: #b91c1c;
 }
 
-.ema-empty-state,
-[class*="empty-state"] {
+.ema-empty-state {
   min-height: 11.5rem;
   display: flex;
   flex-direction: column;
@@ -406,8 +404,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   text-transform: uppercase;
 }
 
-.ema-empty-state::before,
-[class*="empty-state"]::before {
+.ema-empty-state::before {
   content: "";
   width: 2rem;
   height: 2rem;
@@ -417,8 +414,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   animation: ema-spin 0.8s linear infinite;
 }
 
-.ema-empty-state::after,
-[class*="empty-state"]::after {
+.ema-empty-state::after {
   content: "LOADING DATA...";
   color: #94a3b8;
   font-size: 0.72rem;
@@ -443,16 +439,14 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   stroke: transparent !important;
 }
 
-.ema-stat-workbench,
-[class*="stat-workbench"] {
+.ema-stat-workbench {
   min-height: 22rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-.ema-stat-commandbar,
-[class*="stat-commandbar"] {
+.ema-stat-commandbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -464,8 +458,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
 }
 
-.ema-stat-commandbar h3,
-[class*="stat-commandbar"] h3 {
+.ema-stat-commandbar h3 {
   margin: 0;
   color: #0f172a;
   font-size: 1rem;
@@ -473,8 +466,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   line-height: 1.15;
 }
 
-.ema-stat-commandbar p,
-[class*="stat-commandbar"] p {
+.ema-stat-commandbar p {
   width: fit-content;
   margin: 0.3rem 0 0;
   padding: 0.25rem 0.55rem;
@@ -489,8 +481,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   text-transform: uppercase;
 }
 
-.ema-stat-refresh-btn,
-[class*="stat-refresh-btn"] {
+.ema-stat-refresh-btn {
   min-height: 2.25rem;
   display: inline-flex;
   align-items: center;
@@ -507,14 +498,12 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.08);
 }
 
-.ema-stat-refresh-btn:hover:not(:disabled),
-[class*="stat-refresh-btn"]:hover:not(:disabled) {
+.ema-stat-refresh-btn:hover:not(:disabled) {
   border-color: #93c5fd;
   background: #eff6ff;
 }
 
-.ema-stat-table-card,
-[class*="stat-table-card"] {
+.ema-stat-table-card {
   flex: 1 1 auto;
   min-height: 18rem;
   display: flex;
@@ -525,29 +514,25 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   background: #ffffff;
 }
 
-.ema-stat-table-scroll,
-[class*="stat-table-scroll"] {
+.ema-stat-table-scroll {
   flex: 1 1 auto;
   min-height: 18rem;
   overflow: auto;
   padding: 0.75rem;
 }
 
-.ema-stat-table-scroll > .flex.items-center.justify-center,
-[class*="stat-table-scroll"] > .flex.items-center.justify-center {
+.ema-stat-table-scroll > .flex.items-center.justify-center {
   min-height: 18rem;
   border-radius: 0.8rem;
   background: #ffffff;
 }
 
-.ema-stat-summary-layout,
-[class*="stat-summary-layout"] {
+.ema-stat-summary-layout {
   display: grid;
   gap: 0.75rem;
 }
 
-.ema-stat-summary-total,
-[class*="stat-summary-total"] {
+.ema-stat-summary-total {
   width: fit-content;
   border: 1px solid #bfdbfe;
   border-radius: 999px;
@@ -558,8 +543,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   font-weight: 950;
 }
 
-.ema-stat-summary-table,
-[class*="stat-summary-table"] {
+.ema-stat-summary-table {
   width: 100%;
   overflow: hidden;
   border-collapse: separate;
@@ -570,8 +554,7 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   font-size: 0.78rem;
 }
 
-.ema-stat-summary-table thead th,
-[class*="stat-summary-table"] thead th {
+.ema-stat-summary-table thead th {
   padding: 0.65rem 0.8rem;
   background: #f1f5f9;
   color: #475569 !important;
@@ -582,21 +565,18 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
   letter-spacing: 0.08em;
 }
 
-.ema-stat-summary-table tbody td,
-[class*="stat-summary-table"] tbody td {
+.ema-stat-summary-table tbody td {
   padding: 0.7rem 0.8rem;
   border-top: 1px solid #e2e8f0;
   color: #0f172a;
   font-weight: 800;
 }
 
-.ema-stat-summary-table tbody tr:hover td,
-[class*="stat-summary-table"] tbody tr:hover td {
+.ema-stat-summary-table tbody tr:hover td {
   background: #f8fbff;
 }
 
-.ema-stat-summary-reference,
-[class*="stat-summary-reference"] {
+.ema-stat-summary-reference {
   color: #64748b;
   font-size: 0.7rem;
   font-weight: 850;
@@ -605,10 +585,10 @@ body .software-inventory-module > .grid.min-w-0 > aside > div:last-child {
 }
 
 @media (max-width: 1100px) {
+  body .ema-page main .settings-layout,
+  body .ema-page main > .grid.min-w-0,
   body .ema-module-root .settings-layout,
-  body .hardware-module-root .settings-layout,
-  body .ema-module-root > .grid.min-w-0,
-  body .software-inventory-module > .grid.min-w-0 {
+  body .ema-module-root > .grid.min-w-0 {
     grid-template-columns: 1fr !important;
   }
 }
