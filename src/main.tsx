@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import "./index.css";
 import "./styles/ema-module-sidebar.css";
+import "./styles/ema-device-detail.css";
 
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
