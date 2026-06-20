@@ -1,15 +1,28 @@
+/* Hardware-only compact fixes.
+   Keep this small: sidebar tabs, branch selection highlight and loading state only. */
+
 #hardwareMenu.settings-menu-list,
 #hardwareMenu.ema-module-sidebar-nav {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.35rem;
+  margin-bottom: 0.55rem;
 }
 
 #hardwareMenu .setting-btn {
   min-width: 0;
-  align-items: flex-start;
-  gap: 0.4rem;
-  padding: 0.5rem 0.45rem;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.48rem 0.45rem;
+  border-radius: 0.65rem;
+}
+
+#hardwareMenu .setting-btn.active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  box-shadow: inset 3px 0 0 #2563eb;
 }
 
 #hardwareMenu .setting-btn > span:last-child {
@@ -35,5 +48,134 @@
 #hardwareMenu .setting-btn small {
   display: block;
   white-space: normal;
-  line-height: 1.2;
+  line-height: 1.15;
+}
+
+.hardware-left-panel .ema-sidebar-subpanel {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.hardware-left-panel .section-search,
+.hardware-left-panel .ema-sidebar-field {
+  width: 100%;
+}
+
+.hardware-left-panel .soft-btn {
+  width: 100%;
+  min-height: 2.15rem;
+  justify-content: center;
+  border-color: #bfdbfe;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.hardware-left-panel .soft-btn:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.hardware-left-panel .ema-sidebar-tree {
+  display: grid;
+  gap: 0.28rem;
+  padding-top: 0.15rem;
+}
+
+.hardware-left-panel .ema-sidebar-tree-node,
+.hardware-left-panel .hardware-tree-node,
+.hardware-left-panel .hardware-stat-tree-node {
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  background: transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hardware-left-panel .ema-sidebar-tree-node:hover,
+.hardware-left-panel .hardware-tree-node:hover,
+.hardware-left-panel .hardware-stat-tree-node:hover {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+.hardware-left-panel .ema-sidebar-tree-node.is-selected,
+.hardware-left-panel .ema-sidebar-tree-node.is-active,
+.hardware-left-panel .hardware-tree-node.is-selected,
+.hardware-left-panel .hardware-tree-node.is-active,
+.hardware-left-panel .hardware-stat-tree-node.is-selected,
+.hardware-left-panel .hardware-stat-tree-node.is-active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  box-shadow: inset 3px 0 0 #2563eb;
+}
+
+.hardware-left-panel .ema-sidebar-tree-node.is-selected .ema-sidebar-tree-main,
+.hardware-left-panel .ema-sidebar-tree-node.is-active .ema-sidebar-tree-main,
+.hardware-left-panel .hardware-tree-node.is-selected .hardware-tree-node-main,
+.hardware-left-panel .hardware-tree-node.is-active .hardware-tree-node-main,
+.hardware-left-panel .hardware-stat-tree-node.is-selected .hardware-stat-tree-main,
+.hardware-left-panel .hardware-stat-tree-node.is-active .hardware-stat-tree-main {
+  color: #1d4ed8;
+}
+
+.hardware-left-panel .ema-sidebar-tree-main,
+.hardware-left-panel .hardware-tree-node-main,
+.hardware-left-panel .hardware-stat-tree-main {
+  min-height: 2.15rem;
+  border-radius: 0.55rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.hardware-left-panel .ema-sidebar-tree-label,
+.hardware-left-panel .hardware-tree-node-label,
+.hardware-left-panel .hardware-stat-tree-main > span:last-child {
+  font-weight: 900;
+}
+
+.hardware-device-table .hardware-empty-state,
+.hardware-standard-table .hardware-empty-state,
+.hardware-registry-card .hardware-empty-state {
+  min-height: 9rem;
+  display: grid;
+  place-items: center;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.hardware-registry-subhead span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.7rem;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.hardware-registry-subhead span:has(+ *) {
+  color: #475569;
+}
+
+.hardware-registry-subhead span::after {
+  content: "";
+  display: none;
+}
+
+.hardware-registry-subhead span:not(:empty) {
+  line-height: 1.3;
+}
+
+.hardware-registry-subhead span:contains("Loading") {
+  color: #2563eb;
+}
+
+@media (max-width: 1100px) {
+  #hardwareMenu.settings-menu-list,
+  #hardwareMenu.ema-module-sidebar-nav {
+    grid-template-columns: 1fr;
+  }
 }
