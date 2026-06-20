@@ -15,6 +15,7 @@ const css = `
   box-sizing: border-box !important;
 }
 
+.ema-toolbar,
 .ema-module-root .ema-registry-toolbar *,
 .ema-module-root .ema-registry-toolbar.ema-registry-toolbar-stacked * {
   box-sizing: border-box !important;
@@ -87,8 +88,10 @@ const css = `
 }
 
 .ema-module-root .ema-scan-command-row > .ema-command-btn:nth-of-type(3):not(:disabled) {
-  border-color: #93b8ff !important;
-  color: #0b63ff !important;
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, .22) !important;
 }
 
 .ema-module-root .ema-toolbar-export {
@@ -115,7 +118,8 @@ const css = `
 }
 
 .ema-module-root .ema-search-box,
-.ema-module-root .ema-toolbar-search {
+.ema-module-root .ema-toolbar-search,
+.ema-search-input {
   width: 100% !important;
   min-width: 0 !important;
   height: 2.55rem !important;
@@ -132,7 +136,8 @@ const css = `
 }
 
 .ema-module-root .ema-search-box input,
-.ema-module-root .ema-toolbar-search input {
+.ema-module-root .ema-toolbar-search input,
+.ema-search-input input {
   width: 100% !important;
   min-width: 0 !important;
   border: 0 !important;
@@ -144,14 +149,17 @@ const css = `
 }
 
 .ema-module-root .ema-search-box input::placeholder,
-.ema-module-root .ema-toolbar-search input::placeholder {
+.ema-module-root .ema-toolbar-search input::placeholder,
+.ema-search-input input::placeholder {
   color: #94a3b8 !important;
 }
 
 .ema-module-root .ema-registry-filters,
-.ema-module-root .ema-registry-filter-row {
+.ema-module-root .ema-registry-filter-row,
+.ema-toolbar-filter-row {
   width: 100% !important;
   display: flex !important;
+  flex-wrap: wrap !important;
   align-items: flex-end !important;
   justify-content: flex-end !important;
   gap: .65rem !important;
@@ -160,42 +168,95 @@ const css = `
   overflow: visible !important;
 }
 
-.ema-module-root .ema-filter-group {
+.ema-module-root .ema-filter-group,
+.ema-filter-field {
   min-width: 12.75rem !important;
   width: 15.25rem !important;
   display: grid !important;
+  grid-template-columns: 1fr !important;
   gap: .35rem !important;
   position: relative !important;
+  align-items: start !important;
+  text-align: left !important;
 }
 
-.ema-module-root .ema-filter-group label {
+.ema-module-root .ema-filter-group > label,
+.ema-filter-field > span {
+  display: block !important;
   margin: 0 !important;
   color: #475569 !important;
   font-size: .68rem !important;
   font-weight: 950 !important;
   letter-spacing: .08em !important;
+  line-height: 1 !important;
   text-transform: uppercase !important;
+  text-align: left !important;
 }
 
 .ema-module-root .ema-custom-select,
-.ema-module-root .ema-filter-group select {
+.ema-module-root .ema-filter-group select,
+.ema-filter-field select {
   position: relative !important;
   width: 100% !important;
+  min-width: 0 !important;
   z-index: 30 !important;
 }
 
 .ema-module-root .ema-custom-select-trigger,
 .ema-module-root .ema-custom-select > button,
-.ema-module-root .ema-filter-group select {
+.ema-module-root .ema-filter-group select,
+.ema-filter-field select {
+  width: 100% !important;
   height: 2.45rem !important;
   min-height: 2.45rem !important;
+  max-height: 2.45rem !important;
   border: 1px solid #cfe0f6 !important;
   border-radius: .85rem !important;
-  background: #fff !important;
+  background-color: #fff !important;
   color: #0f172a !important;
-  padding: 0 .8rem !important;
+  padding: 0 2.15rem 0 .85rem !important;
   font-size: .82rem !important;
   font-weight: 850 !important;
+  line-height: 2.45rem !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  box-shadow: none !important;
+}
+
+.ema-module-root .ema-custom-select-trigger,
+.ema-module-root .ema-custom-select > button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: .6rem !important;
+  line-height: 1 !important;
+}
+
+.ema-module-root .ema-custom-select-trigger svg,
+.ema-module-root .ema-custom-select > button svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  margin-left: auto !important;
+  flex: 0 0 auto !important;
+  position: static !important;
+  transform: none !important;
+}
+
+.ema-module-root .ema-filter-group select,
+.ema-filter-field select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-image: linear-gradient(45deg, transparent 50%, #475569 50%), linear-gradient(135deg, #475569 50%, transparent 50%) !important;
+  background-position: calc(100% - 1.05rem) calc(50% - .12rem), calc(100% - .72rem) calc(50% - .12rem) !important;
+  background-size: .34rem .34rem, .34rem .34rem !important;
+  background-repeat: no-repeat !important;
+}
+
+.ema-module-root .ema-filter-group select::-ms-expand,
+.ema-filter-field select::-ms-expand {
+  display: none !important;
 }
 
 .ema-module-root .ema-custom-select-menu,
@@ -215,7 +276,8 @@ const css = `
   box-shadow: 0 18px 42px rgba(15, 23, 42, .16) !important;
 }
 
-.ema-module-root .ema-clear-filters-btn {
+.ema-module-root .ema-clear-filters-btn,
+.ema-toolbar-filter-row .ema-button-ghost {
   min-width: 5.55rem !important;
   color: #64748b !important;
 }
@@ -241,13 +303,15 @@ main div[class~="space-y-3"] > div[class~="rounded-xl"][class~="border"][class~=
 
 @media (max-width: 1080px) {
   .ema-module-root .ema-scan-command-row,
-  .ema-module-root .ema-registry-filter-row {
+  .ema-module-root .ema-registry-filter-row,
+  .ema-toolbar-filter-row {
     display: flex !important;
     flex-wrap: wrap !important;
     justify-content: flex-start !important;
   }
 
-  .ema-module-root .ema-toolbar-search {
+  .ema-module-root .ema-toolbar-search,
+  .ema-toolbar-search-slot {
     flex: 1 1 22rem !important;
   }
 }
