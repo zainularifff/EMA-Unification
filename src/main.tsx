@@ -3,8 +3,6 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 
 import "./index.css";
-import "./styles/ema-device-detail.css";
-import "./styles/ema-modal.css";
 
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
