@@ -4270,7 +4270,7 @@ export default function HardwareInventory() {
               onClick={() => setActiveTab("organization")}
             >
               <span className="setting-icon"><FolderOpen size={16} /></span>
-              <span><strong>Branch</strong><small>Branch device scope</small></span>
+              <span><strong>Branch</strong></span>
             </button>
             <button
               type="button"
@@ -4278,7 +4278,7 @@ export default function HardwareInventory() {
               onClick={() => setActiveTab("statistics")}
             >
               <span className="setting-icon"><Database size={16} /></span>
-              <span><strong>Statistics</strong><small>Hardware operational views</small></span>
+              <span><strong>Statistics</strong></span>
             </button>
           </nav>
 
@@ -5286,3 +5286,4 @@ export default function HardwareInventory() {
     </main>
   );
 }
+
