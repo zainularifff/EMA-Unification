@@ -58,22 +58,7 @@ const css = `
 
 .ema-module-root .ema-sidebar-section-title,
 .ema-module-root .ema-sidebar-tree[aria-label="Hardware statistics tree"] .ema-sidebar-section-title {
-  width: 100% !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: .45rem !important;
-  margin: 0 0 .16rem !important;
-  color: #64748b !important;
-  font-size: .68rem !important;
-  font-weight: 950 !important;
-  letter-spacing: .08em !important;
-  text-transform: uppercase !important;
-}
-
-.ema-module-root .ema-sidebar-section-title svg {
-  width: .9rem !important;
-  height: .9rem !important;
-  color: #2563eb !important;
+  display: none !important;
 }
 
 .ema-module-root .ema-sidebar-tree[aria-label="Hardware statistics tree"] .ema-sidebar-tree-node {
