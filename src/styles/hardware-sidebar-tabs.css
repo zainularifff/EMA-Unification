@@ -1,59 +1,76 @@
 /* Hardware-only compact fixes.
-   Keep this small: sidebar tabs, branch selection highlight and loading state only. */
+   Keep this small: sidebar segmented tabs, branch selection highlight and loading state only. */
 
+.hardware-left-panel .panel-head {
+  margin-bottom: 0.65rem;
+}
+
+/* Branch / Statistics should be a single full-width segmented control, not two cramped cards. */
 #hardwareMenu.settings-menu-list,
 #hardwareMenu.ema-module-sidebar-nav {
+  width: 100%;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem;
-  margin-bottom: 0.55rem;
+  gap: 0;
+  margin: 0 0 0.7rem;
+  padding: 0.22rem;
+  border: 1px solid #dbe7f6;
+  border-radius: 0.9rem;
+  background: #f8fbff;
 }
 
 #hardwareMenu .setting-btn {
+  width: 100%;
   min-width: 0;
-  min-height: 3rem;
-  align-items: center;
+  min-height: 2.55rem;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   gap: 0.45rem;
-  padding: 0.48rem 0.45rem;
-  border-radius: 0.65rem;
+  padding: 0.45rem 0.55rem;
+  border: 0 !important;
+  border-radius: 0.72rem;
+  background: transparent;
+  color: #475569;
+  box-shadow: none !important;
+  text-align: center;
 }
 
 #hardwareMenu .setting-btn.active {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  background: #ffffff;
   color: #1d4ed8;
-  box-shadow: inset 3px 0 0 #2563eb;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12) !important;
 }
 
 #hardwareMenu .setting-btn > span:last-child {
   min-width: 0;
+  display: block;
 }
 
 #hardwareMenu .setting-icon {
-  width: 1.5rem;
-  height: 1.5rem;
-  flex: 0 0 1.5rem;
-}
-
-#hardwareMenu .setting-btn strong,
-#hardwareMenu .setting-btn small {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  width: 1.45rem;
+  height: 1.45rem;
+  flex: 0 0 1.45rem;
+  border-radius: 0.55rem;
 }
 
 #hardwareMenu .setting-btn strong {
+  display: block;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.8rem;
+  line-height: 1.05;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 #hardwareMenu .setting-btn small {
-  display: block;
-  white-space: normal;
-  line-height: 1.15;
+  display: none !important;
 }
 
 .hardware-left-panel .ema-sidebar-subpanel {
   display: grid;
-  gap: 0.45rem;
+  gap: 0.55rem;
 }
 
 .hardware-left-panel .section-search,
@@ -63,11 +80,13 @@
 
 .hardware-left-panel .soft-btn {
   width: 100%;
-  min-height: 2.15rem;
+  min-height: 2.25rem;
   justify-content: center;
   border-color: #bfdbfe;
+  border-radius: 0.75rem;
   background: #ffffff;
   color: #0f172a;
+  font-weight: 900;
 }
 
 .hardware-left-panel .soft-btn:hover:not(:disabled) {
@@ -78,8 +97,8 @@
 
 .hardware-left-panel .ema-sidebar-tree {
   display: grid;
-  gap: 0.28rem;
-  padding-top: 0.15rem;
+  gap: 0.22rem;
+  padding-top: 0.08rem;
 }
 
 .hardware-left-panel .ema-sidebar-tree-node,
@@ -87,24 +106,30 @@
 .hardware-left-panel .hardware-stat-tree-node {
   position: relative;
   border: 1px solid transparent;
-  border-radius: 0.65rem;
+  border-radius: 0.7rem;
   background: transparent;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
 }
 
 .hardware-left-panel .ema-sidebar-tree-node:hover,
 .hardware-left-panel .hardware-tree-node:hover,
 .hardware-left-panel .hardware-stat-tree-node:hover {
-  border-color: #e2e8f0;
+  border-color: #dbe7f6;
   background: #f8fafc;
 }
 
 .hardware-left-panel .ema-sidebar-tree-node.is-selected,
 .hardware-left-panel .ema-sidebar-tree-node.is-active,
+.hardware-left-panel .ema-sidebar-tree-node[aria-selected="true"],
+.hardware-left-panel .ema-sidebar-tree-node[aria-current="true"],
 .hardware-left-panel .hardware-tree-node.is-selected,
 .hardware-left-panel .hardware-tree-node.is-active,
+.hardware-left-panel .hardware-tree-node[aria-selected="true"],
+.hardware-left-panel .hardware-tree-node[aria-current="true"],
 .hardware-left-panel .hardware-stat-tree-node.is-selected,
-.hardware-left-panel .hardware-stat-tree-node.is-active {
+.hardware-left-panel .hardware-stat-tree-node.is-active,
+.hardware-left-panel .hardware-stat-tree-node[aria-selected="true"],
+.hardware-left-panel .hardware-stat-tree-node[aria-current="true"] {
   border-color: #93c5fd;
   background: #eff6ff;
   box-shadow: inset 3px 0 0 #2563eb;
@@ -112,10 +137,16 @@
 
 .hardware-left-panel .ema-sidebar-tree-node.is-selected .ema-sidebar-tree-main,
 .hardware-left-panel .ema-sidebar-tree-node.is-active .ema-sidebar-tree-main,
+.hardware-left-panel .ema-sidebar-tree-node[aria-selected="true"] .ema-sidebar-tree-main,
+.hardware-left-panel .ema-sidebar-tree-node[aria-current="true"] .ema-sidebar-tree-main,
 .hardware-left-panel .hardware-tree-node.is-selected .hardware-tree-node-main,
 .hardware-left-panel .hardware-tree-node.is-active .hardware-tree-node-main,
+.hardware-left-panel .hardware-tree-node[aria-selected="true"] .hardware-tree-node-main,
+.hardware-left-panel .hardware-tree-node[aria-current="true"] .hardware-tree-node-main,
 .hardware-left-panel .hardware-stat-tree-node.is-selected .hardware-stat-tree-main,
-.hardware-left-panel .hardware-stat-tree-node.is-active .hardware-stat-tree-main {
+.hardware-left-panel .hardware-stat-tree-node.is-active .hardware-stat-tree-main,
+.hardware-left-panel .hardware-stat-tree-node[aria-selected="true"] .hardware-stat-tree-main,
+.hardware-left-panel .hardware-stat-tree-node[aria-current="true"] .hardware-stat-tree-main {
   color: #1d4ed8;
 }
 
@@ -123,26 +154,34 @@
 .hardware-left-panel .hardware-tree-node-main,
 .hardware-left-panel .hardware-stat-tree-main {
   min-height: 2.15rem;
-  border-radius: 0.55rem;
-  padding: 0.35rem 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.48rem;
 }
 
 .hardware-left-panel .ema-sidebar-tree-label,
 .hardware-left-panel .hardware-tree-node-label,
 .hardware-left-panel .hardware-stat-tree-main > span:last-child {
+  min-width: 0;
+  overflow: hidden;
   font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hardware-device-table .hardware-empty-state,
 .hardware-standard-table .hardware-empty-state,
-.hardware-registry-card .hardware-empty-state {
-  min-height: 9rem;
+.hardware-registry-card .hardware-empty-state,
+.hardware-registry-card .settings-empty-state.hardware-empty-state {
+  min-height: 10rem;
   display: grid;
   place-items: center;
   border-top: 1px solid #e2e8f0;
   color: #64748b;
-  font-size: 0.82rem;
-  font-weight: 800;
+  font-size: 0.84rem;
+  font-weight: 850;
   text-align: center;
 }
 
@@ -160,6 +199,6 @@
 @media (max-width: 1100px) {
   #hardwareMenu.settings-menu-list,
   #hardwareMenu.ema-module-sidebar-nav {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
