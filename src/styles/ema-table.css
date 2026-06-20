@@ -1,5 +1,5 @@
-/* EMA shared table cleanup styles.
-   Keep table display rules reusable across modules while pages migrate to ema-* markup. */
+/* EMA shared table and inventory cleanup styles.
+   Keep display rules reusable across modules while pages migrate to ema-* markup. */
 
 .ema-clean-table,
 .advanced.clean-table {
@@ -25,4 +25,292 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Software uses legacy markup for now. These selectors map it back to the same EMA inventory rhythm used by Hardware without adding module-specific CSS files. */
+html body .ema-module-root[data-section="software"] .settings-layout.software-settings-layout {
+  display: grid !important;
+  grid-template-columns: 16.25rem minmax(0, 1fr) !important;
+  gap: 0.55rem !important;
+  align-items: stretch !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+html body .ema-module-root[data-section="software"] .settings-menu.software-left-panel {
+  min-width: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-center-panel {
+  min-width: 0 !important;
+  gap: 0.5rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-hero {
+  padding: 0.65rem !important;
+  gap: 0.5rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-hero-kpi-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(9.8rem, 1fr)) !important;
+  gap: 0.45rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-kpi-card {
+  min-width: 0 !important;
+  min-height: auto !important;
+  padding: 0.55rem !important;
+  border: 1px solid #dbe4f0 !important;
+  border-radius: 0.7rem !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035) !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-kpi-card.is-active,
+html body .ema-module-root[data-section="software"] .software-kpi-card:hover {
+  border-color: #93c5fd !important;
+  box-shadow: 0 5px 12px rgba(15, 23, 42, 0.055) !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-kpi-content {
+  display: grid !important;
+  grid-template-columns: 1.45rem minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 0.12rem 0.45rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-kpi-icon {
+  grid-row: span 3 !important;
+  width: 1.45rem !important;
+  height: 1.45rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 0.5rem !important;
+  background: #eff6ff !important;
+  color: #2563eb !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-kpi-icon svg {
+  width: 0.85rem !important;
+  height: 0.85rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-registry-card {
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 9.5rem) !important;
+  overflow: hidden !important;
+  padding: 0.6rem !important;
+  border: 1px solid #dbe4f0 !important;
+  border-radius: 0.75rem !important;
+  background: #ffffff !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-registry-head.software-registry-head--standard {
+  display: grid !important;
+  gap: 0.45rem !important;
+  padding: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-registry-tools.software-registry-tools--standard {
+  display: grid !important;
+  grid-template-columns: repeat(4, max-content) minmax(14rem, 1fr) 2.1rem max-content !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-registry-tools--standard .soft-btn,
+html body .ema-module-root[data-section="software"] .software-registry-tools--standard .primary-btn,
+html body .ema-module-root[data-section="software"] .software-registry-tools--standard .icon-action-btn {
+  min-height: 2.1rem !important;
+  height: 2.1rem !important;
+  margin: 0 !important;
+  border-radius: 0.65rem !important;
+  padding: 0 0.65rem !important;
+  font-size: 0.76rem !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-registry-tools--standard .software-icon-btn {
+  width: 2.1rem !important;
+  min-width: 2.1rem !important;
+  padding: 0 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-search-box {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 2.1rem !important;
+  min-height: 2.1rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.65rem !important;
+  background: #ffffff !important;
+  padding: 0 0.55rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-search-box input {
+  width: 100% !important;
+  min-width: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-filter-row.software-filter-row--toolbar {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(8rem, 11rem)) !important;
+  justify-content: end !important;
+  align-items: end !important;
+  gap: 0.45rem !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-filter-row--toolbar label {
+  margin: 0 0 0.18rem !important;
+  color: #64748b !important;
+  font-size: 0.62rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-custom-select-trigger,
+html body .ema-module-root[data-section="software"] .setting-select-trigger {
+  min-height: 2.1rem !important;
+  height: 2.1rem !important;
+  border-radius: 0.65rem !important;
+  font-size: 0.76rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-table-status-row {
+  margin: 0 !important;
+  padding: 0.4rem 0 0.35rem !important;
+  border: 0 !important;
+  color: #64748b !important;
+  font-size: 0.76rem !important;
+  font-weight: 700 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-device-table.software-standard-table {
+  width: 100% !important;
+  min-width: 720px !important;
+  max-width: none !important;
+  flex: 1 1 auto !important;
+  max-height: calc(100vh - 23rem) !important;
+  margin: 0 !important;
+  overflow: auto !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.7rem !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-device-table .software-device-table-row,
+html body .ema-module-root[data-section="software"] .software-device-table .software-registry-row {
+  min-width: 980px !important;
+  display: grid !important;
+  grid-template-columns: 3rem minmax(13rem, 1.4fr) minmax(8rem, 0.9fr) minmax(10rem, 1fr) minmax(7rem, 0.7fr) minmax(8rem, 0.8fr) minmax(7rem, 0.75fr) minmax(8.5rem, 0.9fr) !important;
+  align-items: center !important;
+  border-bottom: 1px solid #eef2f7 !important;
+  background: #ffffff !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-device-table .head.software-device-table-row {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 2 !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-device-table .software-standard-row.software-device-table-row:not(.head) {
+  min-height: 3.6rem !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-device-table .software-standard-row.software-device-table-row:not(.head):hover {
+  background: #f8fafc !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-device-table .user-cell {
+  min-width: 0 !important;
+  padding: 0.43rem 0.55rem !important;
+  color: #334155 !important;
+  font-size: 0.72rem !important;
+  font-weight: 650 !important;
+  overflow: hidden !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-device-table .head .user-cell,
+html body .ema-module-root[data-section="software"] .software-device-table .software-sort-btn {
+  color: #475569 !important;
+  font-size: 0.62rem !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-user-name strong,
+html body .ema-module-root[data-section="software"] .software-device-cell strong,
+html body .ema-module-root[data-section="software"] .software-category-cell strong,
+html body .ema-module-root[data-section="software"] .software-type-cell strong,
+html body .ema-module-root[data-section="software"] .software-model-text,
+html body .ema-module-root[data-section="software"] .software-date-cell {
+  display: block !important;
+  overflow: hidden !important;
+  color: #0f172a !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 0.76rem !important;
+  font-weight: 900 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-user-name small,
+html body .ema-module-root[data-section="software"] .software-device-cell small,
+html body .ema-module-root[data-section="software"] .software-category-cell small,
+html body .ema-module-root[data-section="software"] .software-type-cell small {
+  display: block !important;
+  overflow: hidden !important;
+  color: #64748b !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: 0.66rem !important;
+  font-weight: 650 !important;
+}
+
+html body .ema-module-root[data-section="software"] .software-page-pagination {
+  flex: 0 0 auto !important;
+  padding: 0.45rem 0 0 !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 1040px) {
+  html body .ema-module-root[data-section="software"] .settings-layout.software-settings-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  html body .ema-module-root[data-section="software"] .software-registry-tools.software-registry-tools--standard,
+  html body .ema-module-root[data-section="software"] .software-filter-row.software-filter-row--toolbar {
+    grid-template-columns: 1fr !important;
+    justify-content: stretch !important;
+  }
 }
