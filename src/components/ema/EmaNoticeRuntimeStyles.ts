@@ -1,3 +1,5 @@
+import "./EmaPathRuntimeStyles";
+
 const STYLE_ID = "ema-notice-runtime-styles";
 
 const css = `
