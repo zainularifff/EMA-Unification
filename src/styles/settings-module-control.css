@@ -43,14 +43,15 @@ html body .settings-with-notifications .module-control-table {
 
 html body .settings-with-notifications .module-control-row,
 html body .settings-with-notifications .module-control-group-row {
-  --module-first-columns: 25rem;
-  --module-role-width: 8rem;
-  min-width: calc(var(--module-first-columns) + (var(--module-role-count, 1) * var(--module-role-width))) !important;
+  --module-no-width: 3.5rem;
+  --module-name-width: 21rem;
+  --module-role-width: 8.75rem;
+  min-width: calc(var(--module-no-width) + var(--module-name-width) + (var(--module-role-count, 1) * var(--module-role-width))) !important;
 }
 
 html body .settings-with-notifications .module-control-row {
   display: grid !important;
-  grid-template-columns: 4rem minmax(21rem, 1.35fr) repeat(var(--module-role-count, 1), minmax(var(--module-role-width), 0.8fr)) !important;
+  grid-template-columns: var(--module-no-width) var(--module-name-width) repeat(var(--module-role-count, 1), var(--module-role-width)) !important;
   align-items: center !important;
   min-height: 3.7rem !important;
   border-bottom: 1px solid #e6edf6 !important;
@@ -68,7 +69,7 @@ html body .settings-with-notifications .module-control-table > .module-control-r
 
 html body .settings-with-notifications .module-control-row .user-cell {
   min-width: 0 !important;
-  padding: 0.75rem 0.9rem !important;
+  padding: 0.75rem 0.8rem !important;
   display: flex !important;
   align-items: center !important;
   color: #0f172a !important;
@@ -80,9 +81,9 @@ html body .settings-with-notifications .module-control-row .user-cell {
 html body .settings-with-notifications .module-control-row.head .user-cell,
 html body .settings-with-notifications .module-control-row .module-role-head {
   color: #334155 !important;
-  font-size: 0.72rem !important;
+  font-size: 0.7rem !important;
   font-weight: 950 !important;
-  letter-spacing: 0.08em !important;
+  letter-spacing: 0.07em !important;
   text-transform: uppercase !important;
 }
 
@@ -91,6 +92,8 @@ html body .settings-with-notifications .module-control-row .module-role-head {
   text-align: center !important;
   white-space: normal !important;
   word-break: normal !important;
+  padding-left: 0.45rem !important;
+  padding-right: 0.45rem !important;
 }
 
 html body .settings-with-notifications .module-control-group-row {
@@ -176,6 +179,8 @@ html body .settings-with-notifications .module-info-cell small {
 html body .settings-with-notifications .module-toggle-cell {
   justify-content: center !important;
   text-align: center !important;
+  padding-left: 0.45rem !important;
+  padding-right: 0.45rem !important;
 }
 
 html body .settings-with-notifications .module-toggle-cell .toggle {
@@ -219,9 +224,17 @@ html body .settings-with-notifications .module-toggle-cell .toggle:disabled {
 }
 
 html body .settings-with-notifications .module-control-table .settings-empty-state {
-  min-width: calc(25rem + (var(--module-role-count, 1) * 8rem)) !important;
+  min-width: calc(var(--module-no-width, 3.5rem) + var(--module-name-width, 21rem) + (var(--module-role-count, 1) * var(--module-role-width, 8.75rem))) !important;
   min-height: 11rem !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: #ffffff !important;
+}
+
+@media (max-width: 1500px) {
+  html body .settings-with-notifications .module-control-row,
+  html body .settings-with-notifications .module-control-group-row {
+    --module-name-width: 19rem;
+    --module-role-width: 8.25rem;
+  }
 }
