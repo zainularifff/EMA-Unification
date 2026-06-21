@@ -1,0 +1,139 @@
+/* Settings User Access modal final layout fixes. Scoped to Settings modal only. */
+
+html body .user-modal-backdrop .user-modal.advanced {
+  width: min(58rem, calc(100vw - 2rem)) !important;
+  max-height: calc(100dvh - 2rem) !important;
+}
+
+html body .user-modal-backdrop .user-modal-body.advanced {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  align-content: start !important;
+  gap: 0.7rem 0.85rem !important;
+  padding: 0.95rem 1rem !important;
+}
+
+html body .user-modal-backdrop .user-modal-body.advanced > .modal-section-title {
+  margin: 0 !important;
+  padding: 0.25rem 0 0 !important;
+}
+
+/* Force the form to follow the real filling sequence. */
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(1) { order: 1; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(2) { order: 2; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(3) { order: 3; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(4) { order: 4; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(5) { order: 5; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(6) { order: 6; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(8) { order: 7; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(9) { order: 8; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(10) { order: 9; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(7) { order: 10; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(11) { order: 11; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(12) { order: 12; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(13) { order: 13; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(14) { order: 14; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(15) { order: 15; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(16) { order: 16; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(17) { order: 17; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(18) { order: 18; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(19) { order: 19; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(20) { order: 20; }
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(21) { order: 21; }
+
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(7),
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(14),
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(18),
+html body .user-modal-backdrop .user-modal-body.advanced > :nth-child(21) {
+  grid-column: 1 / -1 !important;
+}
+
+html body .user-modal-backdrop .setting-input,
+html body .user-modal-backdrop .setting-textarea,
+html body .user-modal-backdrop .setting-select-trigger {
+  min-height: 2.55rem !important;
+}
+
+html body .user-modal-backdrop .inline-check {
+  justify-content: flex-start !important;
+}
+
+html body .user-modal-backdrop .role-assignment-head {
+  margin-bottom: 0.45rem !important;
+}
+
+html body .user-modal-backdrop .selected-role-box {
+  min-height: 2.75rem !important;
+  padding: 0.55rem 0.65rem !important;
+}
+
+html body .user-modal-backdrop .role-picker-panel {
+  width: 100% !important;
+  max-height: 18rem !important;
+  overflow: hidden !important;
+  margin-top: 0.55rem !important;
+}
+
+html body .user-modal-backdrop .role-picker-search-wrap {
+  height: 2.5rem !important;
+  min-height: 2.5rem !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  overflow: hidden !important;
+  padding: 0 0.75rem !important;
+}
+
+html body .user-modal-backdrop .role-picker-search-wrap svg,
+html body .user-modal-backdrop .role-picker-search-wrap > svg,
+html body .user-modal-backdrop .role-picker-panel svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  max-width: 1rem !important;
+  flex: 0 0 1rem !important;
+  display: block !important;
+  color: #64748b !important;
+  transform: none !important;
+}
+
+html body .user-modal-backdrop .role-picker-search {
+  min-width: 0 !important;
+  height: 100% !important;
+  flex: 1 1 auto !important;
+  font-size: 0.82rem !important;
+  font-weight: 750 !important;
+}
+
+html body .user-modal-backdrop .role-picker-list {
+  max-height: 11.5rem !important;
+  overflow: auto !important;
+}
+
+html body .user-modal-backdrop .role-picker-option b {
+  color: #2563eb !important;
+  font-size: 0.72rem !important;
+  font-weight: 950 !important;
+}
+
+html body .user-modal-backdrop .user-modal-foot {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 3 !important;
+}
+
+@media (max-width: 1280px) {
+  html body .user-modal-backdrop .user-modal.advanced {
+    width: min(54rem, calc(100vw - 2rem)) !important;
+  }
+
+  html body .user-modal-backdrop .user-modal-body.advanced {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html body .user-modal-backdrop .user-modal-body.advanced {
+    grid-template-columns: 1fr !important;
+  }
+}
