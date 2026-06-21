@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import "./styles/settings-resource-planning.css";
+import "./styles/settings-shared-controls.css";
 import "./components/ema/EmaNetworkHierarchyFallback";
 import "./components/ema/EmaRuntimeStyles";
 import "./components/ema/EmaSidebarRuntimeStyles";
