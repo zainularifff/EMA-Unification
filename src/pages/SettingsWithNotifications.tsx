@@ -93,7 +93,7 @@ function applyLegacySettingsUiFixes() {
   root.querySelectorAll<HTMLElement>(".setting-btn").forEach((button) => {
     setImportantStyle(button, {
       width: "100%",
-      minHeight: "3.15rem",
+      minHeight: "2.75rem",
       display: "grid",
       gridTemplateColumns: "2.1rem minmax(0, 1fr)",
       alignItems: "center",
@@ -118,7 +118,7 @@ function applyLegacySettingsUiFixes() {
   root.querySelectorAll<HTMLElement>(".setting-btn strong").forEach((node) => {
     setImportantStyle(node, {
       display: "block",
-      fontSize: "0.78rem",
+      fontSize: "0.84rem",
       fontWeight: "950",
       whiteSpace: "nowrap",
     });
@@ -126,13 +126,13 @@ function applyLegacySettingsUiFixes() {
 
   root.querySelectorAll<HTMLElement>(".setting-btn small").forEach((node) => {
     setImportantStyle(node, {
-      display: "-webkit-box",
-      WebkitLineClamp: "2",
-      WebkitBoxOrient: "vertical",
-      fontSize: "0.68rem",
-      fontWeight: "700",
-      whiteSpace: "normal",
-      lineHeight: "1.15",
+      display: "none",
+      visibility: "hidden",
+      height: "0",
+      maxHeight: "0",
+      margin: "0",
+      padding: "0",
+      lineHeight: "0",
     });
   });
 
