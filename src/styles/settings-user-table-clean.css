@@ -1,0 +1,43 @@
+/* Settings User Access table cleanup. Scoped only to Settings page. */
+
+html body .settings-with-notifications .user-access-table .user-mini-avatar {
+  display: none !important;
+}
+
+html body .settings-with-notifications .user-access-table .user-name {
+  display: block !important;
+  min-width: 0 !important;
+}
+
+html body .settings-with-notifications .user-access-table .user-name > div {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.15rem !important;
+}
+
+html body .settings-with-notifications .user-access-table .user-name strong,
+html body .settings-with-notifications .user-access-table .user-name small {
+  display: block !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .user-access-table .user-name strong {
+  color: #0f172a !important;
+  font-size: 0.86rem !important;
+  font-weight: 950 !important;
+  line-height: 1.15 !important;
+}
+
+html body .settings-with-notifications .user-access-table .user-name small {
+  color: #475569 !important;
+  font-size: 0.74rem !important;
+  font-weight: 750 !important;
+  line-height: 1.15 !important;
+}
+
+html body .settings-with-notifications .user-access-table .user-cell {
+  vertical-align: middle !important;
+}
