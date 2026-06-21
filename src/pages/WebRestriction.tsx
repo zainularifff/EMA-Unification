@@ -1,9 +1,53 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Ban, CheckCircle2, ChevronDown, ChevronRight, Folder, FolderOpen, Globe, Layers, Link as LinkIcon, Loader2, Plus, RefreshCw, RotateCcw, Save, Search, Trash2 } from 'lucide-react';
-import restrictionService, { getCurrentLoginId, type RestrictionModule, type RestrictionPolicyDetail, type RestrictionPolicyRow, type RestrictionTarget, type RestrictionTreeNode, type WebGroup, type WebGroupUrl } from '../services/restrictionService';
-import { EmaButton, EmaFilterField, EmaKpiCard, EmaKpiGrid, EmaPageLayout, EmaPagination, EmaSearchInput, EmaSection, EmaSidebarPanel, EmaSidebarTreeRow, EmaTable, EmaTableShell, EmaToastViewport, EmaToolbar, type EmaTableColumn, type EmaToastItem, type EmaToastTone } from '../components/ema';
+import {
+  Ban,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  Globe,
+  Layers,
+  Link as LinkIcon,
+  Loader2,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Trash2,
+} from 'lucide-react';
+import restrictionService, {
+  getCurrentLoginId,
+  type RestrictionModule,
+  type RestrictionPolicyDetail,
+  type RestrictionPolicyRow,
+  type RestrictionTarget,
+  type RestrictionTreeNode,
+  type WebGroup,
+  type WebGroupUrl,
+} from '../services/restrictionService';
+import {
+  EmaButton,
+  EmaFilterField,
+  EmaKpiCard,
+  EmaKpiGrid,
+  EmaPageLayout,
+  EmaPagination,
+  EmaSearchInput,
+  EmaSection,
+  EmaSidebarPanel,
+  EmaSidebarTreeRow,
+  EmaTable,
+  EmaTableShell,
+  EmaToastViewport,
+  EmaToolbar,
+  type EmaTableColumn,
+  type EmaToastItem,
+  type EmaToastTone,
+} from '../components/ema';
 
 type SubTab = 'settings' | 'policyStatus';
+
 type FormState = {
   policyId: number;
   inheritPolicy: boolean;
@@ -22,41 +66,267 @@ type FormState = {
 const WEB_MODULE: RestrictionModule = 'webRestriction';
 const DAY_OPTIONS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const PAGE_SIZE = 10;
-const TAB_LABELS: Record<SubTab, string> = { settings: 'Policy Settings', policyStatus: 'Policy Status' };
-const DEFAULT_FORM: FormState = { policyId: 0, inheritPolicy: false, exception: false, updateInterval: '120', weeklyPolicy: false, useSchedule: false, schedule1: '', schedule2: '', schedule3: '', schedule4: '', webRestrictType: '1', defaultUrl: '127.0.0.1' };
+const TAB_LABELS: Record<SubTab, string> = {
+  settings: 'Policy Settings',
+  policyStatus: 'Policy Status',
+};
+const DEFAULT_FORM: FormState = {
+  policyId: 0,
+  inheritPolicy: false,
+  exception: false,
+  updateInterval: '120',
+  weeklyPolicy: false,
+  useSchedule: false,
+  schedule1: '',
+  schedule2: '',
+  schedule3: '',
+  schedule4: '',
+  webRestrictType: '1',
+  defaultUrl: '127.0.0.1',
+};
 const inputClass = 'h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
 
-function cn(...values: Array<string | false | null | undefined>) { return values.filter(Boolean).join(' '); }
-function today() { return new Date().toISOString().slice(0, 10); }
-function daysAgo(days: number) { const date = new Date(); date.setDate(date.getDate() - days); return date.toISOString().slice(0, 10); }
-function cleanText(value: unknown, fallback = '') { const text = value === undefined || value === null ? '' : String(value).trim(); return text || fallback; }
-function keyify(value: string) { return value.toLowerCase().replace(/[\s_\-().]/g, ''); }
-function asArray<T = any>(value: unknown): T[] { if (Array.isArray(value)) return value as T[]; if (value && typeof value === 'object') { const row = value as Record<string, unknown>; if (Array.isArray(row.data)) return row.data as T[]; if (Array.isArray(row.rows)) return row.rows as T[]; if (Array.isArray(row.recordset)) return row.recordset as T[]; } return []; }
-function pick(row: Record<string, unknown> | null | undefined, keys: string[], fallback = '-') { if (!row) return fallback; const map = new Map(Object.entries(row).map(([key, value]) => [keyify(key), value])); for (const key of keys) { const direct = row[key]; const mapped = map.get(keyify(key)); const value = direct !== undefined ? direct : mapped; if (value !== undefined && value !== null && String(value).trim() !== '') return String(value); } return fallback; }
-function pickNumber(row: Record<string, unknown> | null | undefined, keys: string[]) { const parsed = Number(pick(row, keys, '').replace(/,/g, '')); return Number.isFinite(parsed) ? parsed : 0; }
-function getChildren(node: RestrictionTreeNode) { return asArray<RestrictionTreeNode>(node.children || node.Children || node.items || node.nodes); }
-function getNodeLabel(node: RestrictionTreeNode) { return cleanText(node.label || node.name || node.Object_Rel_Name || node.Object_Full_Name || node.ComputerName || node.Object_DeviceID || node.MDM_DeviceID, 'Unnamed scope'); }
-function getNodeId(node: RestrictionTreeNode, index = 0) { return cleanText(node.id || node.ID || node.Object_Rel_Idn || node.Object_Root_Idn || node.target_id || node.Object_DeviceID || node.MDM_DeviceID, `node-${index}`); }
-function getNodeType(node: RestrictionTreeNode): 'root' | 'department' | 'device' { const type = String(node.type || node.Type || '').toLowerCase(); if (type.includes('device') || node.Object_Root_Idn || node.Object_DeviceID || node.MDM_DeviceID) return 'device'; if (type.includes('root') || type.includes('org')) return 'root'; return 'department'; }
-function countNodes(node: RestrictionTreeNode): number { const count = pickNumber(node, ['count', 'badge', 'total', 'deviceCount', 'TotalDevices']); if (count > 0) return count; if (getNodeType(node) === 'device') return 1; return getChildren(node).reduce((total, child) => total + countNodes(child), 0); }
-function getTarget(node: RestrictionTreeNode, index = 0): RestrictionTarget { const type = getNodeType(node); const label = getNodeLabel(node); if (type === 'root') return { id: 'root', label: 'All Branches', type: 'root', target_type: 1, target_id: '-1', Object_Full_Name: 'Root Policy' }; if (type === 'device') { const rootId = cleanText(node.Object_Root_Idn || node.objectRootIdn || node.MDM_Asset_Idn || node.assetId || node.target_id || node.id || index); return { id: `device-${rootId}`, label, type: 'device', target_type: 3, target_id: rootId, Object_Root_Idn: rootId, Object_DeviceID: node.Object_DeviceID || node.MDM_DeviceID || node.DeviceID || '', Object_Full_Name: node.Object_Full_Name || node.Department || node.Branch || '' }; } const relationId = cleanText(node.Object_Rel_Idn || node.objectRelIdn || node.target_id || node.id || index); return { id: `department-${relationId}`, label, type: 'department', target_type: 2, target_id: relationId, Object_Rel_Idn: relationId, Object_Full_Name: node.Object_Full_Name || node.path || label }; }
-function filterTree(nodes: RestrictionTreeNode[], query: string): RestrictionTreeNode[] { const search = query.trim().toLowerCase(); if (!search) return nodes; return nodes.map((node) => { const children = filterTree(getChildren(node), search); const label = [getNodeLabel(node), node.Object_Full_Name, node.Object_DeviceID, node.MDM_DeviceID].filter(Boolean).join(' ').toLowerCase(); return label.includes(search) || children.length ? { ...node, children } : null; }).filter(Boolean) as RestrictionTreeNode[]; }
-function findFirstTarget(nodes: RestrictionTreeNode[]): RestrictionTarget | null { for (let index = 0; index < nodes.length; index += 1) { const node = nodes[index]; const target = getTarget(node, index); if (target) return target; const nested = findFirstTarget(getChildren(node)); if (nested) return nested; } return null; }
-function getSetting(policy: RestrictionPolicyDetail | null, key: string, fallback = '') { if (!policy) return fallback; const direct = policy.settings?.[key] ?? policy[key]; if (direct !== undefined && direct !== null && String(direct).trim() !== '') return String(direct); const found = asArray<any>(policy.settingItems || policy.items || policy.settingsList).find((item) => cleanText(item.policy_key || item.key).toLowerCase() === key.toLowerCase()); return found?.policy_value !== undefined && found?.policy_value !== null ? String(found.policy_value) : fallback; }
-function settingValues(policy: RestrictionPolicyDetail | null, key: string) { return asArray<any>(policy?.settingItems || policy?.items || policy?.settingsList).filter((item) => cleanText(item.policy_key || item.key).toLowerCase() === key.toLowerCase()).sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0)).map((item) => cleanText(item.policy_value || item.value)).filter(Boolean); }
-function splitDays(value: string) { const upper = value.toUpperCase(); if (!upper) return []; if (upper.includes(',')) return upper.split(',').map((item) => item.trim()).filter(Boolean); return DAY_OPTIONS.filter((day) => upper.includes(day)); }
-function formFromPolicy(policy: RestrictionPolicyDetail | null): FormState { const schedules = settingValues(policy, 'WebRestrictSchedule'); return { policyId: Number(policy?.policy_id || policy?.PolicyID || policy?.id || 0), inheritPolicy: getSetting(policy, 'parent_policy', '0') !== '0' || getSetting(policy, 'use_parent_policy', '0') === '1', exception: getSetting(policy, 'use_policy', '1') === '0', updateInterval: getSetting(policy, 'update_policy_result_interval', '120'), weeklyPolicy: getSetting(policy, 'use_weekly_policy', '0') === '1', useSchedule: getSetting(policy, 'use_schedule', '0') === '1', schedule1: schedules[0] || '', schedule2: schedules[1] || '', schedule3: schedules[2] || '', schedule4: schedules[3] || '', webRestrictType: (getSetting(policy, 'WebRestrictType', '1') as FormState['webRestrictType']) || '1', defaultUrl: getSetting(policy, 'WebRestrictMessage', '127.0.0.1') }; }
-function normalizeDomain(value: string) { return value.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[\s,]+/)[0].split('/')[0].toLowerCase(); }
-function uniqueDomains(values: string[]) { return Array.from(new Set(values.map(normalizeDomain).filter(Boolean))); }
-function getWebGroupId(group: WebGroup | null | undefined) { return Number(pick(group, ['idx', 'IDX', 'id', 'ID', 'groupId', 'GroupId'], '0')) || 0; }
-function getWebGroupName(group: WebGroup | null | undefined) { return pick(group, ['name', 'Name', 'groupName', 'GroupName', 'URLMain_Name'], 'Unnamed group'); }
-function getWebGroupDescription(group: WebGroup | null | undefined) { return pick(group, ['description', 'Description', 'remark', 'Remark'], ''); }
-function getWebGroupUrlValue(row: unknown) { if (typeof row === 'string') return row.trim(); if (!row || typeof row !== 'object') return ''; const record = row as Record<string, unknown>; return cleanText(record.url ?? record.URL ?? record.Url ?? record.DomainName ?? record.domainName ?? record.WebUrl ?? record.webUrl); }
-function normalizeWebGroupRows(rows: unknown, groupId = 0): WebGroupUrl[] { return asArray<any>(rows).map((row, index) => { const record = row && typeof row === 'object' ? row as Record<string, unknown> : {}; const url = getWebGroupUrlValue(row); if (!url) return null; return { ...record, idx: Number(record.idx ?? record.IDX ?? record.groupId ?? record.GroupId ?? groupId) || groupId, seq: Number(record.seq ?? record.Seq ?? record.SEQ ?? record.sequence ?? record.Sequence ?? index + 1) || index + 1, url: normalizeDomain(url) } as WebGroupUrl; }).filter(Boolean) as WebGroupUrl[]; }
-function getUrlSeq(row: WebGroupUrl, index: number) { return Number(row.seq ?? row.Seq ?? row.SEQ ?? row.sequence ?? index + 1) || index + 1; }
-function pageSlice<T>(rows: T[], page: number, size = PAGE_SIZE) { const totalPages = Math.max(1, Math.ceil(rows.length / size)); const safePage = Math.min(Math.max(1, page), totalPages); const start = (safePage - 1) * size; return { totalPages, safePage, start, rows: rows.slice(start, start + size) }; }
-function Badge({ children, className }: { children: ReactNode; className: string }) { return <span className={cn('inline-flex rounded-full border px-3 py-1 text-xs font-black', className)}>{children}</span>; }
-function FieldLabel({ children }: { children: ReactNode }) { return <label className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">{children}</label>; }
+function cn(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function cleanText(value: unknown, fallback = '') {
+  const text = value === undefined || value === null ? '' : String(value).trim();
+  return text || fallback;
+}
+
+function keyify(value: string) {
+  return value.toLowerCase().replace(/[\s_\-().]/g, '');
+}
+
+function asArray<T = any>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === 'object') {
+    const row = value as Record<string, unknown>;
+    if (Array.isArray(row.data)) return row.data as T[];
+    if (Array.isArray(row.rows)) return row.rows as T[];
+    if (Array.isArray(row.recordset)) return row.recordset as T[];
+  }
+  return [];
+}
+
+function pick(row: Record<string, unknown> | null | undefined, keys: string[], fallback = '-') {
+  if (!row) return fallback;
+  const map = new Map(Object.entries(row).map(([key, value]) => [keyify(key), value]));
+
+  for (const key of keys) {
+    const direct = row[key];
+    const mapped = map.get(keyify(key));
+    const value = direct !== undefined ? direct : mapped;
+    if (value !== undefined && value !== null && String(value).trim() !== '') return String(value);
+  }
+
+  return fallback;
+}
+
+function pickNumber(row: Record<string, unknown> | null | undefined, keys: string[]) {
+  const parsed = Number(pick(row, keys, '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getChildren(node: RestrictionTreeNode) {
+  return asArray<RestrictionTreeNode>(node.children || node.Children || node.items || node.nodes);
+}
+
+function getNodeLabel(node: RestrictionTreeNode) {
+  return cleanText(node.label || node.name || node.Object_Rel_Name || node.Object_Full_Name || node.ComputerName || node.Object_DeviceID || node.MDM_DeviceID, 'Unnamed scope');
+}
+
+function getNodeId(node: RestrictionTreeNode, index = 0) {
+  return cleanText(node.id || node.ID || node.Object_Rel_Idn || node.Object_Root_Idn || node.target_id || node.Object_DeviceID || node.MDM_DeviceID, `node-${index}`);
+}
+
+function getNodeType(node: RestrictionTreeNode): 'root' | 'department' | 'device' {
+  const type = String(node.type || node.Type || '').toLowerCase();
+  if (type.includes('device') || node.Object_Root_Idn || node.Object_DeviceID || node.MDM_DeviceID) return 'device';
+  if (type.includes('root') || type.includes('org')) return 'root';
+  return 'department';
+}
+
+function countNodes(node: RestrictionTreeNode): number {
+  const count = pickNumber(node, ['count', 'badge', 'total', 'deviceCount', 'TotalDevices']);
+  if (count > 0) return count;
+  if (getNodeType(node) === 'device') return 1;
+  return getChildren(node).reduce((total, child) => total + countNodes(child), 0);
+}
+
+function getTarget(node: RestrictionTreeNode, index = 0): RestrictionTarget {
+  const type = getNodeType(node);
+  const label = getNodeLabel(node);
+
+  if (type === 'root') {
+    return { id: 'root', label: 'All Branches', type: 'root', target_type: 1, target_id: '-1', Object_Full_Name: 'Root Policy' };
+  }
+
+  if (type === 'device') {
+    const rootId = cleanText(node.Object_Root_Idn || node.objectRootIdn || node.MDM_Asset_Idn || node.assetId || node.target_id || node.id || index);
+    return {
+      id: `device-${rootId}`,
+      label,
+      type: 'device',
+      target_type: 3,
+      target_id: rootId,
+      Object_Root_Idn: rootId,
+      Object_DeviceID: node.Object_DeviceID || node.MDM_DeviceID || node.DeviceID || '',
+      Object_Full_Name: node.Object_Full_Name || node.Department || node.Branch || '',
+    };
+  }
+
+  const relationId = cleanText(node.Object_Rel_Idn || node.objectRelIdn || node.target_id || node.id || index);
+  return {
+    id: `department-${relationId}`,
+    label,
+    type: 'department',
+    target_type: 2,
+    target_id: relationId,
+    Object_Rel_Idn: relationId,
+    Object_Full_Name: node.Object_Full_Name || node.path || label,
+  };
+}
+
+function filterTree(nodes: RestrictionTreeNode[], query: string): RestrictionTreeNode[] {
+  const search = query.trim().toLowerCase();
+  if (!search) return nodes;
+
+  return nodes
+    .map((node) => {
+      const children = filterTree(getChildren(node), search);
+      const label = [getNodeLabel(node), node.Object_Full_Name, node.Object_DeviceID, node.MDM_DeviceID].filter(Boolean).join(' ').toLowerCase();
+      return label.includes(search) || children.length ? { ...node, children } : null;
+    })
+    .filter(Boolean) as RestrictionTreeNode[];
+}
+
+function findFirstTarget(nodes: RestrictionTreeNode[]): RestrictionTarget | null {
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    const target = getTarget(node, index);
+    if (target) return target;
+    const nested = findFirstTarget(getChildren(node));
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function getSetting(policy: RestrictionPolicyDetail | null, key: string, fallback = '') {
+  if (!policy) return fallback;
+
+  const direct = policy.settings?.[key] ?? policy[key];
+  if (direct !== undefined && direct !== null && String(direct).trim() !== '') return String(direct);
+
+  const found = asArray<any>(policy.settingItems || policy.items || policy.settingsList).find((item) => cleanText(item.policy_key || item.key).toLowerCase() === key.toLowerCase());
+  return found?.policy_value !== undefined && found?.policy_value !== null ? String(found.policy_value) : fallback;
+}
+
+function settingValues(policy: RestrictionPolicyDetail | null, key: string) {
+  return asArray<any>(policy?.settingItems || policy?.items || policy?.settingsList)
+    .filter((item) => cleanText(item.policy_key || item.key).toLowerCase() === key.toLowerCase())
+    .sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0))
+    .map((item) => cleanText(item.policy_value || item.value))
+    .filter(Boolean);
+}
+
+function splitDays(value: string) {
+  const upper = value.toUpperCase();
+  if (!upper) return [];
+  if (upper.includes(',')) return upper.split(',').map((item) => item.trim()).filter(Boolean);
+  return DAY_OPTIONS.filter((day) => upper.includes(day));
+}
+
+function formFromPolicy(policy: RestrictionPolicyDetail | null): FormState {
+  const schedules = settingValues(policy, 'WebRestrictSchedule');
+  return {
+    policyId: Number(policy?.policy_id || policy?.PolicyID || policy?.id || 0),
+    inheritPolicy: getSetting(policy, 'parent_policy', '0') !== '0' || getSetting(policy, 'use_parent_policy', '0') === '1',
+    exception: getSetting(policy, 'use_policy', '1') === '0',
+    updateInterval: getSetting(policy, 'update_policy_result_interval', '120'),
+    weeklyPolicy: getSetting(policy, 'use_weekly_policy', '0') === '1',
+    useSchedule: getSetting(policy, 'use_schedule', '0') === '1',
+    schedule1: schedules[0] || '',
+    schedule2: schedules[1] || '',
+    schedule3: schedules[2] || '',
+    schedule4: schedules[3] || '',
+    webRestrictType: (getSetting(policy, 'WebRestrictType', '1') as FormState['webRestrictType']) || '1',
+    defaultUrl: getSetting(policy, 'WebRestrictMessage', '127.0.0.1'),
+  };
+}
+
+function normalizeDomain(value: string) {
+  return value.trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[\s,]+/)[0].split('/')[0].toLowerCase();
+}
+
+function uniqueDomains(values: string[]) {
+  return Array.from(new Set(values.map(normalizeDomain).filter(Boolean)));
+}
+
+function getWebGroupId(group: WebGroup | null | undefined) {
+  return Number(pick(group, ['idx', 'IDX', 'id', 'ID', 'groupId', 'GroupId'], '0')) || 0;
+}
+
+function getWebGroupName(group: WebGroup | null | undefined) {
+  return pick(group, ['name', 'Name', 'groupName', 'GroupName', 'URLMain_Name'], 'Unnamed group');
+}
+
+function getWebGroupDescription(group: WebGroup | null | undefined) {
+  return pick(group, ['description', 'Description', 'remark', 'Remark'], '');
+}
+
+function getWebGroupUrlValue(row: unknown) {
+  if (typeof row === 'string') return row.trim();
+  if (!row || typeof row !== 'object') return '';
+  const record = row as Record<string, unknown>;
+  return cleanText(record.url ?? record.URL ?? record.Url ?? record.DomainName ?? record.domainName ?? record.WebUrl ?? record.webUrl);
+}
+
+function normalizeWebGroupRows(rows: unknown, groupId = 0): WebGroupUrl[] {
+  return asArray<any>(rows)
+    .map((row, index) => {
+      const record = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+      const url = getWebGroupUrlValue(row);
+      if (!url) return null;
+      return {
+        ...record,
+        idx: Number(record.idx ?? record.IDX ?? record.groupId ?? record.GroupId ?? groupId) || groupId,
+        seq: Number(record.seq ?? record.Seq ?? record.SEQ ?? record.sequence ?? record.Sequence ?? index + 1) || index + 1,
+        url: normalizeDomain(url),
+      } as WebGroupUrl;
+    })
+    .filter(Boolean) as WebGroupUrl[];
+}
+
+function getUrlSeq(row: WebGroupUrl, index: number) {
+  return Number(row.seq ?? row.Seq ?? row.SEQ ?? row.sequence ?? index + 1) || index + 1;
+}
+
+function pageSlice<T>(rows: T[], page: number, size = PAGE_SIZE) {
+  const totalPages = Math.max(1, Math.ceil(rows.length / size));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * size;
+  return { totalPages, safePage, start, rows: rows.slice(start, start + size) };
+}
+
+function Badge({ children, className }: { children: ReactNode; className: string }) {
+  return <span className={cn('inline-flex rounded-full border px-3 py-1 text-xs font-black', className)}>{children}</span>;
+}
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <label className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">{children}</label>;
+}
 
 export default function WebRestriction() {
   const [activeTab, setActiveTab] = useState<SubTab>('settings');
@@ -145,6 +415,7 @@ export default function WebRestriction() {
       setWebGroupUrls([]);
       return [] as WebGroupUrl[];
     }
+
     setLoadingGroupUrls(true);
     try {
       const rows = normalizeWebGroupRows(await restrictionService.getWebGroupUrls(id), id);
@@ -185,6 +456,7 @@ export default function WebRestriction() {
   useEffect(() => { setGroupPage(1); }, [groupSearch, filteredGroups.length]);
   useEffect(() => { setPolicyUrlPage(1); }, [policyUrlSearch, filteredPolicyUrls.length]);
   useEffect(() => { setPolicyPage(1); }, [policySearch, filteredPolicyRows.length]);
+  useEffect(() => { setGroupUrlPage(1); }, [selectedGroupId, webGroupUrls.length]);
   useEffect(() => {
     if (!selectedGroup) return;
     setGroupName(getWebGroupName(selectedGroup));
@@ -196,7 +468,7 @@ export default function WebRestriction() {
   }
 
   function toggleDay(day: string) {
-    setSelectedDays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day]);
+    setSelectedDays((current) => (current.includes(day) ? current.filter((item) => item !== day) : [...current, day]));
   }
 
   function addPolicyUrl() {
@@ -229,25 +501,32 @@ export default function WebRestriction() {
     const name = groupName.trim();
     if (!name) {
       addToast('warning', 'Group name required', 'Enter website group name first.');
-      return;
+      return null;
     }
+
+    const urls = uniqueDomains(groupUrlInput.split(/[\s,\n]+/));
     setLoadingGroupUrls(true);
     try {
+      let nextGroupId = selectedGroupId || 0;
       if (selectedGroupId) {
         await restrictionService.updateWebGroup(selectedGroupId, name, groupDescription.trim());
         addToast('success', 'Group updated', name);
       } else {
-        const result = await restrictionService.createWebGroup(name, uniqueDomains(groupUrlInput.split(/[\s,\n]+/)), groupDescription.trim());
-        const nextId = getWebGroupId(result as WebGroup);
-        setSelectedGroupId(nextId || null);
+        const result = await restrictionService.createWebGroup(name, urls, groupDescription.trim());
+        nextGroupId = getWebGroupId(result as WebGroup);
         addToast('success', 'Group created', name);
       }
+
       const groups = await loadGroups();
       const matched = groups.find((item) => getWebGroupName(item).toLowerCase() === name.toLowerCase());
-      if (matched) setSelectedGroupId(getWebGroupId(matched));
+      const resolvedId = nextGroupId || getWebGroupId(matched) || null;
+      setSelectedGroupId(resolvedId);
       setGroupUrlInput('');
+      if (resolvedId) await loadGroupUrls(resolvedId);
+      return resolvedId;
     } catch (error) {
       addToast('error', 'Group save failed', error instanceof Error ? error.message : 'Please check web restriction API.');
+      return null;
     } finally {
       setLoadingGroupUrls(false);
     }
@@ -281,20 +560,37 @@ export default function WebRestriction() {
   }
 
   async function addGroupUrl() {
-    if (!selectedGroupId) {
-      addToast('warning', 'Select group first', 'Create or select a website group before adding URL.');
-      return;
-    }
     const urls = uniqueDomains(groupUrlInput.split(/[\s,\n]+/));
     if (!urls.length) {
       addToast('warning', 'Enter URL first', 'Add a domain before saving to the group.');
       return;
     }
+
     setLoadingGroupUrls(true);
     try {
-      for (const url of urls) await restrictionService.addWebGroupUrl(selectedGroupId, url);
+      let groupId = selectedGroupId;
+      if (!groupId) {
+        const name = groupName.trim();
+        if (!name) {
+          addToast('warning', 'Group name required', 'Enter group name before adding URL.');
+          return;
+        }
+        const result = await restrictionService.createWebGroup(name, [], groupDescription.trim());
+        groupId = getWebGroupId(result as WebGroup);
+        if (!groupId) {
+          const groups = await loadGroups();
+          const matched = groups.find((item) => getWebGroupName(item).toLowerCase() === name.toLowerCase());
+          groupId = getWebGroupId(matched) || null;
+        }
+        if (!groupId) throw new Error('Website group was created but group ID was not returned.');
+        setSelectedGroupId(groupId);
+        addToast('success', 'Group created', name);
+      }
+
+      for (const url of urls) await restrictionService.addWebGroupUrl(groupId, url);
       setGroupUrlInput('');
-      await loadGroupUrls(selectedGroupId);
+      await loadGroups();
+      await loadGroupUrls(groupId);
       addToast('success', 'Group URL added', `${urls.length} URL${urls.length === 1 ? '' : 's'} added.`);
     } catch (error) {
       addToast('error', 'Group URL failed', error instanceof Error ? error.message : 'Please check web restriction API.');
@@ -370,6 +666,7 @@ export default function WebRestriction() {
           const Icon = type === 'root' ? Layers : open ? FolderOpen : Folder;
           const label = type === 'root' ? 'All Branches' : getNodeLabel(node);
           const total = countNodes(node);
+
           return (
             <div key={id}>
               <EmaSidebarTreeRow active={active} depth={depth} onClick={() => { setSelectedTarget(target); if (children.length) setExpandedNodes((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; }); }}>
@@ -413,15 +710,13 @@ export default function WebRestriction() {
     <EmaPageLayout sidebar={sidebar} showHeader={false}>
       <div className="space-y-3">
         <EmaSection eyebrow="Website Governance" title="Web Restriction" description="Manage website restriction policy and URL groups.">
-          <div className="space-y-4">
-            <EmaKpiGrid>
-              <EmaKpiCard title="Target" value={selectedTarget?.label || 'All Branches'} note="Selected scope" icon={<Layers size={19} />} tone="blue" />
-              <EmaKpiCard title="Website URLs" value={webUrls.length} note="Policy URL list" icon={<LinkIcon size={19} />} tone="blue" />
-              <EmaKpiCard title="Restriction Type" value={form.webRestrictType === '1' ? 'Block list' : 'Allow only'} note={form.exception ? 'Disabled' : 'Enabled'} icon={<Ban size={19} />} tone="slate" />
-              <EmaKpiCard title="Web Groups" value={webGroups.length} note="Configured groups" icon={<Globe size={19} />} tone="violet" />
-              <EmaKpiCard title="Policy Source" value={policySource} note={pick(policyDetail, ['version', 'Version'], '-')} icon={<CheckCircle2 size={19} />} tone="emerald" />
-            </EmaKpiGrid>
-          </div>
+          <EmaKpiGrid>
+            <EmaKpiCard title="Target" value={selectedTarget?.label || 'All Branches'} note="Selected scope" icon={<Layers size={19} />} tone="blue" />
+            <EmaKpiCard title="Website URLs" value={webUrls.length} note="Policy URL list" icon={<LinkIcon size={19} />} tone="blue" />
+            <EmaKpiCard title="Restriction Type" value={form.webRestrictType === '1' ? 'Block list' : 'Allow only'} note={form.exception ? 'Disabled' : 'Enabled'} icon={<Ban size={19} />} tone="slate" />
+            <EmaKpiCard title="Web Groups" value={webGroups.length} note="Configured groups" icon={<Globe size={19} />} tone="violet" />
+            <EmaKpiCard title="Policy Source" value={policySource} note={pick(policyDetail, ['version', 'Version'], '-')} icon={<CheckCircle2 size={19} />} tone="emerald" />
+          </EmaKpiGrid>
         </EmaSection>
 
         <EmaToolbar
@@ -447,7 +742,15 @@ export default function WebRestriction() {
                 <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <EmaSearchInput value={groupSearch} onChange={setGroupSearch} placeholder="Search website group..." />
                   <div className="mt-3 space-y-2">
-                    {groupPageData.rows.length ? groupPageData.rows.map((group) => { const id = getWebGroupId(group); const active = selectedGroupId === id; return <button key={id || getWebGroupName(group)} type="button" onClick={() => setSelectedGroupId(id)} className={cn('flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition', active ? 'border-blue-300 bg-white text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-800 hover:border-blue-200')}><span className="min-w-0"><span className="block truncate text-sm font-black">{getWebGroupName(group)}</span><span className="block truncate text-xs font-semibold text-slate-500">ID: {id || '-'}</span></span><Globe size={16} /></button>; }) : <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-sm font-bold text-slate-500">No website group found.</div>}
+                    {groupPageData.rows.length ? groupPageData.rows.map((group) => {
+                      const id = getWebGroupId(group);
+                      const active = selectedGroupId === id;
+                      return (
+                        <button key={id || getWebGroupName(group)} type="button" onClick={() => setSelectedGroupId(id)} className={cn('flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition', active ? 'border-blue-300 bg-white text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-800 hover:border-blue-200')}>
+                          <span className="min-w-0"><span className="block truncate text-sm font-black">{getWebGroupName(group)}</span><span className="block truncate text-xs font-semibold text-slate-500">ID: {id || '-'}</span></span><Globe size={16} />
+                        </button>
+                      );
+                    }) : <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-center text-sm font-bold text-slate-500">No website group found.</div>}
                   </div>
                   {filteredGroups.length > PAGE_SIZE ? <EmaPagination page={groupPageData.safePage} totalPages={groupPageData.totalPages} totalLabel={`${filteredGroups.length} group(s)`} onPageChange={setGroupPage} /> : null}
                 </div>
@@ -460,12 +763,12 @@ export default function WebRestriction() {
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
-                    <input value={groupUrlInput} onChange={(event) => setGroupUrlInput(event.target.value)} className={inputClass} placeholder="Add URL/domain to selected group..." />
-                    <EmaButton onClick={() => void addGroupUrl()} disabled={loadingGroupUrls || !selectedGroupId}><Plus size={16} />Add URL</EmaButton>
+                    <input value={groupUrlInput} onChange={(event) => setGroupUrlInput(event.target.value)} className={inputClass} placeholder={selectedGroupId ? 'Add URL/domain to selected group...' : 'Enter group name, then add URL/domain...'} onKeyDown={(event) => { if (event.key === 'Enter') void addGroupUrl(); }} />
+                    <EmaButton onClick={() => void addGroupUrl()} disabled={loadingGroupUrls}><Plus size={16} />{selectedGroupId ? 'Add URL' : 'Create + Add URL'}</EmaButton>
                     <EmaButton variant="primary" onClick={addGroupUrlsToPolicy} disabled={!webGroupUrls.length}><LinkIcon size={16} />Add Group To Policy</EmaButton>
                   </div>
 
-                  <EmaTableShell title="Selected Group URLs" subtitle={selectedGroup ? getWebGroupName(selectedGroup) : 'Select or create a website group.'}>
+                  <EmaTableShell title="Selected Group URLs" subtitle={selectedGroup ? getWebGroupName(selectedGroup) : 'Create or select a website group.'}>
                     <EmaTable columns={groupUrlColumns} rows={groupUrlPageData.rows} loading={loadingGroupUrls} getRowKey={(row, index) => `${selectedGroupId || 'group'}-${getUrlSeq(row, index)}-${getWebGroupUrlValue(row)}`} emptyText="No URL found in this group." />
                     {webGroupUrls.length > PAGE_SIZE ? <EmaPagination page={groupUrlPageData.safePage} totalPages={groupUrlPageData.totalPages} totalLabel={`${webGroupUrls.length} URL(s)`} onPageChange={setGroupUrlPage} /> : null}
                   </EmaTableShell>
