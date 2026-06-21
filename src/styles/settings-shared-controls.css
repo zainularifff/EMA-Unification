@@ -16,6 +16,46 @@ html body .settings-with-notifications .settings-menu-list .setting-btn strong {
   line-height: 1.15 !important;
 }
 
+html body .settings-with-notifications .content-toolbar,
+html body .settings-with-notifications .user-access-commandbar {
+  align-items: center !important;
+}
+
+html body .settings-with-notifications .content-toolbar .section-search,
+html body .settings-with-notifications .user-access-commandbar .section-search {
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  align-self: center !important;
+}
+
+html body .settings-with-notifications .content-toolbar .content-actions,
+html body .settings-with-notifications .content-toolbar .toolbar-actions,
+html body .settings-with-notifications .content-toolbar .settings-toolbar-right,
+html body .settings-with-notifications .content-toolbar .uam-actions-right,
+html body .settings-with-notifications .user-access-commandbar .content-actions,
+html body .settings-with-notifications .user-access-commandbar .toolbar-actions,
+html body .settings-with-notifications .user-access-commandbar .settings-toolbar-right,
+html body .settings-with-notifications .user-access-commandbar .uam-actions-right {
+  height: 2.75rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.5rem !important;
+  align-self: center !important;
+}
+
+html body .settings-with-notifications .content-toolbar .primary-btn,
+html body .settings-with-notifications .content-toolbar .soft-btn,
+html body .settings-with-notifications .content-toolbar .danger-btn,
+html body .settings-with-notifications .user-access-commandbar .primary-btn,
+html body .settings-with-notifications .user-access-commandbar .soft-btn,
+html body .settings-with-notifications .user-access-commandbar .danger-btn {
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  align-self: center !important;
+  margin: 0 !important;
+}
+
 html body .settings-with-notifications .primary-btn,
 html body .settings-with-notifications .soft-btn,
 html body .settings-with-notifications .danger-btn,
