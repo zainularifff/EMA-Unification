@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Database,
   Download,
-  Filter,
   Folder,
   FolderOpen,
   Gauge,
@@ -21,7 +20,6 @@ import {
 import appMeteringService from "../services/appMeteringService";
 import {
   EmaButton,
-  EmaFilterField,
   EmaKpiCard,
   EmaKpiGrid,
   EmaModal,
@@ -108,6 +106,8 @@ type FilterState = {
   status: string;
   license: string;
 };
+
+type MeteringAction = "start" | "collect" | "stop";
 
 const PAGE_SIZE = 10;
 const statusOrder: UsageStatus[] = ["Productive", "Review", "Restricted", "Unused"];
@@ -238,6 +238,12 @@ function mapDepartmentNode(department: ApiDepartment): TreeNode {
   };
 }
 
+function getTreeCount(node: TreeNode): number {
+  if (typeof node.count === "number" && Number.isFinite(node.count) && node.count > 0) return node.count;
+  if (node.type === "device" || node.type === "package") return 1;
+  return (node.children || []).reduce((total, child) => total + getTreeCount(child), 0);
+}
+
 function buildDepartmentTree(departments: ApiDepartment[]) {
   const children = departments.map(mapDepartmentNode);
   return [{ ...emptyNode, count: children.reduce((total, child) => total + getTreeCount(child), 0), children }];
@@ -284,12 +290,6 @@ function buildPackageTree(packages: PackageRow[]) {
         })),
     }));
   return [{ id: "all-packages", label: "Application Packages", type: "folder" as const, count: packages.length, children }];
-}
-
-function getTreeCount(node: TreeNode): number {
-  if (typeof node.count === "number" && Number.isFinite(node.count) && node.count > 0) return node.count;
-  if (node.type === "device" || node.type === "package") return 1;
-  return (node.children || []).reduce((total, child) => total + getTreeCount(child), 0);
 }
 
 function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
@@ -343,26 +343,6 @@ function normalizeUsageRow(row: unknown, index = 0): UsageRow {
     risk,
     licenseType,
     recommendation: getRecommendation(status, risk, licenseType),
-    raw: record,
-  };
-}
-
-function normalizeAssetNode(row: unknown, index = 0): TreeNode | null {
-  const record = asRecord(row) || {};
-  const rawAssetId = parseNumber(pickValue(record, ["_Idn", "Object_Root_Idn", "ObjectRootIdn", "ClientID", "MDM_Asset_Idn"], "0"), 0);
-  if (!rawAssetId) return null;
-  const deviceName = pickValue(record, ["DeviceName", "ComputerName", "MDM_DeviceName", "Name", "Object_DeviceID"], `Device ${index + 1}`);
-  const ownerName = pickValue(record, ["DisplayName", "OwnerName", "DeviceOwner", "UserName", "LastLoggedInUser", "Object_Client_Name"], "-");
-  return {
-    id: `device-${rawAssetId}`,
-    label: deviceName,
-    subLabel: ownerName,
-    status: pickValue(record, ["ConnectionStatus", "Status"], "-"),
-    type: "device",
-    objectRootIdn: rawAssetId,
-    objectDeviceID: pickValue(record, ["Object_DeviceID", "DeviceID", "MDM_DeviceID"], ""),
-    objectAgent: pickValue(record, ["Object_Agent", "Agent", "Source"], "EM"),
-    mdmAssetIdn: parseNumber(pickValue(record, ["MDM_Asset_Idn"], "0"), 0),
     raw: record,
   };
 }
@@ -434,11 +414,13 @@ function AppMeteringTree({ nodes, selectedId, onSelect, search = "" }: { nodes: 
     const isOpen = search.trim() ? true : open[node.id] ?? depth < 1;
     const isSelected = selectedId === node.id;
     const isRoot = node.id === "organization" || node.id === "all-packages";
-    const Icon = node.type === "package" ? Package : node.type === "device" ? UserRound : isOpen ? FolderOpen : Folder;
+    const Icon = node.type === "package" ? Package : isOpen ? FolderOpen : Folder;
+
     const handleToggle = () => {
       if (!hasChildren) return;
       setOpen((prev) => ({ ...prev, [node.id]: !isOpen }));
     };
+
     const handleSelect = () => {
       if (hasChildren) handleToggle();
       onSelect(node);
@@ -470,6 +452,19 @@ function AppMeteringTree({ nodes, selectedId, onSelect, search = "" }: { nodes: 
   return <div>{filteredNodes.map((node) => renderNode(node))}</div>;
 }
 
+function ControlField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="grid min-w-0 gap-1 text-xs font-black uppercase tracking-[0.08em] text-slate-500">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function controlClassName() {
+  return "h-10 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-900 outline-none shadow-sm transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50";
+}
+
 export default function AppMetering() {
   const [viewMode, setViewMode] = useState<ViewMode>("device");
   const [departmentTree, setDepartmentTree] = useState<TreeNode[]>([emptyNode]);
@@ -477,7 +472,6 @@ export default function AppMetering() {
   const [selectedNode, setSelectedNode] = useState<TreeNode>(emptyNode);
   const [selectedPackageId, setSelectedPackageId] = useState<number>(0);
   const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
-  const [deviceRows, setDeviceRows] = useState<TreeNode[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [treeSearch, setTreeSearch] = useState("");
   const [filters, setFilters] = useState<FilterState>({ status: "all", license: "all" });
@@ -485,15 +479,16 @@ export default function AppMetering() {
   const [endDate, setEndDate] = useState(formatDateInput(new Date()));
   const [oneYearMode, setOneYearMode] = useState(false);
   const [page, setPage] = useState(1);
-  const [drawerRow, setDrawerRow] = useState<UsageRow | null>(null);
+  const [detailRow, setDetailRow] = useState<UsageRow | null>(null);
   const [showMeteringModal, setShowMeteringModal] = useState(false);
-  const [loading, setLoading] = useState({ hierarchy: false, packages: false, usage: false, action: false, assets: false });
+  const [loading, setLoading] = useState({ hierarchy: false, packages: false, usage: false, action: false });
   const [error, setError] = useState("");
   const [toasts, setToasts] = useState<EmaToastItem[]>([]);
 
   const packageTree = useMemo(() => buildPackageTree(packages), [packages]);
   const activeTree = viewMode === "device" ? departmentTree : packageTree;
   const activePackageId = selectedPackageId || (selectedNode.type === "package" ? selectedNode.packageId || 0 : 0);
+  const packageOptions = useMemo(() => packages.slice().sort((a, b) => a.name.localeCompare(b.name)), [packages]);
 
   const showToast = useCallback((tone: EmaToastItem["tone"], title: ReactNode, message?: ReactNode) => {
     const id = Date.now();
@@ -505,8 +500,7 @@ export default function AppMetering() {
     setLoading((prev) => ({ ...prev, hierarchy: true }));
     try {
       const payload = await appMeteringService.getDepartments();
-      const departments = unwrapRows<ApiDepartment>(payload);
-      const tree = buildDepartmentTree(departments);
+      const tree = buildDepartmentTree(unwrapRows<ApiDepartment>(payload));
       setDepartmentTree(tree);
       setSelectedNode((current) => findTreeNodeById(tree, current.id) || tree[0] || emptyNode);
     } catch (err) {
@@ -523,28 +517,12 @@ export default function AppMetering() {
       const payload = await appMeteringService.getPackages();
       setPackages(unwrapRows(payload).map(normalizePackageRow));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load application packages.");
+      setError("Package list is not available right now.");
+      setPackages([]);
     } finally {
       setLoading((prev) => ({ ...prev, packages: false }));
     }
   }, []);
-
-  const loadAssetsForScope = useCallback(async (node: TreeNode) => {
-    if (node.type !== "folder" || !node.relationID || node.relationID <= 0) {
-      setDeviceRows([]);
-      return;
-    }
-    setLoading((prev) => ({ ...prev, assets: true }));
-    try {
-      const payload = await appMeteringService.getAssetsByRelationID(node.relationID);
-      setDeviceRows(unwrapRows(payload).map(normalizeAssetNode).filter((item): item is TreeNode => Boolean(item)));
-    } catch {
-      setDeviceRows([]);
-      showToast("error", "Device list unavailable", "Unable to load devices for this branch.");
-    } finally {
-      setLoading((prev) => ({ ...prev, assets: false }));
-    }
-  }, [showToast]);
 
   const loadUsage = useCallback(async () => {
     setLoading((prev) => ({ ...prev, usage: true }));
@@ -554,17 +532,18 @@ export default function AppMetering() {
       const payload = await appMeteringService.getUsage({
         startDate,
         endDate,
+        oneYearMode,
         relationID,
         Object_Rel_Idn: relationID,
+        packageId: activePackageId || 0,
         swPkgId: activePackageId || -1,
-        packageId: activePackageId || undefined,
-        oneYear: oneYearMode ? 1 : undefined,
+        Object_DeviceID: selectedNode.objectDeviceID,
+        objectRootIdn: selectedNode.objectRootIdn,
       });
       setUsageRows(unwrapRows(payload).map(normalizeUsageRow));
-      setPage(1);
     } catch (err) {
       setUsageRows([]);
-      setError(err instanceof Error ? err.message : "Failed to load application usage.");
+      setError(err instanceof Error ? err.message : "Unable to load application metering data.");
     } finally {
       setLoading((prev) => ({ ...prev, usage: false }));
     }
@@ -576,48 +555,48 @@ export default function AppMetering() {
   }, [loadHierarchy, loadPackages]);
 
   useEffect(() => {
-    if (selectedNode.type === "folder") void loadAssetsForScope(selectedNode);
-  }, [loadAssetsForScope, selectedNode]);
-
-  useEffect(() => {
     void loadUsage();
   }, [loadUsage]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [filters.license, filters.status, searchTerm, selectedPackageId, startDate, endDate, oneYearMode, selectedNode.id]);
+
   const handleNodeSelect = (node: TreeNode) => {
     setSelectedNode(node);
-    if (node.type === "package") setSelectedPackageId(node.packageId || 0);
     setPage(1);
+    if (node.type === "package") setSelectedPackageId(node.packageId || 0);
   };
 
   const filteredRows = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    const query = searchTerm.trim().toLowerCase();
     return usageRows.filter((row) => {
-      const matchesTerm = !term || [row.application, row.publisher, row.fileName, row.device, row.user, row.site, row.ip].join(" ").toLowerCase().includes(term);
-      const matchesStatus = filters.status === "all" || row.status === filters.status;
-      const matchesLicense = filters.license === "all" || row.licenseType === filters.license;
-      return matchesTerm && matchesStatus && matchesLicense;
+      if (filters.status !== "all" && row.status !== filters.status) return false;
+      if (filters.license !== "all" && row.licenseType !== filters.license) return false;
+      if (!query) return true;
+      return [row.application, row.publisher, row.version, row.fileName, row.device, row.user, row.site, row.ip, row.status, row.licenseType]
+        .join(" ")
+        .toLowerCase()
+        .includes(query);
     });
   }, [filters.license, filters.status, searchTerm, usageRows]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const pagedRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
   const summary = useMemo(() => {
-    const uniqueApplications = new Set(usageRows.map((row) => row.application.toLowerCase())).size;
+    const uniqueApplications = new Set(usageRows.map((row) => row.application)).size;
+    const uniqueDevices = new Set(usageRows.map((row) => row.device).filter((value) => value && value !== "-")).size;
     const totalSeconds = usageRows.reduce((total, row) => total + row.usedTimeSeconds, 0);
     const review = usageRows.filter((row) => row.status === "Review").length;
     const restricted = usageRows.filter((row) => row.status === "Restricted").length;
-    return { uniqueApplications, totalSeconds, review, restricted };
+    return { uniqueApplications, uniqueDevices, totalSeconds, review, restricted };
   }, [usageRows]);
 
-  const runMeteringAction = async (action: "start" | "collect" | "stop") => {
-    const relationID = selectedNode.type === "folder" && selectedNode.relationID && selectedNode.relationID > 0 ? selectedNode.relationID : undefined;
+  const runMeteringAction = async (action: MeteringAction) => {
     setLoading((prev) => ({ ...prev, action: true }));
     try {
+      const relationID = selectedNode.type === "folder" && selectedNode.relationID && selectedNode.relationID > 0 ? selectedNode.relationID : undefined;
       await appMeteringService.runMeteringAction(action, {
         title: `${action === "start" ? "Start" : action === "collect" ? "Collect" : "Stop"} Application Metering - ${selectedNode.label}`,
         scanMode: selectedNode.type === "device" ? "device" : relationID ? "folder" : "all",
@@ -644,10 +623,10 @@ export default function AppMetering() {
       key: "application",
       header: "Application",
       render: (row) => (
-        <div className="min-w-0">
+        <button type="button" onClick={() => setDetailRow(row)} className="min-w-0 text-left">
           <strong className="block break-words text-slate-950">{row.application}</strong>
           <small className="block break-words text-xs font-bold text-slate-500">{row.publisher}</small>
-        </div>
+        </button>
       ),
     },
     { key: "version", header: "Version", render: (row) => row.version },
@@ -671,30 +650,6 @@ export default function AppMetering() {
     { key: "risk", header: "Risk", render: (row) => <StatusBadge status={row.risk} /> },
     { key: "lastUsed", header: "Last Used", render: (row) => row.lastUsed },
   ];
-
-  const deviceColumns: EmaTableColumn<TreeNode>[] = [
-    { key: "no", header: "No", width: "4.5rem", render: (_row, index) => String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0") },
-    {
-      key: "device",
-      header: "Device Name",
-      render: (row) => (
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600"><UserRound size={14} /></span>
-          <span className="min-w-0"><strong className="block break-words text-slate-950">{row.label}</strong><small className="block break-words text-xs font-bold text-slate-500">{row.subLabel || "-"}</small></span>
-        </div>
-      ),
-    },
-    { key: "platform", header: "Platform", render: (row) => pickValue(row.raw, ["PlatformType"], "-") },
-    { key: "status", header: "Status", render: (row) => row.status || "-" },
-    { key: "ip", header: "IP Address", render: (row) => pickValue(row.raw, ["IP", "IPAddress", "IpAddress"], "-") },
-  ];
-
-  const packageOptions = useMemo(() => packages.slice().sort((a, b) => a.name.localeCompare(b.name)), [packages]);
-  const showDeviceRegistry = viewMode === "device" && selectedNode.type === "folder" && selectedNode.relationID && selectedNode.relationID > 0;
-  const shownRows = showDeviceRegistry ? deviceRows : pagedRows;
-  const shownTotal = showDeviceRegistry ? deviceRows.length : filteredRows.length;
-  const shownPages = showDeviceRegistry ? Math.max(1, Math.ceil(deviceRows.length / PAGE_SIZE)) : totalPages;
-  const shownPageRows = showDeviceRegistry ? deviceRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : pagedRows;
 
   const sidebar = (
     <EmaSidebarPanel
@@ -728,6 +683,7 @@ export default function AppMetering() {
             <EmaKpiGrid>
               <EmaKpiCard title="Apps in Scope" value={summary.uniqueApplications.toLocaleString()} note="Unique metered apps" icon={<Package size={16} />} />
               <EmaKpiCard title="Usage Hours" value={`${(summary.totalSeconds / 3600).toFixed(1)}h`} note="Selected date range" icon={<Gauge size={16} />} tone="emerald" />
+              <EmaKpiCard title="Devices" value={summary.uniqueDevices.toLocaleString()} note="devices in usage" icon={<UserRound size={16} />} tone="violet" />
               <EmaKpiCard title="Review Apps" value={summary.review.toLocaleString()} note="Low or unusual use" icon={<AlertTriangle size={16} />} tone="amber" onClick={() => setFilters((prev) => ({ ...prev, status: "Review" }))} />
               <EmaKpiCard title="Restricted" value={summary.restricted.toLocaleString()} note="Policy review needed" icon={<Layers3 size={16} />} tone="rose" onClick={() => setFilters((prev) => ({ ...prev, status: "Restricted" }))} />
             </EmaKpiGrid>
@@ -740,7 +696,7 @@ export default function AppMetering() {
                 <EmaButton variant="secondary" onClick={() => void runMeteringAction("collect")} disabled={loading.action}><RefreshCw size={15} /> Collect</EmaButton>
               </>
             }
-            search={<EmaSearchInput value={searchTerm} onChange={(value) => { setSearchTerm(value); setPage(1); }} placeholder={showDeviceRegistry ? "Search devices, IPs, users..." : "Search application, device or user..."} />}
+            search={<EmaSearchInput value={searchTerm} onChange={(value) => { setSearchTerm(value); setPage(1); }} placeholder="Search application, device or user..." />}
             right={
               <>
                 <EmaButton variant="secondary" onClick={() => void loadUsage()} disabled={loading.usage}><RefreshCw size={15} /> Refresh</EmaButton>
@@ -748,49 +704,51 @@ export default function AppMetering() {
               </>
             }
             filters={
-              <>
-                <EmaFilterField label="Start Date"><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></EmaFilterField>
-                <EmaFilterField label="End Date"><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></EmaFilterField>
-                <EmaFilterField label="Package">
-                  <select value={selectedPackageId} onChange={(event) => { setSelectedPackageId(Number(event.target.value)); setPage(1); }}>
+              <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[repeat(6,minmax(0,1fr))]">
+                <ControlField label="Start Date">
+                  <input className={controlClassName()} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                </ControlField>
+                <ControlField label="End Date">
+                  <input className={controlClassName()} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                </ControlField>
+                <ControlField label="Package">
+                  <select className={controlClassName()} value={selectedPackageId} onChange={(event) => { setSelectedPackageId(Number(event.target.value)); setPage(1); }}>
                     <option value={0}>All packages</option>
                     {packageOptions.map((pkg) => <option key={pkg.packageId} value={pkg.packageId}>{pkg.name}</option>)}
                   </select>
-                </EmaFilterField>
-                <EmaFilterField label="Status">
-                  <select value={filters.status} onChange={(event) => { setFilters((prev) => ({ ...prev, status: event.target.value })); setPage(1); }}>
+                </ControlField>
+                <ControlField label="Status">
+                  <select className={controlClassName()} value={filters.status} onChange={(event) => { setFilters((prev) => ({ ...prev, status: event.target.value })); setPage(1); }}>
                     <option value="all">All status</option>
                     {statusOrder.map((status) => <option key={status} value={status}>{status}</option>)}
                   </select>
-                </EmaFilterField>
-                <EmaFilterField label="License">
-                  <select value={filters.license} onChange={(event) => { setFilters((prev) => ({ ...prev, license: event.target.value })); setPage(1); }}>
+                </ControlField>
+                <ControlField label="License">
+                  <select className={controlClassName()} value={filters.license} onChange={(event) => { setFilters((prev) => ({ ...prev, license: event.target.value })); setPage(1); }}>
                     <option value="all">All license</option>
                     <option value="Free">Free</option>
                     <option value="Paid">Paid</option>
                     <option value="Enterprise">Enterprise</option>
                     <option value="Unknown">Unknown</option>
                   </select>
-                </EmaFilterField>
-                <EmaFilterField label="SP Mode">
-                  <select value={oneYearMode ? "oneYear" : "normal"} onChange={(event) => setOneYearMode(event.target.value === "oneYear")}>
-                    <option value="normal">Normal</option>
-                    <option value="oneYear">One Year</option>
-                  </select>
-                </EmaFilterField>
-                <EmaButton variant="ghost" onClick={() => { setFilters({ status: "all", license: "all" }); setSelectedPackageId(0); setSearchTerm(""); setOneYearMode(false); setPage(1); }}><X size={14} /> Reset</EmaButton>
-              </>
+                </ControlField>
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                  <ControlField label="SP Mode">
+                    <select className={controlClassName()} value={oneYearMode ? "oneYear" : "normal"} onChange={(event) => setOneYearMode(event.target.value === "oneYear")}>
+                      <option value="normal">Normal</option>
+                      <option value="oneYear">One Year</option>
+                    </select>
+                  </ControlField>
+                  <EmaButton variant="ghost" onClick={() => { setFilters({ status: "all", license: "all" }); setSelectedPackageId(0); setSearchTerm(""); setOneYearMode(false); setPage(1); }}><X size={14} /> Reset</EmaButton>
+                </div>
+              </div>
             }
           />
 
-          <EmaTableShell title={showDeviceRegistry ? "Target Device Registry" : "Application Usage Registry"} subtitle={`${shownTotal.toLocaleString()} record(s) shown`}>
+          <EmaTableShell title="Application Usage Registry" subtitle={`${filteredRows.length.toLocaleString()} record(s) shown`}>
             {error ? <div className="border-b border-rose-100 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</div> : null}
-            {showDeviceRegistry ? (
-              <EmaTable columns={deviceColumns} rows={shownPageRows as TreeNode[]} loading={loading.assets} getRowKey={(row) => row.id} emptyText="No devices found for this branch." />
-            ) : (
-              <EmaTable columns={usageColumns} rows={pagedRows} loading={loading.usage} getRowKey={(row, index) => `${row.id}-${index}`} emptyText="No application usage records found." />
-            )}
-            <EmaPagination page={page} totalPages={shownPages} totalLabel={`Page ${page} of ${shownPages} • ${shownTotal.toLocaleString()} records`} onPageChange={setPage} />
+            {loading.usage && !pagedRows.length ? <EmaSpinner label="Loading application usage..." /> : <EmaTable columns={usageColumns} rows={pagedRows} loading={loading.usage} getRowKey={(row, index) => `${row.id}-${index}`} emptyText="No application usage records found." />}
+            <EmaPagination page={page} totalPages={totalPages} totalLabel={`Page ${page} of ${totalPages} • ${filteredRows.length.toLocaleString()} records`} onPageChange={setPage} />
           </EmaTableShell>
         </div>
       </EmaPageLayout>
@@ -819,19 +777,20 @@ export default function AppMetering() {
       </EmaModal>
 
       <EmaModal
-        open={Boolean(drawerRow)}
-        title={drawerRow?.application || "Application Detail"}
-        description={drawerRow ? `${drawerRow.device} • ${drawerRow.user}` : undefined}
-        onClose={() => setDrawerRow(null)}
-        footer={<EmaButton variant="primary" onClick={() => setDrawerRow(null)}>Done</EmaButton>}
+        open={Boolean(detailRow)}
+        title={detailRow?.application || "Application Detail"}
+        description={detailRow ? `${detailRow.device} • ${detailRow.user}` : undefined}
+        onClose={() => setDetailRow(null)}
+        footer={<EmaButton variant="primary" onClick={() => setDetailRow(null)}>Done</EmaButton>}
       >
-        {drawerRow ? (
+        {detailRow ? (
           <div className="grid gap-3 text-sm font-semibold text-slate-700">
-            <p><strong className="text-slate-950">Publisher:</strong> {drawerRow.publisher}</p>
-            <p><strong className="text-slate-950">File:</strong> {drawerRow.fileName}</p>
-            <p><strong className="text-slate-950">Path:</strong> {drawerRow.filePath}</p>
-            <p><strong className="text-slate-950">Usage:</strong> {formatUsageDuration(drawerRow.usedTimeSeconds)} · {drawerRow.launchCount} launch(es)</p>
-            <p><strong className="text-slate-950">Recommendation:</strong> {drawerRow.recommendation}</p>
+            <p><strong className="text-slate-950">Publisher:</strong> {detailRow.publisher}</p>
+            <p><strong className="text-slate-950">Version:</strong> {detailRow.version}</p>
+            <p><strong className="text-slate-950">File:</strong> {detailRow.fileName}</p>
+            <p><strong className="text-slate-950">Path:</strong> {detailRow.filePath}</p>
+            <p><strong className="text-slate-950">Usage:</strong> {formatUsageDuration(detailRow.usedTimeSeconds)} · {detailRow.launchCount} launch(es)</p>
+            <p><strong className="text-slate-950">Recommendation:</strong> {detailRow.recommendation}</p>
           </div>
         ) : null}
       </EmaModal>
