@@ -79,7 +79,7 @@ export function EmaSearchInput({
 
 export function EmaFilterField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="ema-filter-field flex min-w-[10rem] flex-col gap-1 text-xs font-black uppercase leading-none tracking-[0.08em] text-slate-500">
+    <label className="ema-filter-field-compact flex min-w-[10rem] flex-col gap-1 text-xs font-black uppercase leading-none tracking-[0.08em] text-slate-500">
       <span className="block leading-none">{label}</span>
       {children}
     </label>
