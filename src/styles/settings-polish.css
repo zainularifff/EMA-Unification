@@ -1,0 +1,361 @@
+/* Settings UI polish overrides. Loaded after legacy Settings CSS. */
+
+html body .settings-with-notifications {
+  height: calc(100dvh - 4.5rem) !important;
+  min-height: calc(100dvh - 4.5rem) !important;
+  overflow: hidden !important;
+}
+
+html body .settings-with-notifications .settings-view-host {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html body .settings-with-notifications .settings-module-root {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html body .settings-with-notifications .settings-module-root .settings-layout {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  grid-template-columns: 20rem minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+  overflow: hidden !important;
+}
+
+html body .settings-with-notifications .settings-module-root .settings-menu {
+  width: 20rem !important;
+  max-width: 20rem !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0.9rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .settings-menu-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  align-content: start !important;
+  gap: 0.45rem !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 0.2rem 0 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow: auto !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-btn {
+  min-height: 3.4rem !important;
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 2.15rem minmax(0, 1fr) !important;
+  justify-content: stretch !important;
+  align-items: center !important;
+  gap: 0.65rem !important;
+  padding: 0.65rem !important;
+  text-align: left !important;
+  border: 1px solid transparent !important;
+  border-radius: 0.9rem !important;
+  background: #f8fbff !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-btn.active {
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  box-shadow: inset 3px 0 0 #2563eb, 0 10px 22px rgba(37, 99, 235, 0.1) !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-btn span:last-child {
+  min-width: 0 !important;
+  display: block !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-btn strong,
+html body .settings-with-notifications .settings-module-root .setting-btn small {
+  min-width: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  text-align: left !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-btn strong {
+  font-size: 0.82rem !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-btn small {
+  margin-top: 0.15rem !important;
+  font-size: 0.7rem !important;
+  line-height: 1.15 !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-icon,
+html body .settings-with-notifications .settings-module-root .setting-icon svg {
+  width: 2.15rem !important;
+  height: 2.15rem !important;
+  flex: 0 0 2.15rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-icon {
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 0.75rem !important;
+  background: #edf3fb !important;
+  color: #475569 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .setting-btn.active .setting-icon {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html body .settings-with-notifications .settings-module-root .settings-content,
+html body .settings-with-notifications .settings-module-root .content-shell {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+html body .settings-with-notifications .settings-module-root .settings-hero {
+  grid-template-columns: minmax(13rem, 17rem) minmax(0, 1fr) !important;
+  padding: 0.85rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .settings-score {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+html body .settings-with-notifications .settings-module-root .content-toolbar,
+html body .settings-with-notifications .settings-module-root .user-access-commandbar {
+  grid-template-columns: minmax(0, 1fr) max-content max-content !important;
+  gap: 0.6rem !important;
+  align-items: center !important;
+  padding: 0.75rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .uam-filter-grid.clean.compact {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(10rem, 12rem)) !important;
+  gap: 0.5rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .content-body {
+  min-height: 0 !important;
+  overflow: auto !important;
+  padding: 0.75rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-access-table,
+html body .settings-with-notifications .settings-module-root .clean-table,
+html body .settings-with-notifications .settings-module-root .role-table-wrap,
+html body .settings-with-notifications .settings-module-root .table-shell {
+  overflow: auto !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 0.95rem !important;
+  background: #ffffff !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-row {
+  min-height: 3.85rem !important;
+  border-bottom: 1px solid #edf2f7 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-row.head {
+  min-height: 3rem !important;
+  background: #f3f6fb !important;
+}
+
+html body .settings-with-notifications .settings-module-root .role-standard-row {
+  display: grid !important;
+  grid-template-columns: 4rem minmax(22rem, 1.5fr) minmax(10rem, 0.7fr) minmax(8rem, 0.55fr) 9rem !important;
+  min-width: 68rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-row:not(.head):hover,
+html body .settings-with-notifications .settings-module-root .clean-table-row:not(.head):hover {
+  background: #f8fbff !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-cell {
+  min-width: 0 !important;
+  padding: 0.7rem 0.85rem !important;
+  font-size: 0.82rem !important;
+  line-height: 1.2 !important;
+  align-self: stretch !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+html body .settings-with-notifications .settings-module-root .head .user-cell {
+  font-size: 0.7rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+html body .settings-with-notifications .settings-module-root .role-info-cell,
+html body .settings-with-notifications .settings-module-root .user-name {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+html body .settings-with-notifications .settings-module-root .role-info-cell strong,
+html body .settings-with-notifications .settings-module-root .role-info-cell small,
+html body .settings-with-notifications .settings-module-root .user-name strong,
+html body .settings-with-notifications .settings-module-root .user-name small,
+html body .settings-with-notifications .settings-module-root .muted-cell {
+  display: block !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .settings-module-root .role-info-cell strong,
+html body .settings-with-notifications .settings-module-root .user-name strong {
+  color: #061b3a !important;
+  font-size: 0.84rem !important;
+  font-weight: 950 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .role-info-cell small,
+html body .settings-with-notifications .settings-module-root .user-name small,
+html body .settings-with-notifications .settings-module-root .muted-cell {
+  margin-top: 0.15rem !important;
+  color: #64748b !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .row-actions,
+html body .settings-with-notifications .settings-module-root .user-row-action-wrap {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0.4rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root .mini-btn,
+html body .settings-with-notifications .settings-module-root .icon-delete-btn {
+  width: 2.1rem !important;
+  height: 2.1rem !important;
+  min-width: 2.1rem !important;
+  min-height: 2.1rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 0.65rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+html body .settings-with-notifications .settings-module-root .mini-btn.edit {
+  color: #1d4ed8 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .mini-btn.delete,
+html body .settings-with-notifications .settings-module-root .icon-delete-btn {
+  color: #dc2626 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .mini-btn svg,
+html body .settings-with-notifications .settings-module-root .icon-delete-btn svg,
+html body .settings-with-notifications .settings-module-root .action-link svg,
+html body .settings-with-notifications .settings-module-root .delete-link svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  max-width: 1rem !important;
+  max-height: 1rem !important;
+  stroke-width: 2.25 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-pill,
+html body .settings-with-notifications .settings-module-root .mfa-pill,
+html body .settings-with-notifications .settings-module-root .approval-chip,
+html body .settings-with-notifications .settings-module-root .status-pill {
+  display: inline-flex !important;
+  min-height: 1.55rem !important;
+  align-items: center !important;
+  border-radius: 999px !important;
+  padding: 0 0.6rem !important;
+  font-size: 0.72rem !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-pill.active,
+html body .settings-with-notifications .settings-module-root .mfa-pill.on {
+  background: #dcfce7 !important;
+  color: #047857 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-pill.inactive,
+html body .settings-with-notifications .settings-module-root .mfa-pill.off {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-pill.locked {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+}
+
+html body .settings-with-notifications .settings-module-root .user-pill.review,
+html body .settings-with-notifications .settings-module-root .approval-chip.standard {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html body .settings-with-notifications .settings-module-root .uam-pagination {
+  padding: 0.65rem 0.2rem 0 !important;
+}
+
+@media (max-width: 1280px) {
+  html body .settings-with-notifications .settings-module-root .settings-layout {
+    grid-template-columns: 18rem minmax(0, 1fr) !important;
+  }
+
+  html body .settings-with-notifications .settings-module-root .settings-menu {
+    width: 18rem !important;
+    max-width: 18rem !important;
+  }
+
+  html body .settings-with-notifications .settings-module-root .settings-score {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 980px) {
+  html body .settings-with-notifications .settings-module-root .settings-layout {
+    grid-template-columns: 1fr !important;
+    overflow: auto !important;
+  }
+
+  html body .settings-with-notifications .settings-module-root .settings-menu {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 22rem !important;
+  }
+
+  html body .settings-with-notifications .settings-module-root .content-toolbar,
+  html body .settings-with-notifications .settings-module-root .user-access-commandbar {
+    grid-template-columns: 1fr !important;
+  }
+}
