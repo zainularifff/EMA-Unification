@@ -77,23 +77,33 @@ export default function SettingsWithNotifications() {
   };
 
   return (
-    <div className={`settings-with-notifications settings-view-${view}`} data-settings-view={view}>
-      <div className="settings-notification-page-tabs">
-        <button className={`notification-tab ${view === "settings" ? "active" : ""}`} onClick={() => switchView("settings")}>Settings Console</button>
-        <button className={`notification-tab ${view === "management" ? "active" : ""}`} onClick={() => switchView("management")}>Management Control</button>
-        <button className={`notification-tab ${view === "notifications" ? "active" : ""}`} onClick={() => switchView("notifications")}>Notification Channels</button>
-      </div>
-
-      <div className="settings-view-host">
-        {view === "notifications" ? (
-          <NotificationChannelsSettings />
-        ) : view === "management" ? (
-          <div className="management-control-wrapper" data-management-section={managementSection}>
-            <LegacySettings key={`management-${managementSection}`} />
+    <div className={`ema-module-root settings-with-notifications settings-view-${view}`} data-settings-view={view} data-section="settings">
+      <div className="flex h-full min-h-0 w-full flex-col gap-3 overflow-hidden p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">Settings Center</p>
+            <h1 className="mt-1 text-xl font-black text-slate-950">Configuration Area</h1>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Manage access, policy and notification settings.</p>
           </div>
-        ) : (
-          <LegacySettings />
-        )}
+
+          <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            <button className={`rounded-xl px-4 py-2 text-sm font-black transition ${view === "settings" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-white hover:text-slate-900"}`} onClick={() => switchView("settings")}>Settings Console</button>
+            <button className={`rounded-xl px-4 py-2 text-sm font-black transition ${view === "management" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-white hover:text-slate-900"}`} onClick={() => switchView("management")}>Management Control</button>
+            <button className={`rounded-xl px-4 py-2 text-sm font-black transition ${view === "notifications" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-white hover:text-slate-900"}`} onClick={() => switchView("notifications")}>Notification Channels</button>
+          </div>
+        </div>
+
+        <div className="settings-view-host min-h-0 flex-1 overflow-hidden">
+          {view === "notifications" ? (
+            <NotificationChannelsSettings />
+          ) : view === "management" ? (
+            <div className="management-control-wrapper h-full min-h-0" data-management-section={managementSection}>
+              <LegacySettings key={`management-${managementSection}`} />
+            </div>
+          ) : (
+            <LegacySettings />
+          )}
+        </div>
       </div>
     </div>
   );
