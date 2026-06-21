@@ -12,13 +12,13 @@ export function EmaToolbar({
   right?: ReactNode;
 }) {
   return (
-    <div className="ema-toolbar space-y-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className="ema-toolbar space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="ema-toolbar-primary-row flex flex-wrap items-center gap-2">
         {left ? <div className="ema-toolbar-left flex shrink-0 flex-wrap items-center gap-2">{left}</div> : null}
         {search ? <div className="ema-toolbar-search-slot min-w-[16rem] flex-1">{search}</div> : null}
         {right ? <div className="ema-toolbar-right ml-auto flex shrink-0 flex-wrap items-center gap-2">{right}</div> : null}
       </div>
-      {filters ? <div className="ema-toolbar-filter-row flex flex-wrap items-end justify-end gap-3 border-t border-slate-100 pt-3">{filters}</div> : null}
+      {filters ? <div className="ema-toolbar-filter-row flex flex-wrap items-start justify-end gap-3 border-t border-slate-100 pt-2">{filters}</div> : null}
     </div>
   );
 }
@@ -79,8 +79,8 @@ export function EmaSearchInput({
 
 export function EmaFilterField({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="ema-filter-field grid min-w-[10rem] gap-1 text-xs font-black uppercase tracking-[0.08em] text-slate-500">
-      <span>{label}</span>
+    <label className="ema-filter-field flex min-w-[10rem] flex-col gap-1 text-xs font-black uppercase leading-none tracking-[0.08em] text-slate-500">
+      <span className="block leading-none">{label}</span>
       {children}
     </label>
   );
