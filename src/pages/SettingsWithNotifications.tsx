@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import LegacySettings from "./Settings";
 import NotificationChannelsSettings from "../components/settings/NotificationChannelsSettings";
+import "../styles/settings-polish.css";
 
 type SettingsView = "settings" | "management" | "notifications";
 type ManagementSection = "aging" | "pricing" | "policy";
