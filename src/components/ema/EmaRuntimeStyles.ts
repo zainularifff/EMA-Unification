@@ -227,9 +227,47 @@ html body .ema-timeline-item p { margin-top: .25rem !important; color: #1e293b !
 html body .ema-timeline-item small { margin-top: .2rem !important; color: #64748b !important; font-size: .72rem !important; font-weight: 750 !important; }
 html body .ema-detail-form-footer { flex: 0 0 auto !important; display: flex !important; justify-content: flex-end !important; gap: .5rem !important; padding: .85rem 1rem !important; border-top: 1px solid #e2e8f0 !important; background: #f8fafc !important; }
 
+html body main[data-section="service-desk"] > div > section > div:first-child {
+  align-items: center !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child {
+  align-self: center !important;
+  grid-template-columns: repeat(4, minmax(8.5rem, 1fr)) !important;
+  gap: .65rem !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div {
+  min-height: 4.25rem !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  grid-template-areas: "value label" "value note" !important;
+  align-items: center !important;
+  column-gap: .75rem !important;
+  row-gap: .1rem !important;
+  border-radius: 1rem !important;
+  padding: .72rem .85rem !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > span {
+  grid-area: label !important;
+  font-size: .66rem !important;
+  line-height: 1.05 !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > strong {
+  grid-area: value !important;
+  margin-top: 0 !important;
+  min-width: 2rem !important;
+  font-size: 1.55rem !important;
+  line-height: 1 !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > small {
+  grid-area: note !important;
+  font-size: .68rem !important;
+  line-height: 1.15 !important;
+}
+
 @media (max-width: 900px) {
   html body .ema-detail-summary-grid,
   html body .ema-detail-section-grid { grid-template-columns: 1fr !important; }
+  html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
 }
 `;
 
