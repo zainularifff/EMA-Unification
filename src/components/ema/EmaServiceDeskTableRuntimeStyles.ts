@@ -29,6 +29,15 @@ html body main[data-section="service-desk"] table th:nth-child(3),
 html body main[data-section="service-desk"] table td:nth-child(3) {
   width: 11.5rem !important;
 }
+html body main[data-section="service-desk"] table th:nth-child(3) {
+  font-size: 0 !important;
+}
+html body main[data-section="service-desk"] table th:nth-child(3)::after {
+  content: "CREATED BY" !important;
+  font-size: .75rem !important;
+  font-weight: 900 !important;
+  letter-spacing: .08em !important;
+}
 html body main[data-section="service-desk"] table td:nth-child(3) > div {
   display: block !important;
 }
@@ -184,6 +193,32 @@ function applyServiceDeskStatusKeys() {
   });
 }
 
+function applyServiceDeskCreatedByCopy() {
+  if (typeof document === "undefined") return;
+  const root = document.querySelector<HTMLElement>('main[data-section="service-desk"]');
+  if (!root) return;
+
+  root.querySelectorAll<HTMLTableCellElement>("table th").forEach((cell) => {
+    if ((cell.textContent || "").trim().toLowerCase() === "requester") {
+      cell.textContent = "Created By";
+    }
+  });
+
+  root.querySelectorAll<HTMLLabelElement>("label").forEach((label) => {
+    const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+    const firstTextNode = walker.nextNode() as Text | null;
+    if (firstTextNode && (firstTextNode.textContent || "").trim().toLowerCase() === "requester") {
+      firstTextNode.textContent = "Created By";
+    }
+  });
+
+  root.querySelectorAll<HTMLInputElement>("input[placeholder]").forEach((input) => {
+    if (/requester/i.test(input.placeholder)) {
+      input.placeholder = input.placeholder.replace(/requester/gi, "created by");
+    }
+  });
+}
+
 function blockServiceDeskRowDetail(event: MouseEvent) {
   const target = event.target as HTMLElement | null;
   if (!target?.closest('main[data-section="service-desk"]')) return;
@@ -193,15 +228,20 @@ function blockServiceDeskRowDetail(event: MouseEvent) {
   event.stopPropagation();
 }
 
+function applyServiceDeskPolish() {
+  applyServiceDeskStatusKeys();
+  applyServiceDeskCreatedByCopy();
+}
+
 injectServiceDeskTableStyles();
-applyServiceDeskStatusKeys();
+applyServiceDeskPolish();
 
 if (typeof window !== "undefined") {
-  window.setTimeout(applyServiceDeskStatusKeys, 0);
-  window.setTimeout(applyServiceDeskStatusKeys, 250);
+  window.setTimeout(applyServiceDeskPolish, 0);
+  window.setTimeout(applyServiceDeskPolish, 250);
   document.addEventListener("click", blockServiceDeskRowDetail, true);
 
-  const observer = new MutationObserver(() => applyServiceDeskStatusKeys());
+  const observer = new MutationObserver(() => applyServiceDeskPolish());
   observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
 }
 
