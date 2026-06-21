@@ -412,17 +412,9 @@ export default function AppRestriction() {
     return selectedLookupRows.filter((row) => {
       const id = getPackageId(row);
       const selected = selectedIdSet.has(id);
-
       if (packageView === 'selected' && !selected) return false;
       if (packageView === 'available' && selected) return false;
-
-      const text = [
-        getPackageName(row),
-        getPackageId(row),
-        pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], ''),
-        pick(row, ['SW_Catg', 'category', 'Category'], ''),
-      ].join(' ').toLowerCase();
-
+      const text = [getPackageName(row), id, pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], ''), pick(row, ['SW_Catg', 'category', 'Category'], '')].join(' ').toLowerCase();
       return !search || text.includes(search);
     });
   }, [selectedLookupRows, packageSearch, packageView, selectedIdSet]);
@@ -492,7 +484,6 @@ export default function AppRestriction() {
         restrictionService.getPolicyList(activeModule, selectedTarget).catch(() => []),
         restrictionService.getRestrictionStatus(activeModule, selectedTarget, { search: statusSearch || undefined, startDate, endDate, includeSub: includeSub ? 1 : 0 }).catch(() => []),
       ]);
-
       const nextPolicy = (effectivePolicy || {}) as RestrictionPolicyDetail;
       const sourceRows = activeModule === 'appWhitelist' ? lookups.whitelistSoftware : lookups.packages;
       setForm(createFormFromPolicy(activeModule, nextPolicy));
@@ -524,21 +515,14 @@ export default function AppRestriction() {
 
   function togglePackage(id: string) {
     if (!id) return;
-    if (isWhitelist) {
-      setSelectedWhitelistIds((current) => {
-        const next = new Set(current.filter(Boolean));
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        return Array.from(next);
-      });
-      return;
-    }
-    setSelectedPackageIds((current) => {
+    const updater = (current: string[]) => {
       const next = new Set(current.filter(Boolean));
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return Array.from(next);
-    });
+    };
+    if (isWhitelist) setSelectedWhitelistIds(updater);
+    else setSelectedPackageIds(updater);
   }
 
   async function savePolicy() {
@@ -627,123 +611,109 @@ export default function AppRestriction() {
   ];
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 text-slate-950">
-      <div className="mx-auto max-w-[1600px] space-y-4">
-        <section className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-4 rounded-[20px] bg-slate-50 p-4"><p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">App Control</p><h2 className="mt-1 text-lg font-black text-slate-950">Branch Scope</h2><p className="mt-1 text-xs font-semibold text-slate-500">Select branch or device before applying policy.</p></div>
-            <div className="relative mb-4"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={treeSearch} onChange={(event) => setTreeSearch(event.target.value)} placeholder="Search branch/device..." className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div>
-            <div className="max-h-[calc(100vh-260px)] overflow-auto pr-1">{loadingTree ? <div className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-700"><Loader2 size={16} className="animate-spin" /> Loading scope...</div> : filteredTree.length ? renderTree(filteredTree) : <div className="rounded-2xl border border-slate-200 p-4 text-sm font-bold text-slate-500">No branch scope found.</div>}</div>
-          </aside>
+    <main className="min-h-screen bg-slate-50 px-5 py-5 text-slate-950" data-section="app-restriction">
+      <div className="grid min-h-[calc(100vh-7rem)] grid-cols-1 gap-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">App Control</p>
+            <h2 className="mt-1 text-lg font-black text-slate-950">Branch Scope</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Select branch or device before applying policy.</p>
+          </div>
+          <div className="relative mb-4">
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={treeSearch} onChange={(event) => setTreeSearch(event.target.value)} placeholder="Search branch/device..." className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" />
+          </div>
+          <div className="max-h-[calc(100vh-260px)] overflow-auto pr-1">
+            {loadingTree ? <div className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-700"><Loader2 size={16} className="animate-spin" /> Loading scope...</div> : filteredTree.length ? renderTree(filteredTree) : <div className="rounded-2xl border border-slate-200 p-4 text-sm font-bold text-slate-500">No branch scope found.</div>}
+          </div>
+        </aside>
 
-          <section className="space-y-4 overflow-hidden">
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="max-w-xl"><p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">Application Governance</p><h1 className="mt-1 text-2xl font-black text-slate-950">{moduleConfig.label}</h1><p className="mt-1 text-sm font-semibold text-slate-500">{moduleConfig.helper}</p></div>
-                <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                  {MODULES.map((item) => { const Icon = item.icon; const active = item.id === activeModule; return <button key={item.id} type="button" onClick={() => setActiveModule(item.id)} className={cn('flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition', active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white hover:text-slate-900')}><Icon size={16} />{item.shortLabel}</button>; })}
-                </div>
+        <section className="min-w-0 space-y-5 overflow-hidden">
+          <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-xl">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">Application Governance</p>
+                <h1 className="mt-1 text-2xl font-black text-slate-950">{moduleConfig.label}</h1>
+                <p className="mt-1 text-sm font-semibold text-slate-500">{moduleConfig.helper}</p>
               </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {summaryCards.map((card) => { const Icon = card.icon; return <div key={card.label} className={cn('rounded-2xl border p-4', card.tone)}><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/75"><Icon size={20} /></span><div className="min-w-0"><p className="truncate text-[11px] font-black uppercase tracking-[0.16em] opacity-80">{card.label}</p><p className="truncate text-xl font-black">{card.value}</p></div></div></div>; })}
+              <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                {MODULES.map((item) => { const Icon = item.icon; const active = item.id === activeModule; return <button key={item.id} type="button" onClick={() => setActiveModule(item.id)} className={cn('flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition', active ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white hover:text-slate-900')}><Icon size={16} />{item.shortLabel}</button>; })}
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {summaryCards.map((card) => { const Icon = card.icon; return <div key={card.label} className={cn('rounded-2xl border p-4', card.tone)}><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/75"><Icon size={20} /></span><div className="min-w-0"><p className="truncate text-[11px] font-black uppercase tracking-[0.16em] opacity-80">{card.label}</p><p className="truncate text-xl font-black">{card.value}</p></div></div></div>; })}
+            </div>
+          </div>
+
+          <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                {(Object.keys(TAB_LABELS) as SubTab[]).map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={cn('rounded-xl px-4 py-2 text-sm font-black transition', activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white hover:text-slate-900')}>{TAB_LABELS[tab]}</button>)}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void loadPolicyData()} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RefreshCw size={16} className={loadingData ? 'animate-spin' : ''} /> Refresh</button>
+                <button type="button" onClick={() => { setStatusSearch(''); setPolicySearch(''); setPackageSearch(''); setPackageView('all'); setStartDate(daysAgo(30)); setEndDate(today()); }} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RotateCcw size={16} /> Reset</button>
               </div>
             </div>
 
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
-                  {(Object.keys(TAB_LABELS) as SubTab[]).map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={cn('rounded-xl px-4 py-2 text-sm font-black transition', activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white hover:text-slate-900')}>{TAB_LABELS[tab]}</button>)}
+            {activeTab === 'status' ? (
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px_auto]">
+                  <div className="relative"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={statusSearch} onChange={(event) => setStatusSearch(event.target.value)} placeholder="Search device, package, status..." className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div>
+                  <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none" />
+                  <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none" />
+                  <button type="button" onClick={() => setIncludeSub((value) => !value)} className={cn('h-12 rounded-2xl border px-4 text-sm font-black transition', includeSub ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>Include Sub</button>
                 </div>
-                <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => void loadPolicyData()} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RefreshCw size={16} className={loadingData ? 'animate-spin' : ''} /> Refresh</button><button type="button" onClick={() => { setStatusSearch(''); setPolicySearch(''); setPackageSearch(''); setPackageView('all'); setStartDate(daysAgo(30)); setEndDate(today()); }} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RotateCcw size={16} /> Reset</button></div>
+                <Table columns={statusColumns} rows={filteredStatusRows} loading={loadingData} emptyText="No restriction status found." />
               </div>
+            ) : null}
 
-              {activeTab === 'status' ? <div className="mt-4 space-y-4"><div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px_auto]"><div className="relative"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={statusSearch} onChange={(event) => setStatusSearch(event.target.value)} placeholder="Search device, package, status..." className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none" /><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none" /><button type="button" onClick={() => setIncludeSub((value) => !value)} className={cn('h-12 rounded-2xl border px-4 text-sm font-black transition', includeSub ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>Include Sub</button></div><Table columns={statusColumns} rows={filteredStatusRows} loading={loadingData} emptyText="No restriction status found." /></div> : null}
-
-              {activeTab === 'settings' ? <div className="mt-4 space-y-5">
-                <div className="grid gap-4 lg:grid-cols-3"><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Update Interval</FieldLabel><input value={form.updateInterval} onChange={(event) => updateForm('updateInterval', event.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>{isWhitelist ? 'Process Restrict Type' : 'App Restrict Type'}</FieldLabel>{isWhitelist ? <Select value={form.processRestrictType} onChange={(value) => updateForm('processRestrictType', value)} options={[{ value: '0', label: 'Disabled' }, { value: '1', label: 'Allow Whitelist' }, { value: '2', label: 'Audit Only' }, { value: '3', label: 'Strict Mode' }]} /> : <Select value={form.appRestrictType} onChange={(value) => updateForm('appRestrictType', value)} options={[{ value: '1', label: 'Block Package' }, { value: '2', label: 'Warn User' }, { value: '3', label: 'Audit Only' }]} />}</div><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Weekly Policy</FieldLabel><button type="button" onClick={() => updateForm('weeklyPolicy', !form.weeklyPolicy)} className={cn('h-12 w-full rounded-2xl border px-4 text-sm font-black transition', form.weeklyPolicy ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>{form.weeklyPolicy ? 'Enabled' : 'Disabled'}</button></div></div>
+            {activeTab === 'settings' ? (
+              <div className="mt-4 space-y-5">
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Update Interval</FieldLabel><input value={form.updateInterval} onChange={(event) => updateForm('updateInterval', event.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>{isWhitelist ? 'Process Restrict Type' : 'App Restrict Type'}</FieldLabel>{isWhitelist ? <Select value={form.processRestrictType} onChange={(value) => updateForm('processRestrictType', value)} options={[{ value: '0', label: 'Disabled' }, { value: '1', label: 'Allow Whitelist' }, { value: '2', label: 'Audit Only' }, { value: '3', label: 'Strict Mode' }]} /> : <Select value={form.appRestrictType} onChange={(value) => updateForm('appRestrictType', value)} options={[{ value: '1', label: 'Block Package' }, { value: '2', label: 'Warn User' }, { value: '3', label: 'Audit Only' }]} />}</div>
+                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Weekly Policy</FieldLabel><button type="button" onClick={() => updateForm('weeklyPolicy', !form.weeklyPolicy)} className={cn('h-12 w-full rounded-2xl border px-4 text-sm font-black transition', form.weeklyPolicy ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>{form.weeklyPolicy ? 'Enabled' : 'Disabled'}</button></div>
+                </div>
 
                 <div className="rounded-[24px] border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">{isWhitelist ? 'Whitelist Software' : 'Restricted Package'}</p>
-                      <h3 className="mt-1 text-xl font-black text-slate-950">{selectedLookupCount} selected from {selectedLookupRows.length}</h3>
-                    </div>
-                    <div className="relative min-w-[260px] max-w-md flex-1">
-                      <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} placeholder={isWhitelist ? 'Search whitelist software...' : 'Search package...'} className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" />
-                    </div>
+                    <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">{isWhitelist ? 'Whitelist Software' : 'Restricted Package'}</p><h3 className="mt-1 text-xl font-black text-slate-950">{selectedLookupCount} selected from {selectedLookupRows.length}</h3></div>
+                    <div className="relative min-w-[260px] max-w-md flex-1"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} placeholder={isWhitelist ? 'Search whitelist software...' : 'Search package...'} className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div>
                   </div>
 
                   <div className="mt-4 grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
                     <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Package Summary</p>
                       <div className="mt-4 grid grid-cols-1 gap-3">
-                        <button type="button" onClick={() => setPackageView('all')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'all' ? 'border-blue-300 bg-white text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}>
-                          <span className="text-sm font-black">All Software</span>
-                          <span className="text-lg font-black">{selectedLookupRows.length}</span>
-                        </button>
-
-                        <button type="button" onClick={() => setPackageView('selected')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'selected' && isWhitelist && 'border-emerald-300 bg-emerald-50 text-emerald-700', packageView === 'selected' && !isWhitelist && 'border-rose-300 bg-rose-50 text-rose-700', packageView !== 'selected' && 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}>
-                          <span className="text-sm font-black">Selected</span>
-                          <span className="text-lg font-black">{selectedLookupCount}</span>
-                        </button>
-
-                        <button type="button" onClick={() => setPackageView('available')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'available' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}>
-                          <span className="text-sm font-black">Available</span>
-                          <span className="text-lg font-black">{availableLookupCount}</span>
-                        </button>
+                        <button type="button" onClick={() => setPackageView('all')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'all' ? 'border-blue-300 bg-white text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}><span className="text-sm font-black">All Software</span><span className="text-lg font-black">{selectedLookupRows.length}</span></button>
+                        <button type="button" onClick={() => setPackageView('selected')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'selected' && isWhitelist && 'border-emerald-300 bg-emerald-50 text-emerald-700', packageView === 'selected' && !isWhitelist && 'border-rose-300 bg-rose-50 text-rose-700', packageView !== 'selected' && 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}><span className="text-sm font-black">Selected</span><span className="text-lg font-black">{selectedLookupCount}</span></button>
+                        <button type="button" onClick={() => setPackageView('available')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'available' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}><span className="text-sm font-black">Available</span><span className="text-lg font-black">{availableLookupCount}</span></button>
                       </div>
-
                       <p className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold leading-relaxed text-slate-500">Use search and filter to manage package list. Only selected package will be applied to this policy.</p>
                     </div>
 
                     <div className="min-w-0 overflow-hidden rounded-[22px] border border-slate-200 bg-white">
                       <div className="overflow-auto">
                         <div className="min-w-[720px]">
-                          <div className="grid grid-cols-[48px_minmax(0,1fr)_180px_110px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                            <span>Status</span>
-                            <span>Software / Package</span>
-                            <span>Company</span>
-                            <span className="text-right">Action</span>
-                          </div>
-
+                          <div className="grid grid-cols-[48px_minmax(0,1fr)_180px_110px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-500"><span>Status</span><span>Software / Package</span><span>Company</span><span className="text-right">Action</span></div>
                           <div className="divide-y divide-slate-100">
-                            {loadingData ? (
-                              <div className="flex items-center justify-center p-8 text-sm font-bold text-blue-700"><Loader2 size={18} className="mr-2 animate-spin" /> Loading packages...</div>
-                            ) : pagedLookupRows.length === 0 ? (
-                              <div className="p-8 text-center text-sm font-bold text-slate-500">No package found.</div>
-                            ) : (
-                              pagedLookupRows.map((row, index) => {
-                                const id = getPackageId(row) || `${getPackageName(row)}-${lookupStart + index}`;
-                                const selected = selectedIdSet.has(id);
-                                const company = pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], 'No company');
-
-                                return (
-                                  <button key={id} type="button" onClick={() => togglePackage(id)} className="grid w-full grid-cols-[48px_minmax(0,1fr)_180px_110px] items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50">
-                                    <span className={cn('grid h-9 w-9 place-items-center rounded-xl', selected && isWhitelist && 'bg-emerald-600 text-white', selected && !isWhitelist && 'bg-rose-600 text-white', !selected && 'bg-slate-100 text-slate-500')}>
-                                      {selected ? <CheckCircle2 size={16} /> : <Package size={16} />}
-                                    </span>
-
-                                    <span className="min-w-0">
-                                      <span className="block truncate text-sm font-black text-slate-900">{getPackageName(row)}</span>
-                                      <span className="block truncate text-xs font-bold text-slate-500">ID: {id || '-'}</span>
-                                    </span>
-
-                                    <span className="truncate text-sm font-bold text-slate-600">{company}</span>
-
-                                    <span className="text-right">
-                                      <span className={cn('inline-flex rounded-full border px-3 py-1 text-xs font-black', selected && isWhitelist && 'border-emerald-200 bg-emerald-50 text-emerald-700', selected && !isWhitelist && 'border-rose-200 bg-rose-50 text-rose-700', !selected && 'border-slate-200 bg-slate-50 text-slate-500')}>
-                                        {selected ? 'Selected' : 'Add'}
-                                      </span>
-                                    </span>
-                                  </button>
-                                );
-                              })
-                            )}
+                            {loadingData ? <div className="flex items-center justify-center p-8 text-sm font-bold text-blue-700"><Loader2 size={18} className="mr-2 animate-spin" /> Loading packages...</div> : pagedLookupRows.length === 0 ? <div className="p-8 text-center text-sm font-bold text-slate-500">No package found.</div> : pagedLookupRows.map((row, index) => {
+                              const id = getPackageId(row) || `${getPackageName(row)}-${lookupStart + index}`;
+                              const selected = selectedIdSet.has(id);
+                              const company = pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], 'No company');
+                              return (
+                                <button key={id} type="button" onClick={() => togglePackage(id)} className="grid w-full grid-cols-[48px_minmax(0,1fr)_180px_110px] items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50">
+                                  <span className={cn('grid h-9 w-9 place-items-center rounded-xl', selected && isWhitelist && 'bg-emerald-600 text-white', selected && !isWhitelist && 'bg-rose-600 text-white', !selected && 'bg-slate-100 text-slate-500')}>{selected ? <CheckCircle2 size={16} /> : <Package size={16} />}</span>
+                                  <span className="min-w-0"><span className="block truncate text-sm font-black text-slate-900">{getPackageName(row)}</span><span className="block truncate text-xs font-bold text-slate-500">ID: {id || '-'}</span></span>
+                                  <span className="truncate text-sm font-bold text-slate-600">{company}</span>
+                                  <span className="text-right"><span className={cn('inline-flex rounded-full border px-3 py-1 text-xs font-black', selected && isWhitelist && 'border-emerald-200 bg-emerald-50 text-emerald-700', selected && !isWhitelist && 'border-rose-200 bg-rose-50 text-rose-700', !selected && 'border-slate-200 bg-slate-50 text-slate-500')}>{selected ? 'Selected' : 'Add'}</span></span>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
-
                       {filteredLookupRows.length > LOOKUP_PAGE_SIZE ? <PaginationFooter page={safeLookupPage} totalPages={lookupTotalPages} totalItems={filteredLookupRows.length} start={lookupStart} pageSize={LOOKUP_PAGE_SIZE} onPageChange={setPackagePage} /> : null}
                     </div>
                   </div>
@@ -751,14 +721,14 @@ export default function AppRestriction() {
 
                 <div className="grid gap-4 lg:grid-cols-2"><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Notice Message</FieldLabel><textarea value={isWhitelist ? form.processNoticeMessage : form.appNoticeMessage} onChange={(event) => updateForm(isWhitelist ? 'processNoticeMessage' : 'appNoticeMessage', event.target.value)} rows={4} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" placeholder="Message shown to user when policy is applied." /></div><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Policy Days</FieldLabel><div className="flex flex-wrap gap-2">{DAY_OPTIONS.map((day) => { const selected = selectedDays.includes(day); return <button key={day} type="button" onClick={() => toggleDay(day)} className={cn('h-10 rounded-xl border px-3 text-xs font-black transition', selected ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>{day}</button>; })}</div><div className="mt-4 grid gap-3 sm:grid-cols-2">{[1, 2, 3, 4].map((slot) => <input key={slot} value={(form as any)[`schedule${slot}`]} onChange={(event) => updateForm(`schedule${slot}` as keyof FormState, event.target.value)} placeholder={`Schedule ${slot}`} className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" />)}</div></div></div>
                 <div className="flex justify-end"><button type="button" onClick={() => void savePolicy()} disabled={saving || loadingData} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-600 px-6 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}Save Policy</button></div>
-              </div> : null}
+              </div>
+            ) : null}
 
-              {activeTab === 'policyStatus' ? <div className="mt-4 space-y-4"><div className="relative max-w-lg"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={policySearch} onChange={(event) => setPolicySearch(event.target.value)} placeholder="Search policy status..." className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div><Table columns={policyColumns} rows={filteredPolicyRows} loading={loadingData} emptyText="No policy status found." /></div> : null}
-            </div>
-          </section>
+            {activeTab === 'policyStatus' ? <div className="mt-4 space-y-4"><div className="relative max-w-lg"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={policySearch} onChange={(event) => setPolicySearch(event.target.value)} placeholder="Search policy status..." className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div><Table columns={policyColumns} rows={filteredPolicyRows} loading={loadingData} emptyText="No policy status found." /></div> : null}
+          </div>
         </section>
       </div>
-      <EmaToastViewport toasts={toasts} onDismiss={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
+      <EmaToastViewport items={toasts} onClose={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
     </main>
   );
 }
