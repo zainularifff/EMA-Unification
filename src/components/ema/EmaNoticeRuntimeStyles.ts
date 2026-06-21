@@ -3,6 +3,24 @@ import "./EmaPathRuntimeStyles";
 const STYLE_ID = "ema-notice-runtime-styles";
 
 const css = `
+@keyframes ema-toast-life {
+  0% {
+    opacity: 0;
+    transform: translateY(-.45rem) scale(.98);
+    visibility: visible;
+  }
+  8%, 78% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    visibility: visible;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-.45rem) scale(.98);
+    visibility: hidden;
+  }
+}
+
 main[data-section="users"] > div:has([role="alert"]),
 main[data-section="users"] > div:has([role="status"][aria-live]) {
   position: fixed !important;
@@ -13,6 +31,7 @@ main[data-section="users"] > div:has([role="status"][aria-live]) {
   margin: 0 !important;
   padding: 0 !important;
   pointer-events: none !important;
+  animation: ema-toast-life 4.8s ease forwards !important;
 }
 
 main[data-section="users"] > div:has([role="alert"]) > div,
