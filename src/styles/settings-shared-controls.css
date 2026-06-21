@@ -349,3 +349,392 @@ html body .pricing-confirm-actions {
   gap: 0.55rem !important;
   padding-top: 0.35rem !important;
 }
+
+html body .settings-with-notifications .users-content-shell .content-body {
+  padding: 0.85rem !important;
+}
+
+html body .settings-with-notifications .users-content-shell .uam-panel.clean {
+  gap: 0.85rem !important;
+}
+
+html body .settings-with-notifications .user-access-commandbar {
+  display: grid !important;
+  grid-template-columns: minmax(22rem, 1fr) minmax(18rem, 24rem) auto !important;
+  gap: 0.65rem !important;
+  align-items: center !important;
+  padding: 0.8rem !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 1rem !important;
+  background: #ffffff !important;
+}
+
+html body .settings-with-notifications .user-access-commandbar .user-search-inline {
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  margin: 0 !important;
+  align-self: center !important;
+}
+
+html body .settings-with-notifications .user-access-commandbar .uam-filter-grid.clean.compact {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(8.5rem, 1fr)) !important;
+  gap: 0.5rem !important;
+  height: 2.75rem !important;
+  align-items: center !important;
+  align-self: center !important;
+}
+
+html body .settings-with-notifications .user-access-commandbar .uam-filter-dropdown,
+html body .settings-with-notifications .user-access-commandbar .uam-filter-trigger {
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  margin: 0 !important;
+}
+
+html body .settings-with-notifications .user-access-commandbar .uam-actions-right {
+  height: 2.75rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.5rem !important;
+  align-self: center !important;
+  margin: 0 !important;
+}
+
+html body .settings-with-notifications .user-access-commandbar .uam-actions-right .soft-btn,
+html body .settings-with-notifications .user-access-commandbar .uam-actions-right .primary-btn {
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+  margin: 0 !important;
+}
+
+html body .user-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9990 !important;
+  display: none !important;
+  place-items: center !important;
+  background: rgba(15, 23, 42, 0.55) !important;
+  padding: 1rem !important;
+  backdrop-filter: blur(6px) !important;
+}
+
+html body .user-modal-backdrop.open {
+  display: grid !important;
+}
+
+html body .user-modal-backdrop .user-modal.advanced {
+  width: min(68rem, calc(100vw - 2rem)) !important;
+  max-height: calc(100dvh - 2rem) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 1rem !important;
+  background: #ffffff !important;
+  box-shadow: 0 34px 90px rgba(15, 23, 42, 0.35) !important;
+}
+
+html body .user-modal-backdrop .user-modal-head {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 1rem !important;
+  padding: 1rem 1.1rem !important;
+  border-bottom: 1px solid #1d4ed8 !important;
+  background: linear-gradient(135deg, #10214f 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+}
+
+html body .user-modal-backdrop .user-modal-head .eyebrow,
+html body .user-modal-backdrop .user-modal-head h3,
+html body .user-modal-backdrop .user-modal-head p {
+  margin: 0 !important;
+  color: #ffffff !important;
+}
+
+html body .user-modal-backdrop .user-modal-head .eyebrow {
+  font-size: 0.7rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.13em !important;
+  text-transform: uppercase !important;
+  opacity: 0.85 !important;
+}
+
+html body .user-modal-backdrop .user-modal-head h3 {
+  margin-top: 0.25rem !important;
+  font-size: 1rem !important;
+  font-weight: 950 !important;
+  line-height: 1.1 !important;
+}
+
+html body .user-modal-backdrop .user-modal-head p {
+  margin-top: 0.25rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  opacity: 0.92 !important;
+}
+
+html body .user-modal-backdrop .modal-close {
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  min-height: 2.25rem !important;
+  display: grid !important;
+  place-items: center !important;
+  flex: 0 0 2.25rem !important;
+  border: 0 !important;
+  border-radius: 0.75rem !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+  padding: 0 !important;
+  font-size: 1.25rem !important;
+  font-weight: 900 !important;
+}
+
+html body .user-modal-backdrop .user-modal-body.advanced {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 0.75rem 0.9rem !important;
+  padding: 1rem 1.1rem !important;
+  background: #ffffff !important;
+}
+
+html body .user-modal-backdrop .modal-section-title {
+  grid-column: 1 / -1 !important;
+  margin-top: 0.1rem !important;
+  padding-top: 0.1rem !important;
+  color: #475569 !important;
+  font-size: 0.7rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.13em !important;
+  text-transform: uppercase !important;
+}
+
+html body .user-modal-backdrop .form-field {
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.35rem !important;
+  color: #334155 !important;
+  font-size: 0.76rem !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+html body .user-modal-backdrop .form-field.wide,
+html body .user-modal-backdrop .form-helper-text.wide {
+  grid-column: 1 / -1 !important;
+}
+
+html body .user-modal-backdrop .setting-input,
+html body .user-modal-backdrop .setting-textarea,
+html body .user-modal-backdrop .setting-select-trigger,
+html body .user-modal-backdrop .role-picker-search-wrap {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 2.6rem !important;
+  display: flex !important;
+  align-items: center !important;
+  border: 1px solid #d7e2ef !important;
+  border-radius: 0.85rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 750 !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+html body .user-modal-backdrop .setting-input:focus,
+html body .user-modal-backdrop .setting-textarea:focus,
+html body .user-modal-backdrop .setting-select-trigger:focus,
+html body .user-modal-backdrop .setting-select-trigger[aria-expanded='true'] {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12) !important;
+}
+
+html body .user-modal-backdrop .setting-textarea {
+  min-height: 4.5rem !important;
+  align-items: flex-start !important;
+  padding-top: 0.75rem !important;
+  resize: vertical !important;
+}
+
+html body .user-modal-backdrop .setting-select-dropdown,
+html body .user-modal-backdrop .uam-filter-dropdown {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+html body .user-modal-backdrop .setting-select-trigger {
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+}
+
+html body .user-modal-backdrop .setting-select-trigger svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  flex: 0 0 1rem !important;
+}
+
+html body .user-modal-backdrop .inline-check {
+  min-height: 2.6rem !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  border: 1px solid #d7e2ef !important;
+  border-radius: 0.85rem !important;
+  background: #f8fbff !important;
+  padding: 0 0.75rem !important;
+}
+
+html body .user-modal-backdrop .inline-check input[type='checkbox'] {
+  width: 1rem !important;
+  height: 1rem !important;
+  flex: 0 0 1rem !important;
+  accent-color: #2563eb !important;
+}
+
+html body .user-modal-backdrop .role-assignment-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+}
+
+html body .user-modal-backdrop .selected-role-box {
+  min-height: 3rem !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.45rem !important;
+  align-items: center !important;
+  border: 1px dashed #bfdbfe !important;
+  border-radius: 0.85rem !important;
+  background: #f8fbff !important;
+  padding: 0.65rem !important;
+}
+
+html body .user-modal-backdrop .selected-role-empty,
+html body .user-modal-backdrop .form-helper-text,
+html body .user-modal-backdrop .role-picker-empty {
+  color: #64748b !important;
+  font-size: 0.75rem !important;
+  font-weight: 750 !important;
+}
+
+html body .user-modal-backdrop .selected-role-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+  border-radius: 999px !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  padding: 0.35rem 0.55rem !important;
+  font-size: 0.74rem !important;
+  font-weight: 900 !important;
+}
+
+html body .user-modal-backdrop .selected-role-chip button {
+  width: 1.25rem !important;
+  height: 1.25rem !important;
+  min-height: 1.25rem !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  color: #1d4ed8 !important;
+  padding: 0 !important;
+}
+
+html body .user-modal-backdrop .role-picker-panel {
+  display: grid !important;
+  gap: 0.6rem !important;
+  border: 1px solid #d7e2ef !important;
+  border-radius: 0.95rem !important;
+  background: #ffffff !important;
+  padding: 0.7rem !important;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.1) !important;
+}
+
+html body .user-modal-backdrop .role-picker-search-wrap input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+}
+
+html body .user-modal-backdrop .role-picker-list {
+  max-height: 12rem !important;
+  overflow: auto !important;
+  display: grid !important;
+  gap: 0.35rem !important;
+}
+
+html body .user-modal-backdrop .role-picker-option {
+  min-height: 2.35rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.65rem !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.75rem !important;
+  background: #f8fbff !important;
+  color: #0f172a !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 850 !important;
+}
+
+html body .user-modal-backdrop .role-picker-option:hover {
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html body .user-modal-backdrop .user-modal-foot {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.55rem !important;
+  border-top: 1px solid #e2e8f0 !important;
+  background: #f8fbff !important;
+  padding: 0.85rem 1.1rem !important;
+}
+
+@media (max-width: 1280px) {
+  html body .settings-with-notifications .user-access-commandbar {
+    grid-template-columns: minmax(18rem, 1fr) minmax(16rem, 20rem) auto !important;
+  }
+
+  html body .user-modal-backdrop .user-modal-body.advanced {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 980px) {
+  html body .settings-with-notifications .user-access-commandbar {
+    grid-template-columns: 1fr !important;
+  }
+
+  html body .settings-with-notifications .user-access-commandbar .uam-filter-grid.clean.compact {
+    grid-template-columns: 1fr 1fr !important;
+    width: 100% !important;
+  }
+
+  html body .settings-with-notifications .user-access-commandbar .uam-actions-right {
+    justify-content: flex-start !important;
+  }
+
+  html body .user-modal-backdrop .user-modal-body.advanced {
+    grid-template-columns: 1fr !important;
+  }
+}
