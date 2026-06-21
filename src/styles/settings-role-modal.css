@@ -1,0 +1,207 @@
+/* Settings role / access-control modal only. */
+
+html body .role-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9990 !important;
+  display: none !important;
+  place-items: center !important;
+  background: rgba(15, 23, 42, 0.52) !important;
+  padding: 1rem !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+html body .role-modal-backdrop.open {
+  display: grid !important;
+}
+
+html body .role-modal {
+  width: min(40rem, calc(100vw - 2rem)) !important;
+  max-height: calc(100dvh - 2rem) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 1.1rem !important;
+  background: #ffffff !important;
+  box-shadow: 0 32px 80px rgba(15, 23, 42, 0.32) !important;
+}
+
+html body .role-modal.access-role-modal {
+  width: min(42rem, calc(100vw - 2rem)) !important;
+}
+
+html body .role-modal-head {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 1rem !important;
+  padding: 1rem !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%) !important;
+  color: #ffffff !important;
+}
+
+html body .role-modal-head .eyebrow {
+  display: block !important;
+  color: rgba(255, 255, 255, 0.74) !important;
+  font-size: 0.68rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+}
+
+html body .role-modal-head h3,
+html body .role-modal-head p {
+  margin: 0 !important;
+}
+
+html body .role-modal-head h3 {
+  margin-top: 0.2rem !important;
+  color: #ffffff !important;
+  font-size: 1.05rem !important;
+  font-weight: 950 !important;
+  line-height: 1.2 !important;
+}
+
+html body .role-modal-head p {
+  margin-top: 0.25rem !important;
+  max-width: 32rem !important;
+  color: rgba(255, 255, 255, 0.86) !important;
+  font-size: 0.78rem !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+}
+
+html body .role-modal-head .modal-close {
+  width: 2.2rem !important;
+  height: 2.2rem !important;
+  min-width: 2.2rem !important;
+  min-height: 2.2rem !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-radius: 0.75rem !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #ffffff !important;
+  padding: 0 !important;
+  font-size: 1.1rem !important;
+  font-weight: 900 !important;
+}
+
+html body .role-modal-head .modal-close:hover {
+  background: rgba(255, 255, 255, 0.24) !important;
+}
+
+html body .role-modal-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.85rem !important;
+  padding: 1rem !important;
+}
+
+html body .role-modal-body .form-field {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.35rem !important;
+  color: #334155 !important;
+  font-size: 0.76rem !important;
+  font-weight: 900 !important;
+}
+
+html body .role-modal-body .form-field.wide,
+html body .role-modal-body .inline-check.wide {
+  grid-column: 1 / -1 !important;
+}
+
+html body .role-modal-body .setting-input {
+  width: 100% !important;
+  min-height: 2.55rem !important;
+  border: 1px solid #d9e5f4 !important;
+  border-radius: 0.85rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  outline: 0 !important;
+}
+
+html body .role-modal-body .inline-check {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  min-height: 2.55rem !important;
+  border: 1px solid #d9e5f4 !important;
+  border-radius: 0.85rem !important;
+  background: #f8fbff !important;
+  padding: 0 0.75rem !important;
+}
+
+html body .role-modal-body .inline-check input {
+  width: 1rem !important;
+  height: 1rem !important;
+  accent-color: #2563eb !important;
+}
+
+html body .role-modal-body .inline-check span {
+  color: #334155 !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+}
+
+html body .role-modal-foot {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  border-top: 1px solid #e2e8f0 !important;
+  background: #f8fbff !important;
+  padding: 0.85rem 1rem !important;
+}
+
+html body .role-modal .primary-btn,
+html body .role-modal .soft-btn,
+html body .role-modal .danger-btn {
+  appearance: none !important;
+  width: auto !important;
+  min-width: 0 !important;
+  min-height: 2.5rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  border-radius: 0.75rem !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #1e293b !important;
+  padding: 0 1rem !important;
+  font-size: 0.875rem !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+html body .role-modal .primary-btn {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18) !important;
+}
+
+html body .role-modal .soft-btn:hover {
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+@media (max-width: 720px) {
+  html body .role-modal-body {
+    grid-template-columns: 1fr !important;
+  }
+}
