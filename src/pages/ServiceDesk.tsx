@@ -31,7 +31,18 @@ import { knowledgeBase as knowledgeBaseService } from "../services/KnowledgeBase
 import { EmaToastViewport, type EmaToastItem, type EmaToastTone } from "../components/ema/EmaToast";
 
 type AnyRow = Record<string, any>;
-type QueueKey = "all" | "my" | "sla-risk" | "unassigned" | "awaiting" | "in-progress" | "pending-user" | "pending-vendor" | "on-site" | "resolved" | "knowledge";
+type QueueKey =
+  | "all"
+  | "my"
+  | "sla-risk"
+  | "unassigned"
+  | "awaiting"
+  | "in-progress"
+  | "pending-user"
+  | "pending-vendor"
+  | "on-site"
+  | "resolved"
+  | "knowledge";
 type ToastState = { type: EmaToastTone; message: string } | null;
 type SelectOption = { value: string; label: string; disabled?: boolean };
 type ConfirmState = { ticketId: string; loading?: boolean } | null;
@@ -66,12 +77,14 @@ function normalizeText(value: any) {
 
 function unique(values: string[]) {
   const seen = new Set<string>();
-  return values.map((value) => String(value || "").trim()).filter((value) => {
-    const key = value.toLowerCase();
-    if (!value || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return values
+    .map((value) => String(value || "").trim())
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (!value || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function getIncidentId(row: AnyRow | null | undefined) {
@@ -106,7 +119,11 @@ function readCurrentUser() {
 
 function normalizeSupportLevelName(value: any) {
   const text = String(value || "").trim();
-  const match = text.match(/\bl\s*([123])\s*support\b/i) || text.match(/\bl([123])support\b/i) || text.match(/support\s*level\s*([123])/i) || text.match(/level\s*([123])/i);
+  const match =
+    text.match(/\bl\s*([123])\s*support\b/i) ||
+    text.match(/\bl([123])support\b/i) ||
+    text.match(/support\s*level\s*([123])/i) ||
+    text.match(/level\s*([123])/i);
   if (match?.[1]) return `L${match[1]} Support`;
   return text;
 }
@@ -440,7 +457,19 @@ function ServiceDeskSelect({ value, options, placeholder = "Select", disabled, o
         <span className="min-w-0 truncate">{selected?.label || placeholder}</span>
         <ChevronDown size={15} className={cx("shrink-0 text-slate-500 transition", open && "rotate-180 text-blue-600")} />
       </button>
-      {open && !disabled && <div className="absolute left-0 top-[calc(100%+0.45rem)] z-[100] max-h-72 w-full min-w-[13rem] overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">{options.map((option) => { const active = option.value === value; return <button key={`${option.value}-${option.label}`} type="button" disabled={option.disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (option.disabled) return; onChange(option.value); setOpen(false); }} className={cx("flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-sm font-extrabold transition disabled:cursor-not-allowed disabled:opacity-50", active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-blue-700")}><span className="min-w-0 truncate">{option.label}</span>{active ? <span className="text-blue-600">✓</span> : null}</button>; })}</div>}
+      {open && !disabled && (
+        <div className="absolute left-0 top-[calc(100%+0.45rem)] z-[100] max-h-72 w-full min-w-[13rem] overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <button key={`${option.value}-${option.label}`} type="button" disabled={option.disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (option.disabled) return; onChange(option.value); setOpen(false); }} className={cx("flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-sm font-extrabold transition disabled:cursor-not-allowed disabled:opacity-50", active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-blue-700")}>
+                <span className="min-w-0 truncate">{option.label}</span>
+                {active ? <span className="text-blue-600">✓</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -454,7 +483,10 @@ export default function ServiceDesk() {
   const [categories, setCategories] = useState<AnyRow[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<AnyRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isLookupLoading, setIsLookupLoading] = useState(true);
+  const [isLookupLoading, setIsLookupLoading] = useState(false);
+  const [hasLoadedLightLookups, setHasLoadedLightLookups] = useState(false);
+  const [hasLoadedAssets, setHasLoadedAssets] = useState(false);
+  const [hasLoadedKnowledgeBase, setHasLoadedKnowledgeBase] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "form" | "kb">("list");
@@ -482,7 +514,6 @@ export default function ServiceDesk() {
 
   useEffect(() => {
     void loadIncidents();
-    void loadLookups();
     const timer = window.setInterval(() => setNow(new Date()), 120000);
     return () => window.clearInterval(timer);
   }, []);
@@ -511,17 +542,52 @@ export default function ServiceDesk() {
     }
   }
 
-  async function loadLookups() {
+  async function ensureLightLookups(force = false) {
+    if (hasLoadedLightLookups && !force) return;
     setIsLookupLoading(true);
     try {
-      const [userRows, roleRows, categoryRows, assetRows, kbRows] = await Promise.allSettled([usersService.getAll(), rolesService.getAll(), incidentCategoriesService.getAll(), assetsService.getAll(), knowledgeBaseService.getAll()]);
+      const [userRows, roleRows, categoryRows] = await Promise.allSettled([usersService.getAll(), rolesService.getAll(), incidentCategoriesService.getAll()]);
       if (userRows.status === "fulfilled") setUsers(Array.isArray(userRows.value) ? userRows.value : []);
       if (roleRows.status === "fulfilled") setRoles(Array.isArray(roleRows.value) ? roleRows.value : []);
       if (categoryRows.status === "fulfilled") setCategories(Array.isArray(categoryRows.value) ? categoryRows.value : []);
-      if (assetRows.status === "fulfilled") setAssets(Array.isArray(assetRows.value) ? assetRows.value : []);
-      if (kbRows.status === "fulfilled") setKnowledgeBase(Array.isArray(kbRows.value) ? kbRows.value : []);
+      setHasLoadedLightLookups(true);
     } catch (error) {
       console.warn("Service Desk lookup load failed", error);
+    } finally {
+      setIsLookupLoading(false);
+    }
+  }
+
+  async function ensureAssetsLoaded(force = false) {
+    if (hasLoadedAssets && !force) return;
+    setIsLookupLoading(true);
+    try {
+      const rows = await assetsService.getAll();
+      setAssets(Array.isArray(rows) ? rows : []);
+      setHasLoadedAssets(true);
+    } catch (error) {
+      console.warn("Service Desk asset lookup failed", error);
+      setToast({ type: "warning", message: "Asset lookup could not be loaded." });
+    } finally {
+      setIsLookupLoading(false);
+    }
+  }
+
+  async function ensureFormLookups(force = false) {
+    await ensureLightLookups(force);
+    await ensureAssetsLoaded(force);
+  }
+
+  async function ensureKnowledgeBaseLoaded(force = false) {
+    if (hasLoadedKnowledgeBase && !force) return;
+    setIsLookupLoading(true);
+    try {
+      const rows = await knowledgeBaseService.getAll();
+      setKnowledgeBase(Array.isArray(rows) ? rows : []);
+      setHasLoadedKnowledgeBase(true);
+    } catch (error) {
+      console.warn("Knowledge Base load failed", error);
+      setToast({ type: "warning", message: "Knowledge Base could not be loaded." });
     } finally {
       setIsLookupLoading(false);
     }
@@ -530,7 +596,7 @@ export default function ServiceDesk() {
   async function refreshPage() {
     setIsRefreshing(true);
     try {
-      await Promise.all([loadIncidents(true), loadLookups()]);
+      await loadIncidents(true);
       setToast({ type: "success", message: "Service Desk refreshed." });
     } finally {
       setIsRefreshing(false);
@@ -620,34 +686,43 @@ export default function ServiceDesk() {
     }
   }
 
-  function selectAsset(assetKey: string) {
-    const asset = assets.find((row) => getAssetValue(row) === assetKey || getAsset(row) === assetKey);
-    if (!assetKey || !asset) {
-      setFormData((prev) => ({ ...prev, assetId: "", assetBrand: "", assetModel: "", assetOS: "", deviceType: "" }));
-      return;
-    }
-    const owner = getAssetOwner(asset);
-    const ownerId = getAssetOwnerId(asset);
-    const deviceType = getAssetDeviceType(asset);
-    setFormData((prev) => ({ ...prev, assetId: getAssetValue(asset), assetBrand: getAssetBrand(asset), assetModel: getAssetModel(asset), assetOS: getAssetOS(asset), deviceType: deviceType || prev.deviceType, requesterName: owner || prev.requesterName, requesterId: ownerId || prev.requesterId }));
-  }
-
   function startCreate() {
     setFormMode("create");
     setFormData(emptyForm(currentUser));
     setIncidentAttachments([]);
     setSelectedIncidentId("");
     setViewMode("form");
+    void ensureFormLookups();
   }
 
   function startEdit(row: AnyRow) {
     const incidentId = getIncidentId(row);
     setFormMode("edit");
-    setFormData({ ...emptyForm(currentUser), ...row, id: incidentId, title: getTitle(row), description: getDescription(row), priority: getPriority(row), status: getStatus(row), requesterName: getRequester(row), assetId: getAsset(row) === "—" ? "" : getAsset(row), assetBrand: valueOf(row, ["assetBrand", "AssetBrand", "brand", "Brand"]), assetModel: valueOf(row, ["assetModel", "AssetModel", "model", "Model"]), assetOS: valueOf(row, ["assetOS", "AssetOS", "os", "OS"]), deviceType: valueOf(row, ["deviceType", "DeviceType"]), category: valueOf(row, ["category", "Category"]), subcategory: valueOf(row, ["subcategory", "Subcategory", "subCategory", "SubCategory"]), incidentDetail: valueOf(row, ["incidentDetail", "IncidentDetail", "detail", "Detail"]), assignedLevel: valueOf(row, ["assignedLevel", "AssignedLevel", "supportLevel", "SupportLevel"]), assignedTo: getAssigned(row) === "Unassigned" ? "" : getAssigned(row) });
+    setFormData({
+      ...emptyForm(currentUser),
+      ...row,
+      id: incidentId,
+      title: getTitle(row),
+      description: getDescription(row),
+      priority: getPriority(row),
+      status: getStatus(row),
+      requesterName: getRequester(row),
+      assetId: getAsset(row) === "—" ? "" : getAsset(row),
+      assetBrand: valueOf(row, ["assetBrand", "AssetBrand", "brand", "Brand"]),
+      assetModel: valueOf(row, ["assetModel", "AssetModel", "model", "Model"]),
+      assetOS: valueOf(row, ["assetOS", "AssetOS", "os", "OS"]),
+      deviceType: valueOf(row, ["deviceType", "DeviceType"]),
+      category: valueOf(row, ["category", "Category"]),
+      subcategory: valueOf(row, ["subcategory", "Subcategory", "subCategory", "SubCategory"]),
+      incidentDetail: valueOf(row, ["incidentDetail", "IncidentDetail", "detail", "Detail"]),
+      assignedLevel: valueOf(row, ["assignedLevel", "AssignedLevel", "supportLevel", "SupportLevel"]),
+      assignedTo: getAssigned(row) === "Unassigned" ? "" : getAssigned(row),
+    });
     setSelectedIncidentId(incidentId);
     setIncidentAttachments([]);
     if (incidentId) void loadIncidentAttachments(incidentId);
     setViewMode("form");
+    void ensureFormLookups();
   }
 
   async function saveIncident(event: FormEvent) {
@@ -658,7 +733,18 @@ export default function ServiceDesk() {
     if (!description) return setToast({ type: "error", message: "Incident description is required." });
     setIsSaving(true);
     try {
-      const payload = { ...formData, id: formMode === "edit" ? getIncidentId(formData) : formData.id || makeIncidentId(), title, description, status: formMode === "create" ? "Awaiting" : formData.status || "Awaiting", priority: formData.priority || "Medium", requesterName: formData.requesterName || getUserName(currentUser) || "Current User", requesterId: formData.requesterId || getUserId(currentUser), reporterId: formData.reporterId || getUserId(currentUser), createdAt: formData.createdAt || new Date().toISOString() };
+      const payload = {
+        ...formData,
+        id: formMode === "edit" ? getIncidentId(formData) : formData.id || makeIncidentId(),
+        title,
+        description,
+        status: formMode === "create" ? "Awaiting" : formData.status || "Awaiting",
+        priority: formData.priority || "Medium",
+        requesterName: formData.requesterName || getUserName(currentUser) || "Current User",
+        requesterId: formData.requesterId || getUserId(currentUser),
+        reporterId: formData.reporterId || getUserId(currentUser),
+        createdAt: formData.createdAt || new Date().toISOString(),
+      };
       if (formMode === "create") await incidentsService.create(payload);
       else await incidentsService.update(payload);
       setToast({ type: "success", message: formMode === "create" ? "Ticket created successfully." : "Ticket updated successfully." });
@@ -752,7 +838,7 @@ export default function ServiceDesk() {
     { key: "pending-vendor" as QueueKey, label: "Pending Vendor", sub: "External action", count: queueCounts.pendingVendor, icon: Settings },
     { key: "on-site" as QueueKey, label: "On Site", sub: "Field support", count: queueCounts.onSite, icon: Monitor },
     { key: "resolved" as QueueKey, label: "Resolved", sub: "Completed tickets", count: queueCounts.resolved, icon: CheckCircle2 },
-    { key: "knowledge" as QueueKey, label: "Knowledge Base", sub: "Resolution articles", count: queueCounts.kb, icon: BookOpen },
+    { key: "knowledge" as QueueKey, label: "Knowledge Base", sub: hasLoadedKnowledgeBase ? "Resolution articles" : "Load when opened", count: queueCounts.kb, icon: BookOpen },
   ];
 
   const filteredIncidents = useMemo(() => {
@@ -810,24 +896,132 @@ export default function ServiceDesk() {
   }
 
   function renderPagination() {
-    return <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3"><span className="text-sm font-bold text-slate-500">Page {page} of {totalPages}</span><div className="flex items-center gap-2"><button type="button" disabled={page === 1} onClick={() => setPage(1)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">«</button><button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">‹</button><span className="grid h-9 min-w-9 place-items-center rounded-xl bg-blue-600 px-3 text-sm font-black text-white">{page}</span><button type="button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">›</button><button type="button" disabled={page === totalPages} onClick={() => setPage(totalPages)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">»</button></div></div>;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3">
+        <span className="text-sm font-bold text-slate-500">Page {page} of {totalPages}</span>
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={page === 1} onClick={() => setPage(1)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">«</button>
+          <button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">‹</button>
+          <span className="grid h-9 min-w-9 place-items-center rounded-xl bg-blue-600 px-3 text-sm font-black text-white">{page}</span>
+          <button type="button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">›</button>
+          <button type="button" disabled={page === totalPages} onClick={() => setPage(totalPages)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">»</button>
+        </div>
+      </div>
+    );
   }
 
   return (
     <main data-section="service-desk" className="min-h-screen bg-slate-50 text-slate-900">
       <EmaToastViewport items={toastItems} onClose={() => setToast(null)} />
-      {confirmDelete && <div className="fixed inset-0 z-[2147483300] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm"><section className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-rose-500">Delete Ticket</span><h2 className="mt-1 text-xl font-black text-slate-950">Confirm delete</h2><p className="mt-1 text-sm font-semibold text-slate-500">Ticket {confirmDelete.ticketId} will be removed from Service Desk.</p></div><button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X size={16} /></button></div><div className="p-5"><div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">This action cannot be undone. Continue only if this ticket should be deleted.</div></div><div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4"><button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button><button type="button" onClick={() => void confirmDeleteTicket()} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-600 bg-rose-600 px-5 text-sm font-black text-white shadow-sm hover:bg-rose-700 disabled:opacity-60">{confirmDelete.loading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}Delete Ticket</button></div></section></div>}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[2147483300] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <section className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+              <div>
+                <span className="text-xs font-black uppercase tracking-[0.12em] text-rose-500">Delete Ticket</span>
+                <h2 className="mt-1 text-xl font-black text-slate-950">Confirm delete</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">Ticket {confirmDelete.ticketId} will be removed from Service Desk.</p>
+              </div>
+              <button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X size={16} /></button>
+            </div>
+            <div className="p-5"><div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">This action cannot be undone. Continue only if this ticket should be deleted.</div></div>
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4">
+              <button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
+              <button type="button" onClick={() => void confirmDeleteTicket()} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-600 bg-rose-600 px-5 text-sm font-black text-white shadow-sm hover:bg-rose-700 disabled:opacity-60">{confirmDelete.loading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}Delete Ticket</button>
+            </div>
+          </section>
+        </div>
+      )}
 
       <div className="grid min-h-screen gap-4 p-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Service Center</span><h2 className="mt-1 text-xl font-black">Service Desk</h2><p className="mt-1 text-sm font-semibold text-slate-500">Ticket queue and support operation</p></div><nav className="grid gap-2">{queueItems.map((item) => { const Icon = item.icon; const active = queueKey === item.key || (viewMode === "kb" && item.key === "knowledge"); return <button key={item.key} type="button" onClick={() => { setSelectedQueue(item.key); setSelectedIncidentId(""); setViewMode(item.key === "knowledge" ? "kb" : "list"); }} className={cx("grid grid-cols-[2.4rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-3 text-left transition", active ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}><span className={cx("grid h-9 w-9 place-items-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}><Icon size={15} /></span><span className="min-w-0"><strong className="block truncate text-sm font-black">{item.label}</strong><small className="block truncate text-xs font-semibold text-slate-500">{item.sub}</small></span><b className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{item.count}</b></button>; })}</nav></aside>
+        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Service Center</span>
+            <h2 className="mt-1 text-xl font-black">Service Desk</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Ticket queue and support operation</p>
+          </div>
+          <nav className="grid gap-2">
+            {queueItems.map((item) => {
+              const Icon = item.icon;
+              const active = queueKey === item.key || (viewMode === "kb" && item.key === "knowledge");
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    setSelectedQueue(item.key);
+                    setSelectedIncidentId("");
+                    if (item.key === "knowledge") {
+                      setViewMode("kb");
+                      void ensureKnowledgeBaseLoaded();
+                    } else {
+                      setViewMode("list");
+                    }
+                  }}
+                  className={cx("grid grid-cols-[2.4rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-3 text-left transition", active ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}
+                >
+                  <span className={cx("grid h-9 w-9 place-items-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}><Icon size={15} /></span>
+                  <span className="min-w-0"><strong className="block truncate text-sm font-black">{item.label}</strong><small className="block truncate text-xs font-semibold text-slate-500">{item.sub}</small></span>
+                  <b className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{item.count}</b>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
 
-        <section className="min-w-0 space-y-4"><div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(24rem,0.85fr)]"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Incident Command Center</span><h1 className="mt-1 text-2xl font-black">Service Desk</h1><p className="mt-1 text-sm font-semibold text-slate-500">Manage tickets, assignments, SLA risk and support activity.</p></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Open Tickets", queueCounts.open, "support workload"], ["SLA Risk", queueCounts.slaRisk, "near due / breached"], ["Awaiting", queueCounts.awaiting, "new requests"], ["In Progress", queueCounts.inProgress, "active handling"]].map(([label, value, note]) => <div key={String(label)} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">{label}</span><strong className="mt-2 block text-2xl font-black text-slate-950">{value}</strong><small className="text-xs font-bold text-slate-500">{note}</small></div>)}</div></div>
+        <section className="min-w-0 space-y-4">
+          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(24rem,0.85fr)]">
+            <div>
+              <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Incident Command Center</span>
+              <h1 className="mt-1 text-2xl font-black">Service Desk</h1>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Manage tickets, assignments, SLA risk and support activity.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[["Open Tickets", queueCounts.open, "support workload"], ["SLA Risk", queueCounts.slaRisk, "near due / breached"], ["Awaiting", queueCounts.awaiting, "new requests"], ["In Progress", queueCounts.inProgress, "active handling"]].map(([label, value, note]) => (
+                <div key={String(label)} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">{label}</span><strong className="mt-2 block text-2xl font-black text-slate-950">{value}</strong><small className="text-xs font-bold text-slate-500">{note}</small></div>
+              ))}
+            </div>
+          </div>
 
-          {viewMode === "form" ? <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><form onSubmit={saveIncident}><div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{formMode === "create" ? "Create Ticket" : "Edit Ticket"}</span><h2 className="mt-1 text-xl font-black">{formMode === "create" ? "New Incident Request" : `Update ${getIncidentId(formData)}`}</h2></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"><X size={14} />Cancel</button></div><div className="grid gap-4 p-4 lg:grid-cols-2"><label className={cx(labelClass(), "lg:col-span-2")}>Incident Title<input value={formData.title || ""} onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))} className={inputClass()} placeholder="Example: Laptop cannot connect to network" /></label><label className={cx(labelClass(), "lg:col-span-2")}>Description<textarea value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className={textareaClass()} placeholder="Describe the issue, impact and required support." /></label><label className={labelClass()}>Requester<input value={formData.requesterName || ""} onChange={(e) => setFormData((prev) => ({ ...prev, requesterName: e.target.value }))} className={inputClass()} /></label><label className={labelClass()}>Asset<ServiceDeskSelect value={formData.assetId || ""} onChange={(value) => { const asset = assets.find((row) => getAssetValue(row) === value || getAsset(row) === value); if (!value || !asset) setFormData((prev) => ({ ...prev, assetId: "", assetBrand: "", assetModel: "", assetOS: "", deviceType: "" })); else { const owner = getAssetOwner(asset); const ownerId = getAssetOwnerId(asset); setFormData((prev) => ({ ...prev, assetId: getAssetValue(asset), assetBrand: getAssetBrand(asset), assetModel: getAssetModel(asset), assetOS: getAssetOS(asset), deviceType: getAssetDeviceType(asset) || prev.deviceType, requesterName: owner || prev.requesterName, requesterId: ownerId || prev.requesterId })); } }} placeholder="No asset selected" options={[{ value: "", label: "No asset selected" }, ...assetOptions.map((asset) => ({ value: asset, label: asset }))]} /></label>{selectedAsset && <div className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 lg:col-span-2 md:grid-cols-4"><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Owner</span><strong className="mt-1 block text-sm font-black text-slate-900">{getAssetOwner(selectedAsset) || formData.requesterName || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Brand</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetBrand || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Model</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetModel || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">OS / Type</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetOS || formData.deviceType || "-"}</strong></div></div>}<label className={labelClass()}>Urgency<ServiceDeskSelect value={formData.priority || "Medium"} onChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))} options={PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))} /></label><label className={labelClass()}>Status<ServiceDeskSelect value={formData.status || "Awaiting"} onChange={(value) => setFormData((prev) => ({ ...prev, status: value }))} disabled={formMode === "create"} options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></label><label className={labelClass()}>Category<ServiceDeskSelect value={formData.category || ""} onChange={(value) => setFormData((prev) => ({ ...prev, category: value, subcategory: "", incidentDetail: "" }))} placeholder={isLookupLoading ? "Loading category..." : "No category"} options={[{ value: "", label: isLookupLoading ? "Loading category..." : "No category" }, ...categoryOptions.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Sub Category<ServiceDeskSelect value={formData.subcategory || ""} onChange={(value) => setFormData((prev) => ({ ...prev, subcategory: value, incidentDetail: "" }))} disabled={!formData.category || subcategoryOptions.length === 0} placeholder={subcategoryOptions.length ? "No sub category" : "No sub category mapped"} options={[{ value: "", label: subcategoryOptions.length ? "No sub category" : "No sub category mapped" }, ...subcategoryOptions.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Detail<ServiceDeskSelect value={formData.incidentDetail || ""} onChange={(value) => setFormData((prev) => ({ ...prev, incidentDetail: value }))} disabled={!formData.category || (subcategoryOptions.length > 0 && !formData.subcategory) || detailOptions.length === 0} placeholder={detailOptions.length ? "No detail" : "No detail mapped"} options={[{ value: "", label: detailOptions.length ? "No detail" : "No detail mapped" }, ...detailOptions.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Device Type<ServiceDeskSelect value={formData.deviceType || ""} onChange={(value) => setFormData((prev) => ({ ...prev, deviceType: value }))} placeholder="Select device type" options={[{ value: "", label: formData.deviceType || "Select device type" }, ...unique([formData.deviceType, ...DEVICE_TYPES]).filter(Boolean).map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Assigner Level<ServiceDeskSelect value={formData.assignedLevel || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedLevel: value, assignedTo: "" }))} placeholder="Not assigned" options={[{ value: "", label: "Not assigned" }, ...supportLevelOptions.map((level) => ({ value: level, label: level }))]} /></label><label className={labelClass()}>Assigned Engineer<ServiceDeskSelect value={formData.assignedTo || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedTo: value }))} disabled={Boolean(formData.assignedLevel) && engineerOptions.length === 0} placeholder={formData.assignedLevel ? "Select engineer" : "Choose level first"} options={[{ value: "", label: formData.assignedLevel ? "Unassigned" : "Choose level first" }, ...engineerOptions.map((name) => ({ value: name, label: name }))]} /></label>{formData.assignedLevel && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600 lg:col-span-2"><strong className="font-black text-slate-900">{engineerOptions.length}</strong> engineer(s) matched for <strong className="font-black text-slate-900">{formData.assignedLevel}</strong> based on user roles.</div>}<label className={cx(labelClass(), "lg:col-span-2")}>Action Plan<textarea value={formData.actionPlan || ""} onChange={(e) => setFormData((prev) => ({ ...prev, actionPlan: e.target.value }))} className={textareaClass()} placeholder="Resolution steps or next action." /></label>{formMode === "edit" && getIncidentId(formData) && <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Attachment</span><h3 className="mt-1 text-base font-black text-slate-950">Ticket Attachments</h3><p className="mt-1 text-sm font-semibold text-slate-500">Maximum {INCIDENT_ATTACHMENT_MAX_FILES} files, {INCIDENT_ATTACHMENT_MAX_MB}MB each. PDF, Office, image and TXT supported.</p></div><label className={cx("inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700", (isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES) && "pointer-events-none opacity-60")}>{isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}{isUploadingAttachment ? "Uploading..." : "Upload Attachment"}<input type="file" className="hidden" accept={INCIDENT_ATTACHMENT_ALLOWED_TYPES} disabled={isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES} onChange={(event) => void uploadIncidentAttachment(event)} /></label></div><div className="mt-4 rounded-2xl border border-slate-200 bg-white">{isLoadingAttachments ? <div className="flex items-center justify-center gap-2 p-6 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin text-blue-600" />Loading attachments...</div> : incidentAttachments.length === 0 ? <div className="p-6 text-center text-sm font-semibold text-slate-500">No attachment uploaded for this ticket yet.</div> : <div className="divide-y divide-slate-200">{incidentAttachments.map((file, index) => { const filename = String(file?.filename || file?.fileName || file?.FileName || file?.name || file?.Name || `Attachment ${index + 1}`); const sizeLabel = formatAttachmentSize(file?.size || file?.fileSize || file?.FileSize); const url = getIncidentAttachmentUrl(file); return <div key={`${filename}-${index}`} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="min-w-0"><strong className="block truncate text-sm font-black text-slate-900">{filename}</strong><span className="text-xs font-semibold text-slate-500">{sizeLabel || "Uploaded file"}</span></div><div className="flex items-center gap-2">{url !== "#" && <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-blue-700 hover:bg-blue-50"><Download size={14} />View</a>}<button type="button" onClick={() => void deleteIncidentAttachment(filename)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label={`Delete ${filename}`}><Trash2 size={14} /></button></div></div>; })}</div>}</div></section>}</div><div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4"><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button><button type="submit" disabled={isSaving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}{isSaving ? "Saving..." : formMode === "create" ? "Create Ticket" : "Update Ticket"}</button></div></form></section> : viewMode === "kb" ? <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-4 flex items-center justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Base</span><h2 className="text-xl font-black">Resolution Articles</h2></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">Back to Tickets</button></div><div className="overflow-hidden rounded-2xl border border-slate-200"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-16 px-4 py-3">No</th><th className="px-4 py-3">Knowledge Base</th><th className="w-28 px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200">{knowledgeBase.length === 0 ? <tr><td colSpan={3} className="px-4 py-12 text-center text-sm font-semibold text-slate-500">No knowledge base article found.</td></tr> : knowledgeBase.map((kb, index) => <tr key={kb.id || kb.title || index}><td className="px-4 py-3 font-black text-slate-500">{index + 1}</td><td className="px-4 py-3"><strong className="font-black text-slate-900">{kb.title || kb.Title || "Untitled article"}</strong></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedKb(kb)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600"><Eye size={14} /></button></td></tr>)}</tbody></table></div></section> : <section className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="space-y-3 border-b border-slate-200 p-3"><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={startCreate} className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700"><Plus size={15} /> Create Ticket</button><div className="flex h-11 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm"><Search size={16} className="text-slate-400" /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search request no, requester, asset, incident..." className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400" /></div><button type="button" disabled={!searchTerm && filterStatus === "All" && filterPriority === "All" && filterAssignedTo === "All" && filterSla === "All" && !dateFrom && !dateTo} onClick={resetFilters} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"><X size={14} /> Reset</button><button type="button" disabled={isRefreshing} onClick={refreshPage} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600 shadow-sm hover:bg-blue-50 disabled:opacity-50" aria-label="Refresh"><RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} /></button><button type="button" onClick={() => setShowAdvanced((value) => !value)} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Advanced filters"><Filter size={16} /></button><button type="button" onClick={exportCsv} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Export"><Download size={16} /></button><button type="button" onClick={() => window.print()} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Print"><Printer size={16} /></button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><label className={labelClass()}>Status<ServiceDeskSelect value={filterStatus} onChange={setFilterStatus} options={[{ value: "All", label: "All status" }, ...STATUS_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Urgency<ServiceDeskSelect value={filterPriority} onChange={setFilterPriority} options={[{ value: "All", label: "All urgency" }, ...PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Assigner<ServiceDeskSelect value={filterAssignedTo} onChange={setFilterAssignedTo} options={[{ value: "All", label: "All assigner" }, { value: "Unassigned", label: "Unassigned" }, ...filterAssigneeOptions.map((name) => ({ value: name, label: name }))]} /></label><label className={labelClass()}>SLA<ServiceDeskSelect value={filterSla} onChange={setFilterSla} options={[{ value: "All", label: "All SLA" }, ...["On Time", "Near Due", "Overdue", "Resolved", "No SLA"].map((item) => ({ value: item, label: item }))]} /></label></div>{showAdvanced && <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-4"><label className={labelClass()}>Date From<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inputClass()} /></label><label className={labelClass()}>Date To<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputClass()} /></label><div className="flex items-end text-sm font-semibold text-slate-500 xl:col-span-2">Advanced filters are applied directly to the table without hiding the UI.</div></div>}</div><div className="p-3"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm font-black text-slate-900">{activeQueueLabel}</strong><span className="ml-2 text-sm font-semibold text-slate-500">{isLoading ? "Loading tickets..." : `${sortedIncidents.length.toLocaleString()} record(s)`}</span></div>{isLookupLoading && <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"><Loader2 size={13} className="animate-spin" /> Loading filters</span>}</div><div className="overflow-x-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[82rem] text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-14 px-4 py-3">No</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("id")} className="font-black">Req No</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("createdAt")} className="font-black">Submitted</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("requester")} className="font-black">Requester</button></th><th className="px-4 py-3">Asset</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("title")} className="font-black">Incident</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("priority")} className="font-black">Urgency</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("assigned")} className="font-black">Assigner</button></th><th className="px-4 py-3">SLA</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("status")} className="font-black">Status</button></th><th className="px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200 bg-white">{isLoading ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={30} /><strong className="block text-sm font-black text-slate-900">Loading ticket data...</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Table UI is ready. Incident records are loading here only.</span></td></tr> : pageRows.length === 0 ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Ticket className="mx-auto mb-3 text-slate-400" size={30} /><strong className="block text-sm font-black text-slate-900">No incident found</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Try reset filter or create a new request.</span></td></tr> : pageRows.map((row, index) => { const id = getIncidentId(row); const sla = getSlaMeta(row, now); return <tr key={id || index} onClick={() => setSelectedIncidentId(id)} className={cx("cursor-pointer align-top transition hover:bg-blue-50/40", selectedIncidentId === id && "bg-blue-50")}><td className="px-4 py-4"><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-black text-slate-600">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-900">{id || "—"}</strong></td><td className="px-4 py-4 font-semibold text-slate-600">{formatDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)}</td><td className="px-4 py-4"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-black text-blue-700">{initialText(getRequester(row))}</span><strong className="font-black text-slate-800">{getRequester(row)}</strong></div></td><td className="px-4 py-4"><span className="inline-flex max-w-[9rem] items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-slate-700"><Monitor size={12} />{getAsset(row)}</span></td><td className="px-4 py-4"><strong className="block font-black text-slate-950">{getTitle(row)}</strong><small className="mt-1 block max-w-[18rem] text-xs font-semibold text-slate-500">{[row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" / ") || getDescription(row) || "No classification"}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", priorityTone(getPriority(row)))}>{getPriority(row)}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{getAssigned(row)}</strong><small className="block text-xs font-semibold text-slate-500">{row.assignedLevel || row.AssignedLevel || "No level"}</small></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{sla.label}</strong><small className="block text-xs font-semibold text-slate-500">{sla.detail}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", statusTone(getStatus(row)))}>{getStatus(row)}</span></td><td className="px-4 py-4"><div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => startEdit(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100" aria-label="Edit"><Pencil size={14} /></button><button type="button" onClick={() => deleteIncident(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label="Delete"><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>{renderPagination()}</div></section>}
+          {viewMode === "form" ? (
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <form onSubmit={saveIncident}>
+                <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4">
+                  <div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{formMode === "create" ? "Create Ticket" : "Edit Ticket"}</span><h2 className="mt-1 text-xl font-black">{formMode === "create" ? "New Incident Request" : `Update ${getIncidentId(formData)}`}</h2></div>
+                  <button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"><X size={14} />Cancel</button>
+                </div>
+                <div className="grid gap-4 p-4 lg:grid-cols-2">
+                  {isLookupLoading && <div className="lg:col-span-2 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700"><Loader2 size={16} className="animate-spin" />Loading form lookup data...</div>}
+                  <label className={cx(labelClass(), "lg:col-span-2")}>Incident Title<input value={formData.title || ""} onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))} className={inputClass()} placeholder="Example: Laptop cannot connect to network" /></label>
+                  <label className={cx(labelClass(), "lg:col-span-2")}>Description<textarea value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className={textareaClass()} placeholder="Describe the issue, impact and required support." /></label>
+                  <label className={labelClass()}>Requester<input value={formData.requesterName || ""} onChange={(e) => setFormData((prev) => ({ ...prev, requesterName: e.target.value }))} className={inputClass()} /></label>
+                  <label className={labelClass()}>Asset<ServiceDeskSelect value={formData.assetId || ""} onChange={(value) => { const asset = assets.find((row) => getAssetValue(row) === value || getAsset(row) === value); if (!value || !asset) setFormData((prev) => ({ ...prev, assetId: "", assetBrand: "", assetModel: "", assetOS: "", deviceType: "" })); else { const owner = getAssetOwner(asset); const ownerId = getAssetOwnerId(asset); setFormData((prev) => ({ ...prev, assetId: getAssetValue(asset), assetBrand: getAssetBrand(asset), assetModel: getAssetModel(asset), assetOS: getAssetOS(asset), deviceType: getAssetDeviceType(asset) || prev.deviceType, requesterName: owner || prev.requesterName, requesterId: ownerId || prev.requesterId })); } }} placeholder={isLookupLoading ? "Loading asset..." : "No asset selected"} options={[{ value: "", label: isLookupLoading ? "Loading asset..." : "No asset selected" }, ...assetOptions.map((asset) => ({ value: asset, label: asset }))]} /></label>
+                  {selectedAsset && <div className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 lg:col-span-2 md:grid-cols-4"><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Owner</span><strong className="mt-1 block text-sm font-black text-slate-900">{getAssetOwner(selectedAsset) || formData.requesterName || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Brand</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetBrand || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Model</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetModel || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">OS / Type</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetOS || formData.deviceType || "-"}</strong></div></div>}
+                  <label className={labelClass()}>Urgency<ServiceDeskSelect value={formData.priority || "Medium"} onChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))} options={PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
+                  <label className={labelClass()}>Status<ServiceDeskSelect value={formData.status || "Awaiting"} onChange={(value) => setFormData((prev) => ({ ...prev, status: value }))} disabled={formMode === "create"} options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
+                  <label className={labelClass()}>Category<ServiceDeskSelect value={formData.category || ""} onChange={(value) => setFormData((prev) => ({ ...prev, category: value, subcategory: "", incidentDetail: "" }))} placeholder="No category" options={[{ value: "", label: "No category" }, ...categoryOptions.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={labelClass()}>Sub Category<ServiceDeskSelect value={formData.subcategory || ""} onChange={(value) => setFormData((prev) => ({ ...prev, subcategory: value, incidentDetail: "" }))} placeholder="No sub category" disabled={!formData.category} options={[{ value: "", label: "No sub category" }, ...subcategoryOptions.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={labelClass()}>Detail<ServiceDeskSelect value={formData.incidentDetail || ""} onChange={(value) => setFormData((prev) => ({ ...prev, incidentDetail: value }))} placeholder="No detail" disabled={!formData.category} options={[{ value: "", label: "No detail" }, ...detailOptions.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={labelClass()}>Device Type<ServiceDeskSelect value={formData.deviceType || ""} onChange={(value) => setFormData((prev) => ({ ...prev, deviceType: value }))} placeholder="Laptop, Desktop, Server..." options={[{ value: "", label: "No device type" }, ...DEVICE_TYPES.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={labelClass()}>Assigned Level<ServiceDeskSelect value={formData.assignedLevel || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedLevel: value, assignedTo: "" }))} placeholder="Not assigned" options={[{ value: "", label: "Not assigned" }, ...supportLevelOptions.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={labelClass()}>Assigned Engineer<ServiceDeskSelect value={formData.assignedTo || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedTo: value }))} placeholder="Unassigned" disabled={!formData.assignedLevel} options={[{ value: "", label: "Unassigned" }, ...engineerOptions.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={cx(labelClass(), "lg:col-span-2")}>Action Plan<textarea value={formData.actionPlan || ""} onChange={(e) => setFormData((prev) => ({ ...prev, actionPlan: e.target.value }))} className={textareaClass()} placeholder="Resolution steps or next action." /></label>
+                  {formMode === "edit" && <section className="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Attachment</span><h3 className="mt-1 text-base font-black text-slate-900">Ticket Attachment</h3><p className="text-xs font-semibold text-slate-500">Max 3 files, {INCIDENT_ATTACHMENT_MAX_MB}MB each. PDF, Office, image and text files.</p></div><label className={cx("inline-flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700", (isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES) && "pointer-events-none opacity-60")}><Upload size={15} />{isUploadingAttachment ? "Uploading..." : "Upload Attachment"}<input type="file" className="hidden" accept={INCIDENT_ATTACHMENT_ALLOWED_TYPES} disabled={isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES} onChange={uploadIncidentAttachment} /></label></div>{isLoadingAttachments ? <div className="mt-4 flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-500"><Loader2 size={15} className="animate-spin" />Loading attachments...</div> : incidentAttachments.length ? <div className="mt-4 grid gap-2">{incidentAttachments.map((file, index) => { const filename = valueOf(file, ["filename", "fileName", "FileName", "name", "Name"], `Attachment ${index + 1}`); const url = getIncidentAttachmentUrl(file); return <div key={`${filename}-${index}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3"><div className="min-w-0"><strong className="block truncate text-sm font-black text-slate-900">{filename}</strong><span className="text-xs font-bold text-slate-500">{formatAttachmentSize(file.size || file.fileSize || file.FileSize) || "Attached file"}</span></div><div className="flex items-center gap-2">{url !== "#" && <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-blue-700 hover:bg-blue-50">View</a>}<button type="button" onClick={() => void deleteIncidentAttachment(filename)} className="grid h-9 w-9 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100" title="Delete attachment"><Trash2 size={14} /></button></div></div>; })}</div> : <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-5 text-center text-sm font-bold text-slate-500">No attachment uploaded for this ticket.</div>}</section>}
+                </div>
+                <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4"><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-11 items-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm">Cancel</button><button type="submit" disabled={isSaving} className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 text-sm font-black text-white shadow-sm disabled:opacity-60">{isSaving ? <Loader2 size={16} className="animate-spin" /> : null}{formMode === "create" ? "Create Ticket" : "Save Changes"}</button></div>
+              </form>
+            </section>
+          ) : viewMode === "kb" ? (
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-200 p-4"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Base</span><h2 className="mt-1 text-xl font-black">Resolution Articles</h2></div><button type="button" onClick={() => { setViewMode("list"); setSelectedQueue("all"); }} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700"><Ticket size={14} />Tickets</button></div>{isLookupLoading && !hasLoadedKnowledgeBase ? <div className="grid min-h-[16rem] place-items-center"><div className="text-center"><Loader2 size={28} className="mx-auto animate-spin text-blue-600" /><strong className="mt-3 block text-sm font-black text-slate-900">Loading knowledge base...</strong></div></div> : <div className="grid gap-3 p-4">{knowledgeBase.map((kb, index) => <article key={kb.id || kb.title || index} className="rounded-2xl border border-slate-200 p-4"><strong className="text-sm font-black text-slate-900">{valueOf(kb, ["title", "Title"], "Untitled article")}</strong><p className="mt-1 line-clamp-2 text-sm font-semibold text-slate-500">{valueOf(kb, ["resolution", "Resolution", "incidentDetails", "IncidentDetails", "description", "Description"], "No detail")}</p><button type="button" onClick={() => setSelectedKb(kb)} className="mt-3 inline-flex h-9 items-center rounded-xl border border-slate-200 px-3 text-xs font-black text-blue-700">View</button></article>)}{knowledgeBase.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-bold text-slate-500">No knowledge base article found.</div>}</div>}</section>
+          ) : (
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="grid gap-3 border-b border-slate-200 p-3 xl:grid-cols-[auto_minmax(0,1fr)_auto]"><button type="button" onClick={startCreate} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 text-sm font-black text-white shadow-sm"><Plus size={15} />Create Ticket</button><label className="flex h-11 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm"><Search size={16} className="text-slate-400" /><input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400" placeholder="Search request no, requester, asset, incident..." /></label><div className="flex flex-wrap items-center justify-end gap-2"><button type="button" disabled={!searchTerm && filterStatus === "All" && filterPriority === "All" && filterAssignedTo === "All" && filterSla === "All" && !dateFrom && !dateTo} onClick={resetFilters} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-500 disabled:opacity-40"><X size={14} />Reset</button><button type="button" aria-label="Refresh" onClick={() => void refreshPage()} disabled={isRefreshing} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600 shadow-sm disabled:opacity-50">{isRefreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}</button><button type="button" aria-label="Advanced filter" onClick={() => setShowAdvanced((current) => !current)} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"><Filter size={16} /></button><button type="button" aria-label="Export" onClick={exportCsv} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"><Download size={16} /></button><button type="button" aria-label="Print" onClick={() => window.print()} className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm"><Printer size={16} /></button></div></div><div className="grid gap-3 border-b border-slate-200 p-3 lg:grid-cols-4"><label className={labelClass()}>Status<ServiceDeskSelect value={filterStatus} onChange={setFilterStatus} options={[{ value: "All", label: "All status" }, ...STATUS_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Urgency<ServiceDeskSelect value={filterPriority} onChange={setFilterPriority} options={[{ value: "All", label: "All urgency" }, ...PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Assigner<ServiceDeskSelect value={filterAssignedTo} onChange={setFilterAssignedTo} options={[{ value: "All", label: "All assigner" }, ...filterAssigneeOptions.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>SLA<ServiceDeskSelect value={filterSla} onChange={setFilterSla} options={["All", "On Time", "Near Due", "Overdue", "No SLA", "Resolved"].map((item) => ({ value: item, label: item === "All" ? "All SLA" : item }))} /></label>{showAdvanced && <><label className={labelClass()}>Date From<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inputClass()} /></label><label className={labelClass()}>Date To<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputClass()} /></label></>}</div><div className="px-3 py-3"><h3 className="text-sm font-black text-slate-900">{activeQueueLabel} <span className="font-bold text-slate-500">{sortedIncidents.length} record(s)</span></h3></div><div className="overflow-auto px-3"><table className="min-w-[1040px] w-full border-separate border-spacing-0 overflow-hidden rounded-2xl border border-slate-200"><thead><tr className="bg-slate-50 text-left text-xs font-black uppercase tracking-[0.08em] text-slate-500"><th className="px-3 py-3">Req No</th><th className="px-3 py-3">Submitted</th><th className="px-3 py-3">Requester</th><th className="px-3 py-3">Asset</th><th className="px-3 py-3">Incident</th><th className="px-3 py-3">Urgency</th><th className="px-3 py-3">Assigner</th><th className="px-3 py-3">SLA</th><th className="px-3 py-3">Status</th><th className="px-3 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200">{isLoading ? <tr><td colSpan={10} className="px-4 py-16 text-center"><Loader2 size={28} className="mx-auto animate-spin text-blue-600" /><strong className="mt-3 block text-sm font-black text-slate-900">Loading ticket data...</strong><span className="text-sm font-semibold text-slate-500">UI is ready. Records are loading in the table.</span></td></tr> : pageRows.length === 0 ? <tr><td colSpan={10} className="px-4 py-16 text-center"><Ticket size={28} className="mx-auto text-slate-300" /><strong className="mt-3 block text-sm font-black text-slate-900">No incident found</strong><span className="text-sm font-semibold text-slate-500">Try reset filter or create a new ticket.</span></td></tr> : pageRows.map((row) => { const id = getIncidentId(row); const sla = getSlaMeta(row, now); return <tr key={id} onClick={() => setSelectedIncidentId(id)} className={cx("cursor-pointer bg-white text-sm transition hover:bg-blue-50/40", selectedIncidentId === id && "bg-blue-50")}><td className="px-3 py-4 align-top font-black text-slate-900">{id}</td><td className="px-3 py-4 align-top font-bold text-slate-600">{formatDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)}</td><td className="px-3 py-4 align-top"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-black text-blue-700">{initialText(getRequester(row))}</span><strong className="font-black text-slate-900">{getRequester(row)}</strong></div></td><td className="px-3 py-4 align-top"><span className="inline-flex max-w-[8rem] items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-slate-700"><Monitor size={12} />{getAsset(row)}</span></td><td className="px-3 py-4 align-top"><strong className="block font-black text-slate-950">{getTitle(row)}</strong><small className="mt-1 block max-w-[18rem] text-xs font-semibold text-slate-500">{[row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" / ") || getDescription(row) || "No classification"}</small></td><td className="px-3 py-4 align-top"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", priorityTone(getPriority(row)))}>{getPriority(row)}</span></td><td className="px-3 py-4 align-top"><strong className="block font-black text-slate-900">{getAssigned(row)}</strong><small className="font-bold text-slate-500">{valueOf(row, ["assignedLevel", "AssignedLevel", "supportLevel", "SupportLevel"], "No level")}</small></td><td className="px-3 py-4 align-top"><strong className="block font-black text-slate-900">{sla.label}</strong><small className="font-bold text-slate-500">{sla.detail}</small></td><td className="px-3 py-4 align-top"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", statusTone(getStatus(row)))}>{getStatus(row)}</span></td><td className="px-3 py-4 align-top text-right"><div className="inline-flex gap-2" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => startEdit(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100" title="Edit ticket"><Pencil size={14} /></button><button type="button" onClick={() => deleteIncident(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" title="Delete ticket"><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>{renderPagination()}</section>
+          )}
         </section>
       </div>
-      {selectedIncident && viewMode === "list" && <aside className="fixed right-4 top-24 z-40 w-[min(26rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><button type="button" onClick={() => setSelectedIncidentId("")} className="float-right grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500"><X size={14} /></button><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Ticket Details</span><h3 className="mt-1 text-lg font-black">{getIncidentId(selectedIncident)}</h3><p className="mt-2 text-sm font-semibold text-slate-600">{getTitle(selectedIncident)}</p><div className="mt-4 grid gap-3 text-sm"><div><span className="font-black text-slate-500">Requester</span><strong className="block text-slate-900">{getRequester(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Asset</span><strong className="block text-slate-900">{getAsset(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Assigner</span><strong className="block text-slate-900">{getAssigned(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Status</span><strong className="block text-slate-900">{getStatus(selectedIncident)}</strong></div></div></aside>}
-      {selectedKb && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setSelectedKb(null)}><section className="w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setSelectedKb(null)} className="float-right grid h-9 w-9 place-items-center rounded-xl border border-slate-200"><X size={14} /></button><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Article</span><h2 className="mt-1 text-xl font-black">{selectedKb.title || selectedKb.Title || "Untitled article"}</h2><p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-slate-600">{selectedKb.resolution || selectedKb.Resolution || selectedKb.incidentDetails || selectedKb.IncidentDetails || "No detail."}</p></section></div>}
+
+      {selectedIncident && viewMode === "list" && <aside className="fixed right-4 top-24 z-[50] max-h-[calc(100vh-7rem)] w-[min(26rem,calc(100vw-2rem))] overflow-auto rounded-3xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-blue-500">Ticket Detail</span><h3 className="mt-1 text-lg font-black text-slate-950">{getIncidentId(selectedIncident)}</h3></div><button type="button" onClick={() => setSelectedIncidentId("")} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500"><X size={15} /></button></div><div className="grid gap-3 text-sm"><div><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Incident</span><strong className="block text-slate-900">{getTitle(selectedIncident)}</strong><p className="mt-1 font-semibold text-slate-500">{getDescription(selectedIncident) || "No description"}</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-slate-50 p-3"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Requester</span><strong className="block text-slate-900">{getRequester(selectedIncident)}</strong></div><div className="rounded-2xl bg-slate-50 p-3"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Asset</span><strong className="block text-slate-900">{getAsset(selectedIncident)}</strong></div></div><button type="button" onClick={() => startEdit(selectedIncident)} className="mt-2 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white"><Pencil size={15} />Edit Ticket</button></div></aside>}
+
+      {selectedKb && <div className="fixed inset-0 z-[2147483200] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm" onClick={() => setSelectedKb(null)}><section className="w-[min(42rem,calc(100vw-2rem))] rounded-3xl bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-start justify-between"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-blue-500">Knowledge Article</span><h2 className="mt-1 text-xl font-black">{valueOf(selectedKb, ["title", "Title"], "Untitled article")}</h2></div><button type="button" onClick={() => setSelectedKb(null)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200"><X size={16} /></button></div><div className="mt-4 whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-600">{valueOf(selectedKb, ["resolution", "Resolution", "incidentDetails", "IncidentDetails", "description", "Description"], "No detail")}</div></section></div>}
     </main>
   );
 }
