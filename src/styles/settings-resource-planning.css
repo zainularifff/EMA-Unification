@@ -1,0 +1,301 @@
+/* Settings Resource Planning only. Scoped by Settings page and active section. */
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .settings-content {
+  gap: 0.65rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .settings-hero {
+  padding: 0.75rem !important;
+  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr) !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .settings-score {
+  grid-template-columns: repeat(2, minmax(11rem, 15rem)) !important;
+  justify-content: start !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .content-body {
+  padding: 0.65rem !important;
+  overflow: auto !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-planning-module {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.65rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-command-card {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 0.75rem !important;
+  padding: 0.8rem 0.9rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-command-card h3,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-card-head h4 {
+  margin: 0.18rem 0 0 !important;
+  color: #0f172a !important;
+  font-size: 0.95rem !important;
+  font-weight: 950 !important;
+  line-height: 1.15 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-command-card p,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-card-head p {
+  max-width: 68rem !important;
+  margin: 0.2rem 0 0 !important;
+  color: #475569 !important;
+  font-size: 0.78rem !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-workbench {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: minmax(24rem, 0.9fr) minmax(32rem, 1.1fr) !important;
+  gap: 0.75rem !important;
+  align-items: stretch !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-form-card,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-card {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 1px solid #d7e2ef !important;
+  border-radius: 1rem !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-card-head {
+  flex: 0 0 auto !important;
+  display: grid !important;
+  gap: 0.55rem !important;
+  padding: 0.8rem 0.85rem !important;
+  border-bottom: 1px solid #e4edf7 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-head {
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem) !important;
+  align-items: start !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-filters {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 0.45rem !important;
+  align-items: center !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-filters .soft-btn {
+  grid-column: 1 / -1 !important;
+  justify-self: end !important;
+  min-height: 2.1rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-form-grid {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0.7rem !important;
+  padding: 0.85rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-wide {
+  grid-column: 1 / -1 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .form-field {
+  gap: 0.32rem !important;
+  color: #334155 !important;
+  font-size: 0.72rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.02em !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .setting-input,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .setting-select-trigger {
+  min-height: 2.45rem !important;
+  border-radius: 0.82rem !important;
+  font-size: 0.8rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-textarea {
+  min-height: 4.7rem !important;
+  max-height: 7rem !important;
+  resize: vertical !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-form-actions {
+  flex: 0 0 auto !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 0.5rem !important;
+  padding: 0 0.85rem 0.85rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-selected-engineer {
+  margin: 0 0.85rem 0.85rem !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 0.9rem !important;
+  background: #eff6ff !important;
+  padding: 0.65rem 0.75rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-selected-engineer strong,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-selected-engineer span {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-selected-engineer strong {
+  color: #1d4ed8 !important;
+  font-size: 0.83rem !important;
+  font-weight: 950 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-selected-engineer span {
+  margin-top: 0.12rem !important;
+  color: #475569 !important;
+  font-size: 0.72rem !important;
+  font-weight: 750 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  margin: 0.75rem 0.85rem 0 !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 0.9rem !important;
+  background: #ffffff !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td {
+  padding: 0.65rem 0.7rem !important;
+  font-size: 0.76rem !important;
+  line-height: 1.25 !important;
+  vertical-align: middle !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th {
+  background: #f3f6fb !important;
+  color: #334155 !important;
+  font-size: 0.68rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td {
+  border-bottom: 1px solid #edf2f7 !important;
+  color: #0f172a !important;
+  font-weight: 750 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th:nth-child(1),
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td:nth-child(1) { width: 20%; }
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th:nth-child(2),
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td:nth-child(2) { width: 13%; }
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th:nth-child(3),
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td:nth-child(3) { width: 19%; }
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th:nth-child(4),
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td:nth-child(4) { width: 13%; }
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th:nth-child(5),
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td:nth-child(5) { width: 17%; }
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table th:nth-child(6),
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td:nth-child(6) { width: 18%; }
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td strong,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td small {
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td strong {
+  color: #061b3a !important;
+  font-size: 0.78rem !important;
+  font-weight: 950 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table td small {
+  margin-top: 0.12rem !important;
+  color: #64748b !important;
+  font-size: 0.68rem !important;
+  font-weight: 700 !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-sort-button {
+  width: 100% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+  text-align: left !important;
+  font: inherit !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-status-pill {
+  min-height: 1.45rem !important;
+  background: #e0f2fe !important;
+  color: #0369a1 !important;
+  padding: 0 0.55rem !important;
+  font-size: 0.68rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-row-actions {
+  flex-wrap: nowrap !important;
+  justify-content: flex-start !important;
+  gap: 0.35rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-row-actions .soft-btn,
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-row-actions .danger-btn {
+  min-height: 1.95rem !important;
+  padding: 0 0.55rem !important;
+  font-size: 0.7rem !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-pagination {
+  flex: 0 0 auto !important;
+  padding: 0.65rem 0.85rem 0.8rem !important;
+}
+
+@media (max-width: 1280px) {
+  html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-workbench {
+    grid-template-columns: 1fr !important;
+  }
+
+  html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-head {
+    grid-template-columns: 1fr !important;
+  }
+}
