@@ -228,6 +228,118 @@ main[data-section="users"] > div:has(> div > h3):has(table) > footer {
   padding: .72rem 1rem !important;
 }
 
+.ema-sd-confirm-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483600 !important;
+  display: grid !important;
+  place-items: center !important;
+  background: rgba(15, 23, 42, .58) !important;
+  backdrop-filter: blur(4px) !important;
+  padding: 1.25rem !important;
+}
+
+.ema-sd-confirm-card {
+  width: min(28rem, calc(100vw - 2rem)) !important;
+  overflow: hidden !important;
+  border: 1px solid #fecaca !important;
+  border-radius: 1.1rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, .35) !important;
+}
+
+.ema-sd-confirm-head {
+  display: flex !important;
+  align-items: center !important;
+  gap: .75rem !important;
+  background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%) !important;
+  color: #ffffff !important;
+  padding: 1rem !important;
+}
+
+.ema-sd-confirm-icon {
+  width: 2.35rem !important;
+  height: 2.35rem !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: .8rem !important;
+  background: rgba(255, 255, 255, .15) !important;
+  font-size: 1.05rem !important;
+  font-weight: 950 !important;
+}
+
+.ema-sd-confirm-head span {
+  display: block !important;
+  color: rgba(255, 255, 255, .85) !important;
+  font-size: .68rem !important;
+  font-weight: 950 !important;
+  letter-spacing: .1em !important;
+  text-transform: uppercase !important;
+}
+
+.ema-sd-confirm-head strong {
+  display: block !important;
+  margin-top: .15rem !important;
+  color: #ffffff !important;
+  font-size: 1rem !important;
+  font-weight: 950 !important;
+}
+
+.ema-sd-confirm-body {
+  display: grid !important;
+  gap: .8rem !important;
+  padding: 1rem !important;
+}
+
+.ema-sd-confirm-body p {
+  margin: 0 !important;
+  color: #475569 !important;
+  font-size: .9rem !important;
+  font-weight: 700 !important;
+  line-height: 1.45 !important;
+}
+
+.ema-sd-confirm-ticket {
+  border: 1px solid #fecaca !important;
+  border-radius: .85rem !important;
+  background: #fff1f2 !important;
+  color: #9f1239 !important;
+  padding: .75rem !important;
+  font-size: .86rem !important;
+  font-weight: 950 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.ema-sd-confirm-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: .65rem !important;
+  border-top: 1px solid #fee2e2 !important;
+  background: #fffafa !important;
+  padding: .9rem 1rem !important;
+}
+
+.ema-sd-confirm-actions button {
+  min-height: 2.45rem !important;
+  border-radius: .75rem !important;
+  padding: 0 .95rem !important;
+  font-size: .82rem !important;
+  font-weight: 950 !important;
+}
+
+.ema-sd-confirm-cancel {
+  border: 1px solid #d8e4f2 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+}
+
+.ema-sd-confirm-delete {
+  border: 1px solid #dc2626 !important;
+  background: #dc2626 !important;
+  color: #ffffff !important;
+}
+
 @media (max-width: 900px) {
   main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div,
   main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div,
@@ -246,6 +358,84 @@ if (typeof document !== "undefined") {
     style.id = STYLE_ID;
     style.textContent = css;
     document.head.appendChild(style);
+  }
+
+  let allowNativeConfirmOnce = false;
+  const nativeConfirm = window.confirm.bind(window);
+  if (!(window as any).__emaServiceDeskConfirmPatched) {
+    (window as any).__emaServiceDeskConfirmPatched = true;
+    window.confirm = (message?: string) => {
+      if (allowNativeConfirmOnce) {
+        allowNativeConfirmOnce = false;
+        return true;
+      }
+      return nativeConfirm(message);
+    };
+
+    const closeDialog = () => document.querySelector(".ema-sd-confirm-overlay")?.remove();
+    const getTicketId = (button: HTMLButtonElement) => {
+      const row = button.closest("tr");
+      const rowId = row?.querySelector("td:nth-child(2) strong")?.textContent?.trim();
+      if (rowId) return rowId;
+      const drawerId = button.closest("aside")?.querySelector("h3")?.textContent?.trim();
+      if (drawerId) return drawerId;
+      return "selected ticket";
+    };
+    const showDialog = (button: HTMLButtonElement) => {
+      closeDialog();
+      const ticketId = getTicketId(button);
+      const overlay = document.createElement("div");
+      overlay.className = "ema-sd-confirm-overlay";
+      overlay.innerHTML = `
+        <section class="ema-sd-confirm-card" role="dialog" aria-modal="true" aria-labelledby="ema-sd-confirm-title">
+          <div class="ema-sd-confirm-head">
+            <div class="ema-sd-confirm-icon">!</div>
+            <div>
+              <span>Confirmation Required</span>
+              <strong id="ema-sd-confirm-title">Delete ticket</strong>
+            </div>
+          </div>
+          <div class="ema-sd-confirm-body">
+            <p>This action will remove the ticket from Service Desk. Please confirm before continuing.</p>
+            <div class="ema-sd-confirm-ticket">${ticketId}</div>
+          </div>
+          <div class="ema-sd-confirm-actions">
+            <button type="button" class="ema-sd-confirm-cancel">Cancel</button>
+            <button type="button" class="ema-sd-confirm-delete">Delete Ticket</button>
+          </div>
+        </section>
+      `;
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) closeDialog();
+      });
+      overlay.querySelector<HTMLButtonElement>(".ema-sd-confirm-cancel")?.addEventListener("click", closeDialog);
+      overlay.querySelector<HTMLButtonElement>(".ema-sd-confirm-delete")?.addEventListener("click", () => {
+        closeDialog();
+        button.setAttribute("data-ema-sd-confirm-bypass", "true");
+        allowNativeConfirmOnce = true;
+        button.click();
+        window.setTimeout(() => button.removeAttribute("data-ema-sd-confirm-bypass"), 0);
+      });
+      document.body.appendChild(overlay);
+    };
+
+    document.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest?.("button") as HTMLButtonElement | null;
+      if (!button) return;
+      if (button.getAttribute("data-ema-sd-confirm-bypass") === "true") return;
+      if (!document.querySelector('main[data-section="service-desk"]')) return;
+      const label = `${button.getAttribute("title") || ""} ${button.getAttribute("aria-label") || ""}`.toLowerCase();
+      if (!label.includes("delete")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      showDialog(button);
+    }, true);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeDialog();
+    });
   }
 }
 
