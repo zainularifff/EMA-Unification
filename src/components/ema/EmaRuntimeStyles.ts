@@ -229,41 +229,59 @@ html body .ema-detail-form-footer { flex: 0 0 auto !important; display: flex !im
 
 html body main[data-section="service-desk"] > div > section > div:first-child {
   align-items: center !important;
+  grid-template-columns: minmax(0, 1fr) minmax(30rem, 36rem) !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child {
   align-self: center !important;
-  grid-template-columns: repeat(4, minmax(8.5rem, 1fr)) !important;
-  gap: .65rem !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: .55rem !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div {
-  min-height: 4.25rem !important;
+  min-width: 0 !important;
+  min-height: 3.15rem !important;
   display: grid !important;
   grid-template-columns: auto minmax(0, 1fr) !important;
-  grid-template-areas: "value label" "value note" !important;
+  grid-template-areas: "value label" !important;
   align-items: center !important;
-  column-gap: .75rem !important;
-  row-gap: .1rem !important;
-  border-radius: 1rem !important;
-  padding: .72rem .85rem !important;
+  column-gap: .58rem !important;
+  border-width: 1px !important;
+  border-radius: .9rem !important;
+  background: linear-gradient(180deg,#ffffff 0%,#f8fbff 100%) !important;
+  padding: .52rem .58rem !important;
+  box-shadow: none !important;
 }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(1) { border-color: #bfdbfe !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) { border-color: #fed7aa !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(3) { border-color: #c7d2fe !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(4) { border-color: #bbf7d0 !important; }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > span {
   grid-area: label !important;
-  font-size: .66rem !important;
+  min-width: 0 !important;
+  color: #475569 !important;
+  font-size: .62rem !important;
   line-height: 1.05 !important;
+  letter-spacing: .08em !important;
+  white-space: normal !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > strong {
   grid-area: value !important;
   margin-top: 0 !important;
-  min-width: 2rem !important;
-  font-size: 1.55rem !important;
+  min-width: 1.35rem !important;
+  color: #0f172a !important;
+  font-size: 1.35rem !important;
   line-height: 1 !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > small {
-  grid-area: note !important;
-  font-size: .68rem !important;
-  line-height: 1.15 !important;
+  display: none !important;
 }
 
+@media (max-width: 1100px) {
+  html body main[data-section="service-desk"] > div > section > div:first-child {
+    grid-template-columns: 1fr !important;
+  }
+}
 @media (max-width: 900px) {
   html body .ema-detail-summary-grid,
   html body .ema-detail-section-grid { grid-template-columns: 1fr !important; }
