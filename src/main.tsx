@@ -21,6 +21,7 @@ import "./components/ema/EmaNetworkRuntimeStyles";
 import "./components/ema/EmaNetworkSidebarRuntimeStyles";
 import "./components/ema/EmaLoadingRuntimeStyles";
 import "./components/ema/EmaNoticeRuntimeStyles";
+import "./components/ema/EmaServiceDeskTableRuntimeStyles";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
