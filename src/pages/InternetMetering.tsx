@@ -588,12 +588,29 @@ export default function InternetMetering() {
                     className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-700 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                 </EmaFilterField>
+                <EmaFilterField label="New URL / Domain">
+                  <input
+                    value={newUrl}
+                    onChange={(event) => setNewUrl(event.target.value)}
+                    placeholder="example.com"
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-700 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                  />
+                </EmaFilterField>
+                <EmaButton variant="primary" onClick={() => void addUrl()} disabled={!newUrl.trim()}>
+                  <Plus size={15} />
+                  Add URL
+                </EmaButton>
+                <EmaButton variant="danger" onClick={() => void removeSelectedUrl()} disabled={!selectedNode.urlMainIdn}>
+                  <Trash2 size={15} />
+                  Remove Selected
+                </EmaButton>
                 <EmaButton
                   variant="ghost"
                   onClick={() => {
                     setSearch("");
                     setFromDate(daysAgoIso(7));
                     setToDate(todayIso());
+                    setNewUrl("");
                   }}
                 >
                   Reset
@@ -601,27 +618,6 @@ export default function InternetMetering() {
               </>
             }
           />
-
-          <EmaTableShell title="URL Rule" subtitle={`Selected scope: ${selectedNode.label}`}>
-            <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end">
-              <EmaFilterField label="New URL / Domain">
-                <input
-                  value={newUrl}
-                  onChange={(event) => setNewUrl(event.target.value)}
-                  placeholder="example.com"
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-700 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                />
-              </EmaFilterField>
-              <EmaButton variant="primary" onClick={() => void addUrl()} disabled={!newUrl.trim()}>
-                <Plus size={15} />
-                Add URL
-              </EmaButton>
-              <EmaButton variant="danger" onClick={() => void removeSelectedUrl()} disabled={!selectedNode.urlMainIdn}>
-                <Trash2 size={15} />
-                Remove Selected
-              </EmaButton>
-            </div>
-          </EmaTableShell>
 
           <EmaTableShell title="Usage Records" subtitle={`${selectedNode.label} • ${filteredRows.length.toLocaleString()} records`}>
             {loading ? <EmaSpinner label="Loading internet usage..." /> : <EmaTable columns={usageColumns} rows={pagedRows} getRowKey={(row, index) => `${row.urlMainIdn}-${row.id}-${index}`} emptyText="No usage records found." />}
