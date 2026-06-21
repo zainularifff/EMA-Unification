@@ -30,7 +30,6 @@ import {
   Plus,
   RefreshCw,
   Timer,
-  Trash2,
 } from "lucide-react";
 import internetMeteringService from "../services/internetMeteringService";
 
@@ -407,21 +406,6 @@ export default function InternetMetering() {
     }
   };
 
-  const removeSelectedUrl = async () => {
-    if (!selectedNode.urlMainIdn) return;
-    setMessage("");
-    setError("");
-    try {
-      await internetMeteringService.deleteUrl({ URLMain_Idn: selectedNode.urlMainIdn, urlID: selectedNode.urlMainIdn });
-      setSelectedNodeId("all");
-      setMessage("URL rule removed.");
-      await loadTrees();
-      await loadUsage();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to remove URL rule.");
-    }
-  };
-
   const exportRows = () => {
     const headers = ["Domain", "URL ID", "Used Time", "Counts", "Device", "Date"];
     const csvRows = filteredRows.map((row) => [row.domainName, row.urlMainIdn, formatDuration(row.usedTime), row.counts, row.device, row.date]);
@@ -553,17 +537,13 @@ export default function InternetMetering() {
           <EmaToolbar
             left={
               <>
-                <EmaButton variant="primary" onClick={() => void runMeteringAction("collect")} disabled={actionLoading !== null || loading}>
-                  <Activity size={15} />
-                  {actionLoading === "collect" ? "Collecting..." : "Collect"}
-                </EmaButton>
                 <EmaButton variant="primary" onClick={() => setShowAddUrlModal(true)}>
                   <Plus size={15} />
                   Add URL
                 </EmaButton>
-                <EmaButton variant="danger" onClick={() => void removeSelectedUrl()} disabled={!selectedNode.urlMainIdn}>
-                  <Trash2 size={15} />
-                  Remove Selected
+                <EmaButton variant="primary" onClick={() => void runMeteringAction("collect")} disabled={actionLoading !== null || loading}>
+                  <Activity size={15} />
+                  {actionLoading === "collect" ? "Collecting..." : "Collect"}
                 </EmaButton>
               </>
             }
