@@ -1,3795 +1,916 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import type { ButtonHTMLAttributes, FormEvent, ReactNode } from 'react';
-import { incidents as incidentsService, incidentConfig as incidentConfigService, incidentCategories as incidentCategoriesService, } from '../services/IncidentService';
-import { users as usersService, roles as rolesService } from '../services/UserService';
-import { assets as assetsService } from '../services/AssetService';
-import { knowledgeBase as knowledgeBaseService } from '../services/KnowledgeBaseService';
-import { engineerAvailability as engineerAvailabilityService } from '../services/EngineerAvailabilityService';
-import { ArrowRightLeft, BookOpen, CheckCircle2, ChevronDown, Clock, Download, Eye, Filter, Loader2, Monitor, Pencil, Plus, Printer, RefreshCw, Search, Send, Settings, ShieldAlert, Ticket, Trash2, User, Users, X, } from 'lucide-react';
-type AppUser = {
-    id?: string | number;
-    name?: string;
-    username?: string;
-    userID?: string;
-    role?: string;
-    email?: string;
-    permissions?: {
-        incidents?: {
-            view?: boolean;
-            create?: boolean;
-            edit?: boolean;
-            delete?: boolean;
-        };
-    };
-};
-type ViewMode = 'list' | 'form' | 'kb';
-type FormMode = 'create' | 'edit';
-type QueueKey = 'all' | 'my' | 'sla-risk' | 'unassigned' | 'awaiting' | 'in-progress' | 'pending-user' | 'pending-vendor' | 'on-site' | 'resolved' | 'knowledge';
-type ToastState = {
-    message: string;
-    type: 'success' | 'error' | 'warning' | 'info';
-} | null;
-type ConfirmDialogState = {
-    title: string;
-    message: string;
-    meta?: string;
-    tone?: 'danger' | 'warning' | 'info';
-    confirmLabel?: string;
-    cancelLabel?: string;
-    loading?: boolean;
-    requiresReason?: boolean;
-    reasonLabel?: string;
-    reasonPlaceholder?: string;
-    minReasonLength?: number;
-    onConfirm: (reason?: string) => Promise<void> | void;
-} | null;
-type SlaConfig = {
-    id?: number | string;
-    priority: string;
-    label?: string;
-    responseTimeMin?: number;
-    resolutionTimeHrs?: number;
-    escalationPolicy?: string;
-};
-type EngineerOption = {
-    id?: string | number;
-    userID?: string | number;
-    UserID?: string | number;
-    userId?: string | number;
-    UserId?: string | number;
-    name?: string;
-    username?: string;
-    email?: string;
-    role?: string;
-    roleName?: string;
-    roles?: string[];
-    supportLevel?: string;
-    department?: string;
-    currentStatus?: string;
-    status?: string;
-    isOnLeave?: boolean;
-    leaveStatus?: string;
-    leaveReason?: string;
-    leaveStartDate?: string;
-    leaveEndDate?: string;
-    StartDate?: string;
-    EndDate?: string;
-};
-const SERVICE_DESK_SUPPORT_LEVELS = ['L1 Support', 'L2 Support', 'L3 Support'];
-function normalizeRoleText(value: any) {
-    return String(value || '').trim();
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  AlertCircle,
+  ArrowRightLeft,
+  BookOpen,
+  CheckCircle2,
+  Clock,
+  Download,
+  Eye,
+  Filter,
+  Loader2,
+  Monitor,
+  Pencil,
+  Plus,
+  Printer,
+  RefreshCw,
+  Search,
+  Settings,
+  ShieldAlert,
+  Ticket,
+  Trash2,
+  User,
+  Users,
+  X,
+} from "lucide-react";
+import { incidents as incidentsService, incidentCategories as incidentCategoriesService } from "../services/IncidentService";
+import { users as usersService, roles as rolesService } from "../services/UserService";
+import { assets as assetsService } from "../services/AssetService";
+import { knowledgeBase as knowledgeBaseService } from "../services/KnowledgeBaseService";
+
+type QueueKey =
+  | "all"
+  | "my"
+  | "sla-risk"
+  | "unassigned"
+  | "awaiting"
+  | "in-progress"
+  | "pending-user"
+  | "pending-vendor"
+  | "on-site"
+  | "resolved"
+  | "knowledge";
+
+type ToastState = { type: "success" | "error" | "warning" | "info"; message: string } | null;
+type SortConfig = { key: string; direction: "asc" | "desc" };
+type AnyRow = Record<string, any>;
+
+const STATUS_OPTIONS = ["Awaiting", "In Progress", "Pending Approval", "Pending User", "Pending Vendor", "On Site", "Resolved", "Rejected"];
+const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
+const SUPPORT_LEVELS = ["L1 Support", "L2 Support", "L3 Support"];
+const PAGE_SIZE = 10;
+
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
 }
-function getRoleDisplayName(role: any) {
-    return normalizeRoleText(role?.RoleName ||
-        role?.roleName ||
-        role?.name ||
-        role?.role ||
-        role?.label ||
-        role);
+
+function valueOf(row: AnyRow | null | undefined, keys: string[], fallback = "") {
+  if (!row) return fallback;
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") return String(value).trim();
+  }
+  return fallback;
 }
-function normalizeSupportLevelName(value: any) {
-    const role = normalizeRoleText(value);
-    const match = role.match(/\bl\s*([123])\s*support\b/i) || role.match(/\bl([123])support\b/i);
-    if (match?.[1]) {
-        return `L${match[1]} Support`;
-    }
-    return role;
+
+function getIncidentId(row: AnyRow | null | undefined) {
+  return valueOf(row, ["id", "IncidentID", "incidentID", "incidentId", "ticketId", "TicketID"]);
 }
-function getUserRoleNames(user: any) {
-    const roleSources: any[] = [];
-    if (Array.isArray(user?.roles))
-        roleSources.push(...user.roles);
-    if (Array.isArray(user?.Roles))
-        roleSources.push(...user.Roles);
-    if (Array.isArray(user?.userRoles))
-        roleSources.push(...user.userRoles);
-    roleSources.push(user?.roleName, user?.RoleName, user?.role, user?.Role, user?.role?.name, user?.role?.RoleName, user?.supportLevel, user?.SupportLevel, user?.designation, user?.Designation);
-    return roleSources
-        .flatMap((role) => String(getRoleDisplayName(role) || '').split(/[,|;]/))
-        .map((role) => normalizeSupportLevelName(role))
-        .filter(Boolean);
+
+function getUserName(row: AnyRow | null | undefined) {
+  return valueOf(row, ["name", "Name", "fullName", "FullName", "displayName", "DisplayName", "username", "Username", "email", "Email"], "");
 }
-function isSupportRoleName(roleName: any) {
-    const role = normalizeRoleText(roleName).toLowerCase();
-    return /\bl\s*[123]\s*support\b/i.test(role) || /\bl[123]support\b/i.test(role) || role.includes('support');
+
+function getUserId(row: AnyRow | null | undefined) {
+  return valueOf(row, ["id", "ID", "userID", "UserID", "userId", "UserId", "email", "Email"], getUserName(row));
 }
-function getPrimarySupportLevel(user: any) {
-    const roles = getUserRoleNames(user);
-    return (SERVICE_DESK_SUPPORT_LEVELS.find((level) => roles.some((role) => normalizeSupportLevelName(role).toLowerCase() === level.toLowerCase())) ||
-        roles.find((role) => /\bl\s*[123]\s*support\b/i.test(role) || /\bl[123]support\b/i.test(role)) ||
-        roles.find((role) => /support/i.test(role)) ||
-        '');
+
+function getCategoryName(row: AnyRow | null | undefined) {
+  return valueOf(row, ["name", "Name", "category", "Category", "categoryName", "CategoryName", "label", "Label"]);
 }
-function userMatchesSupportLevel(user: any, supportLevel: string) {
-    const selectedLevel = normalizeSupportLevelName(supportLevel).toLowerCase();
-    if (!selectedLevel)
-        return false;
-    return getUserRoleNames(user).some((role) => normalizeSupportLevelName(role).toLowerCase() === selectedLevel);
+
+function getStatus(row: AnyRow | null | undefined) {
+  const status = valueOf(row, ["status", "Status"], "Awaiting");
+  return status.toLowerCase() === "solved" ? "Resolved" : status;
 }
-function getEngineerKey(engineer: EngineerOption) {
-    return String(engineer.userID ??
-        engineer.UserID ??
-        engineer.userId ??
-        engineer.UserId ??
-        engineer.id ??
-        engineer.name ??
-        engineer.username ??
-        engineer.email ??
-        '');
+
+function getPriority(row: AnyRow | null | undefined) {
+  return valueOf(row, ["priority", "Priority", "urgency", "Urgency"], "Medium");
 }
-function isEngineerOnLeave(engineer: EngineerOption | null | undefined) {
-    if (!engineer)
-        return false;
-    const status = String(engineer.currentStatus || engineer.status || engineer.leaveStatus || '').toLowerCase();
-    return Boolean(engineer.isOnLeave) || status.includes('leave') || status.includes('not available') || status.includes('unavailable');
+
+function getTitle(row: AnyRow | null | undefined) {
+  return valueOf(row, ["title", "Title", "incidentTitle", "IncidentTitle", "problemDescription", "ProblemDescription"], "Untitled incident");
 }
-function getEngineerLeaveMessage(engineer: EngineerOption) {
-    const name = getUserName(engineer) || 'Selected engineer';
-    const status = engineer.leaveStatus || engineer.currentStatus || 'on leave';
-    const start = normalizeDate(engineer.leaveStartDate || engineer.StartDate);
-    const end = normalizeDate(engineer.leaveEndDate || engineer.EndDate);
-    const period = start && end ? ` from ${start} to ${end}` : '';
-    const reason = engineer.leaveReason ? ` (${engineer.leaveReason})` : '';
-    return `${name} is ${status}${period}${reason}. You can still assign this ticket if needed.`;
+
+function getDescription(row: AnyRow | null | undefined) {
+  return valueOf(row, ["description", "Description", "details", "Details", "incidentDetail", "IncidentDetail"], "");
 }
-function normalizeLookupKey(value: any) {
-    return String(value ?? '').trim().toLowerCase();
+
+function getRequester(row: AnyRow | null | undefined) {
+  return valueOf(row, ["requesterName", "RequesterName", "customerName", "CustomerName", "reporterId", "ReporterID", "requesterId", "RequesterID"], "N/A");
 }
-function getEngineerLookupKeys(engineer: any) {
-    return [
-        engineer?.id,
-        engineer?.ID,
-        engineer?.userID,
-        engineer?.UserID,
-        engineer?.userId,
-        engineer?.UserId,
-        engineer?.emaUserId,
-        engineer?.EMAUserID,
-        engineer?.employeeId,
-        engineer?.EmployeeID,
-        engineer?.email,
-        engineer?.Email,
-        engineer?.name,
-        engineer?.Name,
-        engineer?.username,
-        engineer?.Username,
-        engineer?.engineerName,
-        engineer?.EngineerName,
-    ]
-        .map(normalizeLookupKey)
-        .filter(Boolean);
+
+function getAsset(row: AnyRow | null | undefined) {
+  return valueOf(row, ["assetId", "AssetID", "assetTag", "AssetTag", "deviceName", "DeviceName", "computerName", "ComputerName"], "—");
 }
-function mergeEngineerAvailabilityIntoEmaUsers(emaEngineers: EngineerOption[], availabilityRows: EngineerOption[]) {
-    if (!Array.isArray(availabilityRows) || availabilityRows.length === 0) {
-        return emaEngineers;
-    }
-    const availabilityByKey = new Map<string, EngineerOption>();
-    availabilityRows.forEach((row) => {
-        getEngineerLookupKeys(row).forEach((key) => {
-            availabilityByKey.set(key, row);
-        });
-    });
-    return emaEngineers.map((engineer) => {
-        const match = getEngineerLookupKeys(engineer)
-            .map((key) => availabilityByKey.get(key))
-            .find(Boolean);
-        if (!match)
-            return engineer;
-        return {
-            ...engineer,
-            currentStatus: match.currentStatus ||
-                match.status ||
-                match.leaveStatus ||
-                match.AvailabilityStatus ||
-                match.availabilityStatus ||
-                engineer.currentStatus,
-            status: match.currentStatus ||
-                match.status ||
-                match.leaveStatus ||
-                match.AvailabilityStatus ||
-                match.availabilityStatus ||
-                engineer.status,
-            isOnLeave: Boolean(match.isOnLeave) ||
-                Boolean((match as any).onLeave) ||
-                Boolean((match as any).IsOnLeave) ||
-                Boolean((match as any).OnLeave) ||
-                isEngineerOnLeave(match),
-            leaveStatus: match.leaveStatus ||
-                (match as any).LeaveStatus ||
-                match.currentStatus ||
-                match.status ||
-                engineer.leaveStatus,
-            leaveReason: match.leaveReason ||
-                (match as any).LeaveReason ||
-                (match as any).remarks ||
-                (match as any).Remarks ||
-                engineer.leaveReason,
-            leaveStartDate: match.leaveStartDate ||
-                match.StartDate ||
-                (match as any).startDate ||
-                (match as any).dateFrom ||
-                (match as any).DateFrom ||
-                engineer.leaveStartDate,
-            leaveEndDate: match.leaveEndDate ||
-                match.EndDate ||
-                (match as any).endDate ||
-                (match as any).dateTo ||
-                (match as any).DateTo ||
-                engineer.leaveEndDate,
-        };
-    });
+
+function getAssigned(row: AnyRow | null | undefined) {
+  return valueOf(row, ["assignedTo", "AssignedTo", "engineerName", "EngineerName"], "Unassigned");
 }
-type AdvancedFilters = {
-    reqNo: string;
-    requester: string;
-    incidentTitle: string;
-    assetTag: string;
-    category: string;
-    subcategory: string;
-    detail: string;
-    dateFrom: string;
-    dateTo: string;
-    slaStatus: string;
-};
-function safeJsonParse(raw: string | null) {
-    if (!raw || raw === 'undefined' || raw === 'null')
-        return null;
-    try {
-        return JSON.parse(raw);
-    }
-    catch {
-        return null;
-    }
+
+function parseDate(value: any) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const date = new Date(raw.includes(" ") ? raw.replace(" ", "T") : raw);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
-function readJsonStorage(key: string) {
-    const raw = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
-    return safeJsonParse(raw);
+
+function formatDate(value: any) {
+  const date = parseDate(value);
+  if (!date) return value ? String(value) : "—";
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date);
 }
-const STATUS_OPTIONS = [
-    'Awaiting',
-    'In Progress',
-    'Pending Approval',
-    'Pending User',
-    'Pending Vendor',
-    'On Site',
-    'Resolved',
-    'Rejected',
-];
-const PRIORITY_OPTIONS = ['Critical', 'High', 'Medium', 'Low'];
-const DEVICE_TYPES = ['Desktop', 'Laptop', 'Tablet', 'Mobile', 'Server', 'Network Device', 'Printer', 'Other'];
-const MALAYSIA_TIME_ZONE = 'Asia/Kuala_Lumpur';
-const MALAYSIA_UTC_OFFSET = '+08:00';
-const urgencyToSlaPriority: Record<string, string> = {
-    Critical: 'P1',
-    High: 'P2',
-    Medium: 'P3',
-    Low: 'P4',
-};
-const SLA_PAUSED_STATUSES = new Set(['pending approval', 'pending user', 'pending vendor']);
-function getSlaPriorityCode(priority: string) {
-    return urgencyToSlaPriority[String(priority || '').trim()] || 'P3';
+
+function formatDateTime(value: any) {
+  const date = parseDate(value);
+  if (!date) return value ? String(value) : "—";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date).replace(",", "");
 }
-function formatSlaDuration(totalMinutes: number) {
-    const safeMinutes = Math.max(0, Math.floor(Math.abs(totalMinutes)));
-    const days = Math.floor(safeMinutes / 1440);
-    const hours = Math.floor((safeMinutes % 1440) / 60);
-    const minutes = safeMinutes % 60;
-    if (days > 0)
-        return `${days}d ${hours}h ${minutes}m`;
-    if (hours > 0)
-        return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
+
+function normalizeText(value: any) {
+  return String(value || "").trim().toLowerCase();
 }
-function formatAttachmentSize(size: any) {
-    const bytes = Number(size || 0);
-    if (!Number.isFinite(bytes) || bytes <= 0)
-        return '';
-    if (bytes < 1024)
-        return `${bytes} B`;
-    if (bytes < 1024 * 1024)
-        return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-function getStoredAuthToken() {
-    if (typeof window === 'undefined')
-        return '';
-    const directKeys = ['token', 'accessToken', 'authToken', 'emaToken', 'ema-token'];
-    for (const key of directKeys) {
-        const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
-        if (value && value !== 'undefined' && value !== 'null')
-            return value.replace(/^Bearer\s+/i, '');
-    }
-    const objectKeys = ['user', 'authUser', 'currentUser', 'emaUser', 'ema-user', 'userData', 'auth', 'ema-auth', 'authData', 'loginUser'];
-    for (const key of objectKeys) {
-        const parsed = readJsonStorage(key);
-        const token = parsed?.token ||
-            parsed?.accessToken ||
-            parsed?.authToken ||
-            parsed?.data?.token ||
-            parsed?.data?.accessToken ||
-            parsed?.data?.authToken;
-        if (token)
-            return String(token).replace(/^Bearer\s+/i, '');
-    }
-    return '';
-}
-const INCIDENT_ATTACHMENT_MAX_FILES = 3;
-const INCIDENT_ATTACHMENT_MAX_MB = 10;
-const INCIDENT_ATTACHMENT_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_MB * 1024 * 1024;
-const INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_BYTES;
-const INCIDENT_ATTACHMENT_ALLOWED_TYPES = [
-    '.pdf',
-    '.doc',
-    '.docx',
-    '.xls',
-    '.xlsx',
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.txt',
-].join(',');
-function getServiceDeskApiBase() {
-    const env = (import.meta as any)?.env || {};
-    const configuredBase = String(env.VITE_API_BASE_URL || env.VITE_API_URL || '').trim();
-    if (configuredBase)
-        return configuredBase.replace(/\/$/, '');
-    if (typeof window !== 'undefined') {
-        const { protocol, hostname, port } = window.location;
-        if (port && port !== '3001')
-            return `${protocol}//${hostname}:3001`;
-    }
-    return '';
-}
-function getServiceDeskApiUrl(pathValue: string) {
-    const path = String(pathValue || '');
-    if (/^https?:\/\//i.test(path))
-        return path;
-    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    const base = getServiceDeskApiBase();
-    return base ? `${base}${normalizedPath}` : normalizedPath;
-}
-async function readAttachmentError(response: Response) {
-    try {
-        const data = await response.clone().json();
-        return data?.message || data?.error || '';
-    }
-    catch (error) {
-        try {
-            return await response.clone().text();
-        }
-        catch (textError) {
-            return '';
-        }
-    }
-}
-function getIncidentAttachmentUrl(file: any) {
-    const url = file?.url || file?.filePath || file?.FilePath || '';
-    if (!url || url === '#')
-        return '#';
-    return getServiceDeskApiUrl(String(url));
-}
-const emptyForm = () => ({
-    id: '',
-    title: '',
-    description: '',
-    priority: 'Medium',
-    slaPriority: 'P3',
-    status: 'Awaiting',
-    category: '',
-    subcategory: '',
-    incidentDetail: '',
-    assetId: '',
-    assetBrand: '',
-    assetModel: '',
-    assetOS: '',
-    requesterId: '',
-    requesterName: '',
-    deviceType: '',
-    reporterId: '',
-    createdAt: new Date().toISOString(),
-    slaDue: '',
-    assignedTo: '',
-    assignedLevel: '',
-    firstResponseAt: '',
-    resolvedAt: '',
-    rootCause: '',
-    actionPlan: '',
-    additionalMemo: '',
-    remarks: '',
-});
-const emptyAdvancedFilters = (): AdvancedFilters => ({
-    reqNo: '',
-    requester: '',
-    incidentTitle: '',
-    assetTag: '',
-    category: '',
-    subcategory: '',
-    detail: '',
-    dateFrom: '',
-    dateTo: '',
-    slaStatus: 'All',
-});
-function getStoredUser(): AppUser {
-    const objectKeys = ['user', 'authUser', 'currentUser', 'emaUser', 'ema-user', 'userData', 'auth', 'ema-auth', 'authData', 'loginUser'];
-    for (const key of objectKeys) {
-        const parsed = readJsonStorage(key);
-        const user = parsed?.user || parsed?.data?.user || parsed?.data || parsed?.profile || parsed;
-        if (user &&
-            typeof user === 'object' &&
-            (user.name ||
-                user.Name ||
-                user.fullName ||
-                user.FullName ||
-                user.displayName ||
-                user.DisplayName ||
-                user.username ||
-                user.Username ||
-                user.userName ||
-                user.UserName ||
-                user.userID ||
-                user.UserID ||
-                user.email ||
-                user.Email)) {
-            const displayName = user.name ||
-                user.Name ||
-                user.fullName ||
-                user.FullName ||
-                user.displayName ||
-                user.DisplayName ||
-                user.username ||
-                user.Username ||
-                user.userName ||
-                user.UserName ||
-                user.userID ||
-                user.UserID ||
-                user.email ||
-                user.Email ||
-                'Current User';
-            return {
-                ...user,
-                id: user.id || user.ID || user.userID || user.UserID || user.userId || user.UserId || user.email || user.Email || displayName,
-                name: displayName,
-                username: user.username || user.Username || user.userName || user.UserName || displayName,
-                email: user.email || user.Email || '',
-                role: user.role || user.Role || user.roleName || user.RoleName || 'Admin',
-                permissions: user.permissions || {
-                    incidents: { view: true, create: true, edit: true, delete: true },
-                },
-            };
-        }
-    }
-    return {
-        name: 'Current User',
-        role: 'Admin',
-        permissions: {
-            incidents: { view: true, create: true, edit: true, delete: true },
-        },
-    };
-}
-function cn(...values: Array<string | false | null | undefined>) {
-    return values.filter(Boolean).join(' ');
-}
-type AppButtonVariant = "primary" | "secondary" | "success" | "warning" | "danger" | "light" | "outline-primary" | "outline-secondary" | "outline-danger" | "outline-light" | string;
-type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-    variant?: AppButtonVariant;
-    size?: "sm" | "md" | "lg" | string;
-    fullWidth?: boolean;
-    loading?: boolean;
-    leftIcon?: ReactNode;
-    rightIcon?: ReactNode;
-};
-function mapServiceDeskButtonVariant(variant: AppButtonVariant = "primary") {
-    const normalized = String(variant || "primary").toLowerCase();
-    if (normalized === "primary")
-        return "primary-btn btn btn-primary";
-    if (normalized === "danger")
-        return "danger-btn btn btn-danger";
-    if (normalized === "warning")
-        return "soft-btn btn btn-warning";
-    if (normalized === "success")
-        return "soft-btn btn btn-success";
-    if (normalized === "light")
-        return "soft-btn btn btn-light";
-    if (normalized === "secondary")
-        return "soft-btn btn btn-secondary";
-    if (normalized === "outline-danger")
-        return "danger-btn btn btn-outline-danger";
-    if (normalized === "outline-primary")
-        return "soft-btn btn btn-outline-primary";
-    if (normalized === "outline-light")
-        return "soft-btn btn btn-outline-light";
-    return "soft-btn btn btn-outline-secondary";
-}
-function mapServiceDeskButtonSize(size: AppButtonProps["size"] = "md") {
-    const normalized = String(size || "md").toLowerCase();
-    if (normalized === "sm")
-        return "btn-sm";
-    if (normalized === "lg")
-        return "btn-lg";
-    return "";
-}
-function AppButton({ variant = "primary", size = "md", fullWidth = false, loading = false, leftIcon, rightIcon, disabled, children, type = "button", ...props }: AppButtonProps) {
-    return (<button {...props} type={type} disabled={disabled || loading}>
-      {loading ? <Loader2 size={15}/> : leftIcon ? <span>{leftIcon}</span> : null}
-      <span>{children}</span>
-      {!loading && rightIcon ? <span>{rightIcon}</span> : null}
-    </button>);
-}
-type AppIconButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
-    icon: ReactNode;
-    label: string;
-    variant?: AppButtonVariant;
-    size?: "sm" | "md" | "lg" | string;
-    loading?: boolean;
-};
-function AppIconButton({ icon, label, variant = "outline-secondary", size = "md", loading = false, disabled, type = "button", ...props }: AppIconButtonProps) {
-    return (<button {...props} type={type} aria-label={label} title={props.title || label} disabled={disabled || loading}>
-      {loading ? <Loader2 size={15}/> : icon}
-    </button>);
-}
-type AppPaginationProps = {
-    currentPage: number;
-    totalPages: number;
-    totalItems?: number;
-    pageSize?: number;
-    showPageSize?: boolean;
-    onPageChange: (page: number) => void;
-};
-function AppPagination({ currentPage, totalPages, totalItems = 0, pageSize = 10, onPageChange, }: AppPaginationProps) {
-    const safeTotalPages = Math.max(1, Number(totalPages) || 1);
-    const safeCurrentPage = Math.min(Math.max(1, Number(currentPage) || 1), safeTotalPages);
-    const safePageSize = Math.max(1, Number(pageSize) || 10);
-    const safeTotalItems = Math.max(0, Number(totalItems) || 0);
-    const firstItem = safeTotalItems === 0 ? 0 : (safeCurrentPage - 1) * safePageSize + 1;
-    const lastItem = Math.min(safeCurrentPage * safePageSize, safeTotalItems);
-    const goToPage = (page: number) => {
-        const nextPage = Math.min(Math.max(1, page), safeTotalPages);
-        if (nextPage !== safeCurrentPage) {
-            onPageChange(nextPage);
-        }
-    };
-    return (<div>
-      <div>Page {safeCurrentPage} / {safeTotalPages}</div>
-      <div>
-        <button type="button" disabled={safeCurrentPage <= 1} onClick={() => goToPage(1)}>«</button>
-        <button type="button" disabled={safeCurrentPage <= 1} onClick={() => goToPage(safeCurrentPage - 1)}>‹</button>
-        <span>{safeCurrentPage}</span>
-        <button type="button" disabled={safeCurrentPage >= safeTotalPages} onClick={() => goToPage(safeCurrentPage + 1)}>›</button>
-        <button type="button" disabled={safeCurrentPage >= safeTotalPages} onClick={() => goToPage(safeTotalPages)}>»</button>
-      </div>
-    </div>);
-}
-function areFloatingMenuStylesEqual(current: CSSProperties, next: CSSProperties) {
-    return (current.position === next.position &&
-        current.left === next.left &&
-        current.top === next.top &&
-        current.width === next.width &&
-        current.maxHeight === next.maxHeight &&
-        current.zIndex === next.zIndex);
-}
-type ServiceDeskSelectOption = {
-    value: string;
-    label: string;
-    disabled?: boolean;
-};
-type ServiceDeskSelectProps = {
-    value: string;
-    options: ServiceDeskSelectOption[];
-    placeholder?: string;
-    disabled?: boolean;
-    ariaLabel?: string;
-    menuClassName?: string;
-    onChange: (value: string) => void;
-    onOpen?: () => void;
-};
-function ServiceDeskSelect({ value, options, placeholder = 'Select option', disabled = false, ariaLabel, menuClassName = '', onChange, onOpen, }: ServiceDeskSelectProps) {
-    const triggerRef = useRef<HTMLButtonElement | null>(null);
-    const menuRef = useRef<HTMLDivElement | null>(null);
-    const menuScrollFrameRef = useRef<number | null>(null);
-    const [open, setOpen] = useState(false);
-    const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
-    const selected = options.find((option) => option.value === value);
-    const selectedLabel = selected?.label || placeholder;
-    const updateMenuPosition = () => {
-        const trigger = triggerRef.current;
-        if (!trigger || typeof window === 'undefined')
-            return;
-        const rect = trigger.getBoundingClientRect();
-        const viewportPadding = 16;
-        const gap = 8;
-        const menuWidth = Math.max(rect.width, 210);
-        const optionHeight = 36;
-        const estimatedHeight = Math.min(288, Math.max(44, options.length * optionHeight + 10));
-        const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
-        const availableAbove = rect.top - viewportPadding;
-        const openAbove = availableBelow < estimatedHeight && availableAbove > availableBelow;
-        const maxHeight = Math.max(96, Math.min(estimatedHeight, openAbove ? availableAbove : availableBelow));
-        const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - menuWidth - viewportPadding);
-        const top = openAbove
-            ? Math.max(viewportPadding, rect.top - maxHeight - gap)
-            : Math.min(rect.bottom + gap, window.innerHeight - maxHeight - viewportPadding);
-        const nextStyle: CSSProperties = {
-            position: 'fixed',
-            left,
-            top,
-            width: menuWidth,
-            maxHeight,
-            zIndex: 2147483600,
-        };
-        setMenuStyle((current) => (areFloatingMenuStylesEqual(current, nextStyle) ? current : nextStyle));
-    };
-    useEffect(() => {
-        if (!open)
-            return undefined;
-        updateMenuPosition();
-        const handlePointerDown = (event: MouseEvent) => {
-            const target = event.target as Node;
-            if (triggerRef.current?.contains(target) || menuRef.current?.contains(target))
-                return;
-            setOpen(false);
-        };
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape')
-                setOpen(false);
-        };
-        const handleResize = () => updateMenuPosition();
-        const handleScroll = (event: Event) => {
-            const target = event.target as Node | null;
-            // Keep the option list open when the user scrolls inside the dropdown itself.
-            // Close it for page/modal scrolling instead of recalculating position every frame;
-            // that keeps the create-ticket modal smooth.
-            if (target && menuRef.current?.contains(target))
-                return;
-            setOpen(false);
-        };
-        document.addEventListener('mousedown', handlePointerDown);
-        document.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('resize', handleResize);
-        window.addEventListener('scroll', handleScroll, true);
-        return () => {
-            document.removeEventListener('mousedown', handlePointerDown);
-            document.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('resize', handleResize);
-            window.removeEventListener('scroll', handleScroll, true);
-            if (menuScrollFrameRef.current !== null) {
-                window.cancelAnimationFrame(menuScrollFrameRef.current);
-                menuScrollFrameRef.current = null;
-            }
-        };
-    }, [open, value, options.length]);
-    const menuNode = open && !disabled && typeof document !== 'undefined'
-        ? createPortal(<div ref={menuRef} role="listbox" aria-label={ariaLabel || placeholder}>
-          {options.map((option) => {
-                const active = option.value === value;
-                return (<button key={`${option.value}-${option.label}`} type="button" role="option" aria-selected={active} disabled={option.disabled} onClick={() => {
-                        if (option.disabled)
-                            return;
-                        onChange(option.value);
-                        setOpen(false);
-                    }}>
-                <span>{option.label}</span>
-                {active && <span>✓</span>}
-              </button>);
-            })}
-        </div>, document.body)
-        : null;
-    return (<div>
-      <button ref={triggerRef} type="button" onClick={() => {
-            if (disabled)
-                return;
-            onOpen?.();
-            setOpen((current) => !current);
-        }} disabled={disabled} aria-expanded={open} aria-label={ariaLabel || placeholder}>
-        <span>{selectedLabel}</span>
-        <ChevronDown size={14}/>
-      </button>
-      {menuNode}
-    </div>);
-}
-async function safeApi<T>(label: string, request: Promise<T>, fallback: T, required = false): Promise<T> {
-    try {
-        return await request;
-    }
-    catch (error) {
-        console.error(`Service Desk API failed: ${label}`, error);
-        if (required) {
-            throw error;
-        }
-        return fallback;
-    }
-}
-function getId(row: any) {
-    return String(row?.id ?? row?.IncidentID ?? row?.incidentId ?? '');
-}
-function makeIncidentId() {
-    const timePart = Date.now().toString().slice(-6);
-    const randomPart = Math.floor(Math.random() * 90 + 10);
-    return `INC-${timePart}${randomPart}`;
-}
-function getClientName(client: any) {
-    return client?.companyName || client?.requesterName || client?.RequesterName || client?.customerName || client?.CustomerName || client?.name || client?.username || client?.userID || client?.UserID || client?.Username || '';
-}
-function getClientId(client: any) {
-    return String(client?.id ?? client?.userID ?? client?.UserID ?? client?.requesterId ?? client?.RequesterID ?? client?.customerId ?? client?.CustomerID ?? getClientName(client));
-}
-function cleanAssetText(value: any, fallback = '') {
-    if (value === undefined || value === null)
-        return fallback;
-    const text = String(value).trim();
-    if (!text || text === '-' || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined')
-        return fallback;
-    return text;
-}
-function inferAssetBrand(...values: any[]) {
-    const text = values.map((value) => cleanAssetText(value)).filter(Boolean).join(' ').toLowerCase();
-    if (!text)
-        return '';
-    const rules = [
-        { brand: 'Dell', keys: ['dell', 'latitude', 'optiplex', 'precision', 'vostro', 'inspiron', 'xps'] },
-        { brand: 'HP', keys: ['hewlett', 'hp ', 'probook', 'elitebook', 'zbook', 'pavilion', 'compaq'] },
-        { brand: 'Lenovo', keys: ['lenovo', 'thinkpad', 'thinkcentre', 'ideapad', 'legion'] },
-        { brand: 'Apple', keys: ['apple', 'macbook', 'imac', 'mac mini', 'mac pro'] },
-        { brand: 'Microsoft', keys: ['surface'] },
-        { brand: 'Acer', keys: ['acer', 'aspire', 'travelmate', 'predator'] },
-        { brand: 'ASUS', keys: ['asus', 'zenbook', 'vivobook', 'rog '] },
-        { brand: 'Samsung', keys: ['samsung', 'galaxy'] },
-        { brand: 'Huawei', keys: ['huawei', 'matebook'] },
-        { brand: 'Toshiba', keys: ['toshiba', 'dynabook'] },
-    ];
-    return rules.find((rule) => rule.keys.some((key) => text.includes(key)))?.brand || '';
-}
-function getAssetValue(asset: any) {
-    return cleanAssetText(asset?.assetTag ||
-        asset?.name ||
-        asset?.computerName ||
-        asset?.ComputerName ||
-        asset?.DeviceName ||
-        asset?.Object_DeviceID ||
-        asset?.DeviceID ||
-        asset?.assetId ||
-        asset?.id ||
-        asset?.AssetTag ||
-        asset?.AssetID);
-}
-function getAssetBrand(asset: any) {
-    return cleanAssetText(asset?.brand ||
-        asset?.Brand ||
-        asset?.manufacturer ||
-        asset?.Manufacturer ||
-        inferAssetBrand(getAssetModel(asset), getAssetValue(asset), asset?.deviceType, asset?.DeviceType));
-}
-function getAssetModel(asset: any) {
-    return cleanAssetText(asset?.model || asset?.Model || asset?.DeviceModelName || asset?.machineType || asset?.MachineType);
-}
-function getAssetOS(asset: any) {
-    return cleanAssetText(asset?.osName || asset?.os || asset?.OS || asset?.PlatformType || asset?.operatingSystem || asset?.OperatingSystem);
-}
-function getAssetSearchText(asset: any) {
-    return [
-        getAssetValue(asset),
-        getAssetBrand(asset),
-        getAssetModel(asset),
-        getAssetOS(asset),
-        asset?.deviceType || asset?.DeviceType || '',
-        asset?.requesterName || asset?.RequesterName || asset?.customerName || asset?.CustomerName || asset?.department || '',
-    ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-}
-function getUserName(user: any) {
-    return (user?.name ||
-        user?.Name ||
-        user?.fullName ||
-        user?.FullName ||
-        user?.displayName ||
-        user?.DisplayName ||
-        user?.username ||
-        user?.Username ||
-        user?.userName ||
-        user?.UserName ||
-        user?.email ||
-        user?.Email ||
-        '');
-}
-function getCurrentLoginName(user: any) {
-    return (getUserName(user) ||
-        user?.userID ||
-        user?.UserID ||
-        user?.id ||
-        user?.ID ||
-        user?.email ||
-        user?.Email ||
-        'Current User');
-}
-function getCurrentLoginId(user: any) {
-    return String(user?.emaUserID ||
-        user?.EMAUserID ||
-        user?.EmaUserID ||
-        user?.id ||
-        user?.ID ||
-        user?.userID ||
-        user?.UserID ||
-        user?.userId ||
-        user?.UserId ||
-        user?.email ||
-        user?.Email ||
-        getCurrentLoginName(user));
-}
-function normalizeAssetKey(asset: any) {
-    return String(asset?.id ||
-        asset?.ID ||
-        asset?.assetId ||
-        asset?.AssetID ||
-        asset?.assetTag ||
-        asset?.AssetTag ||
-        asset?.computerName ||
-        asset?.ComputerName ||
-        asset?.DeviceID ||
-        asset?.Object_DeviceID ||
-        getAssetValue(asset) ||
-        JSON.stringify(asset))
-        .trim()
-        .toLowerCase();
-}
-function mergeAssetRows(...groups: any[][]) {
-    const map = new Map<string, any>();
-    groups.flat().forEach((asset) => {
-        if (!asset || typeof asset !== 'object')
-            return;
-        const key = normalizeAssetKey(asset);
-        if (!key || map.has(key))
-            return;
-        map.set(key, asset);
-    });
-    return Array.from(map.values());
-}
-function getCategoryName(row: any) {
-    return row?.name || row?.categoryName || row?.CategoryName || row?.label || row?.Category || '';
-}
-function getChildren(row: any, key: 'subcategories' | 'details') {
-    if (!row)
-        return [];
-    if (Array.isArray(row[key]))
-        return row[key];
-    if (Array.isArray(row.children))
-        return row.children;
-    if (Array.isArray(row.items))
-        return row.items;
-    return [];
-}
-function parseApiDate(value: any) {
-    if (!value)
-        return null;
-    if (value instanceof Date) {
-        return Number.isNaN(value.getTime()) ? null : value;
-    }
-    if (typeof value === 'number') {
-        const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? null : date;
-    }
-    const raw = String(value).trim();
-    if (!raw)
-        return null;
-    // Backend SQL datetime often comes as "2026-05-24T10:17:00.000"
-    // without timezone. That value is UTC from DB, but browser treats it
-    // as local time. Force no-offset ISO/SQL values to UTC before formatting
-    // to Malaysia time.
-    const hasExplicitTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw);
-    const looksLikeSqlDateTime = /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,7})?)?)?$/.test(raw);
-    const normalized = raw.includes(' ') && looksLikeSqlDateTime ? raw.replace(' ', 'T') : raw;
-    const valueToParse = looksLikeSqlDateTime && !hasExplicitTimezone ? `${normalized}Z` : normalized;
-    const date = new Date(valueToParse);
-    return Number.isNaN(date.getTime()) ? null : date;
-}
-function normalizeDate(value: any) {
-    if (!value)
-        return '';
-    const date = parseApiDate(value);
-    if (!date)
-        return String(value);
-    return new Intl.DateTimeFormat('en-GB', {
-        timeZone: MALAYSIA_TIME_ZONE,
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-    }).format(date);
-}
-function normalizeDateTime(value: any) {
-    if (!value)
-        return '—';
-    const date = parseApiDate(value);
-    if (!date)
-        return String(value);
-    return new Intl.DateTimeFormat('en-GB', {
-        timeZone: MALAYSIA_TIME_ZONE,
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    })
-        .format(date)
-        .replace(',', '');
-}
+
 function initialText(value: string) {
-    if (!value)
-        return 'NA';
-    const words = value.trim().split(/\s+/).filter(Boolean);
-    return words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join('') || 'NA';
+  const text = String(value || "").trim();
+  if (!text) return "NA";
+  return text
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
 }
-function statusClass(status: string) {
-    return status.toLowerCase().replace(/\s+/g, '-');
+
+function makeIncidentId() {
+  return `INC-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 90 + 10)}`;
 }
-function normalizeStatus(value: any) {
-    return String(value || '').trim().toLowerCase();
-}
-function standardizeIncidentStatus(value: any) {
-    const text = String(value || '').trim();
-    if (text.toLowerCase() === 'solved')
-        return 'Resolved';
-    return text;
-}
-function isDeleteLockedStatus(status: any) {
-    const normalized = normalizeStatus(status);
-    return normalized === 'closed' || normalized === 'resolved';
-}
-function getOperationalReason(data: any) {
-    const reasonFields = [data?.additionalMemo, data?.remarks];
-    for (const value of reasonFields) {
-        const reason = String(value ?? '').trim();
-        if (reason)
-            return reason;
+
+function readCurrentUser() {
+  if (typeof window === "undefined") return { name: "Current User", role: "Admin" };
+  const keys = ["user", "authUser", "currentUser", "emaUser", "ema-user", "userData", "auth", "ema-auth", "authData", "loginUser"];
+  for (const key of keys) {
+    try {
+      const raw = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const user = parsed?.user || parsed?.data?.user || parsed?.data || parsed?.profile || parsed;
+      const name = getUserName(user);
+      if (name) return { ...user, id: getUserId(user), name, role: valueOf(user, ["role", "Role", "roleName", "RoleName"], "Admin") };
+    } catch {
+      // ignore broken storage value
     }
-    return '';
+  }
+  return { name: "Current User", role: "Admin" };
 }
-function priorityClass(priority: string) {
-    return priority.toLowerCase();
+
+function emptyForm(currentUser: AnyRow) {
+  const requesterName = getUserName(currentUser) || "Current User";
+  const requesterId = getUserId(currentUser) || requesterName;
+  return {
+    id: "",
+    title: "",
+    description: "",
+    priority: "Medium",
+    status: "Awaiting",
+    category: "",
+    subcategory: "",
+    incidentDetail: "",
+    assetId: "",
+    assetBrand: "",
+    assetModel: "",
+    assetOS: "",
+    requesterId,
+    requesterName,
+    reporterId: requesterId,
+    deviceType: "",
+    assignedLevel: "",
+    assignedTo: "",
+    rootCause: "",
+    actionPlan: "",
+    additionalMemo: "",
+    remarks: "",
+    createdAt: new Date().toISOString(),
+  };
 }
-function statusRank(status: string) {
-    const map: Record<string, number> = {
-        Awaiting: 1,
-        'In Progress': 2,
-        'Pending User': 3,
-        'Pending Vendor': 4,
-        'On Site': 5,
-        Resolved: 6,
-        Rejected: 7,
-    };
-    return map[status] || 99;
+
+function getSlaMeta(row: AnyRow, now: Date) {
+  const status = normalizeText(getStatus(row));
+  if (status === "resolved" || status === "rejected") {
+    return { label: "Resolved", tone: "emerald", detail: formatDateTime(row.resolvedAt || row.ResolvedAt) };
+  }
+  const due = parseDate(row.slaDue || row.SlaDue || row.SLADue);
+  if (!due) return { label: "No SLA", tone: "slate", detail: "Not calculated" };
+  const minutes = Math.floor((due.getTime() - now.getTime()) / 60000);
+  if (minutes < 0) return { label: "Overdue", tone: "rose", detail: formatDateTime(due) };
+  if (minutes <= 1440) return { label: "Near Due", tone: "amber", detail: formatDateTime(due) };
+  return { label: "On Time", tone: "blue", detail: formatDateTime(due) };
 }
-function priorityRank(priority: string) {
-    const map: Record<string, number> = {
-        Critical: 4,
-        High: 3,
-        Medium: 2,
-        Low: 1,
-    };
-    return map[priority] || 0;
+
+function statusTone(status: string) {
+  const key = normalizeText(status);
+  if (key.includes("resolved")) return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (key.includes("progress")) return "bg-blue-50 text-blue-700 ring-blue-200";
+  if (key.includes("pending")) return "bg-amber-50 text-amber-700 ring-amber-200";
+  if (key.includes("reject")) return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (key.includes("site")) return "bg-violet-50 text-violet-700 ring-violet-200";
+  return "bg-slate-50 text-slate-700 ring-slate-200";
 }
-function getSlaMeta(incident: any, now: Date) {
-    const normalizedStatus = normalizeStatus(incident?.status);
-    if (normalizedStatus === 'resolved' || normalizedStatus === 'rejected') {
-        return {
-            label: 'Resolved',
-            detail: incident?.resolvedAt ? normalizeDateTime(incident.resolvedAt) : 'Completed',
-            className: 'resolved',
-            statusKey: 'Resolved',
-            minutes: 0,
-            dueText: incident?.slaDue ? normalizeDateTime(incident.slaDue) : '—',
-        };
-    }
-    if (SLA_PAUSED_STATUSES.has(normalizedStatus)) {
-        return {
-            label: 'SLA Paused',
-            detail: incident?.status || 'Pending',
-            className: 'paused',
-            statusKey: 'Paused',
-            minutes: Infinity,
-            dueText: incident?.slaDue ? normalizeDateTime(incident.slaDue) : '—',
-        };
-    }
-    if (!incident?.slaDue) {
-        return { label: 'No SLA', detail: 'Not calculated', className: 'unknown', statusKey: 'Unknown', minutes: Infinity, dueText: '—' };
-    }
-    const due = parseApiDate(incident.slaDue);
-    if (!due) {
-        return { label: 'Invalid', detail: String(incident.slaDue), className: 'unknown', statusKey: 'Unknown', minutes: Infinity, dueText: String(incident.slaDue) };
-    }
-    const diffMinutes = Math.floor((due.getTime() - now.getTime()) / 60000);
-    const duration = formatSlaDuration(diffMinutes);
-    const dueText = normalizeDateTime(incident.slaDue);
-    if (diffMinutes < 0) {
-        return { label: 'Overdue', detail: `${duration} overdue`, className: 'overdue', statusKey: 'Overdue', minutes: diffMinutes, dueText };
-    }
-    if (diffMinutes <= 24 * 60) {
-        return { label: 'Near Due', detail: `Due in ${duration}`, className: 'near', statusKey: 'Near Due', minutes: diffMinutes, dueText };
-    }
-    return { label: 'On Time', detail: `Due in ${duration}`, className: 'ontrack', statusKey: 'On Time', minutes: diffMinutes, dueText };
+
+function priorityTone(priority: string) {
+  const key = normalizeText(priority);
+  if (key.includes("critical")) return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (key.includes("high")) return "bg-orange-50 text-orange-700 ring-orange-200";
+  if (key.includes("medium")) return "bg-blue-50 text-blue-700 ring-blue-200";
+  return "bg-slate-50 text-slate-700 ring-slate-200";
 }
-function isActiveUser(user: any) {
-    if (user?.isActive === false)
-        return false;
-    if (String(user?.status || '').toLowerCase() === 'inactive')
-        return false;
-    return true;
+
+function selectClass() {
+  return "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-800 shadow-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
 }
-function isEngineer(user: any) {
-    return isActiveUser(user) && getUserRoleNames(user).some((role) => isSupportRoleName(role));
+
+function inputClass() {
+  return "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
 }
-function splitKnowledgeSteps(value: any) {
-    const text = String(value || '').trim();
-    if (!text)
-        return [];
-    const normalized = text.replace(/\s+/g, ' ').trim();
-    const parts = normalized
-        .split(/\s+(?=\d+\.\s+)/g)
-        .map((item) => item.replace(/^\d+\.\s*/, '').trim())
-        .filter(Boolean);
-    return parts.length > 1 ? parts : [text];
+
+function textareaClass() {
+  return "min-h-[7rem] w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
 }
-function toIsoDateOrEmpty(value: any) {
-    const date = parseApiDate(value);
-    return date ? date.toISOString() : '';
+
+function labelClass() {
+  return "grid gap-1 text-xs font-black uppercase tracking-[0.08em] text-slate-500";
 }
-function getMalaysiaDateTimeParts(date: Date) {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: MALAYSIA_TIME_ZONE,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-    }).formatToParts(date);
-    const pick = (type: string) => parts.find((part) => part.type === type)?.value || '';
-    return {
-        year: pick('year'),
-        month: pick('month'),
-        day: pick('day'),
-        hour: pick('hour'),
-        minute: pick('minute'),
-    };
-}
-function toDateTimeLocalInput(value: any) {
-    const date = parseApiDate(value);
-    if (!date) {
-        return '';
-    }
-    const malaysia = getMalaysiaDateTimeParts(date);
-    return `${malaysia.year}-${malaysia.month}-${malaysia.day}T${malaysia.hour}:${malaysia.minute}`;
-}
-function fromMalaysiaDateTimeLocalInput(value: string) {
-    if (!value)
-        return '';
-    const date = new Date(`${value}:00${MALAYSIA_UTC_OFFSET}`);
-    if (Number.isNaN(date.getTime())) {
-        return '';
-    }
-    return date.toISOString();
-}
+
 export default function ServiceDesk() {
-    const [currentUser] = useState<AppUser>(() => getStoredUser());
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
-    const [formMode, setFormMode] = useState<FormMode>('create');
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const [isLoadingLookups, setIsLoadingLookups] = useState(false);
-    const [hasLoadedLookups, setHasLoadedLookups] = useState(false);
-    const [hasLoadedKb, setHasLoadedKb] = useState(false);
-    const [toast, setToast] = useState<ToastState>(null);
-    const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
-    const [confirmReason, setConfirmReason] = useState('');
-    const [acknowledgedUnavailableEngineerKey, setAcknowledgedUnavailableEngineerKey] = useState('');
-    const [incidents, setIncidents] = useState<any[]>([]);
-    const [slaConfigs, setSlaConfigs] = useState<SlaConfig[]>([]);
-    const [workingHoursConfigs, setWorkingHoursConfigs] = useState<any[]>([]);
-    const [visibilityConfig, setVisibilityConfig] = useState<Record<string, boolean>>({});
-    const [roles, setRoles] = useState<any[]>([]);
-    const [users, setUsers] = useState<any[]>([]);
-    const [engineersForLevel, setEngineersForLevel] = useState<EngineerOption[]>([]);
-    const [isLoadingEngineers, setIsLoadingEngineers] = useState(false);
-    const [categories, setCategories] = useState<any[]>([]);
-    const [knowledgeBaseEntries, setKnowledgeBaseEntries] = useState<any[]>([]);
-    const [selectedKbArticle, setSelectedKbArticle] = useState<any | null>(null);
-    const [activeQueue, setActiveQueue] = useState<QueueKey>('all');
-    const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('All');
-    const [filterPriority, setFilterPriority] = useState('All');
-    const [filterAssignedTo, setFilterAssignedTo] = useState('All');
-    const [filterSlaStatus, setFilterSlaStatus] = useState('All');
-    const [sortConfig, setSortConfig] = useState<{
-        key: string;
-        direction: 'asc' | 'desc';
-    }>({
-        key: 'createdAt',
-        direction: 'desc',
+  const [currentUser] = useState<AnyRow>(() => readCurrentUser());
+  const [incidents, setIncidents] = useState<AnyRow[]>([]);
+  const [users, setUsers] = useState<AnyRow[]>([]);
+  const [roles, setRoles] = useState<AnyRow[]>([]);
+  const [assets, setAssets] = useState<AnyRow[]>([]);
+  const [categories, setCategories] = useState<AnyRow[]>([]);
+  const [knowledgeBase, setKnowledgeBase] = useState<AnyRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLookupLoading, setIsLookupLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+  const [activeQueue, setActiveQueue] = useState<QueueKey>("all");
+  const [viewMode, setViewMode] = useState<"list" | "form" | "knowledge">("list");
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [formData, setFormData] = useState<AnyRow>(() => emptyForm(currentUser));
+  const [selectedIncidentId, setSelectedIncidentId] = useState("");
+  const [selectedKb, setSelectedKb] = useState<AnyRow | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterPriority, setFilterPriority] = useState("All");
+  const [filterAssignedTo, setFilterAssignedTo] = useState("All");
+  const [filterSla, setFilterSla] = useState("All");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "createdAt", direction: "desc" });
+  const [page, setPage] = useState(1);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    void loadIncidents();
+    void loadLookups();
+    const timer = window.setInterval(() => setNow(new Date()), 120000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeQueue, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSla, dateFrom, dateTo]);
+
+  async function loadIncidents(silent = false) {
+    if (!silent) setIsLoading(true);
+    try {
+      const data = await incidentsService.getAll();
+      setIncidents(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error("Service Desk incidents failed", error);
+      setToast({ type: "error", message: error?.message || "Failed to load Service Desk incidents." });
+      setIncidents([]);
+    } finally {
+      if (!silent) setIsLoading(false);
+    }
+  }
+
+  async function loadLookups() {
+    setIsLookupLoading(true);
+    try {
+      const [userRows, roleRows, categoryRows, assetRows, kbRows] = await Promise.allSettled([
+        usersService.getAll(),
+        rolesService.getAll(),
+        incidentCategoriesService.getAll(),
+        assetsService.getAll(),
+        knowledgeBaseService.getAll(),
+      ]);
+      if (userRows.status === "fulfilled") setUsers(Array.isArray(userRows.value) ? userRows.value : []);
+      if (roleRows.status === "fulfilled") setRoles(Array.isArray(roleRows.value) ? roleRows.value : []);
+      if (categoryRows.status === "fulfilled") setCategories(Array.isArray(categoryRows.value) ? categoryRows.value : []);
+      if (assetRows.status === "fulfilled") setAssets(Array.isArray(assetRows.value) ? assetRows.value : []);
+      if (kbRows.status === "fulfilled") setKnowledgeBase(Array.isArray(kbRows.value) ? kbRows.value : []);
+    } catch (error) {
+      console.warn("Service Desk lookup load failed", error);
+    } finally {
+      setIsLookupLoading(false);
+    }
+  }
+
+  async function refreshPage() {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([loadIncidents(true), loadLookups()]);
+      setToast({ type: "success", message: "Service Desk refreshed." });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  function startCreate() {
+    setFormMode("create");
+    setFormData(emptyForm(currentUser));
+    setSelectedIncidentId("");
+    setViewMode("form");
+  }
+
+  function startEdit(row: AnyRow) {
+    setFormMode("edit");
+    setFormData({
+      ...emptyForm(currentUser),
+      ...row,
+      id: getIncidentId(row),
+      title: getTitle(row),
+      description: getDescription(row),
+      priority: getPriority(row),
+      status: getStatus(row),
+      requesterName: getRequester(row),
+      assetId: getAsset(row),
+      assignedTo: getAssigned(row) === "Unassigned" ? "" : getAssigned(row),
     });
-    const [currentPage, setCurrentPage] = useState(1);
-    const [itemsPerPage, setItemsPerPage] = useState(10);
-    const [showAdvanced, setShowAdvanced] = useState(false);
-    const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(emptyAdvancedFilters());
-    const [now, setNow] = useState(new Date());
-    const serviceDeskIsScrollingRef = useRef(false);
-    const serviceDeskScrollTimerRef = useRef<number | null>(null);
-    const serviceDeskScrollFrameRef = useRef<number | null>(null);
-    const [formData, setFormData] = useState<any>(emptyForm());
-    const [clientAssets, setClientAssets] = useState<any[]>([]);
-    const [incidentAttachments, setIncidentAttachments] = useState<any[]>([]);
-    const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
-    const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
-    const [assetSearchTerm, setAssetSearchTerm] = useState('');
-    const [showAssetDropdown, setShowAssetDropdown] = useState(false);
-    const [isLoadingAssets, setIsLoadingAssets] = useState(false);
-    const [assetDropdownStyle, setAssetDropdownStyle] = useState<CSSProperties>({});
-    const assetComboRef = useRef<HTMLDivElement>(null);
-    const assetDropdownPortalRef = useRef<HTMLDivElement>(null);
-    const assetDropdownFrameRef = useRef<number | null>(null);
-    const detailPanelRef = useRef<HTMLElement>(null);
-    const rejectReasonRef = useRef<HTMLTextAreaElement>(null);
-    const [kbFormOpen, setKbFormOpen] = useState(false);
-    const [kbFormData, setKbFormData] = useState<any>({ id: '', title: '', incidentDetails: '', resolution: '' });
-    const [kbSearch, setKbSearch] = useState('');
-    const [kbSortDirection, setKbSortDirection] = useState<'asc' | 'desc'>('asc');
-    const incidentPermissions = currentUser?.permissions?.incidents;
-    const hasIncidentPermissionProfile = Boolean(incidentPermissions);
-    const canEdit = !hasIncidentPermissionProfile || Boolean(incidentPermissions?.edit);
-    const canCreate = !hasIncidentPermissionProfile || canEdit || Boolean(incidentPermissions?.create);
-    const canDelete = !hasIncidentPermissionProfile || canEdit || Boolean(incidentPermissions?.delete);
-    const isRequesterAssetLocked = formMode === 'edit';
-    const isSupportUser = /L[123]/i.test(currentUser?.role || '') || /support/i.test(currentUser?.role || '');
-    const supportRoles = useMemo(() => {
-        const roleNames = new Set<string>();
-        users.forEach((user) => {
-            getUserRoleNames(user).forEach((roleName) => {
-                const normalized = normalizeSupportLevelName(roleName);
-                if (SERVICE_DESK_SUPPORT_LEVELS.some((level) => level.toLowerCase() === normalized.toLowerCase())) {
-                    roleNames.add(normalized);
-                }
-            });
-        });
-        roles.forEach((role) => {
-            const normalized = normalizeSupportLevelName(getRoleDisplayName(role));
-            if (SERVICE_DESK_SUPPORT_LEVELS.some((level) => level.toLowerCase() === normalized.toLowerCase())) {
-                roleNames.add(normalized);
-            }
-        });
-        // Keep the dropdown predictable even if the role API returns no rows yet.
-        SERVICE_DESK_SUPPORT_LEVELS.forEach((level) => roleNames.add(level));
-        return SERVICE_DESK_SUPPORT_LEVELS.filter((level) => roleNames.has(level)).map((name) => ({ id: name, name, role: name }));
-    }, [roles, users]);
-    const engineers = useMemo(() => users.filter(isEngineer), [users]);
-    const assignableEngineers = useMemo(() => {
-        if (!formData.assignedLevel)
-            return [];
-        const source = engineersForLevel.length > 0 ? engineersForLevel : engineers;
-        const selectedLevel = String(formData.assignedLevel || '');
-        return source.filter((engineer) => userMatchesSupportLevel(engineer, selectedLevel));
-    }, [engineers, engineersForLevel, formData.assignedLevel]);
-    const selectedIncident = useMemo(() => incidents.find((incident) => getId(incident) === selectedIncidentId) || null, [incidents, selectedIncidentId]);
-    const selectedCategory = useMemo(() => {
-        return categories.find((category) => getCategoryName(category) === formData.category) || null;
-    }, [categories, formData.category]);
-    const selectedSubcategory = useMemo(() => {
-        const subs = getChildren(selectedCategory, 'subcategories');
-        return subs.find((sub: any) => getCategoryName(sub) === formData.subcategory) || null;
-    }, [selectedCategory, formData.subcategory]);
-    const subcategoryOptions = useMemo(() => getChildren(selectedCategory, 'subcategories'), [selectedCategory]);
-    const detailOptions = useMemo(() => getChildren(selectedSubcategory, 'details'), [selectedSubcategory]);
-    const requesterOptions = useMemo(() => {
-        const seen = new Set<string>();
-        const list = (Array.isArray(users) ? users : [])
-            .filter((user: any) => {
-            const status = String(user?.status || user?.Status || 'Active').toLowerCase();
-            return status !== 'inactive' && status !== 'disabled';
-        })
-            .map((user: any) => ({
-            ...user,
-            id: getClientId(user),
-            name: getUserName(user) || getClientName(user),
-        }))
-            .filter((user: any) => {
-            const id = getClientId(user);
-            const name = getClientName(user);
-            const key = `${id}::${name}`.toLowerCase();
-            if (!name || seen.has(key))
-                return false;
-            seen.add(key);
-            return true;
-        });
-        const currentName = currentUser?.name || currentUser?.username || currentUser?.userID || '';
-        if (currentName && !list.some((user: any) => getClientName(user) === currentName)) {
-            list.unshift({ id: String(currentUser?.id || currentName), name: currentName });
-        }
-        return list;
-    }, [users, currentUser]);
-    const filteredClientAssets = useMemo(() => {
-        const term = assetSearchTerm.trim().toLowerCase();
-        return clientAssets
-            .filter((asset) => !term || getAssetSearchText(asset).includes(term))
-            .slice(0, 40);
-    }, [clientAssets, assetSearchTerm]);
-    useEffect(() => {
-        void loadData();
-        void ensureKnowledgeBaseLoaded(true);
-    }, []);
-    useEffect(() => {
-        const activeAttachmentIncidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
-        if (!activeAttachmentIncidentId) {
-            setIncidentAttachments([]);
-            return;
-        }
-        void loadIncidentAttachments(activeAttachmentIncidentId);
-    }, [selectedIncidentId, viewMode, formData.id, formData.IncidentID]);
-    useEffect(() => {
-        const timer = window.setInterval(() => {
-            // Do not refresh SLA timer while the user is scrolling.
-            // This prevents full Service Desk re-render during scroll.
-            if (!serviceDeskIsScrollingRef.current) {
-                setNow(new Date());
-            }
-        }, 120000);
-        return () => window.clearInterval(timer);
-    }, []);
-    useEffect(() => {
-        const markScrolling = (event: Event) => {
-            const target = event.target as HTMLElement | null;
-            // Internal modal/dropdown scrolling should not toggle a global HTML class on every frame.
-            // That class is only needed for the ticket registry/table area.
-            if (target?.closest?.('.service-desk-ticket-form-body') ||
-                target?.closest?.('.setting-select-menu') ||
-                target?.closest?.('.service-desk-asset-dropdown')) {
-                return;
-            }
-            if (serviceDeskScrollFrameRef.current !== null)
-                return;
-            serviceDeskScrollFrameRef.current = window.requestAnimationFrame(() => {
-                serviceDeskScrollFrameRef.current = null;
-                if (!serviceDeskIsScrollingRef.current) {
-                    serviceDeskIsScrollingRef.current = true;
-                    document.documentElement.classList.add('service-desk-is-scrolling');
-                }
-                if (serviceDeskScrollTimerRef.current) {
-                    window.clearTimeout(serviceDeskScrollTimerRef.current);
-                }
-                serviceDeskScrollTimerRef.current = window.setTimeout(() => {
-                    serviceDeskIsScrollingRef.current = false;
-                    document.documentElement.classList.remove('service-desk-is-scrolling');
-                    serviceDeskScrollTimerRef.current = null;
-                }, 260);
-            });
-        };
-        window.addEventListener('scroll', markScrolling, { passive: true, capture: true });
-        return () => {
-            window.removeEventListener('scroll', markScrolling, true);
-            if (serviceDeskScrollFrameRef.current !== null) {
-                window.cancelAnimationFrame(serviceDeskScrollFrameRef.current);
-                serviceDeskScrollFrameRef.current = null;
-            }
-            if (serviceDeskScrollTimerRef.current) {
-                window.clearTimeout(serviceDeskScrollTimerRef.current);
-            }
-            serviceDeskIsScrollingRef.current = false;
-            document.documentElement.classList.remove('service-desk-is-scrolling');
-        };
-    }, []);
-    useEffect(() => {
-        let cancelled = false;
-        async function loadEngineersBySupportLevel() {
-            const selectedLevel = String(formData.assignedLevel || '').trim();
-            if (!selectedLevel) {
-                setEngineersForLevel([]);
-                setIsLoadingEngineers(false);
-                return;
-            }
-            const emaEngineersForLevel = engineers.filter((engineer) => userMatchesSupportLevel(engineer, selectedLevel));
-            // Dropdown source of truth is EMA_User. Resource Planning only adds leave/availability warning metadata.
-            setEngineersForLevel(emaEngineersForLevel);
-            if (emaEngineersForLevel.length === 0) {
-                setIsLoadingEngineers(false);
-                return;
-            }
-            setIsLoadingEngineers(true);
-            try {
-                const ticketDate = toIsoDateOrEmpty(formData.createdAt)?.slice(0, 10) ||
-                    new Date().toISOString().slice(0, 10);
-                const rows = await engineerAvailabilityService.getAvailableEngineers(ticketDate, selectedLevel);
-                const mergedRows = mergeEngineerAvailabilityIntoEmaUsers(emaEngineersForLevel, Array.isArray(rows) ? rows : []);
-                if (!cancelled) {
-                    setEngineersForLevel(mergedRows);
-                }
-            }
-            catch (error) {
-                console.error('Failed to load engineer leave schedule from Resource Planning', error);
-                if (!cancelled) {
-                    setEngineersForLevel(emaEngineersForLevel);
-                    setToast({
-                        message: 'Engineer list is loaded from EMA_User, but leave schedule could not be checked.',
-                        type: 'warning',
-                    });
-                }
-            }
-            finally {
-                if (!cancelled) {
-                    setIsLoadingEngineers(false);
-                }
-            }
-        }
-        void loadEngineersBySupportLevel();
-        return () => {
-            cancelled = true;
-        };
-    }, [formData.assignedLevel, formData.createdAt, engineers]);
-    useEffect(() => {
-        if (!toast)
-            return undefined;
-        const timer = window.setTimeout(() => setToast(null), 2800);
-        return () => window.clearTimeout(timer);
-    }, [toast]);
-    useEffect(() => {
-        function handleOutsideClick(event: MouseEvent) {
-            const target = event.target as Node;
-            if (assetComboRef.current?.contains(target))
-                return;
-            if (assetDropdownPortalRef.current?.contains(target))
-                return;
-            setShowAssetDropdown(false);
-        }
-        document.addEventListener('mousedown', handleOutsideClick);
-        return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }, []);
-    useEffect(() => {
-        if (!showAssetDropdown)
-            return undefined;
-        updateAssetDropdownPosition();
-        const handleResize = () => updateAssetDropdownPosition();
-        const handleScroll = (event: Event) => {
-            const target = event.target as Node | null;
-            // Keep the asset list open when scrolling inside the list, but close it when
-            // the page/modal scrolls. This avoids heavy position recalculation during form scroll.
-            if (target && assetDropdownPortalRef.current?.contains(target))
-                return;
-            setShowAssetDropdown(false);
-        };
-        window.addEventListener('resize', handleResize);
-        window.addEventListener('scroll', handleScroll, true);
-        return () => {
-            window.removeEventListener('resize', handleResize);
-            window.removeEventListener('scroll', handleScroll, true);
-            if (assetDropdownFrameRef.current !== null) {
-                window.cancelAnimationFrame(assetDropdownFrameRef.current);
-                assetDropdownFrameRef.current = null;
-            }
-        };
-    }, [showAssetDropdown]);
-    useEffect(() => {
-        if (!selectedIncidentId)
-            return undefined;
-        function closeDetailOnOutsideClick(event: MouseEvent) {
-            const target = event.target as HTMLElement | null;
-            if (!target)
-                return;
-            if (detailPanelRef.current?.contains(target))
-                return;
-            if (target.closest('[data-ticket-row="true"]'))
-                return;
-            if (target.closest('.settings-confirm-backdrop'))
-                return;
-            if (target.closest('.settings-confirm-modal'))
-                return;
-            if (target.closest('.setting-select-menu'))
-                return;
-            if (target.closest('.uam-filter-menu'))
-                return;
-            if (target.closest('.service-desk-asset-dropdown'))
-                return;
-            if (target.closest('.settings-toast'))
-                return;
-            setSelectedIncidentId('');
-        }
-        function closeDetailOnEscape(event: KeyboardEvent) {
-            if (event.key === 'Escape') {
-                setSelectedIncidentId('');
-            }
-        }
-        document.addEventListener('mousedown', closeDetailOnOutsideClick);
-        document.addEventListener('keydown', closeDetailOnEscape);
-        return () => {
-            document.removeEventListener('mousedown', closeDetailOnOutsideClick);
-            document.removeEventListener('keydown', closeDetailOnEscape);
-        };
-    }, [selectedIncidentId]);
-    useEffect(() => {
-        if (viewMode === 'form') {
-            void ensureLookupsLoaded();
-        }
-        if (viewMode === 'kb') {
-            void ensureKnowledgeBaseLoaded();
-        }
-    }, [viewMode]);
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [activeQueue, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSlaStatus, showAdvanced, advancedFilters]);
-    async function loadData(silent = false) {
-        if (!silent)
-            setIsLoading(true);
-        try {
-            const incidentsData = await safeApi('GET /api/incidents', incidentsService.getAll(), [], true);
-            const nextIncidents = Array.isArray(incidentsData)
-                ? incidentsData.map((incident: any) => ({ ...incident, status: standardizeIncidentStatus(incident.status) }))
-                : [];
-            setIncidents(nextIncidents);
-            setSelectedIncidentId((current) => {
-                if (!current)
-                    return '';
-                return nextIncidents.some((incident) => getId(incident) === current) ? current : '';
-            });
-            if (!silent && nextIncidents.length === 0) {
-                setToast({
-                    message: 'Connected to API, but /api/incidents returned 0 records.',
-                    type: 'info',
-                });
-            }
-            void loadEssentialConfig();
-        }
-        catch (error) {
-            console.error('Failed to load Service Desk incidents', error);
-            setToast({
-                message: error instanceof Error ? error.message : 'Failed to load service desk incidents.',
-                type: 'error',
-            });
-        }
-        finally {
-            if (!silent)
-                setIsLoading(false);
-        }
-    }
-    async function loadEssentialConfig() {
-        try {
-            const [slaData, workingHoursData, visibilityData] = await Promise.all([
-                safeApi('GET /api/incident-config', incidentConfigService.getAll(), []),
-                safeApi('GET /api/incident-config/working-hours', incidentConfigService.getWorkingHours(), []),
-                safeApi('GET /api/incident-config/visibility', incidentConfigService.getVisibilityConfig(), {}),
-            ]);
-            setSlaConfigs(Array.isArray(slaData) ? slaData : []);
-            setWorkingHoursConfigs(Array.isArray(workingHoursData) ? workingHoursData : []);
-            setVisibilityConfig(visibilityData || {});
-        }
-        catch (error) {
-            console.warn('Service Desk essential config load failed', error);
-        }
-    }
-    async function ensureLookupsLoaded() {
-        if (hasLoadedLookups || isLoadingLookups)
-            return;
-        setIsLoadingLookups(true);
-        try {
-            const [rolesData, usersData, catsData] = await Promise.all([
-                safeApi('GET /api/roles', rolesService.getAll(), []),
-                safeApi('GET /api/users', usersService.getAll(), []),
-                safeApi('GET /api/incident-categories', incidentCategoriesService.getAll(), []),
-            ]);
-            setRoles(Array.isArray(rolesData) ? rolesData : []);
-            setUsers(Array.isArray(usersData) ? usersData : []);
-            setCategories(Array.isArray(catsData) ? catsData : []);
-            setHasLoadedLookups(true);
-        }
-        catch (error) {
-            console.error('Failed to load service desk lookup data', error);
-            setToast({
-                message: 'Failed to load form lookup data.',
-                type: 'error',
-            });
-        }
-        finally {
-            setIsLoadingLookups(false);
-        }
-    }
-    async function ensureKnowledgeBaseLoaded(force = false) {
-        if (hasLoadedKb && !force)
-            return;
-        setHasLoadedKb(false);
-        try {
-            const kbData = await safeApi('GET /api/knowledge-base', knowledgeBaseService.getAll(), []);
-            setKnowledgeBaseEntries(Array.isArray(kbData) ? kbData : []);
-        }
-        catch (error) {
-            console.error('Failed to load knowledge base', error);
-            setToast({
-                message: 'Failed to load knowledge base.',
-                type: 'error',
-            });
-        }
-        finally {
-            setHasLoadedKb(true);
-        }
-    }
-    async function refreshData() {
-        setIsRefreshing(true);
-        try {
-            await loadData(true);
-            if (hasLoadedLookups) {
-                setHasLoadedLookups(false);
-                await ensureLookupsLoaded();
-            }
-            if (hasLoadedKb) {
-                setHasLoadedKb(false);
-                await ensureKnowledgeBaseLoaded(true);
-            }
-            setToast({ message: 'Service desk refreshed.', type: 'success' });
-        }
-        finally {
-            setIsRefreshing(false);
-        }
-    }
-    function fieldVisible(key: string) {
-        if (visibilityConfig && Object.prototype.hasOwnProperty.call(visibilityConfig, key)) {
-            return visibilityConfig[key] !== false;
-        }
-        return true;
-    }
-    function closeConfirmDialog() {
-        setConfirmDialog(null);
-        setConfirmReason('');
-    }
-    async function runConfirmAction() {
-        if (!confirmDialog || confirmDialog.loading)
-            return;
-        const reason = confirmReason.trim();
-        const minReasonLength = confirmDialog.minReasonLength ?? 1;
-        if (confirmDialog.requiresReason && reason.length < minReasonLength) {
-            setToast({ message: 'Reason is required. Please enter the reason before continuing.', type: 'error' });
-            return;
-        }
-        const action = confirmDialog.onConfirm;
-        setConfirmDialog((current) => (current ? { ...current, loading: true } : current));
-        try {
-            await action(reason);
-            closeConfirmDialog();
-        }
-        catch (error) {
-            console.error('Confirm action failed', error);
-            setConfirmDialog((current) => (current ? { ...current, loading: false } : current));
-        }
-    }
-    function updateFormField(field: string, value: any) {
-        setFormData((prev: any) => {
-            if (field === 'assignedLevel') {
-                return { ...prev, assignedLevel: value, assignedTo: '' };
-            }
-            if (field === 'priority') {
-                return {
-                    ...prev,
-                    priority: value,
-                    slaPriority: getSlaPriorityCode(value),
-                    slaDue: calculateSlaDue({ ...prev, priority: value, slaPriority: getSlaPriorityCode(value), slaDue: '' }, { force: true }),
-                };
-            }
-            if (field === 'createdAt') {
-                return {
-                    ...prev,
-                    createdAt: value,
-                    slaDue: calculateSlaDue({ ...prev, createdAt: value, slaDue: '' }, { force: true }),
-                };
-            }
-            return { ...prev, [field]: value };
-        });
-    }
-    function addWorkingHours(startDate: Date, hoursToAdd: number) {
-        if (!workingHoursConfigs || workingHoursConfigs.length === 0) {
-            return new Date(startDate.getTime() + hoursToAdd * 60 * 60 * 1000);
-        }
-        const daysMap: Record<number, any> = {
-            1: workingHoursConfigs.find((c) => c.dayOfWeek === 'Monday'),
-            2: workingHoursConfigs.find((c) => c.dayOfWeek === 'Tuesday'),
-            3: workingHoursConfigs.find((c) => c.dayOfWeek === 'Wednesday'),
-            4: workingHoursConfigs.find((c) => c.dayOfWeek === 'Thursday'),
-            5: workingHoursConfigs.find((c) => c.dayOfWeek === 'Friday'),
-            6: workingHoursConfigs.find((c) => c.dayOfWeek === 'Saturday'),
-            0: workingHoursConfigs.find((c) => c.dayOfWeek === 'Sunday'),
-        };
-        let current = new Date(startDate);
-        let minutesToAdd = hoursToAdd * 60;
-        let safety = 0;
-        while (minutesToAdd > 0 && safety < 60) {
-            safety += 1;
-            const config = daysMap[current.getDay()];
-            if (!config || config.isRestDay) {
-                current.setDate(current.getDate() + 1);
-                current.setHours(0, 0, 0, 0);
-                continue;
-            }
-            if (config.is24Hours) {
-                current = new Date(current.getTime() + minutesToAdd * 60000);
-                minutesToAdd = 0;
-                break;
-            }
-            const [startH, startM] = String(config.startTime || '09:00').split(':').map(Number);
-            const [endH, endM] = String(config.endTime || '18:00').split(':').map(Number);
-            const dayStart = new Date(current);
-            dayStart.setHours(startH || 9, startM || 0, 0, 0);
-            const dayEnd = new Date(current);
-            dayEnd.setHours(endH || 18, endM || 0, 0, 0);
-            if (current < dayStart)
-                current = new Date(dayStart);
-            if (current >= dayEnd) {
-                current.setDate(current.getDate() + 1);
-                current.setHours(0, 0, 0, 0);
-                continue;
-            }
-            const available = Math.floor((dayEnd.getTime() - current.getTime()) / 60000);
-            const used = Math.min(available, minutesToAdd);
-            current = new Date(current.getTime() + used * 60000);
-            minutesToAdd -= used;
-            if (minutesToAdd > 0) {
-                current.setDate(current.getDate() + 1);
-                current.setHours(0, 0, 0, 0);
-            }
-        }
-        return current;
-    }
-    function getSlaConfigForPriority(priority: string) {
-        const slaCode = getSlaPriorityCode(priority);
-        return slaConfigs.find((item) => String(item.priority || '').trim() === slaCode ||
-            String(item.label || '').trim().toLowerCase() === String(priority || '').trim().toLowerCase());
-    }
-    function calculateSlaDue(data: any, options: {
-        force?: boolean;
-    } = {}) {
-        const existingSlaDue = toIsoDateOrEmpty(data.slaDue);
-        if (existingSlaDue && !options.force) {
-            return existingSlaDue;
-        }
-        const config = getSlaConfigForPriority(data.priority);
-        if (!config?.resolutionTimeHrs) {
-            return '';
-        }
-        const createdAt = toIsoDateOrEmpty(data.createdAt) || new Date().toISOString();
-        const calculatedDue = addWorkingHours(parseApiDate(createdAt) || new Date(), Number(config.resolutionTimeHrs));
-        return calculatedDue.toISOString();
-    }
-    function getSlaPreview(data: any) {
-        const config = getSlaConfigForPriority(data.priority);
-        const due = calculateSlaDue({ ...data, slaDue: '' }, { force: true });
-        return {
-            code: getSlaPriorityCode(data.priority),
-            config,
-            due,
-            meta: getSlaMeta({ ...data, slaDue: due }, now),
-        };
-    }
-    function showEngineerAvailabilityReminder(engineer: EngineerOption) {
-        const engineerKey = getEngineerKey(engineer) || getUserName(engineer);
-        const engineerName = getUserName(engineer) || 'Selected engineer';
-        setConfirmReason('');
-        setConfirmDialog({
-            tone: 'warning',
-            title: 'Engineer not available',
-            message: getEngineerLeaveMessage(engineer),
-            meta: `${engineerName} is still assigned to this ticket. You can continue if this assignment is intentional.`,
-            confirmLabel: 'OK, Continue',
-            cancelLabel: 'Close',
-            onConfirm: () => {
-                setAcknowledgedUnavailableEngineerKey(engineerKey);
-            },
-        });
-    }
-    async function checkEngineerAvailability(assignedTo: string) {
-        if (!assignedTo)
-            return true;
-        const selectedEngineer = assignableEngineers.find((engineer) => getUserName(engineer) === assignedTo || getEngineerKey(engineer) === assignedTo) || null;
-        if (selectedEngineer && isEngineerOnLeave(selectedEngineer)) {
-            const engineerKey = getEngineerKey(selectedEngineer) || getUserName(selectedEngineer);
-            if (engineerKey !== acknowledgedUnavailableEngineerKey) {
-                showEngineerAvailabilityReminder(selectedEngineer);
-            }
-        }
-        return true;
-    }
-    function handleAssignedEngineerChange(value: string) {
-        updateFormField('assignedTo', value);
-        if (!value) {
-            setAcknowledgedUnavailableEngineerKey('');
-            return;
-        }
-        const selectedEngineer = assignableEngineers.find((engineer) => getUserName(engineer) === value || getEngineerKey(engineer) === value);
-        if (selectedEngineer && isEngineerOnLeave(selectedEngineer)) {
-            setAcknowledgedUnavailableEngineerKey('');
-            showEngineerAvailabilityReminder(selectedEngineer);
-        }
-        else {
-            setAcknowledgedUnavailableEngineerKey('');
-        }
-    }
-    function updateAssetDropdownPosition() {
-        if (typeof window === 'undefined')
-            return;
-        const rect = assetComboRef.current?.getBoundingClientRect();
-        if (!rect)
-            return;
-        const viewportPadding = 16;
-        const dropdownWidth = Math.max(rect.width, 420);
-        const left = Math.min(Math.max(viewportPadding, rect.left), Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding));
-        const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
-        const spaceAbove = rect.top - viewportPadding;
-        const openBelow = spaceBelow >= 220 || spaceBelow >= spaceAbove;
-        const maxHeight = Math.max(180, Math.min(360, openBelow ? spaceBelow : spaceAbove));
-        const top = openBelow
-            ? rect.bottom + 8
-            : Math.max(viewportPadding, rect.top - maxHeight - 8);
-        const nextStyle: CSSProperties = {
-            position: 'fixed',
-            left,
-            top,
-            width: dropdownWidth,
-            maxHeight,
-            zIndex: 2147483647,
-        };
-        setAssetDropdownStyle((current) => (areFloatingMenuStylesEqual(current, nextStyle) ? current : nextStyle));
-    }
-    function openAssetDropdown() {
-        if (isRequesterAssetLocked)
-            return;
-        setShowAssetDropdown(true);
-        if (typeof window !== 'undefined' && assetDropdownFrameRef.current === null) {
-            assetDropdownFrameRef.current = window.requestAnimationFrame(() => {
-                assetDropdownFrameRef.current = null;
-                updateAssetDropdownPosition();
-            });
-        }
-    }
-    async function loadIncidentAttachments(incidentId: string) {
-        const id = String(incidentId || '').trim();
-        if (!id) {
-            setIncidentAttachments([]);
-            return;
-        }
-        setIsLoadingAttachments(true);
-        try {
-            const token = getStoredAuthToken();
-            const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(id)}/attachments`), {
-                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-            });
-            if (!response.ok)
-                throw new Error((await readAttachmentError(response)) || `Attachment list failed with status ${response.status}`);
-            const data = await response.json();
-            const activeAttachmentIncidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
-            if (activeAttachmentIncidentId !== id)
-                return;
-            setIncidentAttachments(Array.isArray(data) ? data : []);
-        }
-        catch (error) {
-            console.error('Failed to load incident attachments', error);
-            setIncidentAttachments([]);
-        }
-        finally {
-            setIsLoadingAttachments(false);
-        }
-    }
-    async function uploadIncidentAttachment(event: any) {
-        const file = event?.target?.files?.[0];
-        const incidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
-        if (!file)
-            return;
-        if (!incidentId) {
-            setToast({ message: 'Please save the ticket first before uploading attachment.', type: 'warning' });
-            if (event?.target)
-                event.target.value = '';
-            return;
-        }
-        const existingAttachmentCount = incidentAttachments.length;
-        const existingAttachmentTotalSize = incidentAttachments.reduce((total, attachment) => total + Number(attachment?.size || attachment?.fileSize || attachment?.FileSize || 0), 0);
-        if (existingAttachmentCount >= INCIDENT_ATTACHMENT_MAX_FILES) {
-            setToast({ message: `Maximum ${INCIDENT_ATTACHMENT_MAX_FILES} attachments are allowed per ticket.`, type: 'error' });
-            if (event?.target)
-                event.target.value = '';
-            return;
-        }
-        if (file.size > INCIDENT_ATTACHMENT_MAX_BYTES) {
-            setToast({ message: `Attachment file is too large. Maximum allowed size is ${INCIDENT_ATTACHMENT_MAX_MB}MB per file.`, type: 'error' });
-            if (event?.target)
-                event.target.value = '';
-            return;
-        }
-        if (existingAttachmentTotalSize + file.size > INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES) {
-            setToast({
-                message: `Total attachment size cannot exceed ${INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_MB}MB per ticket.`,
-                type: 'error',
-            });
-            if (event?.target)
-                event.target.value = '';
-            return;
-        }
-        setIsUploadingAttachment(true);
-        try {
-            const body = new FormData();
-            body.append('file', file);
-            const token = getStoredAuthToken();
-            const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments`), {
-                method: 'POST',
-                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-                body,
-            });
-            if (!response.ok) {
-                const errorMessage = await readAttachmentError(response);
-                throw new Error(errorMessage || `Attachment upload failed with status ${response.status}`);
-            }
-            await loadIncidentAttachments(incidentId);
-            setToast({ message: 'Attachment uploaded successfully.', type: 'success' });
-        }
-        catch (error: any) {
-            console.error('Failed to upload incident attachment', error);
-            setToast({ message: error?.message || 'Failed to upload attachment.', type: 'error' });
-        }
-        finally {
-            setIsUploadingAttachment(false);
-            if (event?.target)
-                event.target.value = '';
-        }
-    }
-    async function deleteIncidentAttachment(filename: string) {
-        const incidentId = viewMode === 'form' ? getId(formData) : selectedIncidentId;
-        const safeFilename = String(filename || '').trim();
-        if (!incidentId || !safeFilename)
-            return;
-        try {
-            const token = getStoredAuthToken();
-            const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments/${encodeURIComponent(safeFilename)}`), {
-                method: 'DELETE',
-                headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-            });
-            if (!response.ok)
-                throw new Error(`Attachment delete failed with status ${response.status}`);
-            await loadIncidentAttachments(incidentId);
-            setToast({ message: 'Attachment deleted.', type: 'success' });
-        }
-        catch (error) {
-            console.error('Failed to delete incident attachment', error);
-            setToast({ message: 'Failed to delete attachment.', type: 'error' });
-        }
-    }
-    async function loadClientAssets(requesterName: string, shouldOpenDropdown = false) {
-        const queryName = requesterName.trim();
-        setIsLoadingAssets(true);
-        if (shouldOpenDropdown) {
-            openAssetDropdown();
-        }
-        try {
-            const requests: Promise<any[]>[] = [
-                safeApi('GET /api/assets all', assetsService.getAll(), []),
-            ];
-            if (queryName && queryName.toLowerCase() !== 'all') {
-                requests.unshift(safeApi('GET /api/assets by requester', assetsService.getByCustomer(queryName), []));
-            }
-            const results = await Promise.all(requests);
-            const mergedAssets = mergeAssetRows(...results.filter(Array.isArray));
-            setClientAssets(mergedAssets);
-            if (shouldOpenDropdown) {
-                openAssetDropdown();
-            }
-        }
-        catch (error) {
-            console.error('Failed to load assets from DB', error);
-            setClientAssets([]);
-            if (shouldOpenDropdown) {
-                openAssetDropdown();
-            }
-            setToast({
-                message: 'Asset lookup failed to load from /api/assets.',
-                type: 'warning',
-            });
-        }
-        finally {
-            setIsLoadingAssets(false);
-        }
-    }
-    async function searchAssets(keyword: string) {
-        const term = keyword.trim();
-        openAssetDropdown();
-        if (term.length < 2) {
-            if (clientAssets.length === 0) {
-                void loadClientAssets('all', true);
-            }
-            return;
-        }
-        setIsLoadingAssets(true);
-        try {
-            const [globalResults, allAssets] = await Promise.all([
-                safeApi('GET /api/assets search global', assetsService.search(term), []),
-                clientAssets.length > 0 ? Promise.resolve(clientAssets) : safeApi('GET /api/assets all fallback', assetsService.getAll(), []),
-            ]);
-            const mergedAssets = mergeAssetRows(Array.isArray(globalResults) ? globalResults : [], Array.isArray(allAssets) ? allAssets.filter((asset) => getAssetSearchText(asset).includes(term.toLowerCase())) : []);
-            setClientAssets(mergedAssets);
-            openAssetDropdown();
-        }
-        catch (error) {
-            console.error('Asset search failed', error);
-            setClientAssets([]);
-            openAssetDropdown();
-            setToast({
-                message: 'Asset lookup search failed. Check /api/assets search response.',
-                type: 'warning',
-            });
-        }
-        finally {
-            setIsLoadingAssets(false);
-        }
-    }
-    function handleClientSelect(clientId: string) {
-        const client = requesterOptions.find((item) => getClientId(item) === clientId);
-        if (!client) {
-            setFormData((prev: any) => ({
-                ...prev,
-                requesterId: '',
-                requesterName: '',
-                assetId: '',
-                assetBrand: '',
-                assetModel: '',
-                assetOS: '',
-            }));
-            setAssetSearchTerm('');
-            setClientAssets([]);
-            return;
-        }
-        const alias = client.databaseAlias || client.DatabaseAlias || getClientName(client);
-        setFormData((prev: any) => ({
-            ...prev,
-            requesterId: getClientId(client),
-            requesterName: getClientName(client),
-            assetId: '',
-            assetBrand: '',
-            assetModel: '',
-            assetOS: '',
-        }));
-        setAssetSearchTerm('');
-        setShowAssetDropdown(false);
-        void loadClientAssets(alias);
-    }
-    function handleAssetSelect(asset: any) {
-        const assetLabel = getAssetValue(asset);
-        const assetBrand = getAssetBrand(asset);
-        const assetModel = getAssetModel(asset);
-        const assetOS = getAssetOS(asset);
-        setFormData((prev: any) => ({
-            ...prev,
-            assetId: assetLabel,
-            assetBrand,
-            assetModel,
-            assetOS,
-            deviceType: prev.deviceType || asset.deviceType || asset.DeviceType || assetOS || '',
-        }));
-        // Selected asset details already populate Asset Brand / Asset Model / Asset OS below.
-        // Do not keep the search result/card visible under Asset Lookup after selection.
-        setAssetSearchTerm('');
-        setClientAssets([]);
-        setShowAssetDropdown(false);
-        if (typeof window !== 'undefined') {
-            window.setTimeout(() => setShowAssetDropdown(false), 0);
-        }
-    }
-    async function openCreateForm() {
-        if (!canCreate) {
-            setToast({ message: 'You do not have permission to create a ticket.', type: 'warning' });
-            return;
-        }
-        await ensureLookupsLoaded();
-        const currentRequesterName = getCurrentLoginName(currentUser);
-        const currentRequesterId = getCurrentLoginId(currentUser);
-        setSelectedIncidentId('');
-        setFormMode('create');
-        setFormData({
-            ...emptyForm(),
-            requesterId: currentRequesterId,
-            requesterName: currentRequesterName,
-            reporterId: currentRequesterId,
-        });
-        setClientAssets([]);
-        setIncidentAttachments([]);
-        setAssetSearchTerm('');
-        setShowAssetDropdown(false);
-        void loadClientAssets('all');
-        setViewMode('form');
-    }
-    async function openEditForm(incident: any) {
-        if (!canEdit || !incident)
-            return;
-        await ensureLookupsLoaded();
-        const normalizedIncident = {
-            ...incident,
-            id: getId(incident),
-            status: standardizeIncidentStatus(incident.status),
-            createdAt: toIsoDateOrEmpty(incident.createdAt) || new Date().toISOString(),
-            slaPriority: incident.slaPriority || incident.SlaPriority || getSlaPriorityCode(incident.priority || 'Medium'),
-            slaDue: toIsoDateOrEmpty(incident.slaDue),
-            firstResponseAt: toIsoDateOrEmpty(incident.firstResponseAt),
-            resolvedAt: toIsoDateOrEmpty(incident.resolvedAt),
-        };
-        setSelectedIncidentId('');
-        setFormMode('edit');
-        setFormData({ ...emptyForm(), ...normalizedIncident });
-        setAssetSearchTerm(incident.assetId || '');
-        setClientAssets([]);
-        setShowAssetDropdown(false);
-        if (incident.requesterName) {
-            void loadClientAssets(incident.requesterName);
-        }
-        void loadIncidentAttachments(getId(incident));
-        setViewMode('form');
-    }
-    function closeForm() {
-        setViewMode('list');
-        setFormData(emptyForm());
-        setClientAssets([]);
-        setIncidentAttachments([]);
-        setAssetSearchTerm('');
-        setShowAssetDropdown(false);
-    }
-    function requestCloseForm() {
-        if (isSaving)
-            return;
-        setConfirmReason('');
-        setConfirmDialog({
-            tone: 'warning',
-            title: formMode === 'create' ? 'Cancel ticket creation?' : 'Cancel ticket update?',
-            message: formMode === 'create'
-                ? 'Are you sure you want to cancel creating this ticket? Any information entered in this form will be discarded.'
-                : 'Are you sure you want to cancel editing this ticket? Unsaved changes will be discarded.',
-            confirmLabel: 'Yes, Cancel',
-            cancelLabel: 'Continue Editing',
-            onConfirm: () => {
-                closeForm();
-            },
-        });
-    }
-    async function saveIncident(event: FormEvent) {
-        event.preventDefault();
-        if (formMode === 'create' && !canCreate)
-            return;
-        if (formMode === 'edit' && !canEdit)
-            return;
-        if (!formData.title?.trim()) {
-            setToast({ message: 'Title / Problem Description is required.', type: 'error' });
-            return;
-        }
-        if (!formData.description?.trim()) {
-            setToast({ message: 'Description is required.', type: 'error' });
-            return;
-        }
-        if (normalizeStatus(formData.status) === 'rejected' && !getOperationalReason(formData)) {
-            rejectReasonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            rejectReasonRef.current?.focus();
-            setToast({
-                message: 'Reject reason is required. Fill in the highlighted Reject Reason / Remarks field.',
-                type: 'error',
-            });
-            return;
-        }
-        if (formData.assignedTo) {
-            await checkEngineerAvailability(formData.assignedTo);
-        }
-        setIsSaving(true);
-        try {
-            const operationalReason = getOperationalReason(formData);
-            const currentRequesterName = getCurrentLoginName(currentUser);
-            const currentRequesterId = getCurrentLoginId(currentUser);
-            const saveData = {
-                ...formData,
-                status: standardizeIncidentStatus(formData.status),
-                requesterId: formMode === 'create' ? currentRequesterId : formData.requesterId,
-                requesterName: formMode === 'create' ? currentRequesterName : formData.requesterName,
-                reporterId: formMode === 'create' ? currentRequesterId : formData.reporterId,
-                id: getId(formData) || makeIncidentId(),
-                createdAt: toIsoDateOrEmpty(formData.createdAt) || new Date().toISOString(),
-                slaPriority: getSlaPriorityCode(formData.priority),
-                slaDue: calculateSlaDue(formData, { force: formMode === 'create' || selectedIncident?.priority !== formData.priority }),
-                firstResponseAt: toIsoDateOrEmpty(formData.firstResponseAt),
-                resolvedAt: toIsoDateOrEmpty(formData.resolvedAt),
-                additionalMemo: operationalReason || formData.additionalMemo || '',
-                remarks: operationalReason || formData.remarks || '',
-            };
-            if (formMode === 'create') {
-                saveData.status = 'Awaiting';
-                saveData.createdAt = new Date().toISOString();
-                await incidentsService.create(saveData);
-                setToast({ message: `Ticket ${saveData.id} created successfully.`, type: 'success' });
-            }
-            else {
-                if (saveData.status === 'Solved')
-                    saveData.status = 'Resolved';
-                if (saveData.status === 'Awaiting')
-                    saveData.status = 'In Progress';
-                if (!saveData.firstResponseAt)
-                    saveData.firstResponseAt = new Date().toISOString();
-                if (saveData.status === 'Resolved' && !saveData.resolvedAt)
-                    saveData.resolvedAt = new Date().toISOString();
-                await incidentsService.update(saveData);
-                setToast({ message: `Ticket ${saveData.id} updated successfully.`, type: 'success' });
-            }
-            await loadData(true);
-            closeForm();
-        }
-        catch (error) {
-            console.error('Save failed', error);
-            setToast({ message: 'Failed to save incident.', type: 'error' });
-        }
-        finally {
-            setIsSaving(false);
-        }
-    }
-    async function resolveIncident(incident: any) {
-        if (!canEdit || !incident)
-            return;
-        const incidentId = getId(incident);
-        if (!incidentId) {
-            setToast({ message: 'Cannot resolve incident because ticket ID is missing.', type: 'error' });
-            return;
-        }
-        setIsSaving(true);
-        try {
-            const nowIso = new Date().toISOString();
-            const resolvedData = {
-                ...incident,
-                id: incidentId,
-                IncidentID: incidentId,
-                status: 'Resolved',
-                resolvedAt: nowIso,
-                firstResponseAt: toIsoDateOrEmpty(incident.firstResponseAt) || nowIso,
-                createdAt: toIsoDateOrEmpty(incident.createdAt) || nowIso,
-                slaDue: toIsoDateOrEmpty(incident.slaDue),
-            };
-            await incidentsService.update(resolvedData);
-            await loadData(true);
-            // Close any open edit drawer and right-side detail panel after resolve.
-            // The success toast is enough confirmation; reopening the resolved detail
-            // panel makes the UI feel stuck behind the overlay.
-            closeForm();
-            setSelectedIncidentId('');
-            setToast({ message: `Ticket ${incidentId} resolved successfully.`, type: 'success' });
-        }
-        catch (error) {
-            console.error('Resolve failed', error);
-            setToast({ message: 'Failed to resolve incident.', type: 'error' });
-        }
-        finally {
-            setIsSaving(false);
-        }
-    }
-    async function deleteIncident(incident: any) {
-        if (!canDelete || !incident)
-            return;
-        const incidentId = getId(incident);
-        if (!incidentId) {
-            setToast({ message: 'Cannot delete incident because ticket ID is missing.', type: 'error' });
-            return;
-        }
-        if (isDeleteLockedStatus(incident.status)) {
-            setToast({ message: `Ticket ${incidentId} is ${incident.status}. Delete is disabled for closed or resolved tickets.`, type: 'warning' });
-            return;
-        }
-        setConfirmReason('');
-        setConfirmDialog({
-            tone: 'danger',
-            title: `Delete ticket ${incidentId}?`,
-            message: 'Please enter a deletion reason before removing this ticket from the service queue.',
-            meta: incident.title || incident.description || 'No ticket description available.',
-            confirmLabel: 'Delete Ticket',
-            cancelLabel: 'Keep Ticket',
-            requiresReason: true,
-            reasonLabel: 'Deletion Reason',
-            reasonPlaceholder: 'Example: Duplicate ticket created by requester / invalid request / test record cleanup',
-            minReasonLength: 1,
-            onConfirm: async (reason = '') => {
-                try {
-                    // Reason is required at UI level. Backend delete currently removes the ticket record;
-                    // keep this reason ready for backend audit logging if/when /api/incidents DELETE supports request body.
-                    console.info(`Deleting ticket ${incidentId}. Reason:`, reason);
-                    await incidentsService.delete(incidentId);
-                    await loadData(true);
-                    setSelectedIncidentId((current) => (current === incidentId ? '' : current));
-                    if (getId(formData) === incidentId)
-                        closeForm();
-                    setIncidentAttachments([]);
-                    setToast({ message: `Ticket ${incidentId} and related attachments deleted successfully.`, type: 'success' });
-                }
-                catch (error) {
-                    console.error('Delete failed', error);
-                    setToast({ message: `Failed to delete ticket ${incidentId}.`, type: 'error' });
-                    throw error;
-                }
-            },
-        });
-    }
-    function requestSort(key: string) {
-        setSortConfig((prev) => ({
-            key,
-            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
-        }));
-    }
-    const scopedIncidents = useMemo(() => {
-        return incidents.filter((incident) => {
-            if (isSupportUser && incident.assignedTo !== currentUser?.name)
-                return false;
-            return true;
-        });
-    }, [incidents, isSupportUser, currentUser?.name]);
-    const queueCounts = useMemo(() => {
-        const open = scopedIncidents.filter((item) => !['Resolved', 'Rejected'].includes(item.status));
-        return {
-            all: scopedIncidents.length,
-            my: scopedIncidents.filter((item) => item.assignedTo === currentUser?.name).length,
-            slaRisk: scopedIncidents.filter((item) => {
-                const sla = getSlaMeta(item, now);
-                return ['overdue', 'near'].includes(sla.className) && !['Resolved', 'Rejected'].includes(item.status);
-            }).length,
-            unassigned: open.filter((item) => !item.assignedTo).length,
-            awaiting: scopedIncidents.filter((item) => item.status === 'Awaiting').length,
-            inProgress: scopedIncidents.filter((item) => item.status === 'In Progress').length,
-            pendingUser: scopedIncidents.filter((item) => item.status === 'Pending User').length,
-            pendingVendor: scopedIncidents.filter((item) => item.status === 'Pending Vendor').length,
-            onSite: scopedIncidents.filter((item) => item.status === 'On Site').length,
-            resolved: scopedIncidents.filter((item) => item.status === 'Resolved').length,
-            kb: knowledgeBaseEntries.length,
-            open: open.length,
-        };
-    }, [scopedIncidents, currentUser?.name, now, knowledgeBaseEntries.length]);
-    const filteredIncidents = useMemo(() => {
-        const q = searchTerm.trim().toLowerCase();
-        return scopedIncidents.filter((incident) => {
-            const sla = getSlaMeta(incident, now);
-            const queueMatch = activeQueue === 'all' ||
-                (activeQueue === 'my' && incident.assignedTo === currentUser?.name) ||
-                (activeQueue === 'sla-risk' && ['overdue', 'near'].includes(sla.className) && !['Resolved', 'Rejected'].includes(incident.status)) ||
-                (activeQueue === 'unassigned' && !incident.assignedTo && !['Resolved', 'Rejected'].includes(incident.status)) ||
-                (activeQueue === 'awaiting' && incident.status === 'Awaiting') ||
-                (activeQueue === 'in-progress' && incident.status === 'In Progress') ||
-                (activeQueue === 'pending-user' && incident.status === 'Pending User') ||
-                (activeQueue === 'pending-vendor' && incident.status === 'Pending Vendor') ||
-                (activeQueue === 'on-site' && incident.status === 'On Site') ||
-                (activeQueue === 'resolved' && incident.status === 'Resolved') ||
-                activeQueue === 'knowledge';
-            if (!queueMatch)
-                return false;
-            if (activeQueue === 'knowledge')
-                return false;
-            if (filterStatus !== 'All' && incident.status !== filterStatus)
-                return false;
-            if (filterPriority !== 'All' && incident.priority !== filterPriority)
-                return false;
-            if (filterAssignedTo !== 'All' && (incident.assignedTo || '') !== filterAssignedTo)
-                return false;
-            if (filterSlaStatus !== 'All' && sla.statusKey !== filterSlaStatus)
-                return false;
-            const haystack = [
-                getId(incident),
-                incident.title,
-                incident.description,
-                incident.requesterName,
-                incident.assetId,
-                incident.category,
-                incident.subcategory,
-                incident.incidentDetail,
-                incident.assignedTo,
-                incident.status,
-            ]
-                .join(' ')
-                .toLowerCase();
-            if (q && !haystack.includes(q))
-                return false;
-            if (showAdvanced) {
-                const adv = advancedFilters;
-                if (adv.reqNo && !getId(incident).toLowerCase().includes(adv.reqNo.toLowerCase()))
-                    return false;
-                if (adv.requester && !String(incident.requesterName || '').toLowerCase().includes(adv.requester.toLowerCase()))
-                    return false;
-                if (adv.incidentTitle) {
-                    const incidentText = `${incident.title || ''} ${incident.description || ''}`.toLowerCase();
-                    if (!incidentText.includes(adv.incidentTitle.toLowerCase()))
-                        return false;
-                }
-                if (adv.assetTag && !String(incident.assetId || '').toLowerCase().includes(adv.assetTag.toLowerCase()))
-                    return false;
-                if (adv.category && incident.category !== adv.category)
-                    return false;
-                if (adv.subcategory && incident.subcategory !== adv.subcategory)
-                    return false;
-                if (adv.detail && incident.incidentDetail !== adv.detail)
-                    return false;
-                const createdDate = parseApiDate(incident.createdAt);
-                if (adv.dateFrom && createdDate && createdDate < new Date(`${adv.dateFrom}T00:00:00${MALAYSIA_UTC_OFFSET}`))
-                    return false;
-                if (adv.dateTo && createdDate && createdDate > new Date(`${adv.dateTo}T23:59:59${MALAYSIA_UTC_OFFSET}`))
-                    return false;
-                if (adv.slaStatus !== 'All' && sla.statusKey !== adv.slaStatus)
-                    return false;
-            }
-            return true;
-        });
-    }, [
-        activeQueue,
-        advancedFilters,
-        currentUser?.name,
-        filterAssignedTo,
-        filterSlaStatus,
-        filterPriority,
-        filterStatus,
-        now,
-        scopedIncidents,
-        searchTerm,
-        showAdvanced,
-    ]);
-    const sortedIncidents = useMemo(() => {
-        return [...filteredIncidents].sort((a, b) => {
-            let aValue: any = a[sortConfig.key];
-            let bValue: any = b[sortConfig.key];
-            if (sortConfig.key === 'priority') {
-                aValue = priorityRank(a.priority);
-                bValue = priorityRank(b.priority);
-            }
-            else if (sortConfig.key === 'status') {
-                aValue = statusRank(a.status);
-                bValue = statusRank(b.status);
-            }
-            else if (sortConfig.key === 'slaDue' || sortConfig.key === 'createdAt') {
-                aValue = aValue ? parseApiDate(aValue)?.getTime() || 0 : 0;
-                bValue = bValue ? parseApiDate(bValue)?.getTime() || 0 : 0;
-            }
-            else if (typeof aValue === 'string') {
-                aValue = aValue.toLowerCase();
-                bValue = String(bValue || '').toLowerCase();
-            }
-            if (aValue < bValue)
-                return sortConfig.direction === 'asc' ? -1 : 1;
-            if (aValue > bValue)
-                return sortConfig.direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-    }, [filteredIncidents, sortConfig]);
-    const totalPages = Math.max(1, Math.ceil(sortedIncidents.length / itemsPerPage));
-    const paginatedIncidents = sortedIncidents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    const filteredKb = useMemo(() => {
-        const q = kbSearch.trim().toLowerCase();
-        return knowledgeBaseEntries
-            .filter((kb) => {
-            if (!q)
-                return true;
-            return String(kb.title || '').toLowerCase().includes(q);
-        })
-            .sort((a, b) => {
-            const firstTitle = String(a.title || '').toLowerCase();
-            const secondTitle = String(b.title || '').toLowerCase();
-            if (firstTitle < secondTitle)
-                return kbSortDirection === 'asc' ? -1 : 1;
-            if (firstTitle > secondTitle)
-                return kbSortDirection === 'asc' ? 1 : -1;
-            return 0;
-        });
-    }, [knowledgeBaseEntries, kbSearch, kbSortDirection]);
-    function toggleKbTitleSort() {
-        setKbSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
-    }
-    function exportCsv() {
-        const headers = ['Req No', 'Submitted', 'Requester', 'Asset Tag', 'Incident', 'Urgency Level', 'Assigned To', 'Status', 'SLA Time'];
-        const rows = filteredIncidents.map((incident) => {
-            const sla = getSlaMeta(incident, now);
-            return [
-                getId(incident),
-                normalizeDate(incident.createdAt),
-                incident.requesterName || 'N/A',
-                incident.assetId || '-',
-                incident.title || '',
-                incident.priority || '',
-                incident.assignedTo || 'Unassigned',
-                incident.status || '',
-                sla.label,
-            ].map((value) => `"${String(value).replace(/"/g, '""')}"`);
-        });
-        const csvContent = [headers, ...rows].map((row) => row.join(',')).join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Incident_Report_${new Date().toISOString().split('T')[0]}.csv`;
-        link.click();
-        URL.revokeObjectURL(url);
-    }
-    async function saveKb(event: FormEvent) {
-        event.preventDefault();
-        if (!kbFormData.title?.trim()) {
-            setToast({ message: 'KB title is required.', type: 'error' });
-            return;
-        }
-        setIsSaving(true);
-        try {
-            if (kbFormData.id)
-                await knowledgeBaseService.update(kbFormData);
-            else
-                await knowledgeBaseService.create(kbFormData);
-            await ensureKnowledgeBaseLoaded(true);
-            setKbFormOpen(false);
-            setKbFormData({ id: '', title: '', incidentDetails: '', resolution: '' });
-            setToast({ message: `Knowledge article "${kbFormData.title}" saved successfully.`, type: 'success' });
-        }
-        catch (error) {
-            console.error('KB save failed', error);
-            setToast({ message: 'Failed to save knowledge base.', type: 'error' });
-        }
-        finally {
-            setIsSaving(false);
-        }
-    }
-    async function deleteKb(kb: any) {
-        if (!canDelete || !kb)
-            return;
-        const kbTitle = kb.title || `KB-${kb.id}`;
-        setConfirmDialog({
-            tone: 'danger',
-            title: 'Delete knowledge article?',
-            message: 'This will remove the selected resolution article from the Knowledge Base.',
-            meta: kbTitle,
-            confirmLabel: 'Delete Article',
-            cancelLabel: 'Keep Article',
-            onConfirm: async () => {
-                try {
-                    await knowledgeBaseService.delete(kb.id);
-                    setKnowledgeBaseEntries((current) => current.filter((item) => String(item.id) !== String(kb.id)));
-                    setToast({ message: `Knowledge article "${kbTitle}" deleted successfully.`, type: 'success' });
-                }
-                catch (error) {
-                    console.error('KB delete failed', error);
-                    setToast({ message: 'Failed to delete knowledge base article.', type: 'error' });
-                    throw error;
-                }
-            },
-        });
-    }
-    function printTicket(incident: any) {
-        if (!incident)
-            return;
-        const sla = getSlaMeta(incident, now);
-        const safe = (value: any) => String(value ?? '—')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-        const rows = [
-            ['Request No', getId(incident)],
-            ['Submitted Date', normalizeDateTime(incident.createdAt)],
-            ['Requester', incident.requesterName || 'N/A'],
-            ['Asset Tag', incident.assetId || '—'],
-            ['Asset Brand', incident.assetBrand || '—'],
-            ['Asset Model', incident.assetModel || '—'],
-            ['Asset OS', incident.assetOS || '—'],
-            ['Category', incident.category || '—'],
-            ['Subcategory', incident.subcategory || '—'],
-            ['Problem Detail', incident.incidentDetail || '—'],
-            ['Priority', incident.priority || 'Medium'],
-            ['Status', incident.status || 'Awaiting'],
-            ['Assigned To', incident.assignedTo || 'Unassigned'],
-            ['Assigned Level', incident.assignedLevel || 'No level'],
-            ['SLA Due', normalizeDateTime(incident.slaDue)],
-            ['SLA Status', `${sla.label} (${sla.detail})`],
-            ['First Response', normalizeDateTime(incident.firstResponseAt)],
-            ['Resolved At', normalizeDateTime(incident.resolvedAt)],
-        ];
-        const printHtml = `
-      <!doctype html>
-      <html>
-        <head>
-          <title>Ticket ${safe(getId(incident))}</title>
+    setSelectedIncidentId(getIncidentId(row));
+    setViewMode("form");
+  }
 
-        </head>
-        <body>
-          <main class="ticket-print">
-            <header class="print-head">
-              <div>
-                <span>EMA Unified System — Service Desk Ticket</span>
-                <h1>${safe(incident.title || 'Untitled incident')}</h1>
-                <p>${safe(incident.description || 'No description provided.')}</p>
-              </div>
-              <div class="print-badge">${safe(getId(incident))}</div>
-            </header>
-
-            <section class="section">
-              <h2>Ticket Information</h2>
-              <table>
-                ${rows.map(([label, value]) => `<tr><td>${safe(label)}</td><td>${safe(value)}</td></tr>`).join('')}
-              </table>
-            </section>
-
-            <section class="section">
-              <h2>Root Cause</h2>
-              <div class="text-block">${safe(incident.rootCause || '—')}</div>
-            </section>
-
-            <section class="section">
-              <h2>Action Plan / Resolution</h2>
-              <div class="text-block">${safe(incident.actionPlan || '—')}</div>
-            </section>
-
-            <section class="section">
-              <h2>Operational Note / Remarks</h2>
-              <div class="text-block">${safe(incident.additionalMemo || incident.remarks || '—')}</div>
-            </section>
-
-            <footer class="footer">
-              <span>Printed from EMA Unified System</span>
-              <span>${safe(new Date().toLocaleString('en-GB'))}</span>
-            </footer>
-          </main>
-          <script>
-            window.onload = function () {
-              window.focus();
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `;
-        const printWindow = window.open('', '_blank', 'width=900,height=720');
-        if (!printWindow) {
-            setToast({ message: 'Popup blocked. Allow popups to print ticket details.', type: 'warning' });
-            return;
-        }
-        printWindow.document.open();
-        printWindow.document.write(printHtml);
-        printWindow.document.close();
+  async function saveIncident(event: FormEvent) {
+    event.preventDefault();
+    const title = String(formData.title || "").trim();
+    const description = String(formData.description || "").trim();
+    if (!title) {
+      setToast({ type: "error", message: "Incident title is required." });
+      return;
     }
-    function printTicketRegistry() {
-        const safe = (value: any) => String(value ?? '—')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-        const queueLabel = activeQueue === 'all' ? 'All operational tickets' : queueItems.find((item) => item.key === activeQueue)?.label || 'Ticket Registry';
-        const statusLabel = filterStatus === 'All' ? 'All statuses' : filterStatus;
-        const urgencyLabel = filterPriority === 'All' ? 'All urgencies' : filterPriority;
-        const assigneeLabel = filterAssignedTo === 'All' ? 'All assignees' : filterAssignedTo || 'Unassigned';
-        const slaFilterLabel = filterSlaStatus === 'All' ? 'All SLA statuses' : filterSlaStatus;
-        const rows = sortedIncidents.map((incident, index) => {
-            const sla = getSlaMeta(incident, now);
-            return `
-        <tr>
-          <td>${safe(index + 1)}</td>
-          <td><strong>${safe(getId(incident))}</strong></td>
-          <td>${safe(normalizeDateTime(incident.createdAt))}</td>
-          <td>
-            <strong>${safe(incident.requesterName || 'N/A')}</strong>
-          </td>
-          <td>${safe(incident.assetId || '—')}</td>
-          <td>
-            <strong>${safe(incident.title || 'Untitled incident')}</strong>
-            <small>${safe([incident.category, incident.subcategory, incident.incidentDetail].filter(Boolean).join(' / ') || incident.description || 'No classification')}</small>
-          </td>
-          <td>${safe(incident.priority || 'Medium')}</td>
-          <td>
-            <strong>${safe(incident.assignedTo || 'Unassigned')}</strong>
-            <small>${safe(incident.assignedLevel || 'No level')}</small>
-          </td>
-          <td>
-            <strong>${safe(sla.label)}</strong>
-            <small>${safe(sla.detail)}</small>
-          </td>
-          <td>${safe(incident.status || 'Awaiting')}</td>
-        </tr>
-      `;
-        });
-        const printHtml = `
-      <!doctype html>
-      <html>
-        <head>
-          <title>Service Desk Ticket Registry</title>
+    if (!description) {
+      setToast({ type: "error", message: "Incident description is required." });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = {
+        ...formData,
+        id: formMode === "edit" ? getIncidentId(formData) : formData.id || makeIncidentId(),
+        title,
+        description,
+        status: formMode === "create" ? "Awaiting" : formData.status || "Awaiting",
+        priority: formData.priority || "Medium",
+        requesterName: formData.requesterName || getUserName(currentUser) || "Current User",
+        requesterId: formData.requesterId || getUserId(currentUser),
+        reporterId: formData.reporterId || getUserId(currentUser),
+        createdAt: formData.createdAt || new Date().toISOString(),
+      };
+      if (formMode === "create") await incidentsService.create(payload);
+      else await incidentsService.update(payload);
+      setToast({ type: "success", message: formMode === "create" ? "Ticket created successfully." : "Ticket updated successfully." });
+      setViewMode("list");
+      await loadIncidents(true);
+    } catch (error: any) {
+      console.error("Service Desk save failed", error);
+      setToast({ type: "error", message: error?.message || "Failed to save ticket." });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
-        </head>
-        <body>
-          <main class="registry-print">
-            <header class="print-head">
-              <div>
-                <span>EMA Unified System — Service Desk Registry</span>
-                <h1>Ticket Registry</h1>
-                <p>Table-only print view. Header, sidebar, filters, buttons and detail panel are excluded.</p>
-              </div>
-              <div class="print-meta">
-                <span>Total Tickets</span>
-                <strong>${safe(sortedIncidents.length)}</strong>
-                <span>${safe(new Date().toLocaleString('en-GB'))}</span>
-              </div>
-            </header>
+  async function deleteIncident(row: AnyRow) {
+    const id = getIncidentId(row);
+    if (!id) return;
+    const ok = window.confirm(`Delete ticket ${id}?`);
+    if (!ok) return;
+    try {
+      await incidentsService.delete(id);
+      setToast({ type: "success", message: `Ticket ${id} deleted.` });
+      setSelectedIncidentId("");
+      await loadIncidents(true);
+    } catch (error: any) {
+      console.error("Delete failed", error);
+      setToast({ type: "error", message: error?.message || "Failed to delete ticket." });
+    }
+  }
 
-            <div class="filter-line">
-              <span>${safe(queueLabel)}</span>
-              <span>Status: ${safe(statusLabel)}</span>
-              <span>Urgency: ${safe(urgencyLabel)}</span>
-              <span>Assignee: ${safe(assigneeLabel)}</span>
-              ${searchTerm.trim() ? `<span>Search: ${safe(searchTerm.trim())}</span>` : ''}
+  function resetFilters() {
+    setSearchTerm("");
+    setFilterStatus("All");
+    setFilterPriority("All");
+    setFilterAssignedTo("All");
+    setFilterSla("All");
+    setDateFrom("");
+    setDateTo("");
+    setShowAdvanced(false);
+  }
+
+  function requestSort(key: string) {
+    setSortConfig((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }));
+  }
+
+  const queueCounts = useMemo(() => {
+    const counts = {
+      all: incidents.length,
+      open: 0,
+      my: 0,
+      slaRisk: 0,
+      unassigned: 0,
+      awaiting: 0,
+      inProgress: 0,
+      pendingUser: 0,
+      pendingVendor: 0,
+      onSite: 0,
+      resolved: 0,
+      kb: knowledgeBase.length,
+    };
+    incidents.forEach((row) => {
+      const status = normalizeText(getStatus(row));
+      const assigned = getAssigned(row);
+      const sla = getSlaMeta(row, now).label;
+      if (!status.includes("resolved") && !status.includes("rejected")) counts.open += 1;
+      if (normalizeText(assigned) === normalizeText(getUserName(currentUser))) counts.my += 1;
+      if (assigned === "Unassigned" || normalizeText(assigned) === "unassigned") counts.unassigned += 1;
+      if (status.includes("awaiting")) counts.awaiting += 1;
+      if (status.includes("progress")) counts.inProgress += 1;
+      if (status.includes("pending user")) counts.pendingUser += 1;
+      if (status.includes("pending vendor")) counts.pendingVendor += 1;
+      if (status.includes("site")) counts.onSite += 1;
+      if (status.includes("resolved")) counts.resolved += 1;
+      if (sla === "Near Due" || sla === "Overdue") counts.slaRisk += 1;
+    });
+    return counts;
+  }, [incidents, knowledgeBase.length, now, currentUser]);
+
+  const queueItems = [
+    { key: "all" as QueueKey, label: "All Tickets", sub: "Complete service queue", count: queueCounts.all, icon: Ticket },
+    { key: "my" as QueueKey, label: "My Assigned", sub: "Owned by current agent", count: queueCounts.my, icon: User },
+    { key: "sla-risk" as QueueKey, label: "SLA Risk", sub: "Near due or breached", count: queueCounts.slaRisk, icon: ShieldAlert },
+    { key: "unassigned" as QueueKey, label: "Unassigned", sub: "Needs ownership", count: queueCounts.unassigned, icon: Users },
+    { key: "awaiting" as QueueKey, label: "Awaiting", sub: "New requests", count: queueCounts.awaiting, icon: Clock },
+    { key: "in-progress" as QueueKey, label: "In Progress", sub: "Active work", count: queueCounts.inProgress, icon: ArrowRightLeft },
+    { key: "pending-user" as QueueKey, label: "Pending User", sub: "Waiting requester", count: queueCounts.pendingUser, icon: User },
+    { key: "pending-vendor" as QueueKey, label: "Pending Vendor", sub: "External action", count: queueCounts.pendingVendor, icon: Settings },
+    { key: "on-site" as QueueKey, label: "On Site", sub: "Field support", count: queueCounts.onSite, icon: Monitor },
+    { key: "resolved" as QueueKey, label: "Resolved", sub: "Completed tickets", count: queueCounts.resolved, icon: CheckCircle2 },
+    { key: "knowledge" as QueueKey, label: "Knowledge Base", sub: "Resolution articles", count: queueCounts.kb, icon: BookOpen },
+  ];
+
+  const filteredIncidents = useMemo(() => {
+    const search = normalizeText(searchTerm);
+    return incidents.filter((row) => {
+      const status = getStatus(row);
+      const priority = getPriority(row);
+      const assigned = getAssigned(row);
+      const sla = getSlaMeta(row, now).label;
+      const created = parseDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt);
+      if (activeQueue === "my" && normalizeText(assigned) !== normalizeText(getUserName(currentUser))) return false;
+      if (activeQueue === "sla-risk" && !(sla === "Near Due" || sla === "Overdue")) return false;
+      if (activeQueue === "unassigned" && normalizeText(assigned) !== "unassigned") return false;
+      if (activeQueue === "awaiting" && !normalizeText(status).includes("awaiting")) return false;
+      if (activeQueue === "in-progress" && !normalizeText(status).includes("progress")) return false;
+      if (activeQueue === "pending-user" && !normalizeText(status).includes("pending user")) return false;
+      if (activeQueue === "pending-vendor" && !normalizeText(status).includes("pending vendor")) return false;
+      if (activeQueue === "on-site" && !normalizeText(status).includes("site")) return false;
+      if (activeQueue === "resolved" && !normalizeText(status).includes("resolved")) return false;
+      if (filterStatus !== "All" && status !== filterStatus) return false;
+      if (filterPriority !== "All" && priority !== filterPriority) return false;
+      if (filterAssignedTo !== "All" && assigned !== filterAssignedTo) return false;
+      if (filterSla !== "All" && sla !== filterSla) return false;
+      if (dateFrom && created && created < new Date(`${dateFrom}T00:00:00`)) return false;
+      if (dateTo && created && created > new Date(`${dateTo}T23:59:59`)) return false;
+      if (!search) return true;
+      const haystack = [getIncidentId(row), getRequester(row), getAsset(row), getTitle(row), getDescription(row), getStatus(row), getPriority(row), getAssigned(row), row.category, row.subcategory, row.incidentDetail]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(search);
+    });
+  }, [incidents, activeQueue, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSla, dateFrom, dateTo, now, currentUser]);
+
+  const sortedIncidents = useMemo(() => {
+    const list = [...filteredIncidents];
+    list.sort((a, b) => {
+      const dir = sortConfig.direction === "asc" ? 1 : -1;
+      const read = (row: AnyRow) => {
+        if (sortConfig.key === "id") return getIncidentId(row);
+        if (sortConfig.key === "createdAt") return parseDate(row.createdAt || row.CreatedAt)?.getTime() || 0;
+        if (sortConfig.key === "requester") return getRequester(row);
+        if (sortConfig.key === "title") return getTitle(row);
+        if (sortConfig.key === "priority") return PRIORITY_OPTIONS.indexOf(getPriority(row));
+        if (sortConfig.key === "assigned") return getAssigned(row);
+        if (sortConfig.key === "status") return getStatus(row);
+        return valueOf(row, [sortConfig.key]);
+      };
+      const av = read(a);
+      const bv = read(b);
+      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
+    });
+    return list;
+  }, [filteredIncidents, sortConfig]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedIncidents.length / PAGE_SIZE));
+  const pageRows = sortedIncidents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const selectedIncident = useMemo(() => incidents.find((row) => getIncidentId(row) === selectedIncidentId) || null, [incidents, selectedIncidentId]);
+  const engineerOptions = useMemo(() => users.map((user) => getUserName(user)).filter(Boolean), [users]);
+  const categoryOptions = useMemo(() => categories.map((row) => getCategoryName(row)).filter(Boolean), [categories]);
+  const assetOptions = useMemo(() => assets.map((asset) => getAsset(asset)).filter((asset) => asset && asset !== "—"), [assets]);
+  const activeQueueLabel = queueItems.find((item) => item.key === activeQueue)?.label || "All Tickets";
+
+  function exportCsv() {
+    const headers = ["No", "Req No", "Submitted", "Requester", "Asset", "Incident", "Urgency", "Assigned", "SLA", "Status"];
+    const rows = sortedIncidents.map((row, index) => {
+      const sla = getSlaMeta(row, now);
+      return [index + 1, getIncidentId(row), formatDate(row.createdAt || row.CreatedAt), getRequester(row), getAsset(row), getTitle(row), getPriority(row), getAssigned(row), sla.label, getStatus(row)];
+    });
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `service-desk-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function printTable() {
+    window.print();
+  }
+
+  return (
+    <main data-section="service-desk" className="min-h-screen bg-slate-50 p-4 text-slate-950">
+      {toast && (
+        <div className="fixed right-5 top-5 z-[80] flex w-[min(24rem,calc(100vw-2rem))] items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+          <div className={cx("grid h-10 w-10 place-items-center rounded-xl", toast.type === "success" ? "bg-emerald-50 text-emerald-600" : toast.type === "error" ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600")}>
+            {toast.type === "success" ? <CheckCircle2 size={18} /> : toast.type === "error" ? <AlertCircle size={18} /> : <Clock size={18} />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <strong className="block text-sm font-black text-slate-900">{toast.type === "success" ? "Success" : toast.type === "error" ? "Action failed" : "Information"}</strong>
+            <span className="mt-1 block text-sm font-semibold text-slate-600">{toast.message}</span>
+          </div>
+          <button type="button" onClick={() => setToast(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close toast">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
+            <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Service Center</span>
+            <strong className="mt-1 block text-lg font-black text-slate-950">Service Desk</strong>
+            <small className="mt-1 block text-xs font-semibold text-slate-500">Ticket queue and support operation</small>
+          </div>
+
+          <nav className="grid gap-2" aria-label="Service Desk queue">
+            {queueItems.map((item) => {
+              const Icon = item.icon;
+              const active = activeQueue === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    setActiveQueue(item.key);
+                    setViewMode(item.key === "knowledge" ? "knowledge" : "list");
+                    setSelectedIncidentId("");
+                  }}
+                  className={cx(
+                    "grid min-h-[3.4rem] grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition",
+                    active ? "border-blue-200 bg-blue-50 text-blue-700 shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50/60"
+                  )}
+                >
+                  <i className={cx("grid h-9 w-9 place-items-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}>
+                    <Icon size={16} />
+                  </i>
+                  <span className="min-w-0">
+                    <strong className="block truncate text-sm font-black">{item.label}</strong>
+                    <small className="block truncate text-xs font-semibold text-slate-500">{item.sub}</small>
+                  </span>
+                  <b className={cx("rounded-full px-2 py-1 text-xs font-black", active ? "bg-white text-blue-700" : "bg-slate-100 text-slate-600")}>{isLoading && item.key !== "knowledge" ? "…" : item.count}</b>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <section className="min-w-0 space-y-4">
+          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:grid-cols-[minmax(0,1fr)_minmax(32rem,0.95fr)]">
+            <div>
+              <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Incident Command Center</span>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">Service Desk</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Manage tickets, assignments, SLA risk and support activity.</p>
+              {(isLoading || isLookupLoading) && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
+                  <Loader2 size={14} className="animate-spin" />
+                  Loading data in content area
+                </div>
+              )}
             </div>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[
+                { label: "Open Tickets", value: queueCounts.open, note: "support workload", tone: "blue" },
+                { label: "SLA Risk", value: queueCounts.slaRisk, note: "near due / breached", tone: "rose" },
+                { label: "Awaiting", value: queueCounts.awaiting, note: "new requests", tone: "amber" },
+                { label: "In Progress", value: queueCounts.inProgress, note: "active handling", tone: "violet" },
+              ].map((kpi) => (
+                <div key={kpi.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">{kpi.label}</span>
+                  <strong className="mt-1 block text-2xl font-black text-slate-950">{isLoading ? "…" : kpi.value}</strong>
+                  <small className="mt-1 block text-xs font-bold text-slate-500">{kpi.note}</small>
+                </div>
+              ))}
+            </div>
+          </div>
 
-            ${rows.length
-            ? `<table>
-                    <colgroup>
-                      <col class="col-no" />
-                      <col class="col-req" />
-                      <col class="col-date" />
-                      <col class="col-requester" />
-                      <col class="col-asset" />
-                      <col class="col-incident" />
-                      <col class="col-urgency" />
-                      <col class="col-assigned" />
-                      <col class="col-sla" />
-                      <col class="col-status" />
-                    </colgroup>
-                    <thead>
+          {viewMode === "knowledge" ? (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
+                <div>
+                  <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Knowledge Base</span>
+                  <h3 className="mt-1 text-lg font-black text-slate-950">Resolution Articles</h3>
+                </div>
+                <button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
+                  <Ticket size={15} /> Ticket List
+                </button>
+              </div>
+              <div className="p-4">
+                {isLookupLoading ? (
+                  <div className="grid min-h-[16rem] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center">
+                    <div>
+                      <Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={28} />
+                      <strong className="block text-sm font-black text-slate-900">Loading knowledge base...</strong>
+                    </div>
+                  </div>
+                ) : knowledgeBase.length === 0 ? (
+                  <div className="grid min-h-[16rem] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center">
+                    <div>
+                      <BookOpen className="mx-auto mb-3 text-slate-400" size={28} />
+                      <strong className="block text-sm font-black text-slate-900">No knowledge article found.</strong>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-hidden rounded-2xl border border-slate-200">
+                    <table className="w-full min-w-[48rem] text-left text-sm">
+                      <thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500">
+                        <tr><th className="px-4 py-3">No</th><th className="px-4 py-3">Article</th><th className="px-4 py-3 text-right">Action</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {knowledgeBase.map((row, index) => (
+                          <tr key={valueOf(row, ["id", "KnowledgeID", "title"], String(index))} className="hover:bg-slate-50">
+                            <td className="px-4 py-3 font-black text-slate-500">{String(index + 1).padStart(2, "0")}</td>
+                            <td className="px-4 py-3"><strong className="font-black text-slate-900">{valueOf(row, ["title", "Title"], "Untitled article")}</strong></td>
+                            <td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedKb(row)} className="inline-grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700"><Eye size={14} /></button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : viewMode === "form" ? (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <form onSubmit={saveIncident}>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
+                  <div>
+                    <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">{formMode === "create" ? "Create Ticket" : "Update Ticket"}</span>
+                    <h3 className="mt-1 text-lg font-black text-slate-950">{formMode === "create" ? "New Incident Request" : getIncidentId(formData)}</h3>
+                  </div>
+                  <button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
+                    <X size={15} /> Cancel
+                  </button>
+                </div>
+
+                <div className="grid gap-4 p-4 lg:grid-cols-2">
+                  <label className={cx(labelClass(), "lg:col-span-2")}>Incident Title<input value={formData.title || ""} onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))} className={inputClass()} placeholder="Example: Laptop cannot connect to network" /></label>
+                  <label className={cx(labelClass(), "lg:col-span-2")}>Description<textarea value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className={textareaClass()} placeholder="Describe the issue, impact and required support." /></label>
+                  <label className={labelClass()}>Requester<input value={formData.requesterName || ""} onChange={(e) => setFormData((prev) => ({ ...prev, requesterName: e.target.value }))} className={inputClass()} /></label>
+                  <label className={labelClass()}>Asset<select value={formData.assetId || ""} onChange={(e) => setFormData((prev) => ({ ...prev, assetId: e.target.value }))} className={selectClass()}><option value="">No asset selected</option>{assetOptions.map((asset) => <option key={asset} value={asset}>{asset}</option>)}</select></label>
+                  <label className={labelClass()}>Urgency<select value={formData.priority || "Medium"} onChange={(e) => setFormData((prev) => ({ ...prev, priority: e.target.value }))} className={selectClass()}>{PRIORITY_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                  <label className={labelClass()}>Status<select value={formData.status || "Awaiting"} onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value }))} className={selectClass()} disabled={formMode === "create"}>{STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                  <label className={labelClass()}>Category<select value={formData.category || ""} onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))} className={selectClass()}><option value="">No category</option>{categoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                  <label className={labelClass()}>Device Type<input value={formData.deviceType || ""} onChange={(e) => setFormData((prev) => ({ ...prev, deviceType: e.target.value }))} className={inputClass()} placeholder="Laptop, Desktop, Server..." /></label>
+                  <label className={labelClass()}>Assigned Level<select value={formData.assignedLevel || ""} onChange={(e) => setFormData((prev) => ({ ...prev, assignedLevel: e.target.value, assignedTo: "" }))} className={selectClass()}><option value="">Not assigned</option>{SUPPORT_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
+                  <label className={labelClass()}>Assigned Engineer<select value={formData.assignedTo || ""} onChange={(e) => setFormData((prev) => ({ ...prev, assignedTo: e.target.value }))} className={selectClass()}><option value="">Unassigned</option>{engineerOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+                  <label className={cx(labelClass(), "lg:col-span-2")}>Action Plan<textarea value={formData.actionPlan || ""} onChange={(e) => setFormData((prev) => ({ ...prev, actionPlan: e.target.value }))} className={textareaClass()} placeholder="Resolution steps or next action." /></label>
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4">
+                  <button type="button" onClick={() => setViewMode("list")} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
+                  <button type="submit" disabled={isSaving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                    {isSaving ? "Saving..." : formMode === "create" ? "Create Ticket" : "Update Ticket"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          ) : (
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="space-y-3 border-b border-slate-200 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={startCreate} className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700"><Plus size={15} /> Create Ticket</button>
+                  <div className="flex h-11 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm">
+                    <Search size={16} className="text-slate-400" />
+                    <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search request no, requester, asset, incident..." className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400" />
+                  </div>
+                  <button type="button" disabled={!searchTerm && filterStatus === "All" && filterPriority === "All" && filterAssignedTo === "All" && filterSla === "All" && !dateFrom && !dateTo} onClick={resetFilters} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"><X size={14} /> Reset</button>
+                  <button type="button" disabled={isRefreshing} onClick={refreshPage} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600 shadow-sm hover:bg-blue-50 disabled:opacity-50" aria-label="Refresh"><RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} /></button>
+                  <button type="button" onClick={() => setShowAdvanced((value) => !value)} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Advanced filters"><Filter size={16} /></button>
+                  <button type="button" onClick={exportCsv} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Export"><Download size={16} /></button>
+                  <button type="button" onClick={printTable} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Print"><Printer size={16} /></button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <label className={labelClass()}>Status<select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={selectClass()}><option value="All">All status</option>{STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                  <label className={labelClass()}>Urgency<select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={selectClass()}><option value="All">All urgency</option>{PRIORITY_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                  <label className={labelClass()}>Assignee<select value={filterAssignedTo} onChange={(e) => setFilterAssignedTo(e.target.value)} className={selectClass()}><option value="All">All assignee</option><option value="Unassigned">Unassigned</option>{engineerOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+                  <label className={labelClass()}>SLA<select value={filterSla} onChange={(e) => setFilterSla(e.target.value)} className={selectClass()}><option value="All">All SLA</option>{["On Time", "Near Due", "Overdue", "Resolved", "No SLA"].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                </div>
+
+                {showAdvanced && (
+                  <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label className={labelClass()}>Date From<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inputClass()} /></label>
+                    <label className={labelClass()}>Date To<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputClass()} /></label>
+                    <div className="flex items-end text-sm font-semibold text-slate-500 xl:col-span-2">Advanced filters are applied directly to the table without hiding the UI.</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <strong className="text-sm font-black text-slate-900">{activeQueueLabel}</strong>
+                    <span className="ml-2 text-sm font-semibold text-slate-500">{isLoading ? "Loading tickets..." : `${sortedIncidents.length.toLocaleString()} record(s)`}</span>
+                  </div>
+                  {isLookupLoading && <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"><Loader2 size={13} className="animate-spin" /> Loading filters</span>}
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="w-full min-w-[82rem] text-left text-sm">
+                    <thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500">
                       <tr>
-                        <th>No</th>
-                        <th>Req No</th>
-                        <th>Submitted</th>
-                        <th>Requester</th>
-                        <th>Asset</th>
-                        <th>Incident</th>
-                        <th>Urgency</th>
-                        <th>Assigned</th>
-                        <th>SLA</th>
-                        <th>Status</th>
+                        <th className="w-14 px-4 py-3">No</th>
+                        <th className="px-4 py-3"><button type="button" onClick={() => requestSort("id")} className="font-black">Req No</button></th>
+                        <th className="px-4 py-3"><button type="button" onClick={() => requestSort("createdAt")} className="font-black">Submitted</button></th>
+                        <th className="px-4 py-3"><button type="button" onClick={() => requestSort("requester")} className="font-black">Requester</button></th>
+                        <th className="px-4 py-3">Asset</th>
+                        <th className="px-4 py-3"><button type="button" onClick={() => requestSort("title")} className="font-black">Incident</button></th>
+                        <th className="px-4 py-3"><button type="button" onClick={() => requestSort("priority")} className="font-black">Urgency</button></th>
+                        <th className="px-4 py-3"><button type="button" onClick={() => requestSort("assigned")} className="font-black">Assigned</button></th>
+                        <th className="px-4 py-3">SLA</th>
+                        <th className="px-4 py-3"><button type="button" onClick={() => requestSort("status")} className="font-black">Status</button></th>
+                        <th className="px-4 py-3 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody>${rows.join('')}</tbody>
-                  </table>`
-            : '<div class="empty">No ticket found for the current queue or filter.</div>'}
-
-            <footer class="footer">
-              <span>Printed from EMA Unified System</span>
-              <span>Service Desk Ticket Registry</span>
-            </footer>
-          </main>
-          <script>
-            window.onload = function () {
-              window.focus();
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `;
-        const printWindow = window.open('', '_blank', 'width=1120,height=760');
-        if (!printWindow) {
-            setToast({ message: 'Popup blocked. Allow popups to print ticket registry.', type: 'warning' });
-            return;
-        }
-        printWindow.document.open();
-        printWindow.document.write(printHtml);
-        printWindow.document.close();
-    }
-    const hasAdvancedFilter = Object.entries(advancedFilters).some(([key, value]) => key === 'slaStatus' ? value !== 'All' : Boolean(String(value || '').trim()));
-    const hasActiveFilters = Boolean(searchTerm.trim()) ||
-        filterStatus !== 'All' ||
-        filterPriority !== 'All' ||
-        filterAssignedTo !== 'All' ||
-        filterSlaStatus !== 'All' ||
-        hasAdvancedFilter;
-    function resetRegistryFilters() {
-        setSearchTerm('');
-        setFilterStatus('All');
-        setFilterPriority('All');
-        setFilterAssignedTo('All');
-        setFilterSlaStatus('All');
-        setAdvancedFilters(emptyAdvancedFilters());
-        setShowAdvanced(false);
-        setCurrentPage(1);
-    }
-    const queueItems = [
-        { key: 'all' as QueueKey, label: 'All Tickets', sub: 'Complete service queue', count: queueCounts.all, icon: Ticket },
-        { key: 'my' as QueueKey, label: 'My Assigned', sub: 'Owned by current agent', count: queueCounts.my, icon: User },
-        { key: 'sla-risk' as QueueKey, label: 'SLA Risk', sub: 'Near due or breached', count: queueCounts.slaRisk, icon: ShieldAlert },
-        { key: 'unassigned' as QueueKey, label: 'Unassigned', sub: 'Needs ownership', count: queueCounts.unassigned, icon: Users },
-        { key: 'awaiting' as QueueKey, label: 'Awaiting', sub: 'New requests', count: queueCounts.awaiting, icon: Clock },
-        { key: 'in-progress' as QueueKey, label: 'In Progress', sub: 'Active work', count: queueCounts.inProgress, icon: ArrowRightLeft },
-        { key: 'pending-user' as QueueKey, label: 'Pending User', sub: 'Waiting requester', count: queueCounts.pendingUser, icon: User },
-        { key: 'pending-vendor' as QueueKey, label: 'Pending Vendor', sub: 'External action', count: queueCounts.pendingVendor, icon: Settings },
-        { key: 'on-site' as QueueKey, label: 'On Site', sub: 'Field support', count: queueCounts.onSite, icon: Monitor },
-        { key: 'resolved' as QueueKey, label: 'Resolved', sub: 'Completed tickets', count: queueCounts.resolved, icon: CheckCircle2 },
-        { key: 'knowledge' as QueueKey, label: 'Knowledge Base', sub: hasLoadedKb ? 'Resolution articles' : 'Loading articles...', count: queueCounts.kb, icon: BookOpen },
-    ];
-    const kpis = [
-        { label: 'Open Tickets', value: queueCounts.open, note: 'support workload', className: 'open', icon: Ticket },
-        { label: 'SLA Risk', value: queueCounts.slaRisk, note: 'near due / breached', className: 'risk', icon: ShieldAlert },
-        { label: 'Awaiting', value: queueCounts.awaiting, note: 'new request queue', className: 'awaiting', icon: Clock },
-        { label: 'In Progress', value: queueCounts.inProgress, note: 'active handling', className: 'progress', icon: ArrowRightLeft },
-        { label: 'Resolved', value: queueCounts.resolved, note: 'completed records', className: 'resolved', icon: CheckCircle2 },
-        { label: 'Unassigned', value: queueCounts.unassigned, note: 'needs ownership', className: 'unassigned', icon: Users },
-    ];
-    useEffect(() => {
-        document.documentElement.classList.add('ema-settings-page-active');
-        document.body.classList.add('ema-settings-page-active');
-        return () => {
-            document.documentElement.classList.remove('ema-settings-page-active');
-            document.body.classList.remove('ema-settings-page-active');
-        };
-    }, []);
-    const ticketTableColumns = '52px minmax(112px, .86fr) 106px minmax(132px, 1fr) minmax(96px, .72fr) minmax(220px, 1.55fr) 102px minmax(118px, .92fr) 104px 108px 104px';
-    const ticketTableMinWidth = '100%';
-    if (isLoading) {
-        return (<div>
-        <Loader2 size={28}/>
-        <strong>Loading Service Desk</strong>
-        <span>Loading incident queue...</span>
-      </div>);
-    }
-    // Service Desk uses the existing Settings layout/classes.
-    return (<main data-section="service-desk">
-
-
-      {toast && (<div role="status" aria-live="polite">
-          <i>
-            {toast.type === 'success' ? <CheckCircle2 size={18}/> : toast.type === 'error' ? <ShieldAlert size={18}/> : <Clock size={18}/>}
-          </i>
-          <div>
-            <strong>
-              {toast.type === 'success'
-                ? 'Success'
-                : toast.type === 'error'
-                    ? 'Action failed'
-                    : toast.type === 'warning'
-                        ? 'Attention'
-                        : 'Information'}
-            </strong>
-            <span>{toast.message}</span>
-          </div>
-          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss notification">
-            <X size={14}/>
-          </button>
-        </div>)}
-
-      {confirmDialog && typeof document !== 'undefined' && createPortal(<main data-section="service-desk">
-          <div onClick={(event) => event.stopPropagation()}>
-          <section role="dialog" aria-modal="true" aria-labelledby="service-desk-confirm-title" onClick={(event) => event.stopPropagation()}>
-            <AppIconButton type="button" variant="outline-secondary" label="Close confirmation" icon={<X size={16}/>} onClick={closeConfirmDialog} disabled={confirmDialog.loading}/>
-
-            <div>
-              {confirmDialog.tone === 'warning' ? <ShieldAlert size={24}/> : <Trash2 size={24}/>}
-            </div>
-
-            <span>Confirmation required</span>
-            <h2 id="service-desk-confirm-title">{confirmDialog.title}</h2>
-            <p>{confirmDialog.message}</p>
-
-            {confirmDialog.meta && <div>{confirmDialog.meta}</div>}
-
-            {confirmDialog.requiresReason && (<label>
-                <span>
-                  {confirmDialog.reasonLabel || 'Reason'}
-                </span>
-                <textarea value={confirmReason} onChange={(event) => setConfirmReason(event.target.value)} disabled={confirmDialog.loading} placeholder={confirmDialog.reasonPlaceholder || 'Enter reason'} rows={4}/>
-                <small>
-                  Reason is required before this action can continue.
-                </small>
-              </label>)}
-
-            <footer>
-              <AppButton type="button" variant="outline-secondary" onClick={closeConfirmDialog} disabled={confirmDialog.loading}>
-                {confirmDialog.cancelLabel || 'Cancel'}
-              </AppButton>
-
-              <AppButton type="button" variant={confirmDialog.tone === 'danger' ? 'danger' : 'primary'} onClick={runConfirmAction} loading={confirmDialog.loading}>
-                {confirmDialog.confirmLabel || 'Confirm'}
-              </AppButton>
-            </footer>
-          </section>
-        </div>
-        </main>, document.body)}
-
-      <div>
-      <aside>
-        <div>
-          <div>
-            <span>SERVICE CENTER</span>
-            <strong>Service Desk</strong>
-            <small>Ticket queue and support operation</small>
-          </div>
-        </div>
-        <nav id="serviceDeskMenu" role="tablist" aria-label="Service Desk navigation">
-          {queueItems.map((item) => {
-            const Icon = item.icon;
-            return (<button key={item.key} type="button" onClick={() => {
-                    setActiveQueue(item.key);
-                    if (item.key === 'knowledge') {
-                        setViewMode('kb');
-                        void ensureKnowledgeBaseLoaded();
-                    }
-                    else {
-                        setViewMode('list');
-                    }
-                }}>
-                <i>
-                  <Icon size={16}/>
-                </i>
-                <span>
-                  <strong>{item.label}</strong>
-                  <small>{item.sub}</small>
-                </span>
-                <b>{item.count}</b>
-              </button>);
-        })}
-        </nav>
-      </aside>
-
-      <section>
-        <div>
-          <div>
-            <span>INCIDENT COMMAND CENTER</span>
-            <h2>Service Desk</h2>
-            <p>Manage tickets, assignments, SLA risk and support activity.</p>
-          </div>
-          <div>
-            {kpis.slice(0, 4).map((kpi) => (<div data-service-desk-kpi="true" key={kpi.label}>
-                <span>{kpi.label}</span>
-                <strong>{kpi.value}</strong>
-                <small>{kpi.note}</small>
-              </div>))}
-          </div>
-        </div>
-
-        <div>
-
-        {viewMode === 'list' && (<section>
-            <div>
-              <label>
-                <Search size={15}/>
-                <input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search request no, requester, asset, incident..."/>
-              </label>
-
-              <ServiceDeskSelect value={filterStatus} ariaLabel="Filter tickets by status" placeholder="Status: All" onChange={setFilterStatus} options={[
-                { value: 'All', label: 'Status: All' },
-                ...STATUS_OPTIONS.map((status) => ({ value: status, label: `Status: ${status}` })),
-            ]}/>
-
-              <ServiceDeskSelect value={filterPriority} ariaLabel="Filter tickets by urgency" placeholder="Urgency: All" onChange={setFilterPriority} options={[
-                { value: 'All', label: 'Urgency: All' },
-                ...PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: `Urgency: ${priority}` })),
-            ]}/>
-
-              <ServiceDeskSelect value={filterAssignedTo} ariaLabel="Filter tickets by assigned engineer" placeholder="Assignee: All" onOpen={() => void ensureLookupsLoaded()} onChange={setFilterAssignedTo} options={[
-                { value: 'All', label: 'Assignee: All' },
-                { value: '', label: 'Assignee: Unassigned' },
-                ...engineers.map((user) => ({ value: getUserName(user), label: `Assignee: ${getUserName(user)}` })),
-            ]}/>
-
-              <div>
-                <button type="button" disabled={!hasActiveFilters} onClick={resetRegistryFilters}>
-                  <X size={14}/>
-                  <span>Reset</span>
-                </button>
-
-                <button type="button" onClick={openCreateForm}>
-                  <Plus size={15}/>
-                  <span>Create Ticket</span>
-                </button>
-
-                <button type="button" aria-label="Refresh" title="Refresh" disabled={isRefreshing} onClick={refreshData}>
-                  {isRefreshing ? <Loader2 size={15}/> : <RefreshCw size={15}/>}
-                </button>
-
-                <button type="button" aria-label="Advanced filter" title="Advanced filter" onClick={() => {
-                setShowAdvanced((prev) => !prev);
-                void ensureLookupsLoaded();
-            }}>
-                  <Filter size={15}/>
-                </button>
-
-                <button type="button" aria-label="Export CSV" title="Export CSV" onClick={exportCsv}>
-                  <Download size={15}/>
-                </button>
-
-                <button type="button" aria-label="Print ticket table" title="Print ticket table" onClick={printTicketRegistry}>
-                  <Printer size={15}/>
-                </button>
-              </div>
-            </div>
-
-            {showAdvanced && (<div>
-                <div>
-                  <i>
-                    <Filter size={16}/>
-                  </i>
-                  <div>
-                    <strong>Find Incident</strong>
-                    <span>Use specific ticket fields to narrow the Service Desk registry.</span>
-                  </div>
-                  <AppButton type="button" variant="outline-secondary" size="sm" leftIcon={<X size={14}/>} onClick={() => setAdvancedFilters(emptyAdvancedFilters())}>
-                    Reset Advanced
-                  </AppButton>
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={11} className="px-4 py-16 text-center">
+                            <Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={30} />
+                            <strong className="block text-sm font-black text-slate-900">Loading ticket data...</strong>
+                            <span className="mt-1 block text-sm font-semibold text-slate-500">Table UI is ready. Incident records are loading here only.</span>
+                          </td>
+                        </tr>
+                      ) : pageRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={11} className="px-4 py-16 text-center">
+                            <Ticket className="mx-auto mb-3 text-slate-400" size={30} />
+                            <strong className="block text-sm font-black text-slate-900">No incident found</strong>
+                            <span className="mt-1 block text-sm font-semibold text-slate-500">Try reset filter or create a new request.</span>
+                          </td>
+                        </tr>
+                      ) : (
+                        pageRows.map((row, index) => {
+                          const id = getIncidentId(row);
+                          const sla = getSlaMeta(row, now);
+                          return (
+                            <tr key={id || index} onClick={() => setSelectedIncidentId(id)} className={cx("cursor-pointer align-top transition hover:bg-blue-50/40", selectedIncidentId === id && "bg-blue-50") }>
+                              <td className="px-4 py-4"><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-black text-slate-600">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td>
+                              <td className="px-4 py-4"><strong className="font-black text-slate-900">{id || "—"}</strong></td>
+                              <td className="px-4 py-4 font-semibold text-slate-600">{formatDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)}</td>
+                              <td className="px-4 py-4"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-black text-blue-700">{initialText(getRequester(row))}</span><strong className="font-black text-slate-800">{getRequester(row)}</strong></div></td>
+                              <td className="px-4 py-4"><span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-slate-700"><Monitor size={12} />{getAsset(row)}</span></td>
+                              <td className="max-w-[22rem] px-4 py-4"><strong className="block font-black text-slate-900">{getTitle(row)}</strong><small className="mt-1 line-clamp-2 block text-xs font-semibold text-slate-500">{[row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" / ") || getDescription(row) || "No classification"}</small></td>
+                              <td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2.5 py-1 text-xs font-black ring-1", priorityTone(getPriority(row)))}>{getPriority(row)}</span></td>
+                              <td className="px-4 py-4"><strong className="block font-black text-slate-800">{getAssigned(row)}</strong><small className="text-xs font-semibold text-slate-500">{row.assignedLevel || row.AssignedLevel || "No level"}</small></td>
+                              <td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2.5 py-1 text-xs font-black ring-1", sla.tone === "rose" ? "bg-rose-50 text-rose-700 ring-rose-200" : sla.tone === "amber" ? "bg-amber-50 text-amber-700 ring-amber-200" : sla.tone === "emerald" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-blue-50 text-blue-700 ring-blue-200")}>{sla.label}</span><small className="mt-1 block text-xs font-semibold text-slate-500">{sla.detail}</small></td>
+                              <td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2.5 py-1 text-xs font-black ring-1", statusTone(getStatus(row)))}>{getStatus(row)}</span></td>
+                              <td className="px-4 py-4 text-right" onClick={(event) => event.stopPropagation()}>
+                                <div className="inline-flex items-center gap-2">
+                                  <button type="button" onClick={() => setSelectedIncidentId(id)} className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700" title="View"><Eye size={14} /></button>
+                                  <button type="button" onClick={() => startEdit(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700" title="Edit"><Pencil size={14} /></button>
+                                  <button type="button" onClick={() => void deleteIncident(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" title="Delete"><Trash2 size={14} /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
 
-                <div>
-                  <div>
-                    <label>Request No</label>
-                    <input value={advancedFilters.reqNo} onChange={(e) => setAdvancedFilters((p) => ({ ...p, reqNo: e.target.value }))} placeholder="Example: INC-0001"/>
-                  </div>
-
-                  <div>
-                    <label>Requester</label>
-                    <input value={advancedFilters.requester} onChange={(e) => setAdvancedFilters((p) => ({ ...p, requester: e.target.value }))} placeholder="Requester name"/>
-                  </div>
-
-                  <div>
-                    <label>Incident</label>
-                    <input value={advancedFilters.incidentTitle} onChange={(e) => setAdvancedFilters((p) => ({ ...p, incidentTitle: e.target.value }))} placeholder="Title or description"/>
-                  </div>
-
-                  <div>
-                    <label>Asset Tag</label>
-                    <input value={advancedFilters.assetTag} onChange={(e) => setAdvancedFilters((p) => ({ ...p, assetTag: e.target.value }))} placeholder="Asset tag"/>
-                  </div>
-
-                  <div>
-                    <label>Category</label>
-                    <ServiceDeskSelect value={advancedFilters.category} placeholder="All Categories" onChange={(value) => setAdvancedFilters((p) => ({ ...p, category: value, subcategory: '', detail: '' }))} options={[
-                    { value: '', label: 'All Categories' },
-                    ...categories.map((category) => ({ value: getCategoryName(category), label: getCategoryName(category) })),
-                ]}/>
-                  </div>
-
-                  <div>
-                    <label>SLA Status</label>
-                    <ServiceDeskSelect value={advancedFilters.slaStatus} placeholder="All SLA Status" onChange={(value) => setAdvancedFilters((p) => ({ ...p, slaStatus: value }))} options={['All', 'On Time', 'Near Due', 'Overdue', 'Resolved'].map((status) => ({ value: status, label: status }))}/>
-                  </div>
-
-                  <div>
-                    <label>Date From</label>
-                    <input type="date" value={advancedFilters.dateFrom} onChange={(e) => setAdvancedFilters((p) => ({ ...p, dateFrom: e.target.value }))}/>
-                  </div>
-
-                  <div>
-                    <label>Date To</label>
-                    <input type="date" value={advancedFilters.dateTo} onChange={(e) => setAdvancedFilters((p) => ({ ...p, dateTo: e.target.value }))}/>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-slate-500">Page {page} of {totalPages} • {sortedIncidents.length.toLocaleString()} records</span>
+                  <div className="inline-flex items-center gap-2">
+                    <button type="button" disabled={page === 1} onClick={() => setPage(1)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 disabled:opacity-40">«</button>
+                    <button type="button" disabled={page === 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 disabled:opacity-40">‹</button>
+                    <span className="grid h-9 min-w-9 place-items-center rounded-xl bg-blue-600 px-3 text-sm font-black text-white">{page}</span>
+                    <button type="button" disabled={page === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 disabled:opacity-40">›</button>
+                    <button type="button" disabled={page === totalPages} onClick={() => setPage(totalPages)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 disabled:opacity-40">»</button>
                   </div>
                 </div>
-              </div>)}
-
-            <div>
-              {paginatedIncidents.length === 0 ? (<div>
-                  <div>
-                    <Ticket size={26}/>
-                  </div>
-                  <strong>No incident found</strong>
-                  <span>
-                    There is no ticket for this queue or selected filter.
-                    Try All Tickets, reset filter, or create a new request.
-                  </span>
-                  <div>
-                    <button type="button" onClick={openCreateForm}>
-                      <Plus size={14}/>
-                      <span>New Ticket</span>
-                    </button>
-                  </div>
-                </div>) : (<div>
-                  <div>
-                    <div>No</div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('id')}>
-                        <span>Req No</span>
-                        <i>{sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('createdAt')}>
-                        <span>Submitted</span>
-                        <i>{sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('requesterName')}>
-                        <span>Requester</span>
-                        <i>{sortConfig.key === 'requesterName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>Asset</div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('title')}>
-                        <span>Incident</span>
-                        <i>{sortConfig.key === 'title' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('priority')}>
-                        <span>Urgency</span>
-                        <i>{sortConfig.key === 'priority' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('assignedTo')}>
-                        <span>Assigned</span>
-                        <i>{sortConfig.key === 'assignedTo' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('slaDue')}>
-                        <span>SLA</span>
-                        <i>{sortConfig.key === 'slaDue' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>
-                      <button type="button" onClick={() => requestSort('status')}>
-                        <span>Status</span>
-                        <i>{sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div>Action</div>
-                  </div>
-
-                  {paginatedIncidents.map((incident, index) => {
-                    const runningNo = (currentPage - 1) * itemsPerPage + index + 1;
-                    const sla = getSlaMeta(incident, now);
-                    const isSelected = getId(incident) === getId(selectedIncident || {});
-                    return (<div key={getId(incident)} data-ticket-row="true" onClick={() => setSelectedIncidentId(getId(incident))}>
-                        <div>
-                          <span>{String(runningNo).padStart(2, '0')}</span>
-                        </div>
-
-                        <div>
-                          <strong>{getId(incident)}</strong>
-                        </div>
-
-                        <div>{normalizeDate(incident.createdAt)}</div>
-
-                        <div>
-                          <div>
-                            <span>{initialText(incident.requesterName || incident.reporterId)}</span>
-                            <span>
-                              <strong>{incident.requesterName || 'N/A'}</strong>
-                            </span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <span>
-                            <Monitor size={13}/>
-                            {incident.assetId || '—'}
-                          </span>
-                        </div>
-
-                        <div>
-                          <strong>{incident.title || 'Untitled incident'}</strong>
-                          <small>
-                            {[incident.category, incident.subcategory, incident.incidentDetail].filter(Boolean).join(' / ') ||
-                            incident.description ||
-                            'No classification'}
-                          </small>
-                        </div>
-
-                        <div>
-                          <span>
-                            {incident.priority || 'Medium'}
-                          </span>
-                        </div>
-
-                        <div>
-                          <strong>{incident.assignedTo || 'Unassigned'}</strong>
-                          <small>{incident.assignedLevel || 'No level'}</small>
-                        </div>
-
-                        <div>
-                          <strong>{sla.label}</strong>
-                          <small>{sla.detail}</small>
-                          <small>Due: {sla.dueText}</small>
-                        </div>
-
-                        <div>
-                          <span>
-                            {incident.status || 'Awaiting'}
-                          </span>
-                        </div>
-
-                        <div onClick={(event) => event.stopPropagation()}>
-                          <div>
-                            <button type="button" title="Edit ticket" aria-label="Edit ticket" onClick={() => openEditForm(incident)}>
-                              <Pencil size={14}/>
-                            </button>
-
-                            <button type="button" title={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed or resolved tickets' : 'Delete ticket'} aria-label={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed or resolved tickets' : 'Delete ticket'} disabled={isDeleteLockedStatus(incident.status)} onClick={() => deleteIncident(incident)}>
-                              <Trash2 size={14}/>
-                            </button>
-                          </div>
-                        </div>
-                      </div>);
-                })}
-                </div>)}
-            </div>
-
-            <AppPagination currentPage={currentPage} totalPages={totalPages} totalItems={sortedIncidents.length} pageSize={itemsPerPage} showPageSize={false} onPageChange={setCurrentPage}/>
-          </section>)}
-
-        {viewMode === 'kb' && (<section>
-            <header>
-              <div>
-                <h2>Knowledge Base</h2>
-                <p>Manage and reference previous incident resolutions</p>
               </div>
-              <div>
-                {canCreate && (<button type="button" onClick={() => {
-                    setKbFormData({ id: '', title: '', incidentDetails: '', resolution: '' });
-                    setKbFormOpen(true);
-                }}>
-                    <Plus size={16}/>
-                  </button>)}
-                <button type="button" onClick={() => {
-                setViewMode('list');
-                setActiveQueue('all');
-            }}>
-                  <Ticket size={16}/>
-                </button>
-              </div>
-            </header>
-
-            {!hasLoadedKb && (<div>
-                <Loader2 size={14}/>
-                <span>Loading knowledge base...</span>
-              </div>)}
-
-            <div>
-              <label>
-                <Search size={16}/>
-                <input value={kbSearch} onChange={(event) => setKbSearch(event.target.value)} placeholder="Search article title..."/>
-              </label>
-            </div>
-
-            <div>
-              <span>
-                Showing <strong>{filteredKb.length}</strong> knowledge article
-              </span>
-              <span>Title only. Use eye icon to view details.</span>
-            </div>
-
-            <div>
-              <table>
-                <colgroup>
-                  <col />
-                  <col />
-                  <col />
-                </colgroup>
-
-                <thead>
-                  <tr>
-                    <th>No</th>
-                    <th onClick={() => handleKbSort('title')}>Knowledge Base</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredKb.length === 0 && (<tr>
-                      <td colSpan={3}>
-                        No knowledge base article found.
-                      </td>
-                    </tr>)}
-
-                  {filteredKb.map((kb, index) => (<tr key={kb.id || kb.title}>
-                      <td>
-                        <span>{index + 1}</span>
-                      </td>
-
-                      <td>
-                        <div>
-                          <strong>{kb.title || 'Untitled article'}</strong>
-                        </div>
-                      </td>
-
-                      <td>
-                        <div>
-                          <button type="button" title="View resolution" onClick={() => setSelectedKbArticle(kb)}>
-                            <Eye size={14}/>
-                          </button>
-
-                          {canEdit && (<button type="button" title="Edit article" onClick={() => {
-                        setKbFormData(kb);
-                        setKbFormOpen(true);
-                    }}>
-                              <Pencil size={14}/>
-                            </button>)}
-
-                          {canDelete && (<button type="button" title="Delete article" onClick={() => deleteKb(kb)}>
-                              <Trash2 size={14}/>
-                            </button>)}
-                        </div>
-                      </td>
-                    </tr>))}
-                </tbody>
-              </table>
-            </div>
-          </section>)}
-        </div>
-      </section>
+            </section>
+          )}
+        </section>
       </div>
 
-      {selectedKbArticle && (<div onClick={() => setSelectedKbArticle(null)}>
-          <section onClick={(event) => event.stopPropagation()}>
-            <header>
-              <div>
-                <span>Knowledge Article</span>
-                <h2>{selectedKbArticle.title || 'Untitled article'}</h2>
-                <p>{selectedKbArticle.incidentDetails || 'No incident details provided.'}</p>
-              </div>
-              <button type="button" onClick={() => setSelectedKbArticle(null)} aria-label="Close knowledge article">
-                <X size={18}/>
-              </button>
-            </header>
-
+      {selectedIncident && viewMode === "list" && (
+        <div className="fixed inset-y-0 right-0 z-40 w-[min(31rem,100vw)] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl">
+          <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white p-4">
             <div>
-              <section>
-                <span>Incident Details</span>
-                <p>{selectedKbArticle.incidentDetails || 'No incident details provided.'}</p>
-              </section>
-
-              <section>
-                <span>Resolution</span>
-                {splitKnowledgeSteps(selectedKbArticle.resolution).length > 1 ? (<div>
-                    {splitKnowledgeSteps(selectedKbArticle.resolution).map((step, index) => (<div key={`selected-kb-step-${index}`}>
-                        <p>{step}</p>
-                      </div>))}
-                  </div>) : (<p>{selectedKbArticle.resolution || 'No resolution provided.'}</p>)}
-              </section>
+              <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Ticket Detail</span>
+              <h3 className="mt-1 text-lg font-black text-slate-950">{getIncidentId(selectedIncident)}</h3>
             </div>
-
-            <footer>
-              <AppButton type="button" variant="outline-secondary" onClick={() => setSelectedKbArticle(null)}>
-                Close
-              </AppButton>
-
-              {canEdit && (<AppButton type="button" variant="primary" leftIcon={<Pencil size={15}/>} onClick={() => {
-                    setKbFormData(selectedKbArticle);
-                    setSelectedKbArticle(null);
-                    setKbFormOpen(true);
-                }}>
-                  Edit Article
-                </AppButton>)}
-            </footer>
-          </section>
-        </div>)}
-
-      {selectedIncident && (<aside ref={detailPanelRef}>
-          <>
-            <div>
-              <div>
-                <Ticket size={24}/>
-              </div>
-              <div>
-                <span>{getId(selectedIncident)}</span>
-                <h2>{selectedIncident.title || 'Untitled incident'}</h2>
-                <p>{selectedIncident.description || 'No description provided.'}</p>
-              </div>
-              <AppIconButton type="button" variant="outline-light" label="Close ticket detail" icon={<X size={16}/>} onClick={() => setSelectedIncidentId('')}/>
+            <button type="button" onClick={() => setSelectedIncidentId("")} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X size={16} /></button>
+          </div>
+          <div className="space-y-4 p-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <strong className="block text-base font-black text-slate-950">{getTitle(selectedIncident)}</strong>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">{getDescription(selectedIncident) || "No description provided."}</p>
             </div>
-
-            <div>
-              <div>
-                <span>Requester</span>
-                <strong>{selectedIncident.requesterName || 'N/A'}</strong>
-              </div>
-              <div>
-                <span>Priority</span>
-                <strong>{selectedIncident.priority || 'Medium'}</strong>
-              </div>
-              <div>
-                <span>Status</span>
-                <strong>{selectedIncident.status || 'Awaiting'}</strong>
-              </div>
-              <div>
-                <span>Assigned</span>
-                <strong>{selectedIncident.assignedTo || 'Unassigned'}</strong>
-              </div>
-              <div>
-                <span>Asset</span>
-                <strong>{selectedIncident.assetId || '—'}</strong>
-              </div>
-              <div>
-                <span>SLA Due</span>
-                <strong>{normalizeDateTime(selectedIncident.slaDue)}</strong>
-              </div>
-              <div>
-                <span>SLA Status</span>
-                <strong>{getSlaMeta(selectedIncident, now).label}</strong>
-              </div>
-              <div>
-                <span>SLA Timer</span>
-                <strong>{getSlaMeta(selectedIncident, now).detail}</strong>
-              </div>
-            </div>
-
-            <div>
-              <strong>Operational Note</strong>
-              <p>{selectedIncident.additionalMemo || selectedIncident.remarks || 'Service desk queue ready.'}</p>
-            </div>
-
-            <div>
-              <div>
-                <span>
-                  <Download size={16}/>
-                </span>
-                <div>
-                  <strong>Incident Attachments</strong>
-                  <p>Files linked to this service request.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ["Requester", getRequester(selectedIncident)],
+                ["Asset", getAsset(selectedIncident)],
+                ["Urgency", getPriority(selectedIncident)],
+                ["Status", getStatus(selectedIncident)],
+                ["Assigned", getAssigned(selectedIncident)],
+                ["Submitted", formatDateTime(selectedIncident.createdAt || selectedIncident.CreatedAt)],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl border border-slate-200 bg-white p-3">
+                  <span className="text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">{label}</span>
+                  <strong className="mt-1 block text-sm font-black text-slate-900">{value}</strong>
                 </div>
-              </div>
-
-              {isLoadingAttachments ? (<div>
-                  <Loader2 size={14}/>
-                  Loading attachments...
-                </div>) : incidentAttachments.length === 0 ? (<div>No attachments uploaded.</div>) : (<div>
-                  {incidentAttachments.map((file) => (<div key={file.filename || file.id}>
-                      <span />
-                      <div>
-                        <strong>
-                          <a href={getIncidentAttachmentUrl(file)} target="_blank" rel="noreferrer">
-                            {file.originalName || file.filename || 'Attachment'}
-                          </a>
-                        </strong>
-                        <p>{formatAttachmentSize(file.size || file.fileSize) || 'Uploaded file'}</p>
-                      </div>
-                      {canEdit && (<button type="button" onClick={() => deleteIncidentAttachment(file.filename)}>
-                          <Trash2 size={14}/> Delete
-                        </button>)}
-                    </div>))}
-                </div>)}
+              ))}
             </div>
-
-            <div>
-              {canEdit && (<button type="button" onClick={() => resolveIncident(selectedIncident)} disabled={isDeleteLockedStatus(selectedIncident.status)} title={isDeleteLockedStatus(selectedIncident.status) ? 'Ticket already closed or resolved' : 'Submit and resolve ticket'}>
-                  <CheckCircle2 size={15}/> Submit & Resolve
-                </button>)}
-              <button type="button" onClick={() => printTicket(selectedIncident)}>
-                <Printer size={15}/> Print Ticket
-              </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => startEdit(selectedIncident)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white"><Pencil size={15} /> Edit</button>
+              <button type="button" onClick={() => void deleteIncident(selectedIncident)} className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700"><Trash2 size={15} /> Delete</button>
             </div>
-
-            <div>
-              <div>
-                <Clock size={16}/>
-                <strong>Ticket Timeline</strong>
-              </div>
-
-              <div>
-                <i />
-                <div>
-                  <strong>Created</strong>
-                  <p>{selectedIncident.title || 'Incident submitted'}</p>
-                  <span>{normalizeDateTime(selectedIncident.createdAt)}</span>
-                </div>
-              </div>
-
-              {selectedIncident.firstResponseAt && (<div>
-                  <i />
-                  <div>
-                    <strong>First Response</strong>
-                    <p>{selectedIncident.assignedTo || 'Support team'} started handling this ticket.</p>
-                    <span>{normalizeDateTime(selectedIncident.firstResponseAt)}</span>
-                  </div>
-                </div>)}
-
-              {selectedIncident.resolvedAt && (<div>
-                  <i />
-                  <div>
-                    <strong>Resolved</strong>
-                    <p>{selectedIncident.rootCause || selectedIncident.actionPlan || 'Resolution completed.'}</p>
-                    <span>{normalizeDateTime(selectedIncident.resolvedAt)}</span>
-                  </div>
-                </div>)}
-            </div>
-          </>
-        </aside>)}
-
-      {viewMode === 'form' && typeof document !== 'undefined' && createPortal(<main data-section="service-desk">
-          <div aria-modal="true" role="dialog">
-          <form onSubmit={saveIncident} onClick={(event) => event.stopPropagation()}>
-            <header>
-              <div>
-                <span>{formMode === 'create' ? 'New Incident' : formData.id || 'Edit Incident'}</span>
-                <h2>{formMode === 'create' ? 'Create Service Request' : 'Update Service Request'}</h2>
-                <p>Lookup data loads only when this form is opened.</p>
-              </div>
-              <button type="button" onClick={requestCloseForm} aria-label="Cancel ticket form">
-                <X size={18}/>
-              </button>
-            </header>
-
-            <div>
-              {isLoadingLookups && (<div>
-                  <Loader2 size={14}/>
-                  <span>Loading creator, category and assignment options...</span>
-                </div>)}
-
-              <section>
-                <h3>
-                  <span>Created By & Asset</span>
-                  {isRequesterAssetLocked && (<em>
-                      Locked after creation
-                    </em>)}
-                </h3>
-                {isRequesterAssetLocked && (<p>
-                    Created by and asset identity are locked for audit accuracy. Update assignment, status and resolution fields only.
-                  </p>)}
-                <div>
-                  <label>
-                    <span>Created By</span>
-                    <input value={formData.requesterName || getCurrentLoginName(currentUser)} readOnly disabled aria-label="Created by current logged-in user"/>
-                    <small>
-                      Auto-filled from current login. This field is not manually selectable.
-                    </small>
-                  </label>
-
-                  <label>
-                    <span>Submitted At</span>
-                    <input value={normalizeDateTime(formData.createdAt)} readOnly disabled aria-label="Submitted at system generated timestamp"/>
-                  </label>
-
-                  <label>
-                    <span>Device Type</span>
-                    <ServiceDeskSelect value={formData.deviceType || ''} disabled={isRequesterAssetLocked} placeholder="Select Device Type" onChange={(value) => updateFormField('deviceType', value)} options={[
-                { value: '', label: 'Select Device Type', disabled: true },
-                ...DEVICE_TYPES.map((type) => ({ value: type, label: type })),
-            ]}/>
-                  </label>
-
-                  <label>
-                    <span>Asset Lookup</span>
-                    <div ref={assetComboRef}>
-                      <div>
-                        <Search size={15}/>
-                        <input value={assetSearchTerm} disabled={isRequesterAssetLocked} onChange={(e) => {
-                const value = e.target.value;
-                setAssetSearchTerm(value);
-                updateFormField('assetId', value);
-                openAssetDropdown();
-                void searchAssets(value);
-            }} onFocus={() => {
-                if (isRequesterAssetLocked)
-                    return;
-                openAssetDropdown();
-                if (clientAssets.length === 0) {
-                    void loadClientAssets('all', true);
-                }
-            }} placeholder={isRequesterAssetLocked
-                ? 'Locked after ticket creation'
-                : isLoadingAssets
-                    ? 'Loading assets...'
-                    : 'Search asset tag, username, brand or model'}/>
-                      </div>
-                      <button type="button" disabled={isRequesterAssetLocked} onClick={() => {
-                if (showAssetDropdown) {
-                    setShowAssetDropdown(false);
-                    return;
-                }
-                openAssetDropdown();
-                if (clientAssets.length === 0) {
-                    void loadClientAssets('all');
-                }
-            }}>
-                        Choose asset
-                      </button>
-
-                      {showAssetDropdown && !isRequesterAssetLocked && typeof document !== 'undefined' && createPortal(<div ref={assetDropdownPortalRef}>
-                          {isLoadingAssets ? (<div>
-                              <Loader2 size={14}/>
-                              Loading assets...
-                            </div>) : filteredClientAssets.length === 0 ? (<div>No asset found from API. Check /api/assets response or try another keyword.</div>) : (filteredClientAssets.map((asset) => {
-                    const value = getAssetValue(asset);
-                    const meta = [asset.requesterName || asset.RequesterName, getAssetBrand(asset), getAssetModel(asset), getAssetOS(asset)].filter(Boolean).join(' • ');
-                    return (<button key={value || JSON.stringify(asset)} type="button" onClick={() => handleAssetSelect(asset)}>
-                                  <strong>{value || 'Unnamed asset'}</strong>
-                                  <span>{meta || asset.requesterName || 'No asset details'}</span>
-                                </button>);
-                }))}
-                        </div>, document.body)}
-                    </div>
-
-                    {formData.assetId && (formData.assetBrand || formData.assetModel || formData.assetOS) && (<div>
-                        {formData.assetBrand && <span>{formData.assetBrand}</span>}
-                        {formData.assetModel && <span>{formData.assetModel}</span>}
-                        {formData.assetOS && <span>{formData.assetOS}</span>}
-                      </div>)}
-                  </label>
-
-                  <label>
-                    <span>Asset Brand</span>
-                    <input value={formData.assetBrand || ''} disabled={isRequesterAssetLocked} onChange={(e) => updateFormField('assetBrand', e.target.value)} placeholder="Brand"/>
-                  </label>
-
-                  <label>
-                    <span>Asset Model</span>
-                    <input value={formData.assetModel || ''} disabled={isRequesterAssetLocked} onChange={(e) => updateFormField('assetModel', e.target.value)} placeholder="Model"/>
-                  </label>
-
-                  <label>
-                    <span>Asset OS</span>
-                    <input value={formData.assetOS || ''} disabled={isRequesterAssetLocked} onChange={(e) => updateFormField('assetOS', e.target.value)} placeholder="Operating system"/>
-                  </label>
-                </div>
-              </section>
-
-              <section>
-                <h3>Incident Classification</h3>
-                <div>
-                  <label>
-                    <span>Category</span>
-                    <ServiceDeskSelect value={formData.category || ''} placeholder="Select Category" onChange={(value) => setFormData((prev: any) => ({ ...prev, category: value, subcategory: '', incidentDetail: '' }))} options={[
-                { value: '', label: 'Select Category', disabled: true },
-                ...categories.map((category) => ({ value: getCategoryName(category), label: getCategoryName(category) })),
-            ]}/>
-                  </label>
-
-                  <label>
-                    <span>Subcategory</span>
-                    <ServiceDeskSelect value={formData.subcategory || ''} placeholder="Select Subcategory" onChange={(value) => setFormData((prev: any) => ({ ...prev, subcategory: value, incidentDetail: '' }))} options={[
-                { value: '', label: 'Select Subcategory', disabled: true },
-                ...subcategoryOptions.map((sub: any) => ({ value: getCategoryName(sub), label: getCategoryName(sub) })),
-            ]}/>
-                  </label>
-
-                  <label>
-                    <span>Problem Detail</span>
-                    <ServiceDeskSelect value={formData.incidentDetail || ''} placeholder="Select Detail" onChange={(value) => updateFormField('incidentDetail', value)} options={[
-                { value: '', label: 'Select Detail', disabled: true },
-                ...detailOptions.map((detail: any) => ({ value: getCategoryName(detail), label: getCategoryName(detail) })),
-            ]}/>
-                  </label>
-
-                  <label>
-                    <span>Urgency Level</span>
-                    <ServiceDeskSelect value={formData.priority || 'Medium'} placeholder="Select Urgency" onChange={(value) => updateFormField('priority', value)} options={PRIORITY_OPTIONS.map((priority) => ({ value: priority, label: priority }))}/>
-                  </label>
-
-                  <label>
-                    <span>
-                      Title / Problem Description
-                      <em>*</em>
-                    </span>
-                    <input value={formData.title || ''} onChange={(e) => updateFormField('title', e.target.value)} placeholder="Example: Unable to access internal HR portal" required/>
-                  </label>
-
-                  <label>
-                    <span>
-                      Description
-                      <em>*</em>
-                    </span>
-                    <textarea value={formData.description || ''} onChange={(e) => updateFormField('description', e.target.value)} placeholder="Describe issue, impact, error message and troubleshooting done." required/>
-                  </label>
-                </div>
-              </section>
-
-              <section>
-                <h3>Assignment & Resolution</h3>
-                <div>
-                  <label>
-                    <span>
-                      Status
-                      {normalizeStatus(formData.status) === 'rejected' && (<em>
-                          Reject reason required
-                        </em>)}
-                    </span>
-                    <ServiceDeskSelect value={formData.status || 'Awaiting'} disabled={formMode === 'create'} placeholder="Select Status" onChange={(value) => updateFormField('status', value)} options={STATUS_OPTIONS.map((status) => ({ value: status, label: status }))}/>
-                  </label>
-
-                  <label>
-                    <span>Assigned Level</span>
-                    <ServiceDeskSelect value={formData.assignedLevel || ''} placeholder={isLoadingLookups ? 'Loading support levels...' : 'Select Support Level'} onOpen={() => void ensureLookupsLoaded()} onChange={(value) => updateFormField('assignedLevel', value)} options={[
-                { value: '', label: isLoadingLookups ? 'Loading support levels...' : 'Select Support Level', disabled: true },
-                ...supportRoles.map((role) => ({ value: role.name || role.role, label: role.name || role.role })),
-            ]}/>
-                  </label>
-
-                  <label>
-                    <span>Assigned To</span>
-                    <ServiceDeskSelect value={formData.assignedTo || ''} placeholder={formData.assignedLevel ? 'Unassigned' : 'Select support level first'} disabled={!formData.assignedLevel || isLoadingEngineers} onChange={handleAssignedEngineerChange} options={[
-                {
-                    value: '',
-                    label: formData.assignedLevel
-                        ? isLoadingEngineers
-                            ? 'Loading engineers...'
-                            : 'Unassigned'
-                        : 'Select support level first',
-                    disabled: !formData.assignedLevel || isLoadingEngineers,
-                },
-                ...assignableEngineers.map((engineer) => {
-                    const name = getUserName(engineer);
-                    const supportLevel = getPrimarySupportLevel(engineer) || formData.assignedLevel;
-                    const leaveLabel = isEngineerOnLeave(engineer) ? 'On leave' : 'Available';
-                    return {
-                        value: name,
-                        label: `${name} · ${supportLevel} · ${leaveLabel}`,
-                    };
-                }),
-            ]}/>
-                    {formData.assignedLevel && !isLoadingEngineers && assignableEngineers.length === 0 && (<small>
-                        No EMA_User found with role {formData.assignedLevel}.
-                      </small>)}
-                  </label>
-
-                  <label>
-                    <span>SLA Due</span>
-                    <input type="datetime-local" value={toDateTimeLocalInput(getSlaPreview(formData).due || formData.slaDue)} readOnly disabled aria-readonly="true" title="SLA due date is calculated automatically from Settings SLA rules and working hours."/>
-                    <small>
-                      Auto-calculated from Settings SLA rules and working hours.
-                    </small>
-                  </label>
-
-                  <div>
-                    <strong>SLA Preview</strong>
-                    <p>
-                      {getSlaPreview(formData).code} · {getSlaPreview(formData).config?.label || formData.priority || 'Medium'} · {getSlaPreview(formData).meta.label}
-                    </p>
-                    <small>
-                      Due: {getSlaPreview(formData).due ? normalizeDateTime(getSlaPreview(formData).due) : 'Not calculated'} · {getSlaPreview(formData).meta.detail}
-                    </small>
-                  </div>
-
-                  <label>
-                    <span>Root Cause</span>
-                    <textarea value={formData.rootCause || ''} onChange={(e) => updateFormField('rootCause', e.target.value)} placeholder="Root cause analysis"/>
-                  </label>
-
-                  <label>
-                    <span>Action Plan</span>
-                    <textarea value={formData.actionPlan || ''} onChange={(e) => updateFormField('actionPlan', e.target.value)} placeholder="Resolution steps / action plan"/>
-                  </label>
-
-                  <label>
-                    <span>
-                      {normalizeStatus(formData.status) === 'rejected'
-                ? 'Reject Reason / Remarks *'
-                : 'Additional Memo / Remarks'}
-
-                      {normalizeStatus(formData.status) === 'rejected' && (<em>
-                          Mandatory
-                        </em>)}
-                    </span>
-
-                    <textarea ref={rejectReasonRef} aria-required={normalizeStatus(formData.status) === 'rejected'} aria-invalid={normalizeStatus(formData.status) === 'rejected' && !getOperationalReason(formData)} value={formData.additionalMemo || formData.remarks || ''} onChange={(e) => {
-                updateFormField('additionalMemo', e.target.value);
-                updateFormField('remarks', e.target.value);
-            }} placeholder={normalizeStatus(formData.status) === 'rejected'
-                ? 'Required: explain why this ticket is rejected'
-                : 'Internal note or requester remarks'}/>
-
-                    {normalizeStatus(formData.status) === 'rejected' && (<small>
-                        {getOperationalReason(formData)
-                    ? 'Reject reason captured.'
-                    : 'This field is required before a ticket can be saved as Rejected.'}
-                      </small>)}
-                  </label>
-                </div>
-              </section>
-
-              {formMode === 'edit' && (<section>
-                <div>
-                  <div>
-                    <h3>Incident Attachments</h3>
-                    <p>Upload supporting screenshot, document or log file for this ticket.</p>
-                  </div>
-                  <span>
-                    {incidentAttachments.length}/{INCIDENT_ATTACHMENT_MAX_FILES} file{incidentAttachments.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-
-                <div>
-                  <label>
-                    <input type="file" accept={INCIDENT_ATTACHMENT_ALLOWED_TYPES} disabled={isUploadingAttachment || !getId(formData) || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES} onChange={uploadIncidentAttachment}/>
-                    <span>
-                      {isUploadingAttachment ? <Loader2 size={19}/> : <Download size={19}/>}
-                    </span>
-                    <strong>{isUploadingAttachment ? 'Uploading attachment...' : 'Choose attachment'}</strong>
-                    <small>
-                      Maximum {INCIDENT_ATTACHMENT_MAX_FILES} files per ticket. Max {INCIDENT_ATTACHMENT_MAX_MB}MB per file. Total max {INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_MB}MB.
-                    </small>
-                  </label>
-
-                  <div>
-                    <span>Uploaded Files</span>
-                    {isLoadingAttachments ? (<div>
-                        <Loader2 size={14}/>
-                        Loading attachments...
-                      </div>) : incidentAttachments.length === 0 ? (<div>No attachments uploaded.</div>) : (<div>
-                        {incidentAttachments.map((file) => (<div key={file.filename || file.id}>
-                            <span />
-                            <div>
-                              <strong>
-                                <a href={getIncidentAttachmentUrl(file)} target="_blank" rel="noreferrer">
-                                  {file.originalName || file.filename || 'Attachment'}
-                                </a>
-                              </strong>
-                              <p>{formatAttachmentSize(file.size || file.fileSize) || 'Uploaded file'}</p>
-                            </div>
-                            <button type="button" onClick={() => deleteIncidentAttachment(file.filename)}>
-                              <Trash2 size={14}/> Delete
-                            </button>
-                          </div>))}
-                      </div>)}
-                  </div>
-                </div>
-              </section>)}
-            </div>
-
-            <footer>
-              <AppButton type="button" variant="outline-secondary" onClick={requestCloseForm}>
-                Cancel
-              </AppButton>
-
-              {formMode === 'edit' && canEdit && (<AppButton type="button" variant="warning" onClick={() => resolveIncident(formData)} disabled={isSaving || isDeleteLockedStatus(formData.status)} title={isDeleteLockedStatus(formData.status) ? 'Ticket already closed or resolved' : 'Submit and resolve ticket'}>
-                  Submit & Resolve
-                </AppButton>)}
-
-              <AppButton type="submit" variant="primary" loading={isSaving} leftIcon={<Send size={16}/>}>
-                {formMode === 'create' ? 'Submit Ticket' : 'Update Ticket'}
-              </AppButton>
-            </footer>
-          </form>
+          </div>
         </div>
-        </main>, document.body)}
+      )}
 
-      {kbFormOpen && (<div onClick={() => setKbFormOpen(false)}>
-          <form onSubmit={saveKb} onClick={(event) => event.stopPropagation()}>
-            <header>
+      {selectedKb && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" onClick={() => setSelectedKb(null)}>
+          <section className="w-[min(44rem,100%)] rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-4">
               <div>
-                <span>Knowledge Base</span>
-                <h2>{kbFormData.id ? 'Edit Resolution Article' : 'New Resolution Article'}</h2>
-                <p>Knowledge base records use the existing KnowledgeBaseService API.</p>
+                <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Knowledge Article</span>
+                <h3 className="mt-1 text-lg font-black text-slate-950">{valueOf(selectedKb, ["title", "Title"], "Untitled article")}</h3>
               </div>
-              <button type="button" onClick={() => setKbFormOpen(false)}>
-                <X size={18}/>
-              </button>
-            </header>
-
-            <div>
-              <section>
-                <div>
-                  <label>
-                    <span>Title</span>
-                    <input value={kbFormData.title || ''} onChange={(e) => setKbFormData((prev: any) => ({ ...prev, title: e.target.value }))}/>
-                  </label>
-                  <label>
-                    <span>Incident Details</span>
-                    <textarea value={kbFormData.incidentDetails || ''} onChange={(e) => setKbFormData((prev: any) => ({ ...prev, incidentDetails: e.target.value }))}/>
-                  </label>
-                  <label>
-                    <span>Resolution</span>
-                    <textarea value={kbFormData.resolution || ''} onChange={(e) => setKbFormData((prev: any) => ({ ...prev, resolution: e.target.value }))}/>
-                  </label>
-                </div>
-              </section>
+              <button type="button" onClick={() => setSelectedKb(null)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X size={16} /></button>
             </div>
-
-            <footer>
-              <AppButton type="button" variant="outline-secondary" onClick={() => setKbFormOpen(false)}>
-                Cancel
-              </AppButton>
-
-              <AppButton type="submit" variant="primary" loading={isSaving} leftIcon={<Send size={16}/>}>
-                Save Article
-              </AppButton>
-            </footer>
-          </form>
-        </div>)}
-    </main>);
+            <div className="space-y-4 p-4">
+              <div><strong className="text-sm font-black text-slate-900">Incident Details</strong><p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-600">{valueOf(selectedKb, ["incidentDetails", "IncidentDetails", "details", "Details"], "No details.")}</p></div>
+              <div><strong className="text-sm font-black text-slate-900">Resolution</strong><p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-600">{valueOf(selectedKb, ["resolution", "Resolution", "solution", "Solution"], "No resolution.")}</p></div>
+            </div>
+          </section>
+        </div>
+      )}
+    </main>
+  );
 }
