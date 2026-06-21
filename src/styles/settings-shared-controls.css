@@ -2,6 +2,20 @@
    Scope mirrors the existing EMA component controls so Settings buttons, toast
    and confirm dialogs do not use raw/custom-looking controls. */
 
+html body .settings-with-notifications .settings-menu-list .setting-btn small {
+  display: none !important;
+}
+
+html body .settings-with-notifications .settings-menu-list .setting-btn {
+  min-height: 2.75rem !important;
+  grid-template-columns: 2.1rem minmax(0, 1fr) !important;
+}
+
+html body .settings-with-notifications .settings-menu-list .setting-btn strong {
+  font-size: 0.84rem !important;
+  line-height: 1.15 !important;
+}
+
 html body .settings-with-notifications .primary-btn,
 html body .settings-with-notifications .soft-btn,
 html body .settings-with-notifications .danger-btn,
