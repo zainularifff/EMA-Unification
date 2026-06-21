@@ -33,10 +33,14 @@ html body .settings-with-notifications .module-control-panel .settings-helper-ca
 }
 
 html body .settings-with-notifications .module-control-table {
+  --module-no-width: 3.5rem;
+  --module-name-min: 20rem;
+  --module-role-width: 7.8rem;
   width: 100% !important;
   max-width: 100% !important;
   display: block !important;
-  overflow: auto !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
   border: 1px solid #dbe7f5 !important;
   border-radius: 1rem !important;
   background: #ffffff !important;
@@ -44,21 +48,17 @@ html body .settings-with-notifications .module-control-table {
 
 html body .settings-with-notifications .module-control-row,
 html body .settings-with-notifications .module-control-group-row {
-  --module-no-width: 3.5rem;
-  --module-name-width: 22rem;
-  --module-role-width: 8.15rem;
-  width: max-content !important;
-  min-width: max(100%, calc(var(--module-no-width) + var(--module-name-width) + (var(--module-role-count, 1) * var(--module-role-width)))) !important;
+  min-width: calc(var(--module-no-width) + var(--module-name-min) + (var(--module-role-count, 1) * var(--module-role-width))) !important;
+  width: 100% !important;
 }
 
 html body .settings-with-notifications .module-control-row {
   display: grid !important;
-  grid-template-columns: var(--module-no-width) var(--module-name-width) !important;
-  grid-auto-flow: column !important;
-  grid-auto-columns: var(--module-role-width) !important;
+  grid-template-columns: var(--module-no-width) minmax(var(--module-name-min), 1fr) repeat(var(--module-role-count, 1), var(--module-role-width)) !important;
   align-items: center !important;
-  min-height: 3.7rem !important;
+  min-height: 3.45rem !important;
   border-bottom: 1px solid #e6edf6 !important;
+  background: #ffffff !important;
 }
 
 html body .settings-with-notifications .module-control-row.head,
@@ -73,13 +73,22 @@ html body .settings-with-notifications .module-control-table > .module-control-r
 
 html body .settings-with-notifications .module-control-row .user-cell {
   min-width: 0 !important;
-  padding: 0.75rem 0.8rem !important;
+  padding: 0.72rem 0.8rem !important;
   display: flex !important;
   align-items: center !important;
   color: #0f172a !important;
   font-size: 0.82rem !important;
   font-weight: 850 !important;
   line-height: 1.2 !important;
+}
+
+html body .settings-with-notifications .module-control-row .user-cell:nth-child(n + 3),
+html body .settings-with-notifications .module-control-row .module-toggle-cell,
+html body .settings-with-notifications .module-control-row .module-role-head {
+  justify-content: center !important;
+  text-align: center !important;
+  padding-left: 0.35rem !important;
+  padding-right: 0.35rem !important;
 }
 
 html body .settings-with-notifications .module-control-row.head .user-cell,
@@ -92,12 +101,9 @@ html body .settings-with-notifications .module-control-row .module-role-head {
 }
 
 html body .settings-with-notifications .module-control-row .module-role-head {
-  justify-content: center !important;
-  text-align: center !important;
   white-space: normal !important;
   word-break: normal !important;
-  padding-left: 0.35rem !important;
-  padding-right: 0.35rem !important;
+  line-height: 1.05 !important;
 }
 
 html body .settings-with-notifications .module-control-group-row {
@@ -125,11 +131,6 @@ html body .settings-with-notifications .module-control-group-row span {
 html body .settings-with-notifications .module-control-group-row span::before {
   content: none !important;
   display: none !important;
-}
-
-html body .settings-with-notifications .module-control-row.parent-module-row,
-html body .settings-with-notifications .module-control-row.submodule-row {
-  background: #ffffff !important;
 }
 
 html body .settings-with-notifications .module-control-row.submodule-row .module-info-cell {
@@ -176,17 +177,10 @@ html body .settings-with-notifications .module-info-cell small {
   font-weight: 700 !important;
 }
 
-html body .settings-with-notifications .module-toggle-cell {
-  justify-content: center !important;
-  text-align: center !important;
-  padding-left: 0.35rem !important;
-  padding-right: 0.35rem !important;
-}
-
 html body .settings-with-notifications .module-toggle-cell .toggle {
-  width: 2.65rem !important;
-  height: 1.45rem !important;
-  min-height: 1.45rem !important;
+  width: 2.55rem !important;
+  height: 1.4rem !important;
+  min-height: 1.4rem !important;
   position: relative !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -199,8 +193,8 @@ html body .settings-with-notifications .module-toggle-cell .toggle {
 
 html body .settings-with-notifications .module-toggle-cell .toggle::before {
   content: "" !important;
-  width: 1.05rem !important;
-  height: 1.05rem !important;
+  width: 1rem !important;
+  height: 1rem !important;
   display: block !important;
   border-radius: 999px !important;
   background: #ffffff !important;
@@ -215,7 +209,7 @@ html body .settings-with-notifications .module-toggle-cell .toggle.on {
 }
 
 html body .settings-with-notifications .module-toggle-cell .toggle.on::before {
-  transform: translateX(1.15rem) !important;
+  transform: translateX(1.1rem) !important;
 }
 
 html body .settings-with-notifications .module-toggle-cell .toggle:disabled {
@@ -224,7 +218,8 @@ html body .settings-with-notifications .module-toggle-cell .toggle:disabled {
 }
 
 html body .settings-with-notifications .module-control-table .settings-empty-state {
-  min-width: max(100%, calc(var(--module-no-width, 3.5rem) + var(--module-name-width, 22rem) + (var(--module-role-count, 1) * var(--module-role-width, 8.15rem)))) !important;
+  min-width: calc(var(--module-no-width, 3.5rem) + var(--module-name-min, 20rem) + (var(--module-role-count, 1) * var(--module-role-width, 7.8rem))) !important;
+  width: 100% !important;
   min-height: 11rem !important;
   border: 0 !important;
   border-radius: 0 !important;
@@ -232,9 +227,8 @@ html body .settings-with-notifications .module-control-table .settings-empty-sta
 }
 
 @media (max-width: 1500px) {
-  html body .settings-with-notifications .module-control-row,
-  html body .settings-with-notifications .module-control-group-row {
-    --module-name-width: 20rem;
-    --module-role-width: 7.75rem;
+  html body .settings-with-notifications .module-control-table {
+    --module-name-min: 18rem;
+    --module-role-width: 7.2rem;
   }
 }
