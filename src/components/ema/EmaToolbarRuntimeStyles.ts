@@ -205,24 +205,27 @@ const css = `
 .ema-module-root .ema-custom-select-trigger,
 .ema-module-root .ema-custom-select > button,
 .ema-module-root .ema-filter-group select,
-.ema-filter-field select {
+.ema-filter-field select,
+main[data-section="users"] select {
   width: 100% !important;
-  height: 2.45rem !important;
-  min-height: 2.45rem !important;
-  max-height: 2.45rem !important;
+  height: 2.55rem !important;
+  min-height: 2.55rem !important;
+  max-height: 2.55rem !important;
   border: 1px solid #cfe0f6 !important;
-  border-radius: .85rem !important;
-  background-color: #fff !important;
+  border-radius: .9rem !important;
+  background-color: #ffffff !important;
   color: #0f172a !important;
-  padding: 0 2.15rem 0 .85rem !important;
+  padding: 0 2.35rem 0 .9rem !important;
   font-size: .82rem !important;
-  font-weight: 850 !important;
-  line-height: 2.45rem !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
   text-align: left !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  box-shadow: none !important;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, .04) !important;
+  cursor: pointer !important;
+  outline: none !important;
 }
 
 .ema-module-root .ema-custom-select-trigger,
@@ -231,7 +234,24 @@ const css = `
   align-items: center !important;
   justify-content: space-between !important;
   gap: .6rem !important;
-  line-height: 1 !important;
+}
+
+.ema-module-root .ema-custom-select-trigger:hover,
+.ema-module-root .ema-custom-select > button:hover,
+.ema-module-root .ema-filter-group select:hover,
+.ema-filter-field select:hover,
+main[data-section="users"] select:hover {
+  border-color: #93c5fd !important;
+  color: #1e40af !important;
+}
+
+.ema-module-root .ema-custom-select-trigger:focus,
+.ema-module-root .ema-custom-select > button:focus,
+.ema-module-root .ema-filter-group select:focus,
+.ema-filter-field select:focus,
+main[data-section="users"] select:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 .22rem rgba(37, 99, 235, .12) !important;
 }
 
 .ema-module-root .ema-custom-select-trigger svg,
@@ -245,18 +265,50 @@ const css = `
 }
 
 .ema-module-root .ema-filter-group select,
-.ema-filter-field select {
+.ema-filter-field select,
+main[data-section="users"] select {
   appearance: none !important;
   -webkit-appearance: none !important;
-  background-image: linear-gradient(45deg, transparent 50%, #475569 50%), linear-gradient(135deg, #475569 50%, transparent 50%) !important;
-  background-position: calc(100% - 1.05rem) calc(50% - .12rem), calc(100% - .72rem) calc(50% - .12rem) !important;
+  background-image: linear-gradient(45deg, transparent 50%, #334155 50%), linear-gradient(135deg, #334155 50%, transparent 50%) !important;
+  background-position: calc(100% - 1.15rem) calc(50% - .12rem), calc(100% - .82rem) calc(50% - .12rem) !important;
   background-size: .34rem .34rem, .34rem .34rem !important;
   background-repeat: no-repeat !important;
 }
 
+.ema-module-root .ema-filter-group select option,
+.ema-filter-field select option,
+main[data-section="users"] select option {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: .85rem !important;
+  font-weight: 850 !important;
+}
+
+.ema-module-root .ema-filter-group select option:checked,
+.ema-filter-field select option:checked,
+main[data-section="users"] select option:checked {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
 .ema-module-root .ema-filter-group select::-ms-expand,
-.ema-filter-field select::-ms-expand {
+.ema-filter-field select::-ms-expand,
+main[data-section="users"] select::-ms-expand {
   display: none !important;
+}
+
+.ema-module-root .ema-custom-select-menu,
+.ema-module-root .ema-custom-select-options,
+.ema-module-root .ema-custom-select [role="listbox"],
+body > div[role="listbox"] {
+  z-index: 2147483647 !important;
+  max-height: 14rem !important;
+  overflow: auto !important;
+  border: 1px solid #d7e4f5 !important;
+  border-radius: .95rem !important;
+  background: #fff !important;
+  padding: .35rem !important;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, .18) !important;
 }
 
 .ema-module-root .ema-custom-select-menu,
@@ -266,14 +318,38 @@ const css = `
   top: calc(100% + .4rem) !important;
   left: 0 !important;
   right: 0 !important;
-  z-index: 9999 !important;
-  max-height: 14rem !important;
-  overflow: auto !important;
-  border: 1px solid #d7e4f5 !important;
-  border-radius: .9rem !important;
-  background: #fff !important;
-  padding: .35rem !important;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, .16) !important;
+}
+
+body > div[role="listbox"] button,
+.ema-module-root .ema-custom-select-menu button,
+.ema-module-root .ema-custom-select-options button,
+.ema-module-root .ema-custom-select [role="listbox"] button {
+  width: 100% !important;
+  min-height: 2.35rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: .55rem !important;
+  border: 0 !important;
+  border-radius: .7rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  padding: 0 .75rem !important;
+  font-size: .82rem !important;
+  font-weight: 850 !important;
+  text-align: left !important;
+}
+
+body > div[role="listbox"] button:hover,
+body > div[role="listbox"] button[aria-selected="true"],
+.ema-module-root .ema-custom-select-menu button:hover,
+.ema-module-root .ema-custom-select-menu button[aria-selected="true"],
+.ema-module-root .ema-custom-select-options button:hover,
+.ema-module-root .ema-custom-select-options button[aria-selected="true"],
+.ema-module-root .ema-custom-select [role="listbox"] button:hover,
+.ema-module-root .ema-custom-select [role="listbox"] button[aria-selected="true"] {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
 }
 
 .ema-module-root .ema-clear-filters-btn,
@@ -282,7 +358,6 @@ const css = `
   color: #64748b !important;
 }
 
-/* Merge generic EMA toolbar with the table panel below it. This keeps KPI panels separate, while toolbar/search/filter visually belongs to the main table content. */
 main div[class~="space-y-3"] > div[class~="rounded-xl"][class~="border"][class~="p-3"][class~="shadow-sm"]:has(+ section[class~="rounded-xl"][class~="border"][class~="shadow-sm"]) {
   margin-bottom: 0 !important;
   border-bottom-left-radius: 0 !important;
