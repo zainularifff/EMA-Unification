@@ -8,6 +8,7 @@ import "./styles/settings-sidebar-compact.css";
 import "./styles/settings-role-modal.css";
 import "./styles/settings-select-controls.css";
 import "./styles/settings-user-modal-layout.css";
+import "./styles/settings-user-table-clean.css";
 import "./components/ema/EmaNetworkHierarchyFallback";
 import "./components/ema/EmaRuntimeStyles";
 import "./components/ema/EmaSidebarRuntimeStyles";
