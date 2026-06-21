@@ -1,1747 +1,1113 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, FileArchive, FileText, FolderClosed, FolderOpen, HardDrive, MoreVertical, Package, Plus, Search, Send, Server, ShieldCheck, Trash2, UploadCloud, X, } from "lucide-react";
-import softwareDistributionService from "../services/softwareDistributionService";
-type PackageStatus = "Ready" | "Draft" | "Deployed" | "Archived";
-type DeliveryMethod = "onprem" | "cloud" | "network";
-type SortKey = "name" | "version" | "status" | "lastDeliveryMethod" | "registeredDate" | "targetCount" | "owner";
-type SortDirection = "asc" | "desc";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileArchive,
+  FileText,
+  FolderClosed,
+  FolderOpen,
+  HardDrive,
+  Loader2,
+  Package,
+  Plus,
+  RefreshCw,
+  Search,
+  Send,
+  Server,
+  ShieldCheck,
+  Trash2,
+  UploadCloud,
+  X,
+} from 'lucide-react';
+import softwareDistributionService from '../services/softwareDistributionService';
+import {
+  EmaButton,
+  EmaFilterField,
+  EmaKpiCard,
+  EmaKpiGrid,
+  EmaModal,
+  EmaPageLayout,
+  EmaPagination,
+  EmaSearchInput,
+  EmaSection,
+  EmaSidebarActionButton,
+  EmaSidebarPanel,
+  EmaSidebarTreeRow,
+  EmaTable,
+  EmaTableShell,
+  EmaToastViewport,
+  EmaToolbar,
+  type EmaTableColumn,
+  type EmaToastItem,
+  type EmaToastTone,
+} from '../components/ema';
+
+type PackageStatus = 'Ready' | 'Draft' | 'Deployed' | 'Archived';
+type DeliveryMethod = 'onprem' | 'cloud' | 'network';
+type SortKey = 'name' | 'version' | 'status' | 'registeredDate' | 'targetCount' | 'owner';
+type SortDirection = 'asc' | 'desc';
+
 type PackageRecord = {
-    id: string;
-    name: string;
-    version: string;
-    description: string;
-    status: PackageStatus;
-    owner: string;
-    destinationDirectory: string;
-    registeredDate: string;
-    fileCount: number;
-    sizeBeforeCompression: string;
-    sizeAfterCompression: string;
-    excludeOS: number;
-    remoteExecuteFile: number;
-    lastDeployment: string;
-    targetCount: number;
-    versions: string[];
-    lastDeliveryMethod: DeliveryMethod | "mixed" | "-";
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  status: PackageStatus;
+  owner: string;
+  destinationDirectory: string;
+  registeredDate: string;
+  fileCount: number;
+  sizeBeforeCompression: string;
+  sizeAfterCompression: string;
+  excludeOS: number;
+  remoteExecuteFile: number;
+  lastDeployment: string;
+  targetCount: number;
+  versions: string[];
+  lastDeliveryMethod: DeliveryMethod | 'mixed' | '-';
 };
+
 type TargetDevice = {
-    id: string;
-    name: string;
-    department: string;
-    ip: string;
-    os: string;
-    status: "Online" | "Offline";
-    objectDeviceId?: string;
-    objectAgent?: string;
-    assetId?: string | number;
+  id: string;
+  name: string;
+  department: string;
+  ip: string;
+  os: string;
+  status: 'Online' | 'Offline';
+  objectDeviceId?: string;
+  objectAgent?: string;
+  assetId?: string | number;
 };
-type ModalState = {
-    type: "new";
-} | {
-    type: "send";
-    packageIds: string[];
-} | {
-    type: "delete";
-    packageIds: string[];
-} | {
-    type: "deleteVersion";
-    packageId: string;
-    version: string;
-} | null;
-type ToastState = {
-    type: "success" | "error" | "info";
-    title: string;
-    message: string;
-} | null;
-const PAGE_SIZE = 10;
-const TREE_PAGE_SIZE = 10;
-const deliveryMethodLabels: Record<DeliveryMethod | "mixed" | "-", string> = {
-    onprem: "On-Prem",
-    cloud: "Cloud",
-    network: "Network",
-    mixed: "Mixed",
-    "-": "-",
-};
+
+type ModalState =
+  | { type: 'new' }
+  | { type: 'send'; packageIds: string[] }
+  | { type: 'delete'; packageIds: string[] }
+  | { type: 'deleteVersion'; packageId: string; version: string }
+  | null;
+
 type CreatePackagePayload = {
-    name: string;
-    description: string;
-    owner: string;
-    destinationDirectory: string;
-    osname: string;
-    exclude: number;
-    keepParentDirectories: number;
-    sourcePath: string;
-    cmdline: string;
-    executionOrder: string;
-    fileVersion: string;
-    files: File[];
+  name: string;
+  description: string;
+  owner: string;
+  destinationDirectory: string;
+  osname: string;
+  exclude: number;
+  keepParentDirectories: number;
+  sourcePath: string;
+  cmdline: string;
+  executionOrder: string;
+  fileVersion: string;
+  files: File[];
 };
-function formatBytesFromApi(value: unknown) {
-    const bytes = Number(value || 0);
-    if (!Number.isFinite(bytes) || bytes <= 0)
-        return "0 MB";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
-}
-function normalizeApiDate(value: unknown) {
-    if (!value)
-        return "-";
-    const date = new Date(String(value));
-    if (Number.isNaN(date.getTime()))
-        return String(value);
-    return date.toISOString().slice(0, 16).replace("T", " ");
-}
-function normalizePackageRecord(row: any): PackageRecord {
-    const name = row.name || row.pkg_Name || row.Pkg_Name || row.PKG_Name || row.packageName || "-";
-    const id = String(row.id || row.pkg_Idn || row.Pkg_Idn || row.PKG_Idn || name);
-    const versionValue = row.version || row.pkg_Version || row.Pkg_Version || row.PKG_Version || 1;
-    const statusValue = row.status || row.Status || (Number(row.pkg_bDeleted || row.Pkg_bDeleted || 0) === 1 ? "Archived" : "Ready");
-    const status: PackageStatus = ["Ready", "Draft", "Deployed", "Archived"].includes(statusValue)
-        ? statusValue
-        : "Ready";
-    const rawVersions = row.versions || row.pkg_AllVersions || row.Pkg_AllVersions || row.allVersions;
-    const versions = Array.isArray(rawVersions)
-        ? rawVersions.map((item) => String(item).startsWith("VER_") ? String(item) : `VER_${item}`)
-        : [`VER_${String(versionValue).replace(/^v/i, "")}`];
-    return {
-        id,
-        name,
-        version: String(versionValue).startsWith("v") ? String(versionValue) : `v${versionValue}`,
-        description: row.description || row.pkg_Description || row.PKG_Info || row.Pkg_Info || "Software distribution package.",
-        status,
-        owner: String(row.owner || row.pkg_Owner || row.Pkg_Owner || "system"),
-        destinationDirectory: row.destinationDirectory || row.pkg_File_CTDir || row.Pkg_File_CTDir || row.destination_path || "-",
-        registeredDate: normalizeApiDate(row.registeredDate || row.pkg_ChangedDate || row.Pkg_ChangedDate || row.Pkg_ChangedDate || row.createdAt),
-        fileCount: Number(row.fileCount || row.FileCount || row.file_count || 0),
-        sizeBeforeCompression: row.sizeBeforeCompression || formatBytesFromApi(row.sizeBefore || row.SizeBefore || row.Pkg_File_OSize),
-        sizeAfterCompression: row.sizeAfterCompression || formatBytesFromApi(row.sizeAfter || row.SizeAfter || row.Pkg_File_ZSize),
-        excludeOS: Number(row.excludeOS || row.Exclude || row.exclude || 0),
-        remoteExecuteFile: Number(row.remoteExecuteFile || row.RemoteExecuteFile || 0),
-        lastDeployment: normalizeApiDate(row.lastDeployment || row.LastDeployment),
-        targetCount: Number(row.targetCount || row.TargetCount || 0),
-        versions,
-        lastDeliveryMethod: row.lastDeliveryMethod || "-",
-    };
-}
-function normalizeTargetDevice(row: any): TargetDevice {
-    const objectDeviceId = row.objectDeviceId || row.Object_DeviceID || row.DeviceID || row.deviceID || "";
-    const id = String(row.id || row._Idn || row.assetId || objectDeviceId || row.ComputerName || Date.now());
-    const statusText = String(row.status || row.ConnectionStatus || row.connectionStatus || "Offline").toLowerCase();
-    return {
-        id,
-        name: row.name || row.ComputerName || row.DeviceName || row.computerName || "-",
-        department: row.department || row.Object_Full_Name || row.objectFullName || "-",
-        ip: row.ip || row.IP || row.DeviceIPAddress || row.DeviceLocalIPAddress || "-",
-        os: row.os || row.PlatformType || row.MachineType || "Unknown",
-        status: statusText === "online" || statusText === "1" ? "Online" : "Offline",
-        objectDeviceId,
-        objectAgent: row.objectAgent || row.Object_Agent,
-        assetId: row.assetId || row._Idn,
-    };
-}
-async function fetchPackagesFromApi() {
-    const rows = await softwareDistributionService.getPackages();
-    return rows.map(normalizePackageRecord);
-}
-async function fetchTargetsFromApi() {
-    const rows = await softwareDistributionService.getTargets();
-    return rows.map(normalizeTargetDevice);
-}
-async function createPackageViaApi(payload: CreatePackagePayload) {
-    const formData = new FormData();
-    formData.append("pkg_Name", payload.name);
-    formData.append("pkg_Description", payload.description || payload.name);
-    formData.append("destination_path", payload.destinationDirectory || "C:\\");
-    formData.append("osname", payload.osname || "");
-    formData.append("exclude", String(payload.exclude));
-    formData.append("keep_parent_directories", String(payload.keepParentDirectories));
-    formData.append("pkg_Owner", String(Number(payload.owner) || 1));
-    payload.files.forEach((file) => {
-        formData.append("files", file);
-        formData.append("source_paths", payload.sourcePath || "C:\\PackageSource");
-        formData.append("cmdlines", payload.cmdline || "");
-        formData.append("execution_orders", payload.executionOrder || "0");
-        formData.append("pkg_File_Versions", payload.fileVersion || "");
-    });
-    return softwareDistributionService.createPackage(formData);
-}
-async function deployPackagesViaApi(packages: PackageRecord[], targets: TargetDevice[], _method: DeliveryMethod, scheduleType: "now" | "schedule") {
-    const validTargets = targets.filter((device) => Boolean(device.objectDeviceId || device.id));
-    if (validTargets.length === 0) {
-        throw new Error("Please select at least one target device.");
-    }
-    const target = validTargets.map((device) => ({
-        type: 2,
-        value: String(device.objectDeviceId || device.id),
-    }));
-    const results = [];
-    for (const packageItem of packages) {
-        const owner = Number(packageItem.owner);
-        // Keep this payload aligned with the tested Postman /send payload.
-        // Path, command line and execution order are already stored when the package is created.
-        const body = {
-            Pkg_Name: packageItem.name,
-            Pkg_Owner: Number.isFinite(owner) ? owner : 0,
-            Job_Style: scheduleType === "schedule" ? 3 : 0,
-            distribution_option: 0,
-            Job_StartTime: "",
-            Job_EndTime: "",
-            Job_ScheduleTime: "",
-            Job_Priority: 0,
-            Job_Description: `Software Distribution from EMA UI - ${packageItem.name}`,
-            target,
-        };
-        const response = await softwareDistributionService.sendPackage(body);
-        results.push({ packageName: packageItem.name, request: body, response });
-    }
-    return {
-        success: true,
-        totalRecords: results.length,
-        targetRecords: validTargets.length,
-        data: results,
-    };
-}
-async function deletePackageViaApi(packageName: string) {
-    return softwareDistributionService.deletePackage(packageName);
-}
-async function deletePackageVersionViaApi(packageName: string, version: string) {
-    const versionNumber = String(version).replace(/^VER_/i, "").replace(/^v/i, "");
-    return softwareDistributionService.deletePackageVersion(packageName, versionNumber);
-}
+
+const PAGE_SIZE = 10;
+const TREE_PAGE_SIZE = 15;
+
+const deliveryMethodLabels: Record<DeliveryMethod | 'mixed' | '-', string> = {
+  onprem: 'On-Prem',
+  cloud: 'Cloud',
+  network: 'Network',
+  mixed: 'Mixed',
+  '-': '-',
+};
+
+const inputClass = 'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50 disabled:bg-slate-100 disabled:text-slate-400';
+const labelClass = 'text-[11px] font-black uppercase tracking-[0.14em] text-slate-500';
+
 function cx(...classes: Array<string | false | null | undefined>) {
-    return classes.filter(Boolean).join(" ");
+  return classes.filter(Boolean).join(' ');
 }
-type CompactPaginationProps = {
-    currentPage: number;
-    totalPages: number;
-    ariaLabel?: string;
-    onPageChange: (page: number) => void;
-};
-function CompactPagination({ currentPage, totalPages, ariaLabel = "Pagination", onPageChange, }: CompactPaginationProps) {
-    const safeTotalPages = Math.max(1, totalPages || 1);
-    const safeCurrentPage = Math.min(Math.max(1, currentPage || 1), safeTotalPages);
-    function goToPage(nextPage: number) {
-        if (nextPage < 1 || nextPage > safeTotalPages || nextPage === safeCurrentPage)
-            return;
-        onPageChange(nextPage);
-    }
-    return (<footer>
-      <div aria-live="polite">
-        <span>Page {safeCurrentPage} of {safeTotalPages}</span>
-      </div>
 
-      <nav aria-label={ariaLabel}>
-        <button type="button" aria-label="First page" disabled={safeCurrentPage === 1} onClick={() => goToPage(1)}>
-          <ChevronsLeft size={14} strokeWidth={2.6}/>
-        </button>
-        <button type="button" aria-label="Previous page" disabled={safeCurrentPage === 1} onClick={() => goToPage(safeCurrentPage - 1)}>
-          <ChevronLeft size={14} strokeWidth={2.8}/>
-        </button>
+function formatBytesFromApi(value: unknown) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
+}
 
-        <b aria-current="page">{safeCurrentPage}</b>
+function normalizeApiDate(value: unknown) {
+  if (!value) return '-';
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toISOString().slice(0, 16).replace('T', ' ');
+}
 
-        <button type="button" aria-label="Next page" disabled={safeCurrentPage === safeTotalPages} onClick={() => goToPage(safeCurrentPage + 1)}>
-          <ChevronRight size={14} strokeWidth={2.8}/>
-        </button>
-        <button type="button" aria-label="Last page" disabled={safeCurrentPage === safeTotalPages} onClick={() => goToPage(safeTotalPages)}>
-          <ChevronsRight size={14} strokeWidth={2.6}/>
-        </button>
-      </nav>
-    </footer>);
-}
-function statusTone(status: PackageStatus) {
-    return status.toLowerCase();
-}
-function statusPillClass(status: PackageStatus) {
-    if (status === "Ready")
-        return "active";
-    if (status === "Draft")
-        return "review";
-    if (status === "Archived")
-        return "inactive";
-    return "info";
-}
 function formatDate(value: string) {
-    if (!value || value === "-")
-        return "-";
-    const date = new Date(value.replace(" ", "T"));
-    if (Number.isNaN(date.getTime()))
-        return value;
-    return date.toLocaleString("en-MY", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
+  if (!value || value === '-') return '-';
+  const date = new Date(value.replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('en-MY', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
+
+function normalizePackageRecord(row: any): PackageRecord {
+  const name = row.name || row.pkg_Name || row.Pkg_Name || row.PKG_Name || row.packageName || '-';
+  const id = String(row.id || row.pkg_Idn || row.Pkg_Idn || row.PKG_Idn || name);
+  const versionValue = row.version || row.pkg_Version || row.Pkg_Version || row.PKG_Version || 1;
+  const statusValue = row.status || row.Status || (Number(row.pkg_bDeleted || row.Pkg_bDeleted || 0) === 1 ? 'Archived' : 'Ready');
+  const status: PackageStatus = ['Ready', 'Draft', 'Deployed', 'Archived'].includes(statusValue) ? statusValue : 'Ready';
+  const rawVersions = row.versions || row.pkg_AllVersions || row.Pkg_AllVersions || row.allVersions;
+  const versions = Array.isArray(rawVersions)
+    ? rawVersions.map((item) => (String(item).startsWith('VER_') ? String(item) : `VER_${item}`))
+    : [`VER_${String(versionValue).replace(/^v/i, '')}`];
+
+  return {
+    id,
+    name,
+    version: String(versionValue).startsWith('v') ? String(versionValue) : `v${versionValue}`,
+    description: row.description || row.pkg_Description || row.PKG_Info || row.Pkg_Info || 'Software distribution package.',
+    status,
+    owner: String(row.owner || row.pkg_Owner || row.Pkg_Owner || 'system'),
+    destinationDirectory: row.destinationDirectory || row.pkg_File_CTDir || row.Pkg_File_CTDir || row.destination_path || '-',
+    registeredDate: normalizeApiDate(row.registeredDate || row.pkg_ChangedDate || row.Pkg_ChangedDate || row.createdAt),
+    fileCount: Number(row.fileCount || row.FileCount || row.file_count || 0),
+    sizeBeforeCompression: row.sizeBeforeCompression || formatBytesFromApi(row.sizeBefore || row.SizeBefore || row.Pkg_File_OSize),
+    sizeAfterCompression: row.sizeAfterCompression || formatBytesFromApi(row.sizeAfter || row.SizeAfter || row.Pkg_File_ZSize),
+    excludeOS: Number(row.excludeOS || row.Exclude || row.exclude || 0),
+    remoteExecuteFile: Number(row.remoteExecuteFile || row.RemoteExecuteFile || 0),
+    lastDeployment: normalizeApiDate(row.lastDeployment || row.LastDeployment),
+    targetCount: Number(row.targetCount || row.TargetCount || 0),
+    versions,
+    lastDeliveryMethod: row.lastDeliveryMethod || '-',
+  };
+}
+
+function normalizeTargetDevice(row: any): TargetDevice {
+  const objectDeviceId = row.objectDeviceId || row.Object_DeviceID || row.DeviceID || row.deviceID || '';
+  const id = String(row.id || row._Idn || row.assetId || objectDeviceId || row.ComputerName || Date.now());
+  const statusText = String(row.status || row.ConnectionStatus || row.connectionStatus || 'Offline').toLowerCase();
+
+  return {
+    id,
+    name: row.name || row.ComputerName || row.DeviceName || row.computerName || '-',
+    department: row.department || row.Object_Full_Name || row.objectFullName || '-',
+    ip: row.ip || row.IP || row.DeviceIPAddress || row.DeviceLocalIPAddress || '-',
+    os: row.os || row.PlatformType || row.MachineType || 'Unknown',
+    status: statusText === 'online' || statusText === '1' ? 'Online' : 'Offline',
+    objectDeviceId,
+    objectAgent: row.objectAgent || row.Object_Agent,
+    assetId: row.assetId || row._Idn,
+  };
+}
+
+async function fetchPackagesFromApi() {
+  const rows = await softwareDistributionService.getPackages();
+  return rows.map(normalizePackageRecord);
+}
+
+async function fetchTargetsFromApi() {
+  const rows = await softwareDistributionService.getTargets();
+  return rows.map(normalizeTargetDevice);
+}
+
+async function createPackageViaApi(payload: CreatePackagePayload) {
+  const formData = new FormData();
+  formData.append('pkg_Name', payload.name);
+  formData.append('pkg_Description', payload.description || payload.name);
+  formData.append('destination_path', payload.destinationDirectory || 'C:\\');
+  formData.append('osname', payload.osname || '');
+  formData.append('exclude', String(payload.exclude));
+  formData.append('keep_parent_directories', String(payload.keepParentDirectories));
+  formData.append('pkg_Owner', String(Number(payload.owner) || 1));
+
+  payload.files.forEach((file) => {
+    formData.append('files', file);
+    formData.append('source_paths', payload.sourcePath || 'C:\\PackageSource');
+    formData.append('cmdlines', payload.cmdline || '');
+    formData.append('execution_orders', payload.executionOrder || '0');
+    formData.append('pkg_File_Versions', payload.fileVersion || '');
+  });
+
+  return softwareDistributionService.createPackage(formData);
+}
+
+async function deployPackagesViaApi(packages: PackageRecord[], targets: TargetDevice[], _method: DeliveryMethod, scheduleType: 'now' | 'schedule') {
+  const validTargets = targets.filter((device) => Boolean(device.objectDeviceId || device.id));
+  if (!validTargets.length) throw new Error('Please select at least one target device.');
+
+  const target = validTargets.map((device) => ({
+    type: 2,
+    value: String(device.objectDeviceId || device.id),
+  }));
+
+  const results = [];
+  for (const packageItem of packages) {
+    const owner = Number(packageItem.owner);
+    const body = {
+      Pkg_Name: packageItem.name,
+      Pkg_Owner: Number.isFinite(owner) ? owner : 0,
+      Job_Style: scheduleType === 'schedule' ? 3 : 0,
+      distribution_option: 0,
+      Job_StartTime: '',
+      Job_EndTime: '',
+      Job_ScheduleTime: '',
+      Job_Priority: 0,
+      Job_Description: `Software Distribution - ${packageItem.name}`,
+      target,
+    };
+
+    const response = await softwareDistributionService.sendPackage(body);
+    results.push({ packageName: packageItem.name, request: body, response });
+  }
+
+  return { success: true, totalRecords: results.length, targetRecords: validTargets.length, data: results };
+}
+
+async function deletePackageViaApi(packageName: string) {
+  return softwareDistributionService.deletePackage(packageName);
+}
+
+async function deletePackageVersionViaApi(packageName: string, version: string) {
+  const versionNumber = String(version).replace(/^VER_/i, '').replace(/^v/i, '');
+  return softwareDistributionService.deletePackageVersion(packageName, versionNumber);
+}
+
 function isDeployable(item: PackageRecord) {
-    return item.status !== "Archived";
+  return item.status !== 'Archived';
 }
-function NewPackageModal({ onClose, onCreate, }: {
-    onClose: () => void;
-    onCreate: (payload: CreatePackagePayload) => void;
-}) {
-    const [form, setForm] = useState({
-        name: "",
-        description: "",
-        owner: "1",
-        destinationDirectory: "C:\\PackageDestination",
-        sourcePath: "C:\\PackageSource",
-        cmdline: "",
-        executionOrder: "3",
-        fileVersion: "",
-        osname: "",
-        exclude: -1,
-        keepParentDirectories: 0,
-    });
-    const [files, setFiles] = useState<File[]>([]);
-    const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const canCreate = form.name.trim().length > 0 &&
-        form.destinationDirectory.trim().length > 0 &&
-        files.length > 0;
-    const create = () => {
-        if (!canCreate)
-            return;
-        onCreate({
-            name: form.name.trim(),
-            description: form.description.trim() || form.name.trim(),
-            owner: form.owner.trim() || "1",
-            destinationDirectory: form.destinationDirectory.trim() || "C:\\",
-            osname: form.osname.trim(),
-            exclude: Number(form.exclude),
-            keepParentDirectories: Number(form.keepParentDirectories),
-            sourcePath: form.sourcePath.trim() || "C:\\PackageSource",
-            cmdline: form.cmdline,
-            executionOrder: form.executionOrder || "0",
-            fileVersion: form.fileVersion,
-            files,
-        });
-    };
-    return (<div onMouseDown={onClose}>
-      <div onMouseDown={(event) => event.stopPropagation()}>
-        <div>
-          <div>
-            <h3>New Package</h3>
-            <p>Create a new software distribution package</p>
-          </div>
-          <button type="button" onClick={onClose}>
-            <X size={18}/>
-          </button>
-        </div>
 
-        <div>
-          <label>
-            <span>Package Name</span>
-            <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Google Chrome Enterprise"/>
-          </label>
-
-          <label>
-            <span>Description</span>
-            <textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={3} placeholder="Package description"/>
-          </label>
-
-          <label>
-            <span>Destination Directory</span>
-            <input value={form.destinationDirectory} onChange={(event) => setForm((current) => ({
-            ...current,
-            destinationDirectory: event.target.value,
-        }))} placeholder="C:\\PackageDestination"/>
-            <small>Install path on target device, for example C:\ or C:\Program Files\AppName.</small>
-          </label>
-
-          <label>
-            <span>Source Path</span>
-            <input value={form.sourcePath} onChange={(event) => setForm((current) => ({
-            ...current,
-            sourcePath: event.target.value,
-        }))} placeholder="C:\\PackageSource"/>
-            <small>This value is repeated for every uploaded file unless file-path mapping is expanded.</small>
-          </label>
-
-          <div>
-            <label>
-              <span>Owner Console ID</span>
-              <input value={form.owner} onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))}/>
-            </label>
-
-            <label>
-              <span>Execution Order</span>
-              <select value={form.executionOrder} onChange={(event) => setForm((current) => ({ ...current, executionOrder: event.target.value }))}>
-                <option value="0">0 - No execution</option>
-                <option value="1">1 - Execute before distribution</option>
-                <option value="3">3 - Execute after distribution</option>
-              </select>
-            </label>
-          </div>
-
-          <div>
-            <label>
-              <span>Command Line</span>
-              <input value={form.cmdline} onChange={(event) => setForm((current) => ({ ...current, cmdline: event.target.value }))} placeholder="/quiet"/>
-            </label>
-
-            <label>
-              <span>File Version</span>
-              <input value={form.fileVersion} onChange={(event) => setForm((current) => ({ ...current, fileVersion: event.target.value }))} placeholder="optional"/>
-            </label>
-          </div>
-
-          <div>
-            <label>
-              <span>OS Name</span>
-              <input value={form.osname} onChange={(event) => setForm((current) => ({ ...current, osname: event.target.value }))} placeholder="optional"/>
-            </label>
-
-            <label>
-              <span>Exclude</span>
-              <select value={form.exclude} onChange={(event) => setForm((current) => ({ ...current, exclude: Number(event.target.value) }))}>
-                <option value={-1}>-1 - Default</option>
-                <option value={0}>0 - Include</option>
-                <option value={1}>1 - Exclude</option>
-              </select>
-            </label>
-          </div>
-
-          <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => setFiles(Array.from(event.target.files || []))}/>
-
-          <button type="button" onClick={() => fileInputRef.current?.click()}>
-            <UploadCloud size={24}/>
-            <strong>{files.length ? `${files.length} file(s) selected` : "Select package files"}</strong>
-            <span>Click here to choose package files.</span>
-          </button>
-        </div>
-
-        <div>
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" disabled={!canCreate} onClick={create}>
-            Create Package
-          </button>
-        </div>
-      </div>
-    </div>);
+function statusBadgeClass(status: PackageStatus) {
+  if (status === 'Ready') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'Deployed') return 'border-blue-200 bg-blue-50 text-blue-700';
+  if (status === 'Draft') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-slate-200 bg-slate-50 text-slate-700';
 }
-function DeployPackageModal({ packages, targetDevices, onClose, onDeploy, }: {
-    packages: PackageRecord[];
-    targetDevices: TargetDevice[];
-    onClose: () => void;
-    onDeploy: (selectedTargets: TargetDevice[], method: DeliveryMethod, scheduleType: "now" | "schedule") => void;
-}) {
-    const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
-    const [excludedDevices, setExcludedDevices] = useState<Set<string>>(new Set());
-    const [selectedScopes, setSelectedScopes] = useState<Set<string>>(new Set());
-    const [targetView, setTargetView] = useState<"organization" | "os">("organization");
-    const [includeLowerDepartment, setIncludeLowerDepartment] = useState(true);
-    const [targetSearch, setTargetSearch] = useState("");
-    const [targetStatusFilter, setTargetStatusFilter] = useState<"All" | "Online" | "Offline">("All");
-    const [targetOsFilter, setTargetOsFilter] = useState("All");
-    const [targetPage, setTargetPage] = useState(1);
-    const [scheduleType, setScheduleType] = useState<"now" | "schedule">("now");
-    const [method] = useState<DeliveryMethod>("onprem");
-    const TARGET_PAGE_SIZE = 10;
-    const totalTargetCount = targetDevices.length;
-    const scopeGroups = useMemo(() => {
-        const groupMap = new Map<string, TargetDevice[]>();
-        targetDevices.forEach((device) => {
-            const key = targetView === "os" ? device.os : device.department;
-            const current = groupMap.get(key) || [];
-            current.push(device);
-            groupMap.set(key, current);
-        });
-        return Array.from(groupMap.entries()).map(([name, devices]) => ({
-            id: `${targetView}:${name}`,
-            name,
-            type: targetView === "os" ? "Operating System" : "Department",
-            count: devices.length,
-            devices,
-        }));
-    }, [targetDevices, targetView]);
-    const selectedScopeDevices = useMemo(() => {
-        const scopeDeviceIds = new Set<string>();
-        const selectedScopeNames = scopeGroups
-            .filter((scope) => selectedScopes.has(scope.id))
-            .map((scope) => scope.name);
-        if (selectedScopeNames.length === 0)
-            return scopeDeviceIds;
-        if (targetView === "organization" && includeLowerDepartment) {
-            targetDevices.forEach((device) => {
-                const isInSelectedScope = selectedScopeNames.some((scopeName) => device.department === scopeName ||
-                    device.department.startsWith(`${scopeName}\\`) ||
-                    device.department.startsWith(`${scopeName}/`));
-                if (isInSelectedScope)
-                    scopeDeviceIds.add(device.id);
-            });
-            return scopeDeviceIds;
-        }
-        scopeGroups.forEach((scope) => {
-            if (selectedScopes.has(scope.id)) {
-                scope.devices.forEach((device) => scopeDeviceIds.add(device.id));
-            }
-        });
-        return scopeDeviceIds;
-    }, [scopeGroups, selectedScopes, targetDevices, targetView, includeLowerDepartment]);
-    const includedTargetIds = useMemo(() => {
-        const ids = new Set<string>();
-        selectedScopeDevices.forEach((id) => ids.add(id));
-        selectedDevices.forEach((id) => ids.add(id));
-        excludedDevices.forEach((id) => ids.delete(id));
-        return ids;
-    }, [selectedScopeDevices, selectedDevices, excludedDevices]);
-    const includedTargetList = useMemo(() => targetDevices.filter((device) => includedTargetIds.has(device.id)), [targetDevices, includedTargetIds]);
-    const excludedTargetList = useMemo(() => targetDevices.filter((device) => excludedDevices.has(device.id)), [targetDevices, excludedDevices]);
-    const filteredTargetDevices = useMemo(() => {
-        const keyword = targetSearch.trim().toLowerCase();
-        const hasScopeFilter = selectedScopes.size > 0;
-        return targetDevices.filter((device) => {
-            const searchable = [device.name, device.department, device.ip, device.os, device.status]
-                .join(" ")
-                .toLowerCase();
-            const matchesScope = !hasScopeFilter || selectedScopeDevices.has(device.id);
-            const matchesSearch = !keyword || searchable.includes(keyword);
-            const matchesStatus = targetStatusFilter === "All" || device.status === targetStatusFilter;
-            const matchesOs = targetOsFilter === "All" || device.os === targetOsFilter;
-            return matchesScope && matchesSearch && matchesStatus && matchesOs;
-        });
-    }, [targetDevices, targetSearch, targetStatusFilter, targetOsFilter, selectedScopes, selectedScopeDevices]);
-    const targetTotalPages = Math.max(1, Math.ceil(filteredTargetDevices.length / TARGET_PAGE_SIZE));
-    const targetPageRows = filteredTargetDevices.slice((targetPage - 1) * TARGET_PAGE_SIZE, targetPage * TARGET_PAGE_SIZE);
-    const allTargetPageSelected = targetPageRows.length > 0 && targetPageRows.every((device) => selectedDevices.has(device.id));
-    const finalTargetCount = includedTargetIds.size;
-    const selectedScopeCount = selectedScopes.size;
-    const manualUserCount = selectedDevices.size;
-    const excludedUserCount = excludedDevices.size;
-    const osOptions = useMemo(() => Array.from(new Set(targetDevices.map((device) => device.os))), [targetDevices]);
-    const switchTargetView = (view: "organization" | "os") => {
-        setTargetView(view);
-        setSelectedScopes(new Set());
-        setTargetPage(1);
-    };
-    const toggleScope = (scopeId: string) => {
-        setTargetPage(1);
-        setSelectedScopes((current) => {
-            const next = new Set(current);
-            if (next.has(scopeId))
-                next.delete(scopeId);
-            else
-                next.add(scopeId);
-            return next;
-        });
-    };
-    const toggleManualUser = (id: string) => {
-        setSelectedDevices((current) => {
-            const next = new Set(current);
-            if (next.has(id))
-                next.delete(id);
-            else
-                next.add(id);
-            return next;
-        });
-    };
-    const toggleExcludedUser = (id: string) => {
-        setExcludedDevices((current) => {
-            const next = new Set(current);
-            if (next.has(id))
-                next.delete(id);
-            else
-                next.add(id);
-            return next;
-        });
-    };
-    const toggleSelectTargetPage = () => {
-        setSelectedDevices((current) => {
-            const next = new Set(current);
-            if (allTargetPageSelected) {
-                targetPageRows.forEach((device) => next.delete(device.id));
-            }
-            else {
-                targetPageRows.forEach((device) => next.add(device.id));
-            }
-            return next;
-        });
-    };
-    const clearTargetSelection = () => {
-        setSelectedScopes(new Set());
-        setSelectedDevices(new Set());
-        setExcludedDevices(new Set());
-        setTargetSearch("");
-        setTargetStatusFilter("All");
-        setTargetOsFilter("All");
-        setTargetPage(1);
-    };
-    const hasDeployedPackage = packages.some((item) => item.status === "Deployed");
-    const packageStatusSummary = useMemo(() => {
-        return packages.reduce((summary, item) => {
-            summary.total += 1;
-            if (item.status === "Ready")
-                summary.ready += 1;
-            if (item.status === "Deployed")
-                summary.deployed += 1;
-            if (item.status === "Draft")
-                summary.draft += 1;
-            if (item.status === "Archived")
-                summary.archived += 1;
-            return summary;
-        }, { total: 0, ready: 0, deployed: 0, draft: 0, archived: 0 });
-    }, [packages]);
-    const packagePreviewText = useMemo(() => {
-        const visibleNames = packages.slice(0, 3).map((item) => item.name).filter(Boolean);
-        const hiddenCount = Math.max(packages.length - visibleNames.length, 0);
-        return `${visibleNames.join(", ")}${hiddenCount ? ` +${hiddenCount} more` : ""}`;
-    }, [packages]);
-    const deployModalNode = (<div onMouseDown={onClose}>
-      <div onMouseDown={(event) => event.stopPropagation()}>
-        <div>
-          <div>
-            <h3>{packages.length > 1 ? "Deploy Packages" : "Deploy Package"}</h3>
-            <p>
-              {packages.length > 1
-            ? `${packages.length} packages selected`
-            : `${packages[0]?.name} • ${packages[0]?.version}`}
-            </p>
-          </div>
-          <button type="button" onClick={onClose}>
-            <X size={18}/>
-          </button>
-        </div>
 
-        <div>
-          <section>
-            <div>
-              <div>
-                <strong>{packages.length > 1 ? "Selected Package Batch" : "Selected Package"}</strong>
-                <p>
-                  {packages.length > 1
-            ? "Review the package batch before choosing targets."
-            : "Review the package that will be deployed."}
-                </p>
-              </div>
-              <span>{packages.length} selected</span>
-            </div>
-
-            {packages.length > 1 && (<div>
-                <div>
-                  <div>
-                    <strong>Batch Summary</strong>
-                    <span>{packagePreviewText}</span>
-                  </div>
-                  <span>{packageStatusSummary.total} packages</span>
-                </div>
-                <div>
-                  {packageStatusSummary.ready > 0 && <span>Ready {packageStatusSummary.ready}</span>}
-                  {packageStatusSummary.deployed > 0 && <span>Deployed {packageStatusSummary.deployed}</span>}
-                  {packageStatusSummary.draft > 0 && <span>Draft {packageStatusSummary.draft}</span>}
-                  {packageStatusSummary.archived > 0 && <span>Archived {packageStatusSummary.archived}</span>}
-                </div>
-              </div>)}
-
-            <div>
-              {packages.map((item) => (<div key={item.id}>
-                  <Package size={16}/>
-                  <div>
-                    <strong>{item.name}</strong>
-                    <span>
-                      {item.version} • {item.status} • {item.sizeAfterCompression} • {item.destinationDirectory}
-                    </span>
-                  </div>
-                  <em>{item.status}</em>
-                </div>))}
-            </div>
-
-            {hasDeployedPackage && (<div>
-                <ShieldCheck size={15}/>
-                <span>Some selected packages are already deployed. This action will redeploy them.</span>
-              </div>)}
-          </section>
-
-          <section>
-            <div>
-              <div>
-                <strong>Target User Scope</strong>
-                <p>Select departments, operating systems, or individual endpoint targets.</p>
-              </div>
-              <span>{finalTargetCount} final target(s)</span>
-            </div>
-
-            <div>
-              <div>
-                <section>
-                  <div>
-                    <div>
-                      <h4>Scope Selection</h4>
-                      <p>Choose the grouping method and target scope.</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <button type="button" onClick={() => switchTargetView("organization")}>
-                      Organization
-                    </button>
-                    <button type="button" onClick={() => switchTargetView("os")}>
-                      Operating System
-                    </button>
-                  </div>
-
-                  {targetView === "organization" && (<label>
-                      <input type="checkbox" checked={includeLowerDepartment} onChange={(event) => {
-                setIncludeLowerDepartment(event.target.checked);
-                setTargetPage(1);
-            }}/>
-                      <span>Include Lower Department</span>
-                    </label>)}
-
-                  <div>
-                    {scopeGroups.length > 0 ? (scopeGroups.map((scope) => (<label key={scope.id}>
-                          <input type="checkbox" checked={selectedScopes.has(scope.id)} onChange={() => toggleScope(scope.id)}/>
-                          <div>
-                            <strong>{scope.name}</strong>
-                            <span>{scope.type}</span>
-                          </div>
-                          <em>{scope.count}</em>
-                        </label>))) : (<div>
-                        <Search size={20}/>
-                        <strong>No target scope</strong>
-                        <span>No devices are available for this scope.</span>
-                      </div>)}
-                  </div>
-                </section>
-              </div>
-
-              <div>
-                <section>
-                  <div>
-                    <div>
-                      <h4>Endpoint Targets</h4>
-                      <p>Refine devices before deployment.</p>
-                    </div>
-                    <button type="button" onClick={clearTargetSelection}>
-                      Clear Selection
-                    </button>
-                  </div>
-
-                  <div>
-                    <label>
-                      <Search size={15}/>
-                      <input value={targetSearch} onChange={(event) => {
-            setTargetSearch(event.target.value);
-            setTargetPage(1);
-        }} placeholder="Search user, IP, department"/>
-                      {targetSearch && (<button type="button" onClick={() => setTargetSearch("")}>
-                          <X size={13}/>
-                        </button>)}
-                    </label>
-
-                    <div>
-                      <select value={targetStatusFilter} onChange={(event) => {
-            setTargetStatusFilter(event.target.value as "All" | "Online" | "Offline");
-            setTargetPage(1);
-        }}>
-                        <option value="All">All status</option>
-                        <option value="Online">Online</option>
-                        <option value="Offline">Offline</option>
-                      </select>
-
-                      <select value={targetOsFilter} onChange={(event) => {
-            setTargetOsFilter(event.target.value);
-            setTargetPage(1);
-        }}>
-                        <option value="All">All OS</option>
-                        {osOptions.map((os) => (<option key={os} value={os}>
-                            {os}
-                          </option>))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>
-                            <input type="checkbox" checked={allTargetPageSelected} onChange={toggleSelectTargetPage}/>
-                          </th>
-                          <th>User / Device</th>
-                          <th>Department</th>
-                          <th>IP Address</th>
-                          <th>OS</th>
-                          <th>Status</th>
-                          <th>Exclude</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        {targetPageRows.map((device) => (<tr key={device.id}>
-                            <td>
-                              <input type="checkbox" checked={selectedDevices.has(device.id)} onChange={() => toggleManualUser(device.id)}/>
-                            </td>
-                            <td>
-                              <strong>{device.name}</strong>
-                              <small>{device.id} • {device.objectAgent || "-"}</small>
-                            </td>
-                            <td>{device.department}</td>
-                            <td>{device.ip}</td>
-                            <td>{device.os}</td>
-                            <td>
-                              <span>
-                                {device.status}
-                              </span>
-                            </td>
-                            <td>
-                              <button type="button" onClick={() => toggleExcludedUser(device.id)}>
-                                {excludedDevices.has(device.id) ? "Excluded" : "Exclude"}
-                              </button>
-                            </td>
-                          </tr>))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <CompactPagination currentPage={targetPage} totalPages={targetTotalPages} ariaLabel="Target device pagination" onPageChange={setTargetPage}/>
-                </section>
-              </div>
-
-              <div>
-                <section>
-                  <div>
-                    <div>
-                      <strong>Deployment Review</strong>
-                      <p>Confirm targets and deployment options.</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div>
-                      <span>Final Target</span>
-                      <strong>{finalTargetCount}</strong>
-                      <small>Ready to receive package</small>
-                    </div>
-                    <div>
-                      <span>Scopes</span>
-                      <strong>{selectedScopeCount}</strong>
-                      <small>Selected groups</small>
-                    </div>
-                    <div>
-                      <span>Manual</span>
-                      <strong>{manualUserCount}</strong>
-                      <small>Direct devices</small>
-                    </div>
-                    <div>
-                      <span>Excluded</span>
-                      <strong>{excludedUserCount}</strong>
-                      <small>Skipped targets</small>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div>
-                      <strong>Included Preview</strong>
-                      <span>
-                        {includedTargetList.slice(0, 3).map((device) => device.name).join(", ") ||
-            "No users selected"}
-                        {includedTargetList.length > 3 ? ` +${includedTargetList.length - 3} more` : ""}
-                      </span>
-                    </div>
-
-                    <div>
-                      <strong>Excluded Preview</strong>
-                      <span>
-                        {excludedTargetList.slice(0, 3).map((device) => device.name).join(", ") ||
-            "No excluded users"}
-                        {excludedTargetList.length > 3 ? ` +${excludedTargetList.length - 3} more` : ""}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <button type="button" onClick={() => setScheduleType("now")}>
-                      Send Now
-                    </button>
-                    <button type="button" onClick={() => setScheduleType("schedule")}>
-                      Schedule
-                    </button>
-                  </div>
-
-                  {scheduleType === "schedule" && (<label>
-                      <span>Schedule Time</span>
-                      <input type="datetime-local"/>
-                    </label>)}
-
-                  <div>
-                    <label>
-                      <input type="checkbox" defaultChecked/>
-                      <span>Force installation</span>
-                    </label>
-                    <label>
-                      <input type="checkbox"/>
-                      <span>Reboot after installation</span>
-                    </label>
-                    <label>
-                      <input type="checkbox" defaultChecked/>
-                      <span>Notify user</span>
-                    </label>
-                  </div>
-
-                  <div>
-                    <span>Deployment Summary</span>
-                    <strong>
-                      {packages.length} package(s) • {finalTargetCount} target(s)
-                    </strong>
-                    <p>
-                      Excluded: {excludedUserCount} • {totalTargetCount} available target(s)
-                    </p>
-                  </div>
-                </section>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <div>
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" disabled={finalTargetCount === 0} onClick={() => onDeploy(includedTargetList, method, scheduleType)}>
-            Deploy {packages.length > 1 ? "Packages" : "Package"}
-          </button>
-        </div>
-      </div>
-    </div>);
-    if (typeof document === "undefined")
-        return deployModalNode;
-    return createPortal(deployModalNode, document.body);
+function deviceStatusClass(status: TargetDevice['status']) {
+  return status === 'Online' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-700';
 }
-function DeletePackageModal({ packages, onClose, onDelete, }: {
-    packages: PackageRecord[];
-    onClose: () => void;
-    onDelete: () => void;
-}) {
-    const [confirm, setConfirm] = useState("");
-    return (<div onMouseDown={onClose}>
-      <div onMouseDown={(event) => event.stopPropagation()}>
-        <div>
-          <div>
-            <h3>{packages.length > 1 ? "Delete Packages" : "Delete Package"}</h3>
-            <p>
-              {packages.length > 1
-            ? `${packages.length} packages selected`
-            : packages[0]?.name}
-            </p>
-          </div>
-          <button type="button" onClick={onClose}>
-            <X size={18}/>
-          </button>
-        </div>
 
-        <div>
-          <div>
-            <Trash2 size={18}/>
-            <div>
-              <strong>Confirm delete action</strong>
-              <span>This removes the selected item from Software Distribution.</span>
-            </div>
-          </div>
-
-          <div>
-            {packages.map((item) => (<div key={item.id}>
-                <strong>{item.name}</strong>
-                <span>{item.version} • {item.status}</span>
-              </div>))}
-          </div>
-
-          <label>
-            <span>Type delete to confirm</span>
-            <input value={confirm} onChange={(event) => setConfirm(event.target.value)}/>
-          </label>
-        </div>
-
-        <div>
-          <button type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" disabled={confirm.toLowerCase() !== "delete"} onClick={onDelete}>
-            Delete {packages.length > 1 ? "Packages" : "Package"}
-          </button>
-        </div>
-      </div>
-    </div>);
-}
-export default function SoftwareDistribution() {
-    const [packages, setPackages] = useState<PackageRecord[]>([]);
-    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-    const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-    const [searchTerm, setSearchTerm] = useState("");
-    const [statusFilter, setStatusFilter] = useState<"all" | PackageStatus>("all");
-    const [sortKey, setSortKey] = useState<SortKey>("registeredDate");
-    const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-    const [page, setPage] = useState(1);
-    const [treeVisibleCount, setTreeVisibleCount] = useState(TREE_PAGE_SIZE);
-    const [modal, setModal] = useState<ModalState>(null);
-    const [toast, setToast] = useState<ToastState>(null);
-    const [targetDevices, setTargetDevices] = useState<TargetDevice[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [apiError, setApiError] = useState<string | null>(null);
-    const [openTreeMenuId, setOpenTreeMenuId] = useState<string | null>(null);
-    const [openVersionMenuId, setOpenVersionMenuId] = useState<string | null>(null);
-    const [openRowMenuId, setOpenRowMenuId] = useState<string | null>(null);
-    const loadSoftwareDistributionData = async () => {
-        setIsLoading(true);
-        setOpenTreeMenuId(null);
-        setOpenVersionMenuId(null);
-        setOpenRowMenuId(null);
-        try {
-            const [apiPackages, apiTargets] = await Promise.all([
-                fetchPackagesFromApi(),
-                fetchTargetsFromApi(),
-            ]);
-            setPackages(apiPackages);
-            setTargetDevices(apiTargets);
-            setApiError(null);
-        }
-        catch (error) {
-            console.error(error);
-            const message = error instanceof Error ? error.message : "Unable to load Software Distribution data.";
-            setPackages([]);
-            setTargetDevices([]);
-            setApiError(message);
-            showToast({
-                type: "error",
-                title: "Connection failed",
-                message,
-            });
-        }
-        finally {
-            setIsLoading(false);
-        }
-    };
-    useEffect(() => {
-        document.documentElement.classList.add("ema-layout-lock");
-        document.body.classList.add("ema-layout-lock");
-        return () => {
-            document.documentElement.classList.remove("ema-layout-lock");
-            document.body.classList.remove("ema-layout-lock");
-        };
-    }, []);
-    useEffect(() => {
-        loadSoftwareDistributionData();
-    }, []);
-    useEffect(() => {
-        setTreeVisibleCount(TREE_PAGE_SIZE);
-    }, [searchTerm, statusFilter, sortKey, sortDirection, packages.length]);
-    const selectedPackage = packages.find((item) => item.id === selectedPackageId) || null;
-    const selectedPackages = packages.filter((item) => selectedIds.has(item.id));
-    const summary = useMemo(() => {
-        return {
-            total: packages.length,
-            ready: packages.filter((item) => item.status === "Ready").length,
-            deployed: packages.filter((item) => item.status === "Deployed").length,
-            draft: packages.filter((item) => item.status === "Draft").length,
-            targets: packages.reduce((sum, item) => sum + item.targetCount, 0),
-        };
-    }, [packages]);
-    const filteredPackages = useMemo(() => {
-        const keyword = searchTerm.trim().toLowerCase();
-        const rows = packages.filter((item) => {
-            const searchable = [
-                item.name,
-                item.version,
-                item.description,
-                item.status,
-                item.owner,
-                item.destinationDirectory,
-                item.registeredDate,
-                deliveryMethodLabels[item.lastDeliveryMethod],
-            ]
-                .join(" ")
-                .toLowerCase();
-            const matchesSearch = !keyword || searchable.includes(keyword);
-            const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-            return matchesSearch && matchesStatus;
-        });
-        rows.sort((a, b) => {
-            const first = String(a[sortKey]).toLowerCase();
-            const second = String(b[sortKey]).toLowerCase();
-            if (first < second)
-                return sortDirection === "asc" ? -1 : 1;
-            if (first > second)
-                return sortDirection === "asc" ? 1 : -1;
-            return 0;
-        });
-        return rows;
-    }, [packages, searchTerm, statusFilter, sortKey, sortDirection]);
-    const totalPages = Math.max(1, Math.ceil(filteredPackages.length / PAGE_SIZE));
-    const pageRows = filteredPackages.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    const treePackages = filteredPackages;
-    const treeRows = treePackages.slice(0, treeVisibleCount);
-    const hasMoreTreeRows = treeVisibleCount < treePackages.length;
-    const deployablePageRows = pageRows.filter(isDeployable);
-    const allPageSelected = deployablePageRows.length > 0 && deployablePageRows.every((item) => selectedIds.has(item.id));
-    const somePageSelected = deployablePageRows.some((item) => selectedIds.has(item.id));
-    const showToast = (nextToast: ToastState) => {
-        setToast(nextToast);
-        if (nextToast) {
-            window.setTimeout(() => {
-                setToast((current) => (current === nextToast ? null : current));
-            }, 2400);
-        }
-    };
-    const resetFilters = () => {
-        setOpenTreeMenuId(null);
-        setOpenVersionMenuId(null);
-        setOpenRowMenuId(null);
-        setSearchTerm("");
-        setStatusFilter("all");
-        setSortKey("registeredDate");
-        setSortDirection("desc");
-        setPage(1);
-    };
-    const handleSort = (key: SortKey) => {
-        if (sortKey === key) {
-            setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-            return;
-        }
-        setSortKey(key);
-        setSortDirection("asc");
-    };
-    const toggleExpand = (id: string) => {
-        setExpandedIds((current) => {
-            const next = new Set(current);
-            if (next.has(id))
-                next.delete(id);
-            else
-                next.add(id);
-            return next;
-        });
-    };
-    const toggleSelected = (id: string) => {
-        setSelectedIds((current) => {
-            const next = new Set(current);
-            if (next.has(id))
-                next.delete(id);
-            else
-                next.add(id);
-            return next;
-        });
-    };
-    const toggleSelectPage = () => {
-        setSelectedIds((current) => {
-            const next = new Set(current);
-            if (allPageSelected) {
-                deployablePageRows.forEach((item) => next.delete(item.id));
-            }
-            else {
-                deployablePageRows.forEach((item) => next.add(item.id));
-            }
-            return next;
-        });
-    };
-    const createPackage = async (payload: CreatePackagePayload) => {
-        try {
-            await createPackageViaApi(payload);
-            await loadSoftwareDistributionData();
-            setModal(null);
-            showToast({
-                type: "success",
-                title: "Created successfully",
-                message: "Package created successfully.",
-            });
-        }
-        catch (error) {
-            console.error(error);
-            showToast({
-                type: "error",
-                title: "Create failed",
-                message: error instanceof Error ? error.message : "Unable to create package.",
-            });
-        }
-    };
-    const deployPackages = async (selectedTargets: TargetDevice[], method: DeliveryMethod, scheduleType: "now" | "schedule") => {
-        const packageIds = modal?.type === "send" ? modal.packageIds : [];
-        const selectedPackageRows = packages.filter((item) => packageIds.includes(item.id));
-        try {
-            await deployPackagesViaApi(selectedPackageRows, selectedTargets, method, scheduleType);
-            await loadSoftwareDistributionData();
-            setSelectedIds(new Set());
-            setModal(null);
-            showToast({
-                type: "success",
-                title: "Deployment queued",
-                message: `${packageIds.length} package(s) queued to ${selectedTargets.length} target(s).`,
-            });
-        }
-        catch (error) {
-            console.error(error);
-            showToast({
-                type: "error",
-                title: "Deploy failed",
-                message: error instanceof Error ? error.message : "Unable to deploy package.",
-            });
-        }
-    };
-    const deletePackages = async () => {
-        if (modal?.type !== "delete")
-            return;
-        const packageIds = modal.packageIds;
-        const rowsToDelete = packages.filter((item) => packageIds.includes(item.id));
-        if (!rowsToDelete.length) {
-            setModal(null);
-            return;
-        }
-        try {
-            const deletedNames = new Set(rowsToDelete.map((item) => item.name.toLowerCase()));
-            await Promise.all(rowsToDelete.map((item) => deletePackageViaApi(item.name)));
-            await loadSoftwareDistributionData();
-            setPackages((current) => current.filter((item) => !packageIds.includes(item.id) && !deletedNames.has(item.name.toLowerCase())));
-            setOpenTreeMenuId(null);
-            setOpenVersionMenuId(null);
-            setOpenRowMenuId(null);
-            setExpandedIds((current) => {
-                const next = new Set(current);
-                packageIds.forEach((id) => next.delete(id));
-                return next;
-            });
-            if (selectedPackageId && packageIds.includes(selectedPackageId))
-                setSelectedPackageId(null);
-            setSelectedIds(new Set());
-            setModal(null);
-            showToast({
-                type: "success",
-                title: "Deleted successfully",
-                message: rowsToDelete.length > 1 ? "Packages deleted successfully." : "Package deleted successfully.",
-            });
-        }
-        catch (error) {
-            console.error(error);
-            showToast({
-                type: "error",
-                title: "Delete failed",
-                message: error instanceof Error ? error.message : "Unable to delete package.",
-            });
-        }
-    };
-    const deletePackageVersion = async () => {
-        if (modal?.type !== "deleteVersion")
-            return;
-        const row = packages.find((item) => item.id === modal.packageId);
-        if (!row)
-            return;
-        try {
-            await deletePackageVersionViaApi(row.name, modal.version);
-            await loadSoftwareDistributionData();
-            setPackages((current) => current.filter((item) => {
-                if (item.id !== row.id)
-                    return true;
-                const remainingVersions = item.versions.filter((version) => version !== modal.version);
-                return remainingVersions.length > 0;
-            }));
-            setOpenTreeMenuId(null);
-            setOpenVersionMenuId(null);
-            setOpenRowMenuId(null);
-            if (selectedPackageId === row.id)
-                setSelectedPackageId(null);
-            setSelectedIds((current) => {
-                const next = new Set(current);
-                next.delete(row.id);
-                return next;
-            });
-            setModal(null);
-            showToast({
-                type: "success",
-                title: "Deleted successfully",
-                message: "Version deleted successfully.",
-            });
-        }
-        catch (error) {
-            console.error(error);
-            showToast({
-                type: "error",
-                title: "Delete failed",
-                message: error instanceof Error ? error.message : "Unable to delete version.",
-            });
-        }
-    };
-    const exportCsv = () => {
-        const headers = [
-            "Package Name",
-            "Version",
-            "Status",
-            "Delivery Method",
-            "Destination Directory",
-            "Owner",
-            "Registered Date",
-            "Files",
-            "Size Before",
-            "Size After",
-            "Targets",
-        ];
-        const rows = filteredPackages.map((item) => [
-            item.name,
-            item.version,
-            item.status,
-            deliveryMethodLabels[item.lastDeliveryMethod],
-            item.destinationDirectory,
-            item.owner,
-            item.registeredDate,
-            item.fileCount,
-            item.sizeBeforeCompression,
-            item.sizeAfterCompression,
-            item.targetCount,
-        ]);
-        const csv = [headers, ...rows]
-            .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
-            .join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `software-distribution-${new Date().toISOString().slice(0, 10)}.csv`;
-        link.click();
-        URL.revokeObjectURL(url);
-    };
-    const SortButton = ({ label, columnKey }: {
-        label: string;
-        columnKey: SortKey;
-    }) => (<button type="button" onClick={() => handleSort(columnKey)}>
+function SortHeader({ label, active, direction, onClick }: { label: string; active: boolean; direction: SortDirection; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="inline-flex items-center gap-1 text-left">
       <span>{label}</span>
-      <i>{sortKey === columnKey ? (sortDirection === "asc" ? "↑" : "↓") : "↕"}</i>
-    </button>);
-    return (<div data-section="software-distribution">
-      {toast && (<div>
-          <CheckCircle2 size={18}/>
-          <div>
-            <strong>{toast.title}</strong>
-            <span>{toast.message}</span>
+      <span className="text-[10px] text-slate-400">{active ? (direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+    </button>
+  );
+}
+
+function ModalShell({ title, description, children, footer, onClose, maxWidth = 'max-w-5xl' }: { title: ReactNode; description?: ReactNode; children: ReactNode; footer?: ReactNode; onClose: () => void; maxWidth?: string }) {
+  const node = (
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={onClose}>
+      <div className={cx('flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl', maxWidth)} onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-black text-slate-950">{title}</h2>
+            {description ? <p className="mt-1 text-sm font-semibold text-slate-500">{description}</p> : null}
           </div>
-          <button type="button" onClick={() => setToast(null)}>
-            <X size={14}/>
+          <button type="button" onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-950">
+            <X size={18} />
           </button>
-        </div>)}
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>
+        {footer ? <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 p-4">{footer}</div> : null}
+      </div>
+    </div>
+  );
 
-      <div>
-        <aside>
-          <div>
-            <span>EMA / Software Distribution</span>
-            <strong>Package Library</strong>
-            <small>Browse packages and available versions.</small>
-          </div>
+  if (typeof document === 'undefined') return node;
+  return createPortal(node, document.body);
+}
 
-          <div>
-            {/* <button
-  type="button"
-  className="primary-btn"
-  onClick={() => {
-    setOpenTreeMenuId(null);
-    setOpenVersionMenuId(null);
-    setOpenRowMenuId(null);
-    setModal({ type: "new" });
-  }}
->
-  <Plus size={14} />
-  New Package
-</button> */}
+function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+  return (
+    <label className="block">
+      <span className={labelClass}>{label}</span>
+      <div className="mt-1">{children}</div>
+      {hint ? <small className="mt-1 block text-xs font-semibold text-slate-500">{hint}</small> : null}
+    </label>
+  );
+}
 
-            <label>
-              <Search size={15}/>
-              <input value={searchTerm} onChange={(event) => {
-            setSearchTerm(event.target.value);
-            setPage(1);
-        }} placeholder="Search package"/>
-              {searchTerm && (<button type="button" onClick={() => setSearchTerm("")}>
-                  <X size={13}/>
-                </button>)}
-            </label>
+function NewPackageModal({ onClose, onCreate }: { onClose: () => void; onCreate: (payload: CreatePackagePayload) => void }) {
+  const [form, setForm] = useState({
+    name: '',
+    description: '',
+    owner: '1',
+    destinationDirectory: 'C:\\PackageDestination',
+    sourcePath: 'C:\\PackageSource',
+    cmdline: '',
+    executionOrder: '3',
+    fileVersion: '',
+    osname: '',
+    exclude: -1,
+    keepParentDirectories: 0,
+  });
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canCreate = form.name.trim().length > 0 && form.destinationDirectory.trim().length > 0 && files.length > 0;
 
-            {treeRows.map((item) => {
-            const isExpanded = expandedIds.has(item.id);
-            const isSelected = selectedPackageId === item.id;
-            return (<div key={item.id}>
-                  <button type="button" title="Click to expand or collapse versions" onClick={() => {
-                    setSelectedPackageId(item.id);
-                    setOpenTreeMenuId(null);
-                    setOpenVersionMenuId(null);
-                    setOpenRowMenuId(null);
-                    toggleExpand(item.id);
-                }}>
-                    <span>
-                      {isExpanded ? <FolderOpen size={15}/> : <FolderClosed size={15}/>}
-                    </span>
-                    <span>
-                      <strong>{item.name}</strong>
-                      <small>{isExpanded ? "Versions expanded" : "Click to expand versions"}</small>
-                    </span>
-                  </button>
+  const create = () => {
+    if (!canCreate) return;
+    onCreate({
+      name: form.name.trim(),
+      description: form.description.trim() || form.name.trim(),
+      owner: form.owner.trim() || '1',
+      destinationDirectory: form.destinationDirectory.trim() || 'C:\\',
+      osname: form.osname.trim(),
+      exclude: Number(form.exclude),
+      keepParentDirectories: Number(form.keepParentDirectories),
+      sourcePath: form.sourcePath.trim() || 'C:\\PackageSource',
+      cmdline: form.cmdline,
+      executionOrder: form.executionOrder || '0',
+      fileVersion: form.fileVersion,
+      files,
+    });
+  };
 
-                  {openTreeMenuId === item.id && (<div>
-                      <div>
-                        <button type="button" onClick={() => {
-                        setOpenTreeMenuId(null);
-                        setOpenVersionMenuId(null);
-                        setOpenRowMenuId(null);
-                        setModal({ type: "new" });
-                    }}>
-                          <Plus size={13}/>
-                          New
-                        </button>
-                        <button type="button" onClick={() => {
-                        setOpenTreeMenuId(null);
-                        setOpenVersionMenuId(null);
-                        setOpenRowMenuId(null);
-                        setModal({ type: "send", packageIds: [item.id] });
-                    }} disabled={!isDeployable(item)}>
-                          <Send size={13}/>
-                          Deploy
-                        </button>
-                        <button type="button" onClick={() => {
-                        setOpenTreeMenuId(null);
-                        setOpenVersionMenuId(null);
-                        setOpenRowMenuId(null);
-                        setModal({ type: "delete", packageIds: [item.id] });
-                    }}>
-                          <Trash2 size={13}/>
-                          Delete
-                        </button>
-                      </div>
-                    </div>)}
+  return (
+    <ModalShell
+      title="New Package"
+      description="Create a new software distribution package."
+      onClose={onClose}
+      maxWidth="max-w-4xl"
+      footer={
+        <>
+          <EmaButton onClick={onClose}>Cancel</EmaButton>
+          <EmaButton variant="primary" disabled={!canCreate} onClick={create}>Create Package</EmaButton>
+        </>
+      }
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Field label="Package Name">
+          <input className={inputClass} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="e.g. Google Chrome Enterprise" />
+        </Field>
+        <Field label="Owner Console ID">
+          <input className={inputClass} value={form.owner} onChange={(event) => setForm((current) => ({ ...current, owner: event.target.value }))} />
+        </Field>
+        <div className="lg:col-span-2">
+          <Field label="Description">
+            <textarea className="min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Package description" />
+          </Field>
+        </div>
+        <Field label="Destination Directory" hint="Install path on target device.">
+          <input className={inputClass} value={form.destinationDirectory} onChange={(event) => setForm((current) => ({ ...current, destinationDirectory: event.target.value }))} placeholder="C:\\PackageDestination" />
+        </Field>
+        <Field label="Source Path">
+          <input className={inputClass} value={form.sourcePath} onChange={(event) => setForm((current) => ({ ...current, sourcePath: event.target.value }))} placeholder="C:\\PackageSource" />
+        </Field>
+        <Field label="Command Line">
+          <input className={inputClass} value={form.cmdline} onChange={(event) => setForm((current) => ({ ...current, cmdline: event.target.value }))} placeholder="/quiet" />
+        </Field>
+        <Field label="File Version">
+          <input className={inputClass} value={form.fileVersion} onChange={(event) => setForm((current) => ({ ...current, fileVersion: event.target.value }))} placeholder="optional" />
+        </Field>
+        <Field label="Execution Order">
+          <select className={inputClass} value={form.executionOrder} onChange={(event) => setForm((current) => ({ ...current, executionOrder: event.target.value }))}>
+            <option value="0">0 - No execution</option>
+            <option value="1">1 - Execute before distribution</option>
+            <option value="3">3 - Execute after distribution</option>
+          </select>
+        </Field>
+        <Field label="Exclude">
+          <select className={inputClass} value={form.exclude} onChange={(event) => setForm((current) => ({ ...current, exclude: Number(event.target.value) }))}>
+            <option value={-1}>-1 - Default</option>
+            <option value={0}>0 - Include</option>
+            <option value={1}>1 - Exclude</option>
+          </select>
+        </Field>
+        <Field label="OS Name">
+          <input className={inputClass} value={form.osname} onChange={(event) => setForm((current) => ({ ...current, osname: event.target.value }))} placeholder="optional" />
+        </Field>
+        <Field label="Keep Parent Directories">
+          <select className={inputClass} value={form.keepParentDirectories} onChange={(event) => setForm((current) => ({ ...current, keepParentDirectories: Number(event.target.value) }))}>
+            <option value={0}>No</option>
+            <option value={1}>Yes</option>
+          </select>
+        </Field>
+        <div className="lg:col-span-2">
+          <input ref={fileInputRef} type="file" multiple hidden onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="flex w-full items-center justify-center gap-3 rounded-2xl border border-dashed border-blue-200 bg-blue-50/60 p-6 text-center text-blue-700 transition hover:border-blue-300 hover:bg-blue-50">
+            <UploadCloud size={24} />
+            <span className="text-left">
+              <strong className="block text-sm font-black">{files.length ? `${files.length} file(s) selected` : 'Select package files'}</strong>
+              <span className="text-xs font-semibold">Click here to choose package files.</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
 
-                  {isExpanded && (<div>
-                      {item.versions.map((version) => {
-                        const versionMenuId = `${item.id}::${version}`;
-                        return (<div key={version}>
-                            <div>
-                              <button type="button" onClick={() => {
-                                setSelectedPackageId(item.id);
-                                setOpenTreeMenuId(null);
-                                setOpenVersionMenuId(null);
-                                setOpenRowMenuId(null);
-                            }}>
-                                <FileText size={13}/>
-                                {version}
-                              </button>
-                              <button type="button" title="Version actions" onClick={(event) => {
-                                event.stopPropagation();
-                                setOpenTreeMenuId(null);
-                                setOpenRowMenuId(null);
-                                setOpenVersionMenuId((current) => current === versionMenuId ? null : versionMenuId);
-                            }}>
-                                <MoreVertical size={14}/>
-                              </button>
-                            </div>
+function DeployPackageModal({ packages, targetDevices, onClose, onDeploy }: { packages: PackageRecord[]; targetDevices: TargetDevice[]; onClose: () => void; onDeploy: (selectedTargets: TargetDevice[], method: DeliveryMethod, scheduleType: 'now' | 'schedule') => void }) {
+  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
+  const [targetSearch, setTargetSearch] = useState('');
+  const [targetStatus, setTargetStatus] = useState<'All' | 'Online' | 'Offline'>('All');
+  const [targetOs, setTargetOs] = useState('All');
+  const [scheduleType, setScheduleType] = useState<'now' | 'schedule'>('now');
+  const [page, setPage] = useState(1);
+  const method: DeliveryMethod = 'onprem';
+  const pageSize = 10;
 
-                            {openVersionMenuId === versionMenuId && (<div>
-                                <button type="button" onClick={() => {
-                                    setSelectedPackageId(item.id);
-                                    setOpenVersionMenuId(null);
-                                    setOpenTreeMenuId(null);
-                                    setOpenRowMenuId(null);
-                                }}>
-                                  <FileText size={13}/>
-                                  View details
-                                </button>
-                                <button type="button" onClick={() => {
-                                    setOpenVersionMenuId(null);
-                                    setOpenTreeMenuId(null);
-                                    setOpenRowMenuId(null);
-                                    setModal({ type: "deleteVersion", packageId: item.id, version });
-                                }}>
-                                  <Trash2 size={13}/>
-                                  Delete version
-                                </button>
-                              </div>)}
-                          </div>);
-                    })}
-                    </div>)}
-                </div>);
-        })}
+  const osOptions = useMemo(() => Array.from(new Set(targetDevices.map((device) => device.os).filter(Boolean))), [targetDevices]);
+  const filteredTargets = useMemo(() => {
+    const keyword = targetSearch.trim().toLowerCase();
+    return targetDevices.filter((device) => {
+      const text = [device.name, device.department, device.ip, device.os, device.status].join(' ').toLowerCase();
+      const matchesSearch = !keyword || text.includes(keyword);
+      const matchesStatus = targetStatus === 'All' || device.status === targetStatus;
+      const matchesOs = targetOs === 'All' || device.os === targetOs;
+      return matchesSearch && matchesStatus && matchesOs;
+    });
+  }, [targetDevices, targetSearch, targetStatus, targetOs]);
 
-            {hasMoreTreeRows && (<div>
-                <div>
-                  <button type="button" onClick={() => setTreeVisibleCount((current) => Math.min(current + TREE_PAGE_SIZE, treePackages.length))}>
-                    Load more packages
-                  </button>
+  const totalPages = Math.max(1, Math.ceil(filteredTargets.length / pageSize));
+  const pageRows = filteredTargets.slice((page - 1) * pageSize, page * pageSize);
+  const selectedTargets = targetDevices.filter((device) => selectedTargetIds.has(device.id));
+  const allPageSelected = pageRows.length > 0 && pageRows.every((device) => selectedTargetIds.has(device.id));
+
+  function toggleTarget(id: string) {
+    setSelectedTargetIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function togglePage() {
+    setSelectedTargetIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) pageRows.forEach((device) => next.delete(device.id));
+      else pageRows.forEach((device) => next.add(device.id));
+      return next;
+    });
+  }
+
+  return (
+    <ModalShell
+      title="Deploy Package"
+      description={`${packages.length} package(s) selected. Choose target devices before deployment.`}
+      onClose={onClose}
+      maxWidth="max-w-[1200px]"
+      footer={
+        <>
+          <EmaButton onClick={onClose}>Cancel</EmaButton>
+          <EmaButton variant="primary" disabled={!selectedTargets.length} onClick={() => onDeploy(selectedTargets, method, scheduleType)}>
+            <Send size={15} />
+            Deploy Package
+          </EmaButton>
+        </>
+      }
+    >
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Selected Packages</p>
+            <div className="mt-3 space-y-2">
+              {packages.map((item) => (
+                <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <strong className="block truncate text-sm font-black text-slate-900">{item.name}</strong>
+                  <span className="mt-1 block text-xs font-semibold text-slate-500">{item.version} • {item.status}</span>
                 </div>
-              </div>)}
-
-            {hasMoreTreeRows && (<button type="button" onClick={() => setTreeVisibleCount((current) => Math.min(current + TREE_PAGE_SIZE, treePackages.length))}>
-                Load more packages
-              </button>)}
+              ))}
+            </div>
           </div>
-        </aside>
-
-        <section>
-          <section>
-            <div>
-              <span>Software Distribution</span>
-              <h2>Package Registry</h2>
-              <p>Prepare, organise and deploy software packages to selected target devices.</p>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Deployment Option</p>
+            <div className="mt-3 grid gap-2">
+              <button type="button" onClick={() => setScheduleType('now')} className={cx('rounded-xl border px-3 py-2 text-sm font-black transition', scheduleType === 'now' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>Send Now</button>
+              <button type="button" onClick={() => setScheduleType('schedule')} className={cx('rounded-xl border px-3 py-2 text-sm font-black transition', scheduleType === 'schedule' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>Schedule</button>
             </div>
-
-            <div>
-              <button type="button" onClick={resetFilters}>
-                <span>Total Packages</span>
-                <strong>{summary.total}</strong>
-                <small>All registered packages</small>
-              </button>
-              <button type="button" onClick={() => {
-            setStatusFilter("Ready");
-            setPage(1);
-        }}>
-                <span>Ready</span>
-                <strong>{summary.ready}</strong>
-                <small>Available for deployment</small>
-              </button>
-              <button type="button" onClick={() => {
-            setStatusFilter("Deployed");
-            setPage(1);
-        }}>
-                <span>Deployed</span>
-                <strong>{summary.deployed}</strong>
-                <small>Already delivered</small>
-              </button>
-              <button type="button" onClick={() => {
-            setStatusFilter("Draft");
-            setPage(1);
-        }}>
-                <span>Draft</span>
-                <strong>{summary.draft}</strong>
-                <small>Pending completion</small>
-              </button>
+            {scheduleType === 'schedule' ? <input type="datetime-local" className={cx(inputClass, 'mt-3')} /> : null}
+            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-bold text-blue-700">
+              {selectedTargets.length} target(s) selected
             </div>
-          </section>
+          </div>
+        </div>
 
-          <main>
-            <div>
-              <div>
-                <h3>Package Registry</h3>
-                <p>
-                  Showing {filteredPackages.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}-
-                  {Math.min(page * PAGE_SIZE, filteredPackages.length)} of {filteredPackages.length}
-                </p>
-              </div>
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 p-3">
+            <EmaToolbar
+              search={<EmaSearchInput value={targetSearch} onChange={(value) => { setTargetSearch(value); setPage(1); }} placeholder="Search device, IP, branch..." />}
+              filters={
+                <>
+                  <EmaFilterField label="Status">
+                    <select className={inputClass} value={targetStatus} onChange={(event) => { setTargetStatus(event.target.value as 'All' | 'Online' | 'Offline'); setPage(1); }}>
+                      <option value="All">All status</option>
+                      <option value="Online">Online</option>
+                      <option value="Offline">Offline</option>
+                    </select>
+                  </EmaFilterField>
+                  <EmaFilterField label="OS">
+                    <select className={inputClass} value={targetOs} onChange={(event) => { setTargetOs(event.target.value); setPage(1); }}>
+                      <option value="All">All OS</option>
+                      {osOptions.map((os) => <option key={os} value={os}>{os}</option>)}
+                    </select>
+                  </EmaFilterField>
+                </>
+              }
+            />
+          </div>
+          <EmaTable
+            loading={false}
+            rows={pageRows}
+            getRowKey={(row) => row.id}
+            emptyText="No target device found."
+            columns={[
+              {
+                key: 'select',
+                header: <input type="checkbox" checked={allPageSelected} onChange={togglePage} />,
+                width: '48px',
+                render: (row) => <input type="checkbox" checked={selectedTargetIds.has(row.id)} onChange={() => toggleTarget(row.id)} />,
+              },
+              {
+                key: 'device',
+                header: 'Device',
+                render: (row) => <div><strong className="block font-black text-slate-900">{row.name}</strong><span className="block text-xs font-semibold text-slate-500">{row.id} • {row.objectAgent || '-'}</span></div>,
+              },
+              { key: 'branch', header: 'Branch', render: (row) => row.department },
+              { key: 'ip', header: 'IP Address', render: (row) => row.ip },
+              { key: 'os', header: 'OS', render: (row) => row.os },
+              { key: 'status', header: 'Status', render: (row) => <span className={cx('inline-flex rounded-full border px-3 py-1 text-xs font-black', deviceStatusClass(row.status))}>{row.status}</span> },
+            ]}
+          />
+          <EmaPagination page={page} totalPages={totalPages} totalLabel={`${filteredTargets.length} target(s)`} onPageChange={setPage} />
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
 
-              <div>
-                <button type="button" onClick={() => {
-            setOpenTreeMenuId(null);
-            setOpenVersionMenuId(null);
-            setOpenRowMenuId(null);
-            setModal({ type: "new" });
-        }}>
-                  <Plus size={14}/>
-                  New Package
-                </button>
-                <button type="button" onClick={exportCsv} title="Export CSV">
-                  <Download size={16}/>
-                  Export
-                </button>
-              </div>
+function DeletePackageModal({ packages, onClose, onDelete }: { packages: PackageRecord[]; onClose: () => void; onDelete: () => void }) {
+  const [confirm, setConfirm] = useState('');
+  return (
+    <EmaModal
+      open
+      title={packages.length > 1 ? 'Delete Packages' : 'Delete Package'}
+      description={packages.length > 1 ? `${packages.length} packages selected` : packages[0]?.name}
+      onClose={onClose}
+      footer={
+        <>
+          <EmaButton onClick={onClose}>Cancel</EmaButton>
+          <EmaButton variant="danger" disabled={confirm.toLowerCase() !== 'delete'} onClick={onDelete}>
+            Delete {packages.length > 1 ? 'Packages' : 'Package'}
+          </EmaButton>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+          <Trash2 size={18} />
+          <div>
+            <strong className="block text-sm font-black">Confirm delete action</strong>
+            <span className="text-sm font-semibold">This removes the selected item from Software Distribution.</span>
+          </div>
+        </div>
+        <div className="max-h-44 space-y-2 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          {packages.map((item) => (
+            <div key={item.id} className="rounded-xl bg-white p-3">
+              <strong className="block text-sm font-black text-slate-900">{item.name}</strong>
+              <span className="text-xs font-semibold text-slate-500">{item.version} • {item.status}</span>
             </div>
+          ))}
+        </div>
+        <Field label="Type delete to confirm">
+          <input className={inputClass} value={confirm} onChange={(event) => setConfirm(event.target.value)} />
+        </Field>
+      </div>
+    </EmaModal>
+  );
+}
 
-            <div>
-              <label>
-                <Search size={15}/>
-                <input value={searchTerm} onChange={(event) => {
-            setSearchTerm(event.target.value);
-            setPage(1);
-        }} placeholder="Search package or owner"/>
-                {searchTerm && (<button type="button" onClick={() => setSearchTerm("")}>
-                    <X size={13}/>
-                  </button>)}
-              </label>
+export default function SoftwareDistribution() {
+  const [packages, setPackages] = useState<PackageRecord[]>([]);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | PackageStatus>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('registeredDate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [page, setPage] = useState(1);
+  const [treeVisibleCount, setTreeVisibleCount] = useState(TREE_PAGE_SIZE);
+  const [modal, setModal] = useState<ModalState>(null);
+  const [targetDevices, setTargetDevices] = useState<TargetDevice[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<EmaToastItem[]>([]);
+  const toastIdRef = useRef(0);
 
-              <select value={statusFilter} onChange={(event) => {
-            setStatusFilter(event.target.value as "all" | PackageStatus);
-            setPage(1);
-        }}>
+  function addToast(tone: EmaToastTone, title: ReactNode, message?: ReactNode) {
+    toastIdRef.current += 1;
+    const toast: EmaToastItem = { id: `${Date.now()}-${toastIdRef.current}`, tone, title, message };
+    setToasts((items) => [...items.slice(-2), toast]);
+    window.setTimeout(() => setToasts((items) => items.filter((item) => item.id !== toast.id)), 3200);
+  }
+
+  async function loadSoftwareDistributionData() {
+    setIsLoading(true);
+    try {
+      const [apiPackages, apiTargets] = await Promise.all([fetchPackagesFromApi(), fetchTargetsFromApi()]);
+      setPackages(apiPackages);
+      setTargetDevices(apiTargets);
+      setApiError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load Software Distribution data.';
+      setPackages([]);
+      setTargetDevices([]);
+      setApiError(message);
+      addToast('error', 'Connection failed', message);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadSoftwareDistributionData();
+  }, []);
+
+  useEffect(() => {
+    setTreeVisibleCount(TREE_PAGE_SIZE);
+  }, [searchTerm, statusFilter, sortKey, sortDirection, packages.length]);
+
+  const selectedPackage = packages.find((item) => item.id === selectedPackageId) || null;
+  const selectedPackages = packages.filter((item) => selectedIds.has(item.id));
+  const summary = useMemo(() => ({
+    total: packages.length,
+    ready: packages.filter((item) => item.status === 'Ready').length,
+    deployed: packages.filter((item) => item.status === 'Deployed').length,
+    draft: packages.filter((item) => item.status === 'Draft').length,
+    targets: packages.reduce((sum, item) => sum + item.targetCount, 0),
+  }), [packages]);
+
+  const filteredPackages = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    const rows = packages.filter((item) => {
+      const searchable = [item.name, item.version, item.description, item.status, item.owner, item.destinationDirectory, item.registeredDate, deliveryMethodLabels[item.lastDeliveryMethod]].join(' ').toLowerCase();
+      const matchesSearch = !keyword || searchable.includes(keyword);
+      const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    rows.sort((a, b) => {
+      const first = String(a[sortKey]).toLowerCase();
+      const second = String(b[sortKey]).toLowerCase();
+      if (first < second) return sortDirection === 'asc' ? -1 : 1;
+      if (first > second) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return rows;
+  }, [packages, searchTerm, statusFilter, sortKey, sortDirection]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPackages.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const pageRows = filteredPackages.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const treeRows = filteredPackages.slice(0, treeVisibleCount);
+  const hasMoreTreeRows = treeVisibleCount < filteredPackages.length;
+  const deployablePageRows = pageRows.filter(isDeployable);
+  const allPageSelected = deployablePageRows.length > 0 && deployablePageRows.every((item) => selectedIds.has(item.id));
+  const somePageSelected = deployablePageRows.some((item) => selectedIds.has(item.id));
+
+  function resetFilters() {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setSortKey('registeredDate');
+    setSortDirection('desc');
+    setPage(1);
+  }
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection('asc');
+  }
+
+  function toggleExpand(id: string) {
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectPage() {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) deployablePageRows.forEach((item) => next.delete(item.id));
+      else deployablePageRows.forEach((item) => next.add(item.id));
+      return next;
+    });
+  }
+
+  async function createPackage(payload: CreatePackagePayload) {
+    try {
+      await createPackageViaApi(payload);
+      await loadSoftwareDistributionData();
+      setModal(null);
+      addToast('success', 'Package created', 'Package created successfully.');
+    } catch (error) {
+      addToast('error', 'Create failed', error instanceof Error ? error.message : 'Unable to create package.');
+    }
+  }
+
+  async function deployPackages(selectedTargets: TargetDevice[], method: DeliveryMethod, scheduleType: 'now' | 'schedule') {
+    const packageIds = modal?.type === 'send' ? modal.packageIds : [];
+    const selectedPackageRows = packages.filter((item) => packageIds.includes(item.id));
+    try {
+      await deployPackagesViaApi(selectedPackageRows, selectedTargets, method, scheduleType);
+      await loadSoftwareDistributionData();
+      setSelectedIds(new Set());
+      setModal(null);
+      addToast('success', 'Deployment queued', `${packageIds.length} package(s) queued to ${selectedTargets.length} target(s).`);
+    } catch (error) {
+      addToast('error', 'Deploy failed', error instanceof Error ? error.message : 'Unable to deploy package.');
+    }
+  }
+
+  async function deletePackages() {
+    if (modal?.type !== 'delete') return;
+    const packageIds = modal.packageIds;
+    const rowsToDelete = packages.filter((item) => packageIds.includes(item.id));
+    if (!rowsToDelete.length) {
+      setModal(null);
+      return;
+    }
+
+    try {
+      const deletedNames = new Set(rowsToDelete.map((item) => item.name.toLowerCase()));
+      await Promise.all(rowsToDelete.map((item) => deletePackageViaApi(item.name)));
+      await loadSoftwareDistributionData();
+      setPackages((current) => current.filter((item) => !packageIds.includes(item.id) && !deletedNames.has(item.name.toLowerCase())));
+      setExpandedIds((current) => {
+        const next = new Set(current);
+        packageIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (selectedPackageId && packageIds.includes(selectedPackageId)) setSelectedPackageId(null);
+      setSelectedIds(new Set());
+      setModal(null);
+      addToast('delete', 'Package deleted', rowsToDelete.length > 1 ? 'Packages deleted successfully.' : 'Package deleted successfully.');
+    } catch (error) {
+      addToast('error', 'Delete failed', error instanceof Error ? error.message : 'Unable to delete package.');
+    }
+  }
+
+  async function deletePackageVersion() {
+    if (modal?.type !== 'deleteVersion') return;
+    const row = packages.find((item) => item.id === modal.packageId);
+    if (!row) return;
+
+    try {
+      await deletePackageVersionViaApi(row.name, modal.version);
+      await loadSoftwareDistributionData();
+      setExpandedIds((current) => {
+        const next = new Set(current);
+        if (row.versions.length <= 1) next.delete(row.id);
+        return next;
+      });
+      if (selectedPackageId === row.id) setSelectedPackageId(null);
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(row.id);
+        return next;
+      });
+      setModal(null);
+      addToast('delete', 'Version deleted', 'Version deleted successfully.');
+    } catch (error) {
+      addToast('error', 'Delete failed', error instanceof Error ? error.message : 'Unable to delete version.');
+    }
+  }
+
+  function exportCsv() {
+    const headers = ['Package Name', 'Version', 'Status', 'Delivery Method', 'Destination Directory', 'Owner', 'Registered Date', 'Files', 'Size Before', 'Size After', 'Targets'];
+    const rows = filteredPackages.map((item) => [item.name, item.version, item.status, deliveryMethodLabels[item.lastDeliveryMethod], item.destinationDirectory, item.owner, item.registeredDate, item.fileCount, item.sizeBeforeCompression, item.sizeAfterCompression, item.targetCount]);
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `software-distribution-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const packageColumns: EmaTableColumn<PackageRecord>[] = [
+    {
+      key: 'select',
+      header: <input type="checkbox" checked={allPageSelected} ref={(input) => { if (input) input.indeterminate = !allPageSelected && somePageSelected; }} onChange={toggleSelectPage} disabled={!deployablePageRows.length} />,
+      width: '48px',
+      render: (item) => (
+        <input type="checkbox" checked={selectedIds.has(item.id)} disabled={!isDeployable(item)} title={isDeployable(item) ? 'Select package' : 'Archived packages cannot be selected'} onChange={() => toggleSelected(item.id)} onClick={(event) => event.stopPropagation()} />
+      ),
+    },
+    { key: 'no', header: '#', width: '56px', render: (_item, index) => (safePage - 1) * PAGE_SIZE + index + 1 },
+    {
+      key: 'name',
+      header: <SortHeader label="Package Name" active={sortKey === 'name'} direction={sortDirection} onClick={() => handleSort('name')} />,
+      render: (item) => (
+        <button type="button" onClick={() => setSelectedPackageId(item.id)} className="flex min-w-0 items-center gap-3 text-left">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100"><Package size={15} /></span>
+          <span className="min-w-0">
+            <strong className="block truncate font-black text-slate-900">{item.name}</strong>
+            <span className="block truncate text-xs font-semibold text-slate-500">{item.description}</span>
+          </span>
+        </button>
+      ),
+    },
+    { key: 'version', header: <SortHeader label="Version" active={sortKey === 'version'} direction={sortDirection} onClick={() => handleSort('version')} />, render: (item) => item.version },
+    { key: 'status', header: <SortHeader label="Status" active={sortKey === 'status'} direction={sortDirection} onClick={() => handleSort('status')} />, render: (item) => <span className={cx('inline-flex rounded-full border px-3 py-1 text-xs font-black', statusBadgeClass(item.status))}>{item.status}</span> },
+    { key: 'targets', header: <SortHeader label="Targets" active={sortKey === 'targetCount'} direction={sortDirection} onClick={() => handleSort('targetCount')} />, align: 'right', render: (item) => item.targetCount.toLocaleString() },
+    { key: 'owner', header: <SortHeader label="Owner" active={sortKey === 'owner'} direction={sortDirection} onClick={() => handleSort('owner')} />, render: (item) => item.owner },
+    {
+      key: 'action',
+      header: 'Action',
+      align: 'right',
+      render: (item) => (
+        <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+          <button type="button" disabled={!isDeployable(item)} onClick={() => { setSelectedIds(new Set()); setModal({ type: 'send', packageIds: [item.id] }); }} className="inline-flex h-9 items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50">
+            <Send size={13} />
+            Deploy
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const sidebar = (
+    <EmaSidebarPanel
+      eyebrow="Software Distribution"
+      title="Package Library"
+      description="Browse packages and available versions."
+      searchValue={searchTerm}
+      searchPlaceholder="Search package..."
+      onSearchChange={(value) => { setSearchTerm(value); setPage(1); }}
+      action={<EmaSidebarActionButton onClick={() => setModal({ type: 'new' })}><Plus size={14} />New Package</EmaSidebarActionButton>}
+    >
+      {isLoading ? (
+        <div className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm font-bold text-blue-700"><Loader2 size={16} className="animate-spin" />Loading packages...</div>
+      ) : treeRows.length ? (
+        treeRows.map((item) => {
+          const isExpanded = expandedIds.has(item.id);
+          const isActive = selectedPackageId === item.id;
+          return (
+            <div key={item.id}>
+              <EmaSidebarTreeRow
+                active={isActive}
+                onClick={() => {
+                  setSelectedPackageId(item.id);
+                  toggleExpand(item.id);
+                }}
+              >
+                <span className={cx('grid size-8 shrink-0 place-items-center rounded-xl', isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-white')}>
+                  {isExpanded ? <FolderOpen size={15} /> : <FolderClosed size={15} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-black">{item.name}</span>
+                  <span className="block truncate text-[11px] font-bold text-slate-400">{item.versions.length} version(s)</span>
+                </span>
+                {isExpanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+              </EmaSidebarTreeRow>
+              {isExpanded ? (
+                <div className="ml-5 mt-1 space-y-1 border-l border-slate-100 pl-3">
+                  {item.versions.map((version) => (
+                    <EmaSidebarTreeRow key={version} depth={1} onClick={() => setSelectedPackageId(item.id)}>
+                      <FileText size={13} className="shrink-0 text-slate-400" />
+                      <span className="min-w-0 flex-1 truncate text-xs font-black text-slate-600">{version}</span>
+                      <button type="button" onClick={(event) => { event.stopPropagation(); setModal({ type: 'deleteVersion', packageId: item.id, version }); }} className="grid size-7 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600">
+                        <Trash2 size={13} />
+                      </button>
+                    </EmaSidebarTreeRow>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })
+      ) : (
+        <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-center text-sm font-bold text-slate-500">No package found.</div>
+      )}
+      {hasMoreTreeRows ? (
+        <button type="button" onClick={() => setTreeVisibleCount((current) => Math.min(current + TREE_PAGE_SIZE, filteredPackages.length))} className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:bg-slate-50">
+          Load more packages
+        </button>
+      ) : null}
+    </EmaSidebarPanel>
+  );
+
+  return (
+    <EmaPageLayout sidebar={sidebar} showHeader={false}>
+      <EmaToastViewport items={toasts} onClose={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
+      <div className="space-y-3">
+        <EmaSection eyebrow="Software Distribution" title="Package Registry" description="Prepare, organise and deploy software packages to selected target devices.">
+          <EmaKpiGrid>
+            <EmaKpiCard title="Total Packages" value={summary.total} note="All registered packages" icon={<FileArchive size={18} />} tone="blue" active={statusFilter === 'all'} onClick={resetFilters} />
+            <EmaKpiCard title="Ready" value={summary.ready} note="Available for deployment" icon={<CheckCircle2 size={18} />} tone="emerald" active={statusFilter === 'Ready'} onClick={() => { setStatusFilter('Ready'); setPage(1); }} />
+            <EmaKpiCard title="Deployed" value={summary.deployed} note="Already delivered" icon={<ShieldCheck size={18} />} tone="violet" active={statusFilter === 'Deployed'} onClick={() => { setStatusFilter('Deployed'); setPage(1); }} />
+            <EmaKpiCard title="Draft" value={summary.draft} note="Pending completion" icon={<FileText size={18} />} tone="amber" active={statusFilter === 'Draft'} onClick={() => { setStatusFilter('Draft'); setPage(1); }} />
+            <EmaKpiCard title="Targets" value={summary.targets.toLocaleString()} note="Assigned devices" icon={<HardDrive size={18} />} tone="slate" />
+          </EmaKpiGrid>
+        </EmaSection>
+
+        <EmaToolbar
+          search={<EmaSearchInput value={searchTerm} onChange={(value) => { setSearchTerm(value); setPage(1); }} placeholder="Search package or owner..." />}
+          filters={
+            <EmaFilterField label="Status">
+              <select className={inputClass} value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as 'all' | PackageStatus); setPage(1); }}>
                 <option value="all">All status</option>
                 <option value="Ready">Ready</option>
                 <option value="Draft">Draft</option>
                 <option value="Deployed">Deployed</option>
                 <option value="Archived">Archived</option>
               </select>
-            </div>
+            </EmaFilterField>
+          }
+          right={
+            <>
+              <EmaButton onClick={() => void loadSoftwareDistributionData()} disabled={isLoading}><RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />Refresh</EmaButton>
+              <EmaButton onClick={exportCsv}><Download size={15} />Export</EmaButton>
+              <EmaButton variant="primary" onClick={() => setModal({ type: 'new' })}><Plus size={15} />New Package</EmaButton>
+            </>
+          }
+        />
 
-            {apiError && (<div>
-                <Server size={18}/>
-                <div>
-                  <strong>Data unavailable</strong>
-                  <span>Please refresh the page or try again later.</span>
-                </div>
-              </div>)}
-
-            {selectedPackages.length > 0 && (<div>
-                <strong>{selectedPackages.length} package(s) selected</strong>
-                <span>Bulk deployment uses one target scope and one schedule.</span>
-                <div>
-                  <button type="button" onClick={() => setSelectedIds(new Set())}>
-                    Clear
-                  </button>
-                  <button type="button" onClick={() => setModal({ type: "send", packageIds: selectedPackages.map((item) => item.id) })}>
-                    <Send size={15}/>
-                    Deploy Selected
-                  </button>
-                  <button type="button" onClick={() => setModal({ type: "delete", packageIds: selectedPackages.map((item) => item.id) })}>
-                    <Trash2 size={15}/>
-                    Delete Selected
-                  </button>
-                </div>
-              </div>)}
-
+        {apiError ? (
+          <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-700">
+            <Server size={18} />
             <div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>
-                      <input type="checkbox" checked={allPageSelected} ref={(input) => {
-            if (input)
-                input.indeterminate = !allPageSelected && somePageSelected;
-        }} onChange={toggleSelectPage} disabled={!deployablePageRows.length}/>
-                    </th>
-                    <th>#</th>
-                    <th><SortButton label="Package Name" columnKey="name"/></th>
-                    <th><SortButton label="Version" columnKey="version"/></th>
-                    <th><SortButton label="Status" columnKey="status"/></th>
-                    <th><SortButton label="Targets" columnKey="targetCount"/></th>
-                    <th><SortButton label="Owner" columnKey="owner"/></th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {pageRows.map((item, index) => {
-            const canSelect = isDeployable(item);
-            return (<tr key={item.id} onClick={() => {
-                    setSelectedPackageId(item.id);
-                    setOpenTreeMenuId(null);
-                    setOpenVersionMenuId(null);
-                    setOpenRowMenuId(null);
-                }}>
-                        <td onClick={(event) => event.stopPropagation()}>
-                          <input type="checkbox" checked={selectedIds.has(item.id)} disabled={!canSelect} title={canSelect ? "Select package" : "Archived packages cannot be selected"} onChange={() => toggleSelected(item.id)}/>
-                        </td>
-                        <td><span>{(page - 1) * PAGE_SIZE + index + 1}</span></td>
-                        <td>
-                          <div>
-                            <span><Package size={15}/></span>
-                            <div>
-                              <strong>{item.name}</strong>
-                              <small>{item.description}</small>
-                            </div>
-                          </div>
-                        </td>
-                        <td>{item.version}</td>
-                        <td>
-                          <span>
-                            {item.status}
-                          </span>
-                        </td>
-                        <td>{item.targetCount}</td>
-                        <td>{item.owner}</td>
-                        <td onClick={(event) => event.stopPropagation()}>
-                          <button type="button" disabled={!canSelect} title={canSelect ? "Deploy package" : "Archived packages cannot be deployed"} onClick={() => {
-                    setOpenTreeMenuId(null);
-                    setOpenVersionMenuId(null);
-                    setOpenRowMenuId(null);
-                    setSelectedIds(new Set());
-                    setModal({ type: "send", packageIds: [item.id] });
-                }}>
-                            <Send size={13}/>
-                            Deploy
-                          </button>
-                        </td>
-                      </tr>);
-        })}
-                </tbody>
-              </table>
+              <strong className="block text-sm font-black">Data unavailable</strong>
+              <span className="text-sm font-semibold">Please refresh the page or try again later.</span>
             </div>
+          </div>
+        ) : null}
 
-            <CompactPagination currentPage={page} totalPages={totalPages} ariaLabel="Package registry pagination" onPageChange={setPage}/>
-          </main>
-        </section>
+        {selectedPackages.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-blue-700">
+            <div>
+              <strong className="block text-sm font-black">{selectedPackages.length} package(s) selected</strong>
+              <span className="text-sm font-semibold">Bulk deployment uses one target scope and one schedule.</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <EmaButton onClick={() => setSelectedIds(new Set())}>Clear</EmaButton>
+              <EmaButton variant="primary" onClick={() => setModal({ type: 'send', packageIds: selectedPackages.map((item) => item.id) })}><Send size={15} />Deploy Selected</EmaButton>
+              <EmaButton variant="danger" onClick={() => setModal({ type: 'delete', packageIds: selectedPackages.map((item) => item.id) })}><Trash2 size={15} />Delete Selected</EmaButton>
+            </div>
+          </div>
+        ) : null}
+
+        <EmaTableShell title="Package Registry" subtitle={`Showing ${filteredPackages.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}-${Math.min(safePage * PAGE_SIZE, filteredPackages.length)} of ${filteredPackages.length}`}>
+          <EmaTable columns={packageColumns} rows={pageRows} loading={isLoading} emptyText="No package found." getRowKey={(row) => row.id} />
+          <EmaPagination page={safePage} totalPages={totalPages} totalLabel={`${filteredPackages.length} package(s)`} onPageChange={setPage} />
+        </EmaTableShell>
       </div>
 
-      {selectedPackage && (<div onMouseDown={() => setSelectedPackageId(null)}>
-          <aside onMouseDown={(event) => event.stopPropagation()}>
-            <div>
-              <div>
-                <span><Package size={18}/></span>
-                <div>
-                  <h3>{selectedPackage.name}</h3>
-                  <p>{selectedPackage.version} • {selectedPackage.status} • {selectedPackage.owner}</p>
+      {selectedPackage ? (
+        <div className="fixed inset-0 z-[998] flex justify-end bg-slate-950/20" onMouseDown={() => setSelectedPackageId(null)}>
+          <aside className="flex h-full w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 p-5">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100"><Package size={18} /></span>
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-black text-slate-950">{selectedPackage.name}</h3>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">{selectedPackage.version} • {selectedPackage.status} • {selectedPackage.owner}</p>
                 </div>
               </div>
-
-              <button type="button" onClick={() => setSelectedPackageId(null)}>
-                <X size={18}/>
-              </button>
+              <button type="button" onClick={() => setSelectedPackageId(null)} className="grid size-9 shrink-0 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-950"><X size={18} /></button>
             </div>
 
-            <div>
-              <section>
-                <div><span>Status:</span><strong>{selectedPackage.status}</strong><small>Current package state</small></div>
-                <div><span>Delivery Method:</span><strong>{deliveryMethodLabels[selectedPackage.lastDeliveryMethod]}</strong><small>Last selected channel</small></div>
-                <div><span>Targets:</span><strong>{selectedPackage.targetCount}</strong><small>Total assigned devices</small></div>
-                <div><span>Package Size:</span><strong>{selectedPackage.sizeAfterCompression}</strong><small>After compression</small></div>
-              </section>
-
-              <section>
-                <div><div><h4>Basic Information</h4><p>Package identity and ownership details</p></div></div>
-                <div>
-                  <label><span>Package Name:</span><strong>{selectedPackage.name}</strong></label>
-                  <label><span>Version:</span><strong>{selectedPackage.version}</strong></label>
-                  <label><span>Owner:</span><strong>{selectedPackage.owner}</strong></label>
-                  <label><span>Registered Date:</span><strong>{formatDate(selectedPackage.registeredDate)}</strong></label>
-                  <label><span>Destination Directory:</span><strong>{selectedPackage.destinationDirectory}</strong></label>
-                  <label><span>Description:</span><strong>{selectedPackage.description}</strong></label>
-                </div>
-              </section>
-
-              <section>
-                <div><div><h4>Package Details</h4><p>Files, compression and execution scope</p></div></div>
-                <div>
-                  <label><span>Files:</span><strong>{selectedPackage.fileCount}</strong></label>
-                  <label><span>Versions:</span><strong>{selectedPackage.versions.join(", ")}</strong></label>
-                  <label><span>Before Compression:</span><strong>{selectedPackage.sizeBeforeCompression}</strong></label>
-                  <label><span>After Compression:</span><strong>{selectedPackage.sizeAfterCompression}</strong></label>
-                  <label><span>Remote Execute File:</span><strong>{selectedPackage.remoteExecuteFile}</strong></label>
-                  <label><span>Exclude OS:</span><strong>{selectedPackage.excludeOS}</strong></label>
-                </div>
-              </section>
-
-              <section>
-                <div><div><h4>Last Deployment</h4><p>Read-only deployment reference</p></div></div>
-                <div>
-                  <label><span>Last Method:</span><strong>{deliveryMethodLabels[selectedPackage.lastDeliveryMethod]}</strong></label>
-                  <label><span>Last Deployment:</span><strong>{formatDate(selectedPackage.lastDeployment)}</strong></label>
-                </div>
-              </section>
+            <div className="min-h-0 flex-1 space-y-4 overflow-auto p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <DetailMetric label="Status" value={selectedPackage.status} note="Current package state" />
+                <DetailMetric label="Delivery Method" value={deliveryMethodLabels[selectedPackage.lastDeliveryMethod]} note="Last selected channel" />
+                <DetailMetric label="Targets" value={selectedPackage.targetCount} note="Total assigned devices" />
+                <DetailMetric label="Package Size" value={selectedPackage.sizeAfterCompression} note="After compression" />
+              </div>
+              <DetailSection title="Basic Information" description="Package identity and ownership details">
+                <InfoRow label="Package Name" value={selectedPackage.name} />
+                <InfoRow label="Version" value={selectedPackage.version} />
+                <InfoRow label="Owner" value={selectedPackage.owner} />
+                <InfoRow label="Registered Date" value={formatDate(selectedPackage.registeredDate)} />
+                <InfoRow label="Destination Directory" value={selectedPackage.destinationDirectory} />
+                <InfoRow label="Description" value={selectedPackage.description} />
+              </DetailSection>
+              <DetailSection title="Package Details" description="Files, compression and execution scope">
+                <InfoRow label="Files" value={selectedPackage.fileCount} />
+                <InfoRow label="Versions" value={selectedPackage.versions.join(', ')} />
+                <InfoRow label="Before Compression" value={selectedPackage.sizeBeforeCompression} />
+                <InfoRow label="After Compression" value={selectedPackage.sizeAfterCompression} />
+                <InfoRow label="Remote Execute File" value={selectedPackage.remoteExecuteFile} />
+                <InfoRow label="Exclude OS" value={selectedPackage.excludeOS} />
+              </DetailSection>
+              <DetailSection title="Last Deployment" description="Read-only deployment reference">
+                <InfoRow label="Last Method" value={deliveryMethodLabels[selectedPackage.lastDeliveryMethod]} />
+                <InfoRow label="Last Deployment" value={formatDate(selectedPackage.lastDeployment)} />
+              </DetailSection>
             </div>
 
-            <div>
-              <button type="button" onClick={() => setSelectedPackageId(null)}>
-                Close
-              </button>
-              <button type="button" disabled={!isDeployable(selectedPackage)} onClick={() => {
-                const packageId = selectedPackage.id;
-                setSelectedPackageId(null);
-                setModal({ type: "send", packageIds: [packageId] });
-            }}>
-                <Send size={14}/>
-                Deploy Package
-              </button>
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 p-4">
+              <EmaButton onClick={() => setSelectedPackageId(null)}>Close</EmaButton>
+              <EmaButton variant="primary" disabled={!isDeployable(selectedPackage)} onClick={() => { const packageId = selectedPackage.id; setSelectedPackageId(null); setModal({ type: 'send', packageIds: [packageId] }); }}><Send size={14} />Deploy Package</EmaButton>
             </div>
           </aside>
-        </div>)}
+        </div>
+      ) : null}
 
-      {modal?.type === "new" && (<NewPackageModal onClose={() => setModal(null)} onCreate={createPackage}/>)}
+      {modal?.type === 'new' ? <NewPackageModal onClose={() => setModal(null)} onCreate={createPackage} /> : null}
+      {modal?.type === 'send' ? <DeployPackageModal packages={packages.filter((item) => modal.packageIds.includes(item.id))} targetDevices={targetDevices} onClose={() => setModal(null)} onDeploy={deployPackages} /> : null}
+      {modal?.type === 'delete' ? <DeletePackageModal packages={packages.filter((item) => modal.packageIds.includes(item.id))} onClose={() => setModal(null)} onDelete={deletePackages} /> : null}
+      {modal?.type === 'deleteVersion' ? (
+        <DeletePackageModal
+          packages={packages.filter((item) => item.id === modal.packageId).map((item) => ({ ...item, version: modal.version, versions: [modal.version] }))}
+          onClose={() => setModal(null)}
+          onDelete={deletePackageVersion}
+        />
+      ) : null}
+    </EmaPageLayout>
+  );
+}
 
-      {modal?.type === "send" && (<DeployPackageModal packages={packages.filter((item) => modal.packageIds.includes(item.id))} targetDevices={targetDevices} onClose={() => setModal(null)} onDeploy={deployPackages}/>)}
+function DetailMetric({ label, value, note }: { label: string; value: ReactNode; note: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <span className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</span>
+      <strong className="mt-1 block text-lg font-black text-slate-950">{value}</strong>
+      <small className="mt-1 block text-xs font-semibold text-slate-500">{note}</small>
+    </div>
+  );
+}
 
-      {modal?.type === "delete" && (<DeletePackageModal packages={packages.filter((item) => modal.packageIds.includes(item.id))} onClose={() => setModal(null)} onDelete={deletePackages}/>)}
+function DetailSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="mb-3">
+        <h4 className="text-base font-black text-slate-950">{title}</h4>
+        <p className="text-sm font-semibold text-slate-500">{description}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
 
-      {modal?.type === "deleteVersion" && (<DeletePackageModal packages={packages
-                .filter((item) => item.id === modal.packageId)
-                .map((item) => ({ ...item, version: modal.version, versions: [modal.version] }))} onClose={() => setModal(null)} onDelete={deletePackageVersion}/>)}
-    </div>);
+function InfoRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+      <span className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</span>
+      <strong className="mt-1 block break-words text-sm font-black text-slate-900">{value}</strong>
+    </div>
+  );
 }
