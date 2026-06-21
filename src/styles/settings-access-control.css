@@ -1,0 +1,130 @@
+/* Settings Access Control table fixes. Scoped to Settings only. */
+
+html body .settings-with-notifications .access-control-panel {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.85rem !important;
+}
+
+html body .settings-with-notifications .access-control-panel .settings-helper-card.compact {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 0.95rem !important;
+  background: #f8fbff !important;
+  padding: 0.85rem 1rem !important;
+  color: #334155 !important;
+  line-height: 1.35 !important;
+}
+
+html body .settings-with-notifications .access-control-panel .settings-helper-card.compact strong,
+html body .settings-with-notifications .access-control-panel .settings-helper-card.compact span {
+  display: inline !important;
+  margin: 0 !important;
+  font-size: 0.86rem !important;
+  line-height: 1.35 !important;
+}
+
+html body .settings-with-notifications .access-control-panel .settings-helper-card.compact strong {
+  color: #0f172a !important;
+  font-weight: 950 !important;
+}
+
+html body .settings-with-notifications .access-standard-table {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: block !important;
+  overflow: auto !important;
+  border: 1px solid #dbe7f5 !important;
+  border-radius: 1rem !important;
+  background: #ffffff !important;
+}
+
+html body .settings-with-notifications .access-standard-row {
+  width: 100% !important;
+  min-width: 78rem !important;
+  display: grid !important;
+  grid-template-columns: 3.5rem minmax(22rem, 1fr) 10rem 10rem 9rem 7.5rem 6rem !important;
+  align-items: center !important;
+  min-height: 3.35rem !important;
+  border-bottom: 1px solid #e6edf6 !important;
+}
+
+html body .settings-with-notifications .access-standard-row.head,
+html body .settings-with-notifications .access-standard-table > .access-standard-row:first-child {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5 !important;
+  min-height: 3.15rem !important;
+  background: #f3f6fb !important;
+  border-bottom: 1px solid #cfd9e8 !important;
+}
+
+html body .settings-with-notifications .access-standard-row .user-cell {
+  min-width: 0 !important;
+  padding: 0.7rem 0.8rem !important;
+  display: flex !important;
+  align-items: center !important;
+  color: #0f172a !important;
+  font-size: 0.82rem !important;
+  font-weight: 850 !important;
+  line-height: 1.2 !important;
+}
+
+html body .settings-with-notifications .access-standard-row.head .user-cell {
+  color: #334155 !important;
+  font-size: 0.7rem !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+}
+
+html body .settings-with-notifications .access-standard-row .user-cell:nth-child(n + 3),
+html body .settings-with-notifications .access-standard-row.head .user-cell:nth-child(n + 3) {
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+html body .settings-with-notifications .access-standard-row .row-actions,
+html body .settings-with-notifications .access-standard-row .user-row-action-wrap {
+  width: 100% !important;
+  justify-content: center !important;
+}
+
+html body .settings-with-notifications .access-standard-row .role-info-cell {
+  min-width: 0 !important;
+  display: grid !important;
+  gap: 0.18rem !important;
+}
+
+html body .settings-with-notifications .access-standard-row .role-info-cell strong,
+html body .settings-with-notifications .access-standard-row .role-info-cell small {
+  display: block !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+html body .settings-with-notifications .access-standard-row .role-info-cell strong {
+  color: #061b3a !important;
+  font-size: 0.86rem !important;
+  font-weight: 950 !important;
+}
+
+html body .settings-with-notifications .access-standard-row .role-info-cell small {
+  color: #64748b !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+}
+
+html body .settings-with-notifications .access-standard-table .settings-empty-state {
+  min-width: 78rem !important;
+  width: 100% !important;
+  min-height: 11rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+}
