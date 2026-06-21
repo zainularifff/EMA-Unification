@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 
 type EmaPageLayoutProps = {
   title?: string;
@@ -14,6 +14,20 @@ function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function shouldRenderSidebar(sidebar: ReactNode) {
+  if (!sidebar) return false;
+
+  if (isValidElement(sidebar)) {
+    const props = sidebar.props as { title?: unknown; eyebrow?: unknown };
+    const title = String(props?.title || "").trim().toLowerCase();
+    const eyebrow = String(props?.eyebrow || "").trim().toLowerCase();
+
+    if (title === "task scope" || eyebrow === "operations control") return false;
+  }
+
+  return true;
+}
+
 export function EmaPageLayout({
   title,
   subtitle,
@@ -24,6 +38,7 @@ export function EmaPageLayout({
   showHeader = false,
 }: EmaPageLayoutProps) {
   const hasHeader = showHeader && Boolean(title || subtitle || headerActions);
+  const hasSidebar = shouldRenderSidebar(sidebar);
 
   return (
     <section className={cx("min-h-0 bg-slate-100 text-slate-950", fullHeight ? "h-full overflow-hidden" : "min-h-full")}> 
@@ -38,7 +53,7 @@ export function EmaPageLayout({
       ) : null}
 
       <div className={cx("flex min-h-0 gap-3 overflow-hidden p-3", fullHeight ? (hasHeader ? "h-[calc(100%-4.5rem)]" : "h-full") : "") }>
-        {sidebar ? <aside className="w-80 shrink-0 overflow-hidden">{sidebar}</aside> : null}
+        {hasSidebar ? <aside className="w-80 shrink-0 overflow-hidden">{sidebar}</aside> : null}
         <main className="min-w-0 flex-1 overflow-hidden">
           <div className={cx(fullHeight ? "h-full overflow-auto pr-1" : "pr-1")}>{children}</div>
         </main>
