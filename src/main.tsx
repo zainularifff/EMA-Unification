@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import "./styles/settings-resource-planning.css";
 import "./styles/settings-shared-controls.css";
+import "./styles/settings-sidebar-compact.css";
 import "./components/ema/EmaNetworkHierarchyFallback";
 import "./components/ema/EmaRuntimeStyles";
 import "./components/ema/EmaSidebarRuntimeStyles";
