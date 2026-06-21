@@ -52,11 +52,15 @@ const TOKEN_STORAGE_KEYS = [
   "ema-access-token",
   "accessToken",
   "token",
+  "authToken",
+  "emaToken",
+  "ema-token",
   "ema-auth-token",
 ];
 
 const AI_SESSION_CACHE_KEY = "ema-ai-assist-session";
 const AI_SESSION_TTL_MS = 5 * 60 * 1000;
+const AI_ENDPOINT_PATHS = ["/api/ai-assist", "/api/ai/assist", "/api/assistant/chat"];
 
 const quickPrompts = [
   {
@@ -95,25 +99,28 @@ function getStoredToken() {
   if (typeof window === "undefined") return "";
 
   for (const key of TOKEN_STORAGE_KEYS) {
-    const value = localStorage.getItem(key);
+    const value = localStorage.getItem(key) || sessionStorage.getItem(key);
     if (value && value.trim()) {
-      return value.trim();
+      return value.trim().replace(/^Bearer\s+/i, "");
     }
   }
 
   const authRecord = safeParseJson<{
     token?: string;
     accessToken?: string;
-    data?: { token?: string; accessToken?: string };
-  }>(localStorage.getItem("ema-auth"));
+    authToken?: string;
+    data?: { token?: string; accessToken?: string; authToken?: string };
+  }>(localStorage.getItem("ema-auth") || sessionStorage.getItem("ema-auth"));
 
   return (
     authRecord?.accessToken ||
     authRecord?.token ||
+    authRecord?.authToken ||
     authRecord?.data?.accessToken ||
     authRecord?.data?.token ||
+    authRecord?.data?.authToken ||
     ""
-  );
+  ).replace(/^Bearer\s+/i, "");
 }
 
 function createMessage(
@@ -139,6 +146,67 @@ function formatTime(value: string) {
   } catch {
     return "now";
   }
+}
+
+function getCurrentModuleLabel() {
+  if (typeof window === "undefined") return "current page";
+  const path = window.location.pathname.replace(/^\//, "").replace(/-/g, " ");
+  return path ? path.replace(/\b\w/g, (char) => char.toUpperCase()) : "Dashboard";
+}
+
+function buildLocalAssistantAnswer(prompt: string) {
+  const text = prompt.toLowerCase();
+  const moduleName = getCurrentModuleLabel();
+
+  if (text.includes("service") || text.includes("ticket") || text.includes("sla")) {
+    return `Service Desk is open. Use the ticket table to review Created By, Asset, Incident, Urgency, Assigner, SLA and Status. For faster work, use the top search or table filter, then edit with the pencil action. SLA Risk should be handled first, followed by Awaiting and In Progress tickets.`;
+  }
+
+  if (text.includes("endpoint") || text.includes("hardware") || text.includes("device")) {
+    return `For endpoint health, check total devices, online/recently connected devices, stale sync and security state. Focus first on stale devices, unmanaged records and devices with missing owner or branch mapping.`;
+  }
+
+  if (text.includes("risk") || text.includes("patch") || text.includes("compliance")) {
+    return `Prioritise items with expired support, overdue patch status, high urgency tickets and stale inventory data. Review the affected device list first, then assign ownership and action plan.`;
+  }
+
+  if (text.includes("report")) {
+    return `For reporting, generate the relevant report from the Report module and verify branch, date range and source data before exporting. Use dynamic reporting only when you need AI-written management summary.`;
+  }
+
+  return `AI Assistant is ready for ${moduleName}. Ask about tickets, endpoints, SLA, risk, patch, reports or what to check next. I can also help you decide which record needs action first based on the current module.`;
+}
+
+async function requestAssistantAnswer(content: string) {
+  const token = getStoredToken();
+  let lastError = "";
+
+  for (const path of AI_ENDPOINT_PATHS) {
+    try {
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({ message: content, prompt: content }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        lastError = payload?.message || payload?.error || `Request failed ${response.status}`;
+        continue;
+      }
+
+      return String(payload?.answer || payload?.message || payload?.data?.answer || payload?.data?.message || "No answer returned.");
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "AI assistant request failed.";
+    }
+  }
+
+  console.warn("AI assistant API unavailable. Using local assistant mode.", lastError);
+  return buildLocalAssistantAnswer(content);
 }
 
 function AiAvatar() {
@@ -211,21 +279,7 @@ export default function EmaAssistWidget({ showFloatingLauncher = true }: EmaAssi
     setStatus("loading");
 
     try {
-      const token = getStoredToken();
-      const response = await fetch(`${API_BASE_URL}/api/ai-assist`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        credentials: "include",
-        body: JSON.stringify({ message: content }),
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload?.message || payload?.error || "AI assistant request failed");
-
-      const answer = String(payload?.answer || payload?.message || payload?.data?.answer || "No answer returned.");
+      const answer = await requestAssistantAnswer(content);
       setMessages((current) => current.map((message) => message.id === loadingMessage.id ? { ...message, content: answer, status: "ready" } : message));
       setStatus("ready");
     } catch (error) {
