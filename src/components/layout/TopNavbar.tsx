@@ -1,5 +1,5 @@
 import { Bell, Moon, Search, Sparkles, Sun, UserCircle, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -75,7 +75,7 @@ const pageMeta: Record<string, PageMeta> = {
   "/service-desk": {
     title: "Service Desk",
     subtitle: "Manage incidents, knowledge base and support workflow.",
-    searchPlaceholder: "Search tickets, requester, asset or status...",
+    searchPlaceholder: "Search tickets, created by, asset or status...",
   },
   "/tasklist": {
     title: "Task List",
@@ -96,8 +96,10 @@ const pageMeta: Record<string, PageMeta> = {
 
 const searchableRoutes = new Set([
   "/dashboard",
+  "/management-dashboard",
   "/hardware",
   "/software",
+  "/network-inventory",
   "/network",
   "/geolocation",
   "/settings",
@@ -106,6 +108,12 @@ const searchableRoutes = new Set([
   "/report",
   "/reports",
   "/module",
+  "/appmetering",
+  "/internet-metering",
+  "/app-restriction",
+  "/web-restriction",
+  "/patch-management",
+  "/software-distribution",
 ]);
 
 function normalizePathname(pathname: string) {
@@ -152,6 +160,51 @@ function emitGlobalSearch(query: string, path: string) {
 function getUrlSearchValue(search: string) {
   const params = new URLSearchParams(search);
   return params.get("q") || params.get("search") || params.get("keyword") || "";
+}
+
+function isSearchableTextField(element: HTMLInputElement | HTMLTextAreaElement) {
+  if (element.closest("[data-global-search='true']")) return false;
+  if (element.disabled || element.readOnly) return false;
+
+  if (element instanceof HTMLInputElement) {
+    const allowedTypes = new Set(["", "text", "search", "email", "url"]);
+    if (!allowedTypes.has(element.type)) return false;
+  }
+
+  const text = [
+    element.placeholder,
+    element.getAttribute("aria-label"),
+    element.getAttribute("name"),
+    element.getAttribute("id"),
+    element.className,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return /search|filter|ticket|asset|device|ip|user|created|request|software|internet|task|report|branch/.test(text);
+}
+
+function setNativeFieldValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+
+  descriptor?.set?.call(element, value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function syncSearchToCurrentPage(query: string) {
+  if (typeof document === "undefined") return;
+
+  const fields = Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea"))
+    .filter(isSearchableTextField);
+
+  const preferred = fields.find((field) => field.offsetParent !== null) || fields[0];
+  if (!preferred) return;
+
+  if (preferred.value !== query) {
+    setNativeFieldValue(preferred, query);
+  }
 }
 
 function mergeAccessUser(contextUser: unknown): AccessUser | null {
@@ -228,13 +281,39 @@ export function TopNavbar() {
   const accessUser = mergeAccessUser(user);
   const { isDark, toggleTheme } = useTheme();
   const [searchTerm, setSearchTerm] = useState(() => getUrlSearchValue(location.search));
+  const searchSyncTimerRef = useRef<number | null>(null);
 
   const current = useMemo(() => resolvePageMeta(location.pathname), [location.pathname]);
   const searchDestination = useMemo(() => resolveSearchDestination(location.pathname), [location.pathname]);
+  const cleanPath = useMemo(() => normalizePathname(location.pathname), [location.pathname]);
+
+  const queueSearchSync = (query: string, delay = 80) => {
+    if (typeof window === "undefined") return;
+
+    if (searchSyncTimerRef.current !== null) {
+      window.clearTimeout(searchSyncTimerRef.current);
+    }
+
+    searchSyncTimerRef.current = window.setTimeout(() => {
+      searchSyncTimerRef.current = null;
+      syncSearchToCurrentPage(query);
+    }, delay);
+  };
 
   useEffect(() => {
-    setSearchTerm(getUrlSearchValue(location.search));
+    const query = getUrlSearchValue(location.search);
+    setSearchTerm(query);
+    if (query) queueSearchSync(query, 160);
   }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    return () => {
+      if (searchSyncTimerRef.current !== null) {
+        window.clearTimeout(searchSyncTimerRef.current);
+        searchSyncTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const submitSearch = (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
@@ -242,12 +321,16 @@ export function TopNavbar() {
 
     if (!query) {
       emitGlobalSearch("", searchDestination);
+      queueSearchSync("");
       return;
     }
 
     if (location.pathname !== searchDestination) {
       navigate(`${searchDestination}?q=${encodeURIComponent(query)}`);
-      window.setTimeout(() => emitGlobalSearch(query, searchDestination), 0);
+      window.setTimeout(() => {
+        emitGlobalSearch(query, searchDestination);
+        queueSearchSync(query);
+      }, 0);
       return;
     }
 
@@ -255,40 +338,65 @@ export function TopNavbar() {
     params.set("q", query);
     navigate(`${location.pathname}?${params.toString()}`, { replace: true });
     emitGlobalSearch(query, location.pathname);
+    queueSearchSync(query);
   };
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
 
-    if (resolveSearchDestination(location.pathname) === normalizePathname(location.pathname)) {
+    if (searchDestination === cleanPath) {
       emitGlobalSearch(value, location.pathname);
+      queueSearchSync(value, 120);
     }
   };
 
   const clearSearch = () => {
     setSearchTerm("");
     emitGlobalSearch("", location.pathname);
+    queueSearchSync("");
 
-    if (resolveSearchDestination(location.pathname) === normalizePathname(location.pathname) && location.search) {
+    if (searchDestination === cleanPath && location.search) {
       navigate(location.pathname, { replace: true });
     }
   };
 
   const roleLabel = getPrimaryRoleLabel(accessUser);
   const roleTitle = `${getDisplayName(accessUser)} • ${getFullRoleLabel(accessUser)}`;
+  const headerClass = isDark
+    ? "sticky top-0 z-30 flex min-h-[76px] items-center gap-3 border-b border-slate-800 bg-slate-950/95 px-4 py-3 shadow-sm backdrop-blur md:px-6"
+    : "sticky top-0 z-30 flex min-h-[76px] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:px-6";
+  const titleClass = isDark
+    ? "m-0 truncate text-xl font-extrabold tracking-tight text-white"
+    : "m-0 truncate text-xl font-extrabold tracking-tight text-slate-900";
+  const subtitleClass = isDark
+    ? "m-0 truncate text-sm font-medium text-slate-300"
+    : "m-0 truncate text-sm font-medium text-slate-500";
+  const searchClass = isDark
+    ? "hidden h-11 min-w-[280px] items-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-3 text-slate-200 shadow-inner lg:flex"
+    : "hidden h-11 min-w-[280px] items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-slate-600 shadow-inner lg:flex";
+  const searchInputClass = isDark
+    ? "min-w-0 flex-1 border-0 bg-transparent text-sm font-medium text-white outline-none placeholder:text-slate-400"
+    : "min-w-0 flex-1 border-0 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400";
+  const iconButtonClass = isDark
+    ? "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-200 transition hover:bg-slate-800 hover:text-white"
+    : "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900";
+  const roleButtonClass = isDark
+    ? "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 text-sm font-bold text-slate-100 shadow-sm transition hover:bg-slate-800"
+    : "inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50";
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex min-h-[76px] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur md:px-6">
+      <header className={headerClass}>
         <div className="min-w-0 flex-1">
-          <h1 className="m-0 truncate text-xl font-extrabold tracking-tight text-slate-900">{current.title}</h1>
-          <p className="m-0 truncate text-sm font-medium text-slate-500">{current.subtitle}</p>
+          <h1 className={titleClass}>{current.title}</h1>
+          <p className={subtitleClass}>{current.subtitle}</p>
         </div>
 
         <form
-          className="hidden h-11 min-w-[280px] items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-slate-600 shadow-inner lg:flex"
+          className={searchClass}
           role="search"
           onSubmit={submitSearch}
+          data-global-search="true"
         >
           <button
             type="submit"
@@ -298,7 +406,7 @@ export function TopNavbar() {
             <Search size={17} />
           </button>
           <input
-            className="min-w-0 flex-1 border-0 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+            className={searchInputClass}
             value={searchTerm}
             onChange={(event) => handleSearchChange(event.target.value)}
             placeholder={current.searchPlaceholder}
@@ -318,16 +426,17 @@ export function TopNavbar() {
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+          className={iconButtonClass}
           onClick={toggleTheme}
-          aria-label="Toggle theme"
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDark ? "Light mode" : "Dark mode"}
         >
           {isDark ? <Sun size={17} /> : <Moon size={17} />}
         </button>
 
         <button
           type="button"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+          className={iconButtonClass}
           aria-label="Notifications"
         >
           <Bell size={17} />
@@ -344,7 +453,7 @@ export function TopNavbar() {
 
         <button
           type="button"
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+          className={roleButtonClass}
           title={roleTitle}
         >
           <UserCircle size={18} />
