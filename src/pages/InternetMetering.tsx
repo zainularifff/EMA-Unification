@@ -4,6 +4,7 @@ import {
   EmaFilterField,
   EmaKpiCard,
   EmaKpiGrid,
+  EmaModal,
   EmaPageLayout,
   EmaPagination,
   EmaSearchInput,
@@ -28,7 +29,6 @@ import {
   MousePointerClick,
   Plus,
   RefreshCw,
-  Search,
   Timer,
   Trash2,
 } from "lucide-react";
@@ -271,6 +271,7 @@ export default function InternetMetering() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [showAddUrlModal, setShowAddUrlModal] = useState(false);
   const [actionLoading, setActionLoading] = useState<MeteringAction | null>(null);
 
   const rootNode: TreeNodeType = useMemo(
@@ -398,6 +399,7 @@ export default function InternetMetering() {
     try {
       await internetMeteringService.createUrl({ URL: trimmed, DomainName: trimmed, Restrict: 0 });
       setNewUrl("");
+      setShowAddUrlModal(false);
       setMessage("URL rule created.");
       await loadTrees();
     } catch (err) {
@@ -555,22 +557,18 @@ export default function InternetMetering() {
                   <Activity size={15} />
                   {actionLoading === "collect" ? "Collecting..." : "Collect"}
                 </EmaButton>
+                <EmaButton variant="primary" onClick={() => setShowAddUrlModal(true)}>
+                  <Plus size={15} />
+                  Add URL
+                </EmaButton>
+                <EmaButton variant="danger" onClick={() => void removeSelectedUrl()} disabled={!selectedNode.urlMainIdn}>
+                  <Trash2 size={15} />
+                  Remove Selected
+                </EmaButton>
               </>
             }
             search={<EmaSearchInput value={search} onChange={setSearch} placeholder="Search domain, device or date..." />}
             right={
-              <>
-                <EmaButton variant="secondary" onClick={() => void loadUsage()} disabled={loading}>
-                  <RefreshCw size={15} />
-                  Refresh
-                </EmaButton>
-                <EmaButton variant="primary" onClick={exportRows} disabled={filteredRows.length === 0 || loading}>
-                  <Download size={15} />
-                  Export
-                </EmaButton>
-              </>
-            }
-            filters={
               <>
                 <EmaFilterField label="Start Date">
                   <input
@@ -588,22 +586,6 @@ export default function InternetMetering() {
                     className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-700 shadow-sm outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
                   />
                 </EmaFilterField>
-                <EmaFilterField label="New URL / Domain">
-                  <input
-                    value={newUrl}
-                    onChange={(event) => setNewUrl(event.target.value)}
-                    placeholder="example.com"
-                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-700 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
-                  />
-                </EmaFilterField>
-                <EmaButton variant="primary" onClick={() => void addUrl()} disabled={!newUrl.trim()}>
-                  <Plus size={15} />
-                  Add URL
-                </EmaButton>
-                <EmaButton variant="danger" onClick={() => void removeSelectedUrl()} disabled={!selectedNode.urlMainIdn}>
-                  <Trash2 size={15} />
-                  Remove Selected
-                </EmaButton>
                 <EmaButton
                   variant="ghost"
                   onClick={() => {
@@ -615,6 +597,14 @@ export default function InternetMetering() {
                 >
                   Reset
                 </EmaButton>
+                <EmaButton variant="secondary" onClick={() => void loadUsage()} disabled={loading}>
+                  <RefreshCw size={15} />
+                  Refresh
+                </EmaButton>
+                <EmaButton variant="primary" onClick={exportRows} disabled={filteredRows.length === 0 || loading}>
+                  <Download size={15} />
+                  Export
+                </EmaButton>
               </>
             }
           />
@@ -625,6 +615,40 @@ export default function InternetMetering() {
           </EmaTableShell>
         </div>
       </EmaPageLayout>
+
+      <EmaModal
+        open={showAddUrlModal}
+        title="Add URL Rule"
+        description="Create a new URL or domain rule for internet metering."
+        onClose={() => setShowAddUrlModal(false)}
+        footer={
+          <>
+            <EmaButton variant="secondary" onClick={() => setShowAddUrlModal(false)}>
+              Cancel
+            </EmaButton>
+            <EmaButton variant="primary" onClick={() => void addUrl()} disabled={!newUrl.trim()}>
+              <Plus size={15} />
+              Add URL
+            </EmaButton>
+          </>
+        }
+      >
+        <div className="grid gap-3">
+          <EmaFilterField label="New URL / Domain">
+            <input
+              autoFocus
+              value={newUrl}
+              onChange={(event) => setNewUrl(event.target.value)}
+              placeholder="example.com"
+              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-700 shadow-sm outline-none placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            />
+          </EmaFilterField>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+            <span className="block text-xs font-black uppercase tracking-[0.08em] text-slate-500">Preview</span>
+            <strong className="mt-1 block break-words font-black text-slate-950">{newUrl.trim() || "example.com"}</strong>
+          </div>
+        </div>
+      </EmaModal>
     </>
   );
 }
