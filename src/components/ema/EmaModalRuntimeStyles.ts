@@ -1,7 +1,8 @@
 const STYLE_ID = "ema-modal-runtime-styles";
 
 const css = `
-main[data-section="users"] > div:has(> div > div > h3):has(table) {
+main[data-section="users"] > div:has(> div > div > h3):has(table),
+main[data-section="users"] > div:has(> div > h3):has(table) {
   position: fixed !important;
   inset: 0 !important;
   z-index: 2147483400 !important;
@@ -12,7 +13,8 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) {
   padding: 1.2rem !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div,
+main[data-section="users"] > div:has(> div > h3):has(table) {
   width: min(76rem, calc(100vw - 2.4rem)) !important;
   max-height: min(44rem, calc(100vh - 2.4rem)) !important;
   display: flex !important;
@@ -24,7 +26,8 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div {
   box-shadow: 0 28px 70px rgba(15, 23, 42, .38) !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child {
   flex: 0 0 auto !important;
   display: flex !important;
   align-items: flex-start !important;
@@ -35,7 +38,8 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:fi
   padding: 1rem 1.1rem !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child h3 {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child h3,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child h3 {
   margin: 0 !important;
   color: #ffffff !important;
   font-size: 1.15rem !important;
@@ -44,14 +48,19 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:fi
 }
 
 main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child span,
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child strong {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child strong,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child span,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child strong {
   color: rgba(255, 255, 255, .92) !important;
   font-size: .78rem !important;
   font-weight: 850 !important;
   line-height: 1.25 !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]),
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) {
   flex: 0 0 auto !important;
   display: grid !important;
   grid-template-columns: minmax(20rem, 1fr) minmax(12rem, .34fr) minmax(12rem, .34fr) auto auto !important;
@@ -62,7 +71,10 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:fi
   padding: .75rem 1rem !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div label {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div label,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div label,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) > label,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) > label {
   min-width: 0 !important;
   min-height: 2.45rem !important;
   display: flex !important;
@@ -74,12 +86,18 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:fi
   padding: 0 .75rem !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div label svg {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div label svg,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div label svg,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) > label svg,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) > label svg {
   flex: 0 0 auto !important;
   color: #64748b !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div input {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div input,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div input,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) input,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) input {
   width: 100% !important;
   min-width: 0 !important;
   border: 0 !important;
@@ -90,13 +108,25 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:fi
   font-weight: 750 !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div input::placeholder {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div input::placeholder,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div input::placeholder,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) input::placeholder,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) input::placeholder {
   color: #94a3b8 !important;
 }
 
 main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div > select,
 main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div > span,
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div > button {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div > button,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div > select,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div > span,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div > button,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) > select,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) > span,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) > button,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) > select,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) > span,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) > button {
   min-height: 2.45rem !important;
   display: inline-flex !important;
   align-items: center !important;
@@ -111,18 +141,23 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:fi
   white-space: nowrap !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div > span {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div > span,
+main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div > span,
+main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]) > span,
+main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) > span {
   color: #64748b !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:has(> table) {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:has(> table),
+main[data-section="users"] > div:has(> div > h3):has(table) > div:has(> table) {
   flex: 1 1 auto !important;
   min-height: 14rem !important;
   overflow: auto !important;
   padding: 1rem !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) table {
+main[data-section="users"] > div:has(> div > div > h3):has(table) table,
+main[data-section="users"] > div:has(> div > h3):has(table) table {
   width: 100% !important;
   border: 1px solid #d8e4f2 !important;
   border-radius: .9rem !important;
@@ -132,7 +167,8 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) table {
   table-layout: fixed !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) thead th {
+main[data-section="users"] > div:has(> div > div > h3):has(table) thead th,
+main[data-section="users"] > div:has(> div > h3):has(table) thead th {
   background: #f1f5f9 !important;
   border-bottom: 1px solid #d8e4f2 !important;
   color: #334155 !important;
@@ -143,7 +179,8 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) thead th {
   letter-spacing: .04em !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td {
+main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td,
+main[data-section="users"] > div:has(> div > h3):has(table) tbody td {
   border-bottom: 1px solid #e2e8f0 !important;
   color: #0f172a !important;
   padding: .72rem .8rem !important;
@@ -154,16 +191,20 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td {
   overflow-wrap: anywhere !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) tbody tr:last-child td {
+main[data-section="users"] > div:has(> div > div > h3):has(table) tbody tr:last-child td,
+main[data-section="users"] > div:has(> div > h3):has(table) tbody tr:last-child td {
   border-bottom: 0 !important;
 }
 
 main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan],
-main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan] > div {
+main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan] > div,
+main[data-section="users"] > div:has(> div > h3):has(table) tbody td[colspan],
+main[data-section="users"] > div:has(> div > h3):has(table) tbody td[colspan] > div {
   text-align: center !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan] svg {
+main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan] svg,
+main[data-section="users"] > div:has(> div > h3):has(table) tbody td[colspan] svg {
   width: 2.2rem !important;
   height: 2.2rem !important;
   margin: 0 auto .45rem !important;
@@ -171,13 +212,16 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colsp
 }
 
 main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan] strong,
-main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan] span {
+main[data-section="users"] > div:has(> div > div > h3):has(table) tbody td[colspan] span,
+main[data-section="users"] > div:has(> div > h3):has(table) tbody td[colspan] strong,
+main[data-section="users"] > div:has(> div > h3):has(table) tbody td[colspan] span {
   display: block !important;
   margin: .15rem auto !important;
   line-height: 1.25 !important;
 }
 
-main[data-section="users"] > div:has(> div > div > h3):has(table) > div > footer {
+main[data-section="users"] > div:has(> div > div > h3):has(table) > div > footer,
+main[data-section="users"] > div:has(> div > h3):has(table) > footer {
   flex: 0 0 auto !important;
   border-top: 1px solid #dbe7f5 !important;
   background: #ffffff !important;
@@ -185,7 +229,10 @@ main[data-section="users"] > div:has(> div > div > h3):has(table) > div > footer
 }
 
 @media (max-width: 900px) {
-  main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div {
+  main[data-section="users"] > div:has(> div > div > h3):has(table) > div > div:first-child + div,
+  main[data-section="users"] > div:has(> div > h3):has(table) > div:first-child + div,
+  main[data-section="users"] div:has(> label > input[placeholder*="Search computer"]),
+  main[data-section="users"] div:has(> label > input[placeholder*="Search"]):has(> select) {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
