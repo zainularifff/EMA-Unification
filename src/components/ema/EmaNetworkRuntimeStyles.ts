@@ -270,56 +270,16 @@ body > div:has(> div > div > h3):has(table) tbody tr:last-child td {
   border-bottom: 0 !important;
 }
 
+body > div:has(> div > div > h3):has(table) tbody td[colspan] > div,
 body > div:has(> div > div > h3):has(table) tbody td[colspan] {
-  padding: 0 !important;
   text-align: center !important;
-}
-
-body > div:has(> div > div > h3):has(table) tbody td[colspan] > div {
-  min-height: 7.5rem !important;
-  width: 100% !important;
-  display: grid !important;
-  place-items: center !important;
-  align-content: center !important;
-  justify-items: center !important;
-  gap: .35rem !important;
-  padding: 1.25rem !important;
-  text-align: center !important;
-}
-
-body > div:has(> div > div > h3):has(table) tbody td[colspan] > div > svg,
-body > div:has(> div > div > h3):has(table) tbody td[colspan] > div svg {
-  width: 2.3rem !important;
-  height: 2.3rem !important;
-  display: block !important;
-  margin: 0 auto .25rem !important;
-  color: #334155 !important;
-  stroke-width: 2.2 !important;
 }
 
 body > div:has(> div > div > h3):has(table) tbody td[colspan] strong,
-body > div:has(> div > div > h3):has(table) tbody td[colspan] span,
-body > div:has(> div > div > h3):has(table) tbody td[colspan] p,
-body > div:has(> div > div > h3):has(table) tbody td[colspan] small {
+body > div:has(> div > div > h3):has(table) tbody td[colspan] span {
   display: block !important;
-  width: 100% !important;
-  margin: .05rem auto !important;
-  text-align: center !important;
-  line-height: 1.35 !important;
-}
-
-body > div:has(> div > div > h3):has(table) tbody td[colspan] strong {
-  color: #0f172a !important;
-  font-size: .88rem !important;
-  font-weight: 950 !important;
-}
-
-body > div:has(> div > div > h3):has(table) tbody td[colspan] span,
-body > div:has(> div > div > h3):has(table) tbody td[colspan] p,
-body > div:has(> div > div > h3):has(table) tbody td[colspan] small {
-  color: #64748b !important;
-  font-size: .78rem !important;
-  font-weight: 750 !important;
+  margin: .15rem auto !important;
+  line-height: 1.25 !important;
 }
 
 body > div:has(> div > div > h3):has(table) > div > footer {
