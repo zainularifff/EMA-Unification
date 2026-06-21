@@ -33,6 +33,13 @@ const iconText: Record<EmaToastTone, string> = {
   delete: "⌫",
 };
 
+type EmaToastViewportProps = {
+  items?: EmaToastItem[];
+  toasts?: EmaToastItem[];
+  onClose?: (id: string | number) => void;
+  onDismiss?: (id: string | number) => void;
+};
+
 function nodeToText(value: ReactNode) {
   if (typeof value === "string" || typeof value === "number") return String(value);
   return "";
@@ -89,16 +96,18 @@ function getDisplayTitle(toast: EmaToastItem, tone: EmaToastTone) {
 
 export function EmaToastViewport({
   items,
+  toasts,
   onClose,
-}: {
-  items: EmaToastItem[];
-  onClose?: (id: string | number) => void;
-}) {
-  if (!items.length) return null;
+  onDismiss,
+}: EmaToastViewportProps) {
+  const toastItems = Array.isArray(items) ? items : Array.isArray(toasts) ? toasts : [];
+  const handleClose = onClose || onDismiss;
+
+  if (!toastItems.length) return null;
 
   return (
     <div className="fixed right-6 top-[86px] z-[2147483647] flex w-[min(26rem,calc(100vw-2rem))] flex-col gap-2 max-sm:left-4 max-sm:right-4 max-sm:top-4 max-sm:w-auto">
-      {items.map((toast) => {
+      {toastItems.map((toast) => {
         const tone = normalizeToastTone(toast);
         const displayTitle = getDisplayTitle(toast, tone);
 
@@ -115,10 +124,10 @@ export function EmaToastViewport({
               <strong className="block text-sm font-black leading-tight text-slate-950">{displayTitle}</strong>
               {toast.message ? <span className="mt-1 block text-sm font-semibold leading-snug text-slate-600">{toast.message}</span> : null}
             </div>
-            {onClose ? (
+            {handleClose ? (
               <button
                 type="button"
-                onClick={() => onClose(toast.id)}
+                onClick={() => handleClose(toast.id)}
                 aria-label="Close notification"
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-lg leading-none text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
               >
