@@ -4,6 +4,7 @@ import {
   Box,
   Boxes,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   FileText,
@@ -225,9 +226,22 @@ export function Sidebar() {
       className={`sticky top-0 flex h-screen ${asideWidthClass} shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-950 py-5 text-slate-100 shadow-2xl transition-all duration-300 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
     >
       <div className={`mb-6 flex items-center ${isSidebarOpen ? "gap-3" : "justify-center"}`}>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
-          <Box size={23} />
-        </div>
+        {isSidebarOpen ? (
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
+            <Box size={23} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10 transition hover:bg-white hover:text-slate-950"
+            title="Open sidebar"
+            aria-label="Open sidebar"
+            aria-expanded={isSidebarOpen}
+          >
+            <Box size={23} />
+          </button>
+        )}
 
         {isSidebarOpen && (
           <div className="min-w-0 flex-1">
@@ -236,16 +250,18 @@ export function Sidebar() {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/10 text-slate-200 transition hover:bg-white hover:text-slate-950"
-          title={isSidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-          aria-label={isSidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-          aria-expanded={isSidebarOpen}
-        >
-          {isSidebarOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </button>
+        {isSidebarOpen && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/10 text-slate-200 transition hover:bg-white hover:text-slate-950"
+            title="Collapse sidebar"
+            aria-label="Collapse sidebar"
+            aria-expanded={isSidebarOpen}
+          >
+            <ChevronLeft size={16} />
+          </button>
+        )}
       </div>
 
       {isSidebarOpen && <div className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Main Category</div>}
