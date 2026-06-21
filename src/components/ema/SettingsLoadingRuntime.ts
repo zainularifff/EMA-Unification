@@ -90,6 +90,59 @@ function ensureSettingsLoadingStyles() {
   document.head.appendChild(style);
 }
 
+function setRuntimeStyle(element: HTMLElement | null | undefined, styles: Record<string, string>) {
+  if (!element) return;
+  Object.entries(styles).forEach(([property, value]) => element.style.setProperty(property, value, "important"));
+}
+
+function syncSettingsModuleControlTable() {
+  if (typeof document === "undefined") return;
+  const table = document.querySelector<HTMLElement>(".settings-with-notifications .settings-module-root[data-section='modules'] .module-control-table");
+  const header = table?.querySelector<HTMLElement>(".module-control-row.head");
+  if (!table || !header) return;
+
+  const roleCount = Math.max(header.children.length - 2, 1);
+  const noWidth = 4;
+  const moduleWidth = 24;
+  const roleWidth = 8.5;
+  const totalWidth = noWidth + moduleWidth + roleCount * roleWidth;
+  const grid = `${noWidth}rem ${moduleWidth}rem repeat(${roleCount}, ${roleWidth}rem)`;
+
+  setRuntimeStyle(table, { width: "100%", maxWidth: "100%", display: "block", overflowX: "auto", overflowY: "auto" });
+
+  table.querySelectorAll<HTMLElement>(".module-control-row").forEach((row) => {
+    setRuntimeStyle(row, {
+      width: "100%",
+      minWidth: `${totalWidth}rem`,
+      display: "grid",
+      gridTemplateColumns: grid,
+      alignItems: "center",
+      flexWrap: "nowrap",
+      overflow: "visible",
+    });
+
+    Array.from(row.children).forEach((child, index) => {
+      const cell = child as HTMLElement;
+      setRuntimeStyle(cell, {
+        gridColumn: `${index + 1}`,
+        gridRow: "1",
+        width: "auto",
+        maxWidth: "none",
+        minWidth: "0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: index === 1 ? "flex-start" : "center",
+        textAlign: index === 1 ? "left" : "center",
+        boxSizing: "border-box",
+      });
+    });
+  });
+
+  table.querySelectorAll<HTMLElement>(".module-control-group-row").forEach((row) => {
+    setRuntimeStyle(row, { width: "100%", minWidth: `${totalWidth}rem`, display: "flex", alignItems: "center" });
+  });
+}
+
 function syncSettingsLoadingStates() {
   if (typeof document === "undefined") return;
   const settingsRoot = document.querySelector(".settings-with-notifications");
@@ -110,6 +163,8 @@ function syncSettingsLoadingStates() {
       const isLoading = /^(loading|saving|deleting|adding|updating|reloading|exporting|processing)/.test(text) || text.endsWith("...");
       button.classList.toggle("settings-button-loading", isLoading);
     });
+
+  syncSettingsModuleControlTable();
 }
 
 if (typeof document !== "undefined") {
