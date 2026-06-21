@@ -26,7 +26,7 @@ export function EmaPageLayout({
   const hasHeader = showHeader && Boolean(title || subtitle || headerActions);
 
   return (
-    <section className={cx("min-h-screen bg-slate-100 text-slate-950", fullHeight && "h-screen overflow-hidden")}>
+    <section className={cx("min-h-0 bg-slate-100 text-slate-950", fullHeight ? "h-full overflow-hidden" : "min-h-full")}> 
       {hasHeader ? (
         <header className="sticky top-0 z-20 flex min-h-[4.5rem] items-center justify-between gap-4 border-b border-slate-200 bg-white/95 px-5 shadow-sm backdrop-blur">
           <div className="min-w-0">
@@ -37,10 +37,10 @@ export function EmaPageLayout({
         </header>
       ) : null}
 
-      <div className={cx("flex min-h-0 gap-3 overflow-hidden p-3", fullHeight ? (hasHeader ? "h-[calc(100vh-4.5rem)]" : "h-full") : "") }>
+      <div className={cx("flex min-h-0 gap-3 overflow-hidden p-3", fullHeight ? (hasHeader ? "h-[calc(100%-4.5rem)]" : "h-full") : "") }>
         {sidebar ? <aside className="w-80 shrink-0 overflow-hidden">{sidebar}</aside> : null}
         <main className="min-w-0 flex-1 overflow-hidden">
-          <div className="h-full overflow-auto pr-1">{children}</div>
+          <div className={cx(fullHeight ? "h-full overflow-auto pr-1" : "pr-1")}>{children}</div>
         </main>
       </div>
     </section>
