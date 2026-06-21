@@ -31,6 +31,7 @@ import { EmaToastViewport, type EmaToastItem, type EmaToastTone } from '../compo
 
 type AppModule = 'appBlacklist' | 'appWhitelist';
 type SubTab = 'status' | 'settings' | 'policyStatus';
+type PackageView = 'all' | 'selected' | 'available';
 
 type FormState = {
   policyId: number;
@@ -374,6 +375,7 @@ export default function AppRestriction() {
   const [policySearch, setPolicySearch] = useState('');
   const [packageSearch, setPackageSearch] = useState('');
   const [packagePage, setPackagePage] = useState(1);
+  const [packageView, setPackageView] = useState<PackageView>('all');
   const [startDate, setStartDate] = useState(daysAgo(30));
   const [endDate, setEndDate] = useState(today());
   const [includeSub, setIncludeSub] = useState(true);
@@ -397,14 +399,33 @@ export default function AppRestriction() {
   const selectedLookupRows = isWhitelist ? whitelistSoftware : packages;
   const rawSelectedIds = isWhitelist ? selectedWhitelistIds : selectedPackageIds;
   const selectedIds = useMemo(() => Array.from(new Set(rawSelectedIds.filter(Boolean))), [rawSelectedIds]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  const selectedLookupCount = useMemo(
+    () => selectedLookupRows.reduce((total, row) => total + (selectedIdSet.has(getPackageId(row)) ? 1 : 0), 0),
+    [selectedLookupRows, selectedIdSet]
+  );
+  const availableLookupCount = Math.max(selectedLookupRows.length - selectedLookupCount, 0);
 
   const filteredLookupRows = useMemo(() => {
     const search = packageSearch.trim().toLowerCase();
     return selectedLookupRows.filter((row) => {
-      const text = [getPackageName(row), getPackageId(row), pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], ''), pick(row, ['SW_Catg', 'category', 'Category'], '')].join(' ').toLowerCase();
+      const id = getPackageId(row);
+      const selected = selectedIdSet.has(id);
+
+      if (packageView === 'selected' && !selected) return false;
+      if (packageView === 'available' && selected) return false;
+
+      const text = [
+        getPackageName(row),
+        getPackageId(row),
+        pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], ''),
+        pick(row, ['SW_Catg', 'category', 'Category'], ''),
+      ].join(' ').toLowerCase();
+
       return !search || text.includes(search);
     });
-  }, [selectedLookupRows, packageSearch]);
+  }, [selectedLookupRows, packageSearch, packageView, selectedIdSet]);
 
   const lookupTotalPages = Math.max(1, Math.ceil(filteredLookupRows.length / LOOKUP_PAGE_SIZE));
   const safeLookupPage = Math.min(packagePage, lookupTotalPages);
@@ -423,10 +444,10 @@ export default function AppRestriction() {
 
   const summaryCards = useMemo(() => [
     { label: 'Target', value: selectedTarget?.label || 'All Branches', icon: Layers, tone: 'border-blue-200 text-blue-700 bg-blue-50' },
-    { label: isWhitelist ? 'Allowed Software' : 'Blocked Packages', value: selectedIds.length, icon: Package, tone: isWhitelist ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-rose-200 text-rose-700 bg-rose-50' },
+    { label: isWhitelist ? 'Allowed Software' : 'Blocked Packages', value: selectedLookupCount, icon: Package, tone: isWhitelist ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-rose-200 text-rose-700 bg-rose-50' },
     { label: 'Status Rows', value: statusRows.length, icon: CheckCircle2, tone: 'border-indigo-200 text-indigo-700 bg-indigo-50' },
     { label: 'Policy Rows', value: policyRows.length, icon: Ban, tone: 'border-amber-200 text-amber-700 bg-amber-50' },
-  ], [isWhitelist, policyRows.length, selectedIds.length, selectedTarget?.label, statusRows.length]);
+  ], [isWhitelist, policyRows.length, selectedLookupCount, selectedTarget?.label, statusRows.length]);
 
   const addToast = useCallback((tone: EmaToastTone, title: string, message?: string) => {
     toastIdRef.current += 1;
@@ -490,8 +511,8 @@ export default function AppRestriction() {
 
   useEffect(() => { void loadTree(); }, [loadTree]);
   useEffect(() => { void loadPolicyData(); }, [loadPolicyData]);
-  useEffect(() => { setStatusSearch(''); setPolicySearch(''); setPackageSearch(''); setPackagePage(1); }, [activeModule]);
-  useEffect(() => { setPackagePage(1); }, [packageSearch, activeModule, filteredLookupRows.length]);
+  useEffect(() => { setStatusSearch(''); setPolicySearch(''); setPackageSearch(''); setPackageView('all'); setPackagePage(1); }, [activeModule]);
+  useEffect(() => { setPackagePage(1); }, [packageSearch, packageView, activeModule, filteredLookupRows.length]);
 
   function updateForm(key: keyof FormState, value: any) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -504,10 +525,20 @@ export default function AppRestriction() {
   function togglePackage(id: string) {
     if (!id) return;
     if (isWhitelist) {
-      setSelectedWhitelistIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+      setSelectedWhitelistIds((current) => {
+        const next = new Set(current.filter(Boolean));
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return Array.from(next);
+      });
       return;
     }
-    setSelectedPackageIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+    setSelectedPackageIds((current) => {
+      const next = new Set(current.filter(Boolean));
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return Array.from(next);
+    });
   }
 
   async function savePolicy() {
@@ -536,14 +567,14 @@ export default function AppRestriction() {
         console_ip: '',
       };
       if (activeModule === 'appBlacklist') {
-        await restrictionService.savePolicy(activeModule, { ...basePayload, restrict_type: form.appRestrictType, restrict_message: form.appNoticeMessage, version_compare: form.versionCompare ? '1' : '0', softwareRestrictSchedule1: form.schedule1, softwareRestrictSchedule2: form.schedule2, softwareRestrictSchedule3: form.schedule3, softwareRestrictSchedule4: form.schedule4, package_list: selectedPackageIds });
+        await restrictionService.savePolicy(activeModule, { ...basePayload, restrict_type: form.appRestrictType, restrict_message: form.appNoticeMessage, version_compare: form.versionCompare ? '1' : '0', softwareRestrictSchedule1: form.schedule1, softwareRestrictSchedule2: form.schedule2, softwareRestrictSchedule3: form.schedule3, softwareRestrictSchedule4: form.schedule4, package_list: selectedIds });
       } else {
-        await restrictionService.savePolicy(activeModule, { ...basePayload, restrict_type: form.processRestrictType, restrict_message: form.processNoticeMessage, font_restrict_type: form.fontRestrictType, font_restrict_message: form.fontNoticeMessage, package_list: selectedWhitelistIds });
+        await restrictionService.savePolicy(activeModule, { ...basePayload, restrict_type: form.processRestrictType, restrict_message: form.processNoticeMessage, font_restrict_type: form.fontRestrictType, font_restrict_message: form.fontNoticeMessage, package_list: selectedIds });
       }
       addToast('success', 'Policy saved', `${moduleConfig.label} saved successfully.`);
       await loadPolicyData();
     } catch (error) {
-      addToast('error', 'Policy save failed', error instanceof Error ? error.message : 'Please check the backend API.');
+      addToast('error', 'Policy save failed', error instanceof Error ? error.message : 'Please check restriction API.');
     } finally {
       setSaving(false);
     }
@@ -623,19 +654,101 @@ export default function AppRestriction() {
                 <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
                   {(Object.keys(TAB_LABELS) as SubTab[]).map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={cn('rounded-xl px-4 py-2 text-sm font-black transition', activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white hover:text-slate-900')}>{TAB_LABELS[tab]}</button>)}
                 </div>
-                <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => void loadPolicyData()} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RefreshCw size={16} className={loadingData ? 'animate-spin' : ''} /> Refresh</button><button type="button" onClick={() => { setStatusSearch(''); setPolicySearch(''); setPackageSearch(''); setStartDate(daysAgo(30)); setEndDate(today()); }} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RotateCcw size={16} /> Reset</button></div>
+                <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={() => void loadPolicyData()} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RefreshCw size={16} className={loadingData ? 'animate-spin' : ''} /> Refresh</button><button type="button" onClick={() => { setStatusSearch(''); setPolicySearch(''); setPackageSearch(''); setPackageView('all'); setStartDate(daysAgo(30)); setEndDate(today()); }} className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"><RotateCcw size={16} /> Reset</button></div>
               </div>
 
               {activeTab === 'status' ? <div className="mt-4 space-y-4"><div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px_auto]"><div className="relative"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={statusSearch} onChange={(event) => setStatusSearch(event.target.value)} placeholder="Search device, package, status..." className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none" /><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none" /><button type="button" onClick={() => setIncludeSub((value) => !value)} className={cn('h-12 rounded-2xl border px-4 text-sm font-black transition', includeSub ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>Include Sub</button></div><Table columns={statusColumns} rows={filteredStatusRows} loading={loadingData} emptyText="No restriction status found." /></div> : null}
 
               {activeTab === 'settings' ? <div className="mt-4 space-y-5">
                 <div className="grid gap-4 lg:grid-cols-3"><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Update Interval</FieldLabel><input value={form.updateInterval} onChange={(event) => updateForm('updateInterval', event.target.value)} className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>{isWhitelist ? 'Process Restrict Type' : 'App Restrict Type'}</FieldLabel>{isWhitelist ? <Select value={form.processRestrictType} onChange={(value) => updateForm('processRestrictType', value)} options={[{ value: '0', label: 'Disabled' }, { value: '1', label: 'Allow Whitelist' }, { value: '2', label: 'Audit Only' }, { value: '3', label: 'Strict Mode' }]} /> : <Select value={form.appRestrictType} onChange={(value) => updateForm('appRestrictType', value)} options={[{ value: '1', label: 'Block Package' }, { value: '2', label: 'Warn User' }, { value: '3', label: 'Audit Only' }]} />}</div><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Weekly Policy</FieldLabel><button type="button" onClick={() => updateForm('weeklyPolicy', !form.weeklyPolicy)} className={cn('h-12 w-full rounded-2xl border px-4 text-sm font-black transition', form.weeklyPolicy ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>{form.weeklyPolicy ? 'Enabled' : 'Disabled'}</button></div></div>
-                <div className="rounded-[24px] border border-slate-200 bg-white p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">{isWhitelist ? 'Whitelist Software' : 'Restricted Package'}</p><h3 className="mt-1 text-xl font-black text-slate-950">{selectedIds.length} selected from {filteredLookupRows.length}</h3></div><div className="relative min-w-[260px] max-w-md flex-1"><Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" /><input value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} placeholder={isWhitelist ? 'Search whitelist software...' : 'Search package...'} className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" /></div></div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {loadingData ? <div className="col-span-full flex items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 p-8 text-sm font-bold text-blue-700"><Loader2 size={18} className="mr-2 animate-spin" /> Loading packages...</div> : pagedLookupRows.length === 0 ? <div className="col-span-full rounded-2xl border border-slate-200 p-8 text-center text-sm font-bold text-slate-500">No package found.</div> : pagedLookupRows.map((row, index) => { const id = getPackageId(row) || `${getPackageName(row)}-${lookupStart + index}`; const selected = selectedIds.includes(id); const company = pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], 'No company'); return <button key={id} type="button" onClick={() => togglePackage(id)} className={cn('flex min-h-[74px] items-center gap-4 rounded-[20px] border p-4 text-left transition', selected && isWhitelist && 'border-emerald-300 bg-emerald-50 text-slate-950', selected && !isWhitelist && 'border-rose-300 bg-rose-50 text-slate-950', !selected && 'border-slate-200 bg-white text-slate-900 hover:border-blue-200 hover:bg-blue-50/30')}><span className={cn('grid h-12 w-12 shrink-0 place-items-center rounded-2xl', selected && isWhitelist && 'bg-emerald-600 text-white', selected && !isWhitelist && 'bg-rose-600 text-white', !selected && 'bg-slate-100 text-slate-500')}>{selected ? <CheckCircle2 size={18} /> : <Package size={18} />}</span><span className="min-w-0"><span className="line-clamp-2 text-sm font-black">{getPackageName(row)}</span><span className="mt-1 block truncate text-xs font-bold text-slate-500">{company}</span></span></button>; })}
+
+                <div className="rounded-[24px] border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-600">{isWhitelist ? 'Whitelist Software' : 'Restricted Package'}</p>
+                      <h3 className="mt-1 text-xl font-black text-slate-950">{selectedLookupCount} selected from {selectedLookupRows.length}</h3>
+                    </div>
+                    <div className="relative min-w-[260px] max-w-md flex-1">
+                      <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} placeholder={isWhitelist ? 'Search whitelist software...' : 'Search package...'} className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" />
+                    </div>
                   </div>
-                  {filteredLookupRows.length > LOOKUP_PAGE_SIZE ? <PaginationFooter page={safeLookupPage} totalPages={lookupTotalPages} totalItems={filteredLookupRows.length} start={lookupStart} pageSize={LOOKUP_PAGE_SIZE} onPageChange={setPackagePage} /> : null}
+
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+                    <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Package Summary</p>
+                      <div className="mt-4 grid grid-cols-1 gap-3">
+                        <button type="button" onClick={() => setPackageView('all')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'all' ? 'border-blue-300 bg-white text-blue-700 shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}>
+                          <span className="text-sm font-black">All Software</span>
+                          <span className="text-lg font-black">{selectedLookupRows.length}</span>
+                        </button>
+
+                        <button type="button" onClick={() => setPackageView('selected')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'selected' && isWhitelist && 'border-emerald-300 bg-emerald-50 text-emerald-700', packageView === 'selected' && !isWhitelist && 'border-rose-300 bg-rose-50 text-rose-700', packageView !== 'selected' && 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}>
+                          <span className="text-sm font-black">Selected</span>
+                          <span className="text-lg font-black">{selectedLookupCount}</span>
+                        </button>
+
+                        <button type="button" onClick={() => setPackageView('available')} className={cn('flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition', packageView === 'available' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200')}>
+                          <span className="text-sm font-black">Available</span>
+                          <span className="text-lg font-black">{availableLookupCount}</span>
+                        </button>
+                      </div>
+
+                      <p className="mt-4 rounded-2xl border border-slate-200 bg-white p-3 text-xs font-bold leading-relaxed text-slate-500">Use search and filter to manage package list. Only selected package will be applied to this policy.</p>
+                    </div>
+
+                    <div className="min-w-0 overflow-hidden rounded-[22px] border border-slate-200 bg-white">
+                      <div className="overflow-auto">
+                        <div className="min-w-[720px]">
+                          <div className="grid grid-cols-[48px_minmax(0,1fr)_180px_110px] border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                            <span>Status</span>
+                            <span>Software / Package</span>
+                            <span>Company</span>
+                            <span className="text-right">Action</span>
+                          </div>
+
+                          <div className="divide-y divide-slate-100">
+                            {loadingData ? (
+                              <div className="flex items-center justify-center p-8 text-sm font-bold text-blue-700"><Loader2 size={18} className="mr-2 animate-spin" /> Loading packages...</div>
+                            ) : pagedLookupRows.length === 0 ? (
+                              <div className="p-8 text-center text-sm font-bold text-slate-500">No package found.</div>
+                            ) : (
+                              pagedLookupRows.map((row, index) => {
+                                const id = getPackageId(row) || `${getPackageName(row)}-${lookupStart + index}`;
+                                const selected = selectedIdSet.has(id);
+                                const company = pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], 'No company');
+
+                                return (
+                                  <button key={id} type="button" onClick={() => togglePackage(id)} className="grid w-full grid-cols-[48px_minmax(0,1fr)_180px_110px] items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50">
+                                    <span className={cn('grid h-9 w-9 place-items-center rounded-xl', selected && isWhitelist && 'bg-emerald-600 text-white', selected && !isWhitelist && 'bg-rose-600 text-white', !selected && 'bg-slate-100 text-slate-500')}>
+                                      {selected ? <CheckCircle2 size={16} /> : <Package size={16} />}
+                                    </span>
+
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-sm font-black text-slate-900">{getPackageName(row)}</span>
+                                      <span className="block truncate text-xs font-bold text-slate-500">ID: {id || '-'}</span>
+                                    </span>
+
+                                    <span className="truncate text-sm font-bold text-slate-600">{company}</span>
+
+                                    <span className="text-right">
+                                      <span className={cn('inline-flex rounded-full border px-3 py-1 text-xs font-black', selected && isWhitelist && 'border-emerald-200 bg-emerald-50 text-emerald-700', selected && !isWhitelist && 'border-rose-200 bg-rose-50 text-rose-700', !selected && 'border-slate-200 bg-slate-50 text-slate-500')}>
+                                        {selected ? 'Selected' : 'Add'}
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {filteredLookupRows.length > LOOKUP_PAGE_SIZE ? <PaginationFooter page={safeLookupPage} totalPages={lookupTotalPages} totalItems={filteredLookupRows.length} start={lookupStart} pageSize={LOOKUP_PAGE_SIZE} onPageChange={setPackagePage} /> : null}
+                    </div>
+                  </div>
                 </div>
+
                 <div className="grid gap-4 lg:grid-cols-2"><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Notice Message</FieldLabel><textarea value={isWhitelist ? form.processNoticeMessage : form.appNoticeMessage} onChange={(event) => updateForm(isWhitelist ? 'processNoticeMessage' : 'appNoticeMessage', event.target.value)} rows={4} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" placeholder="Message shown to user when policy is applied." /></div><div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4"><FieldLabel>Policy Days</FieldLabel><div className="flex flex-wrap gap-2">{DAY_OPTIONS.map((day) => { const selected = selectedDays.includes(day); return <button key={day} type="button" onClick={() => toggleDay(day)} className={cn('h-10 rounded-xl border px-3 text-xs font-black transition', selected ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500')}>{day}</button>; })}</div><div className="mt-4 grid gap-3 sm:grid-cols-2">{[1, 2, 3, 4].map((slot) => <input key={slot} value={(form as any)[`schedule${slot}`]} onChange={(event) => updateForm(`schedule${slot}` as keyof FormState, event.target.value)} placeholder={`Schedule ${slot}`} className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50" />)}</div></div></div>
                 <div className="flex justify-end"><button type="button" onClick={() => void savePolicy()} disabled={saving || loadingData} className="inline-flex h-12 items-center gap-2 rounded-2xl bg-blue-600 px-6 text-sm font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{saving ? <Loader2 size={17} className="animate-spin" /> : <Save size={17} />}Save Policy</button></div>
               </div> : null}
