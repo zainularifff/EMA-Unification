@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowRightLeft,
   BookOpen,
@@ -19,6 +19,7 @@ import {
   ShieldAlert,
   Ticket,
   Trash2,
+  Upload,
   User,
   Users,
   X,
@@ -34,12 +35,18 @@ type QueueKey = "all" | "my" | "sla-risk" | "unassigned" | "awaiting" | "in-prog
 type ToastState = { id?: string | number; type: EmaToastTone; message: string } | null;
 type SelectOption = { value: string; label: string; disabled?: boolean };
 type SortConfig = { key: string; direction: "asc" | "desc" };
+type ConfirmState = { ticketId: string; row: AnyRow; loading?: boolean } | null;
 
 const STATUS_OPTIONS = ["Awaiting", "In Progress", "Pending Approval", "Pending User", "Pending Vendor", "On Site", "Resolved", "Rejected"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
 const SUPPORT_LEVELS = ["L1 Support", "L2 Support", "L3 Support"];
 const DEVICE_TYPES = ["Desktop", "Laptop", "Tablet", "Mobile", "Server", "Network Device", "Printer", "Other"];
 const PAGE_SIZE = 10;
+const INCIDENT_ATTACHMENT_MAX_FILES = 3;
+const INCIDENT_ATTACHMENT_MAX_MB = 10;
+const INCIDENT_ATTACHMENT_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_MB * 1024 * 1024;
+const INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES = INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_BYTES;
+const INCIDENT_ATTACHMENT_ALLOWED_TYPES = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".png", ".jpg", ".jpeg", ".txt"].join(",");
 
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -146,7 +153,6 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
   const subByCategory = new Map<string, string[]>();
   const detailsByCategorySub = new Map<string, string[]>();
   const idNameMap = new Map<string, string>();
-
   const keyOf = (value: any) => normalizeText(value);
   const addCategory = (category: string) => {
     const text = String(category || "").trim();
@@ -188,11 +194,9 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
     const categoryValue = valueOf(row, ["category", "Category", "categoryName", "CategoryName", "mainCategory", "MainCategory"]);
     const subValue = valueOf(row, ["subcategory", "Subcategory", "subCategory", "SubCategory", "subCategoryName", "SubCategoryName", "subcategoryName", "SubcategoryName"]);
     const detailValue = valueOf(row, ["detail", "Detail", "incidentDetail", "IncidentDetail", "detailName", "DetailName"]);
-
     if (categoryValue) addCategory(categoryValue);
     if (categoryValue && subValue) addSubcategory(categoryValue, subValue);
     if (categoryValue && detailValue) addDetail(categoryValue, subValue, detailValue);
-
     const isRootCategory = rowName && !subValue && !detailValue && (!parent || (type.includes("category") && !type.includes("sub") && !type.includes("detail")));
     const rootName = categoryValue || (isRootCategory ? rowName : "");
     if (rootName) {
@@ -210,7 +214,6 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
         addDetail(rootName, "", getCategoryName(detailRow) || valueOf(detailRow, ["detail", "Detail", "incidentDetail", "IncidentDetail"]));
       });
     }
-
     if (parent && rowName) {
       const parentName = idNameMap.get(keyOf(parent)) || parent;
       const parentIsCategory = categoryNames.some((cat) => keyOf(cat) === keyOf(parentName));
@@ -223,7 +226,6 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
         }
       });
     }
-
     if (rowId && rowName) idNameMap.set(keyOf(rowId), rowName);
   });
 
@@ -243,11 +245,7 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
     return unique([...(detailsByCategorySub.get(subKey) || []), ...(!subcategory ? detailsByCategorySub.get(directKey) || [] : [])]);
   };
 
-  return {
-    categories: unique(categoryNames),
-    getSubcategories,
-    getDetails,
-  };
+  return { categories: unique(categoryNames), getSubcategories, getDetails };
 }
 
 function getStatus(row: AnyRow | null | undefined) {
@@ -363,6 +361,74 @@ function readCurrentUser() {
     }
   }
   return { name: "Current User", role: "Admin" };
+}
+
+function getStoredAuthToken() {
+  if (typeof window === "undefined") return "";
+  const directKeys = ["token", "accessToken", "authToken", "emaToken", "ema-token"];
+  for (const key of directKeys) {
+    const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+    if (value && value !== "undefined" && value !== "null") return value.replace(/^Bearer\s+/i, "");
+  }
+  const objectKeys = ["user", "authUser", "currentUser", "emaUser", "ema-user", "userData", "auth", "ema-auth", "authData", "loginUser"];
+  for (const key of objectKeys) {
+    try {
+      const raw = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const token = parsed?.token || parsed?.accessToken || parsed?.authToken || parsed?.data?.token || parsed?.data?.accessToken || parsed?.data?.authToken;
+      if (token) return String(token).replace(/^Bearer\s+/i, "");
+    } catch {
+      // ignore storage value
+    }
+  }
+  return "";
+}
+
+function getServiceDeskApiBase() {
+  const env = (import.meta as any)?.env || {};
+  const configuredBase = String(env.VITE_API_BASE_URL || env.VITE_API_URL || "").trim();
+  if (configuredBase) return configuredBase.replace(/\/$/, "");
+  if (typeof window !== "undefined") {
+    const { protocol, hostname, port } = window.location;
+    if (port && port !== "3001") return `${protocol}//${hostname}:3001`;
+  }
+  return "";
+}
+
+function getServiceDeskApiUrl(pathValue: string) {
+  const path = String(pathValue || "");
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const base = getServiceDeskApiBase();
+  return base ? `${base}${normalizedPath}` : normalizedPath;
+}
+
+async function readAttachmentError(response: Response) {
+  try {
+    const data = await response.clone().json();
+    return data?.message || data?.error || "";
+  } catch {
+    try {
+      return await response.clone().text();
+    } catch {
+      return "";
+    }
+  }
+}
+
+function getIncidentAttachmentUrl(file: AnyRow) {
+  const url = file?.url || file?.filePath || file?.FilePath || "";
+  if (!url || url === "#") return "#";
+  return getServiceDeskApiUrl(String(url));
+}
+
+function formatAttachmentSize(size: any) {
+  const bytes = Number(size || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function emptyForm(currentUser: AnyRow) {
@@ -514,9 +580,7 @@ export default function ServiceDesk() {
   const [isLookupLoading, setIsLookupLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [toast, setToast] = useState<ToastState>(null);
-  const [activeQueue, setActiveQueue] = useState<QueueKey>("all");
-  const [viewMode, setViewMode] = useState<"list" | "form" | "knowledge">("list");
+  const [viewMode, setViewMode] = useState<"list" | "form" | "kb">("list");
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [formData, setFormData] = useState<AnyRow>(() => emptyForm(currentUser));
   const [selectedIncidentId, setSelectedIncidentId] = useState("");
@@ -532,6 +596,11 @@ export default function ServiceDesk() {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "createdAt", direction: "desc" });
   const [page, setPage] = useState(1);
   const [now, setNow] = useState(new Date());
+  const [toast, setToast] = useState<ToastState>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ConfirmState>(null);
+  const [incidentAttachments, setIncidentAttachments] = useState<AnyRow[]>([]);
+  const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
   useEffect(() => {
     void loadIncidents();
@@ -596,6 +665,99 @@ export default function ServiceDesk() {
     }
   }
 
+  async function loadIncidentAttachments(incidentId: string) {
+    const id = String(incidentId || "").trim();
+    if (!id) {
+      setIncidentAttachments([]);
+      return;
+    }
+    setIsLoadingAttachments(true);
+    try {
+      const token = getStoredAuthToken();
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(id)}/attachments`), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) throw new Error(`Attachment load failed with status ${response.status}`);
+      const data = await response.json();
+      const rows = Array.isArray(data) ? data : Array.isArray(data?.attachments) ? data.attachments : Array.isArray(data?.data) ? data.data : [];
+      setIncidentAttachments(rows);
+    } catch (error) {
+      console.error("Failed to load incident attachments", error);
+      setIncidentAttachments([]);
+      setToast({ type: "warning", message: "Ticket attachments could not be loaded." });
+    } finally {
+      setIsLoadingAttachments(false);
+    }
+  }
+
+  async function uploadIncidentAttachment(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const incidentId = getIncidentId(formData);
+    if (!file || !incidentId) {
+      event.target.value = "";
+      return;
+    }
+    const existingAttachmentCount = incidentAttachments.length;
+    const existingAttachmentTotalSize = incidentAttachments.reduce((total, attachment) => total + Number(attachment?.size || attachment?.fileSize || attachment?.FileSize || 0), 0);
+    if (existingAttachmentCount >= INCIDENT_ATTACHMENT_MAX_FILES) {
+      setToast({ type: "error", message: `Maximum ${INCIDENT_ATTACHMENT_MAX_FILES} attachments are allowed per ticket.` });
+      event.target.value = "";
+      return;
+    }
+    if (file.size > INCIDENT_ATTACHMENT_MAX_BYTES) {
+      setToast({ type: "error", message: `Attachment file is too large. Maximum allowed size is ${INCIDENT_ATTACHMENT_MAX_MB}MB per file.` });
+      event.target.value = "";
+      return;
+    }
+    if (existingAttachmentTotalSize + file.size > INCIDENT_ATTACHMENT_TOTAL_MAX_BYTES) {
+      setToast({ type: "error", message: `Total attachment size cannot exceed ${INCIDENT_ATTACHMENT_MAX_FILES * INCIDENT_ATTACHMENT_MAX_MB}MB per ticket.` });
+      event.target.value = "";
+      return;
+    }
+    setIsUploadingAttachment(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const token = getStoredAuthToken();
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments`), {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body,
+      });
+      if (!response.ok) {
+        const errorMessage = await readAttachmentError(response);
+        throw new Error(errorMessage || `Attachment upload failed with status ${response.status}`);
+      }
+      await loadIncidentAttachments(incidentId);
+      setToast({ type: "success", message: "Attachment uploaded successfully." });
+    } catch (error: any) {
+      console.error("Failed to upload incident attachment", error);
+      setToast({ type: "error", message: error?.message || "Failed to upload attachment." });
+    } finally {
+      setIsUploadingAttachment(false);
+      event.target.value = "";
+    }
+  }
+
+  async function deleteIncidentAttachment(filename: string) {
+    const incidentId = getIncidentId(formData);
+    const safeFilename = String(filename || "").trim();
+    if (!incidentId || !safeFilename) return;
+    try {
+      const token = getStoredAuthToken();
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments/${encodeURIComponent(safeFilename)}`), {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) throw new Error(`Attachment delete failed with status ${response.status}`);
+      await loadIncidentAttachments(incidentId);
+      setToast({ type: "success", message: "Attachment deleted." });
+    } catch (error) {
+      console.error("Failed to delete incident attachment", error);
+      setToast({ type: "error", message: "Failed to delete attachment." });
+    }
+  }
+
   function selectAsset(assetKey: string) {
     const asset = assets.find((row) => getAssetValue(row) === assetKey || getAsset(row) === assetKey);
     if (!assetKey || !asset) {
@@ -620,16 +782,18 @@ export default function ServiceDesk() {
   function startCreate() {
     setFormMode("create");
     setFormData(emptyForm(currentUser));
+    setIncidentAttachments([]);
     setSelectedIncidentId("");
     setViewMode("form");
   }
 
   function startEdit(row: AnyRow) {
+    const incidentId = getIncidentId(row);
     setFormMode("edit");
     setFormData({
       ...emptyForm(currentUser),
       ...row,
-      id: getIncidentId(row),
+      id: incidentId,
       title: getTitle(row),
       description: getDescription(row),
       priority: getPriority(row),
@@ -646,7 +810,9 @@ export default function ServiceDesk() {
       assignedLevel: valueOf(row, ["assignedLevel", "AssignedLevel", "supportLevel", "SupportLevel"]),
       assignedTo: getAssigned(row) === "Unassigned" ? "" : getAssigned(row),
     });
-    setSelectedIncidentId(getIncidentId(row));
+    setSelectedIncidentId(incidentId);
+    setIncidentAttachments([]);
+    if (incidentId) void loadIncidentAttachments(incidentId);
     setViewMode("form");
   }
 
@@ -689,19 +855,26 @@ export default function ServiceDesk() {
     }
   }
 
-  async function deleteIncident(row: AnyRow) {
+  function deleteIncident(row: AnyRow) {
     const id = getIncidentId(row);
     if (!id) return;
-    const ok = window.confirm(`Delete ticket ${id}?`);
-    if (!ok) return;
+    setConfirmDelete({ ticketId: id, row });
+  }
+
+  async function confirmDeleteTicket() {
+    if (!confirmDelete?.ticketId || confirmDelete.loading) return;
+    const id = confirmDelete.ticketId;
+    setConfirmDelete((current) => (current ? { ...current, loading: true } : current));
     try {
       await incidentsService.delete(id);
       setToast({ type: "success", message: `Ticket ${id} deleted.` });
       setSelectedIncidentId("");
+      setConfirmDelete(null);
       await loadIncidents(true);
     } catch (error: any) {
       console.error("Delete failed", error);
       setToast({ type: "error", message: error?.message || "Failed to delete ticket." });
+      setConfirmDelete((current) => (current ? { ...current, loading: false } : current));
     }
   }
 
@@ -720,6 +893,7 @@ export default function ServiceDesk() {
     setSortConfig((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }));
   }
 
+  const activeQueue = useMemo(() => selectedIncidentId ? "all" : undefined, [selectedIncidentId]);
   const queueCounts = useMemo(() => {
     const counts = { all: incidents.length, open: 0, my: 0, slaRisk: 0, unassigned: 0, awaiting: 0, inProgress: 0, pendingUser: 0, pendingVendor: 0, onSite: 0, resolved: 0, kb: knowledgeBase.length };
     incidents.forEach((row) => {
@@ -740,6 +914,8 @@ export default function ServiceDesk() {
     return counts;
   }, [incidents, knowledgeBase.length, now, currentUser]);
 
+  const [selectedQueue, setSelectedQueue] = useState<QueueKey>("all");
+  const queueKey = activeQueue || selectedQueue;
   const queueItems = [
     { key: "all" as QueueKey, label: "All Tickets", sub: "Complete service queue", count: queueCounts.all, icon: Ticket },
     { key: "my" as QueueKey, label: "My Assigned", sub: "Owned by current agent", count: queueCounts.my, icon: User },
@@ -762,15 +938,15 @@ export default function ServiceDesk() {
       const assigned = getAssigned(row);
       const sla = getSlaMeta(row, now).label;
       const created = parseDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt);
-      if (activeQueue === "my" && normalizeText(assigned) !== normalizeText(getUserName(currentUser))) return false;
-      if (activeQueue === "sla-risk" && !(sla === "Near Due" || sla === "Overdue")) return false;
-      if (activeQueue === "unassigned" && normalizeText(assigned) !== "unassigned") return false;
-      if (activeQueue === "awaiting" && !normalizeText(status).includes("awaiting")) return false;
-      if (activeQueue === "in-progress" && !normalizeText(status).includes("progress")) return false;
-      if (activeQueue === "pending-user" && !normalizeText(status).includes("pending user")) return false;
-      if (activeQueue === "pending-vendor" && !normalizeText(status).includes("pending vendor")) return false;
-      if (activeQueue === "on-site" && !normalizeText(status).includes("site")) return false;
-      if (activeQueue === "resolved" && !normalizeText(status).includes("resolved")) return false;
+      if (queueKey === "my" && normalizeText(assigned) !== normalizeText(getUserName(currentUser))) return false;
+      if (queueKey === "sla-risk" && !(sla === "Near Due" || sla === "Overdue")) return false;
+      if (queueKey === "unassigned" && normalizeText(assigned) !== "unassigned") return false;
+      if (queueKey === "awaiting" && !normalizeText(status).includes("awaiting")) return false;
+      if (queueKey === "in-progress" && !normalizeText(status).includes("progress")) return false;
+      if (queueKey === "pending-user" && !normalizeText(status).includes("pending user")) return false;
+      if (queueKey === "pending-vendor" && !normalizeText(status).includes("pending vendor")) return false;
+      if (queueKey === "on-site" && !normalizeText(status).includes("site")) return false;
+      if (queueKey === "resolved" && !normalizeText(status).includes("resolved")) return false;
       if (filterStatus !== "All" && status !== filterStatus) return false;
       if (filterPriority !== "All" && priority !== filterPriority) return false;
       if (filterAssignedTo !== "All" && assigned !== filterAssignedTo) return false;
@@ -781,65 +957,59 @@ export default function ServiceDesk() {
       const haystack = [getIncidentId(row), getRequester(row), getAsset(row), getTitle(row), getDescription(row), getStatus(row), getPriority(row), getAssigned(row), row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" ").toLowerCase();
       return haystack.includes(search);
     });
-  }, [incidents, activeQueue, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSla, dateFrom, dateTo, now, currentUser]);
+  }, [incidents, queueKey, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSla, dateFrom, dateTo, now, currentUser]);
 
   const sortedIncidents = useMemo(() => {
-    const list = [...filteredIncidents];
-    list.sort((a, b) => {
-      const dir = sortConfig.direction === "asc" ? 1 : -1;
-      const read = (row: AnyRow) => {
+    return [...filteredIncidents].sort((a, b) => {
+      const getValue = (row: AnyRow) => {
         if (sortConfig.key === "id") return getIncidentId(row);
-        if (sortConfig.key === "createdAt") return parseDate(row.createdAt || row.CreatedAt)?.getTime() || 0;
+        if (sortConfig.key === "createdAt") return parseDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)?.getTime() || 0;
         if (sortConfig.key === "requester") return getRequester(row);
         if (sortConfig.key === "title") return getTitle(row);
-        if (sortConfig.key === "priority") return PRIORITY_OPTIONS.indexOf(getPriority(row));
+        if (sortConfig.key === "priority") return getPriority(row);
         if (sortConfig.key === "assigned") return getAssigned(row);
-        if (sortConfig.key === "status") return getStatus(row);
-        return valueOf(row, [sortConfig.key]);
+        return getStatus(row);
       };
-      return String(read(a)).localeCompare(String(read(b)), undefined, { numeric: true }) * dir;
+      const av = getValue(a);
+      const bv = getValue(b);
+      const result = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+      return sortConfig.direction === "asc" ? result : -result;
     });
-    return list;
   }, [filteredIncidents, sortConfig]);
 
   const totalPages = Math.max(1, Math.ceil(sortedIncidents.length / PAGE_SIZE));
   const pageRows = sortedIncidents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const selectedIncident = useMemo(() => incidents.find((row) => getIncidentId(row) === selectedIncidentId) || null, [incidents, selectedIncidentId]);
+  const selectedIncident = incidents.find((row) => getIncidentId(row) === selectedIncidentId) || null;
+  const activeQueueLabel = queueItems.find((item) => item.key === queueKey)?.label || "All Tickets";
+
   const categoryCatalog = useMemo(() => buildCategoryCatalog(categories, incidents), [categories, incidents]);
   const categoryOptions = categoryCatalog.categories;
-  const subcategoryOptions = useMemo(() => categoryCatalog.getSubcategories(formData.category || ""), [categoryCatalog, formData.category]);
-  const detailOptions = useMemo(() => categoryCatalog.getDetails(formData.category || "", formData.subcategory || ""), [categoryCatalog, formData.category, formData.subcategory]);
-
-  const supportLevelOptions = useMemo(() => {
-    const fromRoles = roles.map((role) => normalizeSupportLevelName(getRoleDisplayName(role))).filter(isSupportRoleName);
-    return unique([...SUPPORT_LEVELS, ...fromRoles]);
-  }, [roles]);
-  const engineers = useMemo(() => users.filter((user) => getUserRoleNames(user).some(isSupportRoleName)), [users]);
+  const subcategoryOptions = formData.category ? categoryCatalog.getSubcategories(formData.category) : [];
+  const detailOptions = formData.category ? categoryCatalog.getDetails(formData.category, formData.subcategory || "") : [];
+  const assetOptions = useMemo(() => unique(assets.map(getAssetValue).filter(Boolean)), [assets]);
+  const selectedAsset = useMemo(() => assets.find((row) => getAssetValue(row) === formData.assetId || getAsset(row) === formData.assetId) || null, [assets, formData.assetId]);
+  const supportLevelOptions = useMemo(() => unique([...SUPPORT_LEVELS, ...roles.map(getRoleDisplayName), ...users.flatMap(getUserRoleNames)]).filter((role) => SUPPORT_LEVELS.includes(normalizeSupportLevelName(role))).map(normalizeSupportLevelName), [roles, users]);
   const engineerOptions = useMemo(() => {
-    const source = formData.assignedLevel ? engineers.filter((user) => userMatchesSupportLevel(user, formData.assignedLevel)) : engineers;
-    return source.map((user) => getUserName(user)).filter(Boolean);
-  }, [engineers, formData.assignedLevel]);
-  const filterAssigneeOptions = useMemo(() => unique(engineers.map((user) => getUserName(user)).filter(Boolean)), [engineers]);
-  const assetOptions = useMemo(() => assets.map((asset) => getAssetValue(asset)).filter(Boolean), [assets]);
-  const selectedAsset = useMemo(() => assets.find((asset) => getAssetValue(asset) === formData.assetId || getAsset(asset) === formData.assetId) || null, [assets, formData.assetId]);
-  const activeQueueLabel = queueItems.find((item) => item.key === activeQueue)?.label || "All Tickets";
-  const toastItems: EmaToastItem[] = toast ? [{ id: toast.id || `${toast.type}-${toast.message}`, tone: toast.type, title: toast.type === "success" ? "Success" : toast.type === "error" ? "Action failed" : toast.type === "warning" ? "Attention" : "Information", message: toast.message }] : [];
+    if (!formData.assignedLevel) return [];
+    return unique(users.filter((user) => getUserRoleNames(user).some(isSupportRoleName)).filter((user) => userMatchesSupportLevel(user, formData.assignedLevel)).map(getUserName).filter(Boolean));
+  }, [users, formData.assignedLevel]);
+  const filterAssigneeOptions = useMemo(() => unique(incidents.map(getAssigned).filter((name) => name && name !== "Unassigned")), [incidents]);
+  const toastItems = useMemo<EmaToastItem[]>(() => {
+    if (!toast) return [];
+    const title = toast.type === "success" ? "Success" : toast.type === "error" ? "Action failed" : toast.type === "warning" ? "Attention" : "Information";
+    return [{ id: toast.id ?? "service-desk-toast", tone: toast.type, title, message: toast.message }];
+  }, [toast]);
 
   function exportCsv() {
-    const headers = ["No", "Req No", "Submitted", "Requester", "Asset", "Incident", "Urgency", "Assigner", "SLA", "Status"];
-    const rows = sortedIncidents.map((row, index) => {
-      const sla = getSlaMeta(row, now);
-      return [index + 1, getIncidentId(row), formatDate(row.createdAt || row.CreatedAt), getRequester(row), getAsset(row), getTitle(row), getPriority(row), getAssigned(row), sla.label, getStatus(row)];
-    });
-    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const headers = ["Req No", "Submitted", "Requester", "Asset", "Incident", "Urgency", "Assigner", "SLA", "Status"];
+    const rows = sortedIncidents.map((row) => [getIncidentId(row), formatDate(row.createdAt || row.CreatedAt), getRequester(row), getAsset(row), getTitle(row), getPriority(row), getAssigned(row), getSlaMeta(row, now).label, getStatus(row)]);
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell || "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `service-desk-${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
+    link.download = "service-desk-tickets.csv";
     link.click();
-    link.remove();
     URL.revokeObjectURL(url);
   }
 
@@ -847,26 +1017,62 @@ export default function ServiceDesk() {
     window.print();
   }
 
-  return (
-    <main data-section="service-desk" className="min-h-screen bg-slate-50 p-4 text-slate-950">
-      <EmaToastViewport items={toastItems} onClose={() => setToast(null)} />
+  function renderPagination() {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3">
+        <span className="text-sm font-bold text-slate-500">Page {page} of {totalPages}</span>
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={page === 1} onClick={() => setPage(1)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">«</button>
+          <button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">‹</button>
+          <span className="grid h-9 min-w-9 place-items-center rounded-xl bg-blue-600 px-3 text-sm font-black text-white">{page}</span>
+          <button type="button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">›</button>
+          <button type="button" disabled={page === totalPages} onClick={() => setPage(totalPages)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">»</button>
+        </div>
+      </div>
+    );
+  }
 
-      <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
+  return (
+    <main data-section="service-desk" className="min-h-screen bg-slate-50 text-slate-900">
+      <EmaToastViewport items={toastItems} onClose={() => setToast(null)} />
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[2147483300] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
+          <section className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+              <div>
+                <span className="text-xs font-black uppercase tracking-[0.12em] text-rose-500">Delete Ticket</span>
+                <h2 className="mt-1 text-xl font-black text-slate-950">Confirm delete</h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">Ticket {confirmDelete.ticketId} will be removed from Service Desk.</p>
+              </div>
+              <button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X size={16} /></button>
+            </div>
+            <div className="p-5">
+              <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">This action cannot be undone. Continue only if this ticket should be deleted.</div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4">
+              <button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
+              <button type="button" onClick={() => void confirmDeleteTicket()} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-600 bg-rose-600 px-5 text-sm font-black text-white shadow-sm hover:bg-rose-700 disabled:opacity-60">{confirmDelete.loading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}Delete Ticket</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <div className="grid min-h-screen gap-4 p-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
-            <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Service Center</span>
-            <strong className="mt-1 block text-lg font-black text-slate-950">Service Desk</strong>
-            <small className="mt-1 block text-xs font-semibold text-slate-500">Ticket queue and support operation</small>
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Service Center</span>
+            <h2 className="mt-1 text-xl font-black">Service Desk</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Ticket queue and support operation</p>
           </div>
-          <nav className="grid gap-2" aria-label="Service Desk queue">
+          <nav className="grid gap-2">
             {queueItems.map((item) => {
               const Icon = item.icon;
-              const active = activeQueue === item.key;
+              const active = queueKey === item.key || (viewMode === "kb" && item.key === "knowledge");
               return (
-                <button key={item.key} type="button" onClick={() => { setActiveQueue(item.key); setViewMode(item.key === "knowledge" ? "knowledge" : "list"); setSelectedIncidentId(""); }} className={cx("grid min-h-[3.4rem] grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border px-3 py-2 text-left transition", active ? "border-blue-200 bg-blue-50 text-blue-700 shadow-sm" : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50/60")}>
-                  <i className={cx("grid h-9 w-9 place-items-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}><Icon size={16} /></i>
+                <button key={item.key} type="button" onClick={() => { setSelectedQueue(item.key); setSelectedIncidentId(""); setViewMode(item.key === "knowledge" ? "kb" : "list"); }} className={cx("grid grid-cols-[2.4rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-3 text-left transition", active ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}>
+                  <span className={cx("grid h-9 w-9 place-items-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}><Icon size={15} /></span>
                   <span className="min-w-0"><strong className="block truncate text-sm font-black">{item.label}</strong><small className="block truncate text-xs font-semibold text-slate-500">{item.sub}</small></span>
-                  <b className={cx("rounded-full px-2 py-1 text-xs font-black", active ? "bg-white text-blue-700" : "bg-slate-100 text-slate-600")}>{isLoading && item.key !== "knowledge" ? "…" : item.count}</b>
+                  <b className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{item.count}</b>
                 </button>
               );
             })}
@@ -874,35 +1080,37 @@ export default function ServiceDesk() {
         </aside>
 
         <section className="min-w-0 space-y-4">
-          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm xl:grid-cols-[minmax(0,1fr)_minmax(32rem,0.95fr)]">
+          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(24rem,0.85fr)]">
             <div>
-              <span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Incident Command Center</span>
-              <h2 className="mt-1 text-2xl font-black text-slate-950">Service Desk</h2>
+              <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Incident Command Center</span>
+              <h1 className="mt-1 text-2xl font-black">Service Desk</h1>
               <p className="mt-1 text-sm font-semibold text-slate-500">Manage tickets, assignments, SLA risk and support activity.</p>
-              {(isLoading || isLookupLoading) && <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700"><Loader2 size={14} className="animate-spin" /> Loading data in content area</div>}
             </div>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {[{ label: "Open Tickets", value: queueCounts.open, note: "support workload" }, { label: "SLA Risk", value: queueCounts.slaRisk, note: "near due / breached" }, { label: "Awaiting", value: queueCounts.awaiting, note: "new requests" }, { label: "In Progress", value: queueCounts.inProgress, note: "active handling" }].map((kpi) => <div key={kpi.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><span className="text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">{kpi.label}</span><strong className="mt-1 block text-2xl font-black text-slate-950">{isLoading ? "…" : kpi.value}</strong><small className="mt-1 block text-xs font-bold text-slate-500">{kpi.note}</small></div>)}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                ["Open Tickets", queueCounts.open, "support workload"],
+                ["SLA Risk", queueCounts.slaRisk, "near due / breached"],
+                ["Awaiting", queueCounts.awaiting, "new requests"],
+                ["In Progress", queueCounts.inProgress, "active handling"],
+              ].map(([label, value, note]) => (
+                <div key={String(label)} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">{label}</span><strong className="mt-2 block text-2xl font-black text-slate-950">{value}</strong><small className="text-xs font-bold text-slate-500">{note}</small></div>
+              ))}
             </div>
           </div>
 
-          {viewMode === "knowledge" ? (
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><div><span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Knowledge Base</span><h3 className="mt-1 text-lg font-black text-slate-950">Resolution Articles</h3></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"><Ticket size={15} /> Ticket List</button></div>
-              <div className="p-4">
-                {isLookupLoading ? <div className="grid min-h-[16rem] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center"><div><Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={28} /><strong className="block text-sm font-black text-slate-900">Loading knowledge base...</strong></div></div> : knowledgeBase.length === 0 ? <div className="grid min-h-[16rem] place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center"><div><BookOpen className="mx-auto mb-3 text-slate-400" size={28} /><strong className="block text-sm font-black text-slate-900">No knowledge article found.</strong></div></div> : <div className="overflow-hidden rounded-2xl border border-slate-200"><table className="w-full min-w-[48rem] text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="px-4 py-3">No</th><th className="px-4 py-3">Article</th><th className="px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200">{knowledgeBase.map((row, index) => <tr key={valueOf(row, ["id", "KnowledgeID", "title"], String(index))} className="hover:bg-slate-50"><td className="px-4 py-3 font-black text-slate-500">{String(index + 1).padStart(2, "0")}</td><td className="px-4 py-3"><strong className="font-black text-slate-900">{valueOf(row, ["title", "Title"], "Untitled article")}</strong></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedKb(row)} className="inline-grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700"><Eye size={14} /></button></td></tr>)}</tbody></table></div>}
-              </div>
-            </section>
-          ) : viewMode === "form" ? (
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {viewMode === "form" ? (
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <form onSubmit={saveIncident}>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><div><span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">{formMode === "create" ? "Create Ticket" : "Update Ticket"}</span><h3 className="mt-1 text-lg font-black text-slate-950">{formMode === "create" ? "New Incident Request" : getIncidentId(formData)}</h3></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"><X size={15} /> Cancel</button></div>
+                <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4">
+                  <div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{formMode === "create" ? "Create Ticket" : "Edit Ticket"}</span><h2 className="mt-1 text-xl font-black">{formMode === "create" ? "New Incident Request" : `Update ${getIncidentId(formData)}`}</h2></div>
+                  <button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"><X size={14} />Cancel</button>
+                </div>
                 <div className="grid gap-4 p-4 lg:grid-cols-2">
                   <label className={cx(labelClass(), "lg:col-span-2")}>Incident Title<input value={formData.title || ""} onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))} className={inputClass()} placeholder="Example: Laptop cannot connect to network" /></label>
                   <label className={cx(labelClass(), "lg:col-span-2")}>Description<textarea value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className={textareaClass()} placeholder="Describe the issue, impact and required support." /></label>
                   <label className={labelClass()}>Requester<input value={formData.requesterName || ""} onChange={(e) => setFormData((prev) => ({ ...prev, requesterName: e.target.value }))} className={inputClass()} /></label>
                   <label className={labelClass()}>Asset<ServiceDeskSelect value={formData.assetId || ""} onChange={selectAsset} placeholder="No asset selected" options={[{ value: "", label: "No asset selected" }, ...assetOptions.map((asset) => ({ value: asset, label: asset }))]} /></label>
-                  {selectedAsset && <div className="lg:col-span-2 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 md:grid-cols-4"><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Owner</span><strong className="mt-1 block text-sm font-black text-slate-900">{getAssetOwner(selectedAsset) || formData.requesterName || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Brand</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetBrand || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Model</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetModel || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">OS / Type</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetOS || formData.deviceType || "-"}</strong></div></div>}
+                  {selectedAsset && <div className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 lg:col-span-2 md:grid-cols-4"><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Owner</span><strong className="mt-1 block text-sm font-black text-slate-900">{getAssetOwner(selectedAsset) || formData.requesterName || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Brand</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetBrand || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Model</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetModel || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">OS / Type</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetOS || formData.deviceType || "-"}</strong></div></div>}
                   <label className={labelClass()}>Urgency<ServiceDeskSelect value={formData.priority || "Medium"} onChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))} options={PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
                   <label className={labelClass()}>Status<ServiceDeskSelect value={formData.status || "Awaiting"} onChange={(value) => setFormData((prev) => ({ ...prev, status: value }))} disabled={formMode === "create"} options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
                   <label className={labelClass()}>Category<ServiceDeskSelect value={formData.category || ""} onChange={(value) => setFormData((prev) => ({ ...prev, category: value, subcategory: "", incidentDetail: "" }))} placeholder={isLookupLoading ? "Loading category..." : "No category"} options={[{ value: "", label: isLookupLoading ? "Loading category..." : "No category" }, ...categoryOptions.map((item) => ({ value: item, label: item }))]} /></label>
@@ -911,11 +1119,60 @@ export default function ServiceDesk() {
                   <label className={labelClass()}>Device Type<ServiceDeskSelect value={formData.deviceType || ""} onChange={(value) => setFormData((prev) => ({ ...prev, deviceType: value }))} placeholder="Select device type" options={[{ value: "", label: formData.deviceType || "Select device type" }, ...unique([formData.deviceType, ...DEVICE_TYPES]).filter(Boolean).map((item) => ({ value: item, label: item }))]} /></label>
                   <label className={labelClass()}>Assigner Level<ServiceDeskSelect value={formData.assignedLevel || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedLevel: value, assignedTo: "" }))} placeholder="Not assigned" options={[{ value: "", label: "Not assigned" }, ...supportLevelOptions.map((level) => ({ value: level, label: level }))]} /></label>
                   <label className={labelClass()}>Assigned Engineer<ServiceDeskSelect value={formData.assignedTo || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedTo: value }))} disabled={Boolean(formData.assignedLevel) && engineerOptions.length === 0} placeholder={formData.assignedLevel ? "Select engineer" : "Choose level first"} options={[{ value: "", label: formData.assignedLevel ? "Unassigned" : "Choose level first" }, ...engineerOptions.map((name) => ({ value: name, label: name }))]} /></label>
-                  {formData.assignedLevel && <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600"><strong className="font-black text-slate-900">{engineerOptions.length}</strong> engineer(s) matched for <strong className="font-black text-slate-900">{formData.assignedLevel}</strong> based on user roles.</div>}
+                  {formData.assignedLevel && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600 lg:col-span-2"><strong className="font-black text-slate-900">{engineerOptions.length}</strong> engineer(s) matched for <strong className="font-black text-slate-900">{formData.assignedLevel}</strong> based on user roles.</div>}
                   <label className={cx(labelClass(), "lg:col-span-2")}>Action Plan<textarea value={formData.actionPlan || ""} onChange={(e) => setFormData((prev) => ({ ...prev, actionPlan: e.target.value }))} className={textareaClass()} placeholder="Resolution steps or next action." /></label>
+
+                  {formMode === "edit" && getIncidentId(formData) && (
+                    <section className="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Attachment</span>
+                          <h3 className="mt-1 text-base font-black text-slate-950">Ticket Attachments</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">Maximum {INCIDENT_ATTACHMENT_MAX_FILES} files, {INCIDENT_ATTACHMENT_MAX_MB}MB each. PDF, Office, image and TXT supported.</p>
+                        </div>
+                        <label className={cx("inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700", (isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES) && "pointer-events-none opacity-60")}>
+                          {isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                          {isUploadingAttachment ? "Uploading..." : "Upload Attachment"}
+                          <input type="file" className="hidden" accept={INCIDENT_ATTACHMENT_ALLOWED_TYPES} disabled={isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES} onChange={(event) => void uploadIncidentAttachment(event)} />
+                        </label>
+                      </div>
+                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
+                        {isLoadingAttachments ? (
+                          <div className="flex items-center justify-center gap-2 p-6 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin text-blue-600" />Loading attachments...</div>
+                        ) : incidentAttachments.length === 0 ? (
+                          <div className="p-6 text-center text-sm font-semibold text-slate-500">No attachment uploaded for this ticket yet.</div>
+                        ) : (
+                          <div className="divide-y divide-slate-200">
+                            {incidentAttachments.map((file, index) => {
+                              const filename = String(file?.filename || file?.fileName || file?.FileName || file?.name || file?.Name || `Attachment ${index + 1}`);
+                              const sizeLabel = formatAttachmentSize(file?.size || file?.fileSize || file?.FileSize);
+                              const url = getIncidentAttachmentUrl(file);
+                              return (
+                                <div key={`${filename}-${index}`} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                                  <div className="min-w-0">
+                                    <strong className="block truncate text-sm font-black text-slate-900">{filename}</strong>
+                                    <span className="text-xs font-semibold text-slate-500">{sizeLabel || "Uploaded file"}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {url !== "#" && <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-blue-700 hover:bg-blue-50"><Download size={14} />View</a>}
+                                    <button type="button" onClick={() => void deleteIncidentAttachment(filename)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label={`Delete ${filename}`}><Trash2 size={14} /></button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  )}
                 </div>
                 <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4"><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button><button type="submit" disabled={isSaving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}{isSaving ? "Saving..." : formMode === "create" ? "Create Ticket" : "Update Ticket"}</button></div>
               </form>
+            </section>
+          ) : viewMode === "kb" ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Base</span><h2 className="text-xl font-black">Resolution Articles</h2></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">Back to Tickets</button></div>
+              <div className="overflow-hidden rounded-2xl border border-slate-200"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-16 px-4 py-3">No</th><th className="px-4 py-3">Knowledge Base</th><th className="w-28 px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200">{knowledgeBase.length === 0 ? <tr><td colSpan={3} className="px-4 py-12 text-center text-sm font-semibold text-slate-500">No knowledge base article found.</td></tr> : knowledgeBase.map((kb, index) => <tr key={kb.id || kb.title || index}><td className="px-4 py-3 font-black text-slate-500">{index + 1}</td><td className="px-4 py-3"><strong className="font-black text-slate-900">{kb.title || kb.Title || "Untitled article"}</strong></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedKb(kb)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600"><Eye size={14} /></button></td></tr>)}</tbody></table></div>
             </section>
           ) : (
             <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -926,16 +1183,16 @@ export default function ServiceDesk() {
               </div>
               <div className="p-3">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm font-black text-slate-900">{activeQueueLabel}</strong><span className="ml-2 text-sm font-semibold text-slate-500">{isLoading ? "Loading tickets..." : `${sortedIncidents.length.toLocaleString()} record(s)`}</span></div>{isLookupLoading && <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"><Loader2 size={13} className="animate-spin" /> Loading filters</span>}</div>
-                <div className="overflow-x-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[82rem] text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-14 px-4 py-3">No</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("id")} className="font-black">Req No</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("createdAt")} className="font-black">Submitted</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("requester")} className="font-black">Requester</button></th><th className="px-4 py-3">Asset</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("title")} className="font-black">Incident</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("priority")} className="font-black">Urgency</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("assigned")} className="font-black">Assigner</button></th><th className="px-4 py-3">SLA</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("status")} className="font-black">Status</button></th><th className="px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200 bg-white">{isLoading ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={30} /><strong className="block text-sm font-black text-slate-900">Loading ticket data...</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Table UI is ready. Incident records are loading here only.</span></td></tr> : pageRows.length === 0 ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Ticket className="mx-auto mb-3 text-slate-400" size={30} /><strong className="block text-sm font-black text-slate-900">No incident found</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Try reset filter or create a new request.</span></td></tr> : pageRows.map((row, index) => { const id = getIncidentId(row); const sla = getSlaMeta(row, now); return <tr key={id || index} onClick={() => setSelectedIncidentId(id)} className={cx("cursor-pointer align-top transition hover:bg-blue-50/40", selectedIncidentId === id && "bg-blue-50")}><td className="px-4 py-4"><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-black text-slate-600">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-900">{id || "—"}</strong></td><td className="px-4 py-4 font-semibold text-slate-600">{formatDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)}</td><td className="px-4 py-4"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-black text-blue-700">{initialText(getRequester(row))}</span><strong className="font-black text-slate-800">{getRequester(row)}</strong></div></td><td className="px-4 py-4"><span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-slate-700"><Monitor size={12} />{getAsset(row)}</span></td><td className="max-w-[22rem] px-4 py-4"><strong className="block font-black text-slate-900">{getTitle(row)}</strong><small className="mt-1 block line-clamp-2 font-semibold text-slate-500">{[row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" / ") || getDescription(row) || "No classification"}</small></td><td className="px-4 py-4"><span className={cx("rounded-full px-2 py-1 text-xs font-black ring-1", priorityTone(getPriority(row)))}>{getPriority(row)}</span></td><td className="px-4 py-4"><strong className="block font-black text-slate-800">{getAssigned(row)}</strong><small className="font-semibold text-slate-500">{valueOf(row, ["assignedLevel", "AssignedLevel", "supportLevel", "SupportLevel"], "No level")}</small></td><td className="px-4 py-4"><strong className="block font-black text-slate-800">{sla.label}</strong><small className="font-semibold text-slate-500">{sla.detail}</small></td><td className="px-4 py-4"><span className={cx("rounded-full px-2 py-1 text-xs font-black ring-1", statusTone(getStatus(row)))}>{getStatus(row)}</span></td><td className="px-4 py-4 text-right" onClick={(event) => event.stopPropagation()}><div className="inline-flex gap-2"><button type="button" onClick={() => startEdit(row)} className="inline-grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100" title="Edit"><Pencil size={14} /></button><button type="button" onClick={() => deleteIncident(row)} className="inline-grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100" title="Delete"><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-500">Page {page} of {totalPages} • {sortedIncidents.length.toLocaleString()} record(s)</span><div className="flex items-center gap-2"><button type="button" disabled={page === 1} onClick={() => setPage(1)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 font-black text-slate-600 disabled:opacity-40">«</button><button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="h-9 rounded-xl border border-slate-200 bg-white px-3 font-black text-slate-600 disabled:opacity-40">‹</button><span className="grid h-9 min-w-9 place-items-center rounded-xl bg-blue-600 px-3 text-sm font-black text-white">{page}</span><button type="button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="h-9 rounded-xl border border-slate-200 bg-white px-3 font-black text-slate-600 disabled:opacity-40">›</button><button type="button" disabled={page === totalPages} onClick={() => setPage(totalPages)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 font-black text-slate-600 disabled:opacity-40">»</button></div></div>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[82rem] text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-14 px-4 py-3">No</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("id")} className="font-black">Req No</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("createdAt")} className="font-black">Submitted</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("requester")} className="font-black">Requester</button></th><th className="px-4 py-3">Asset</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("title")} className="font-black">Incident</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("priority")} className="font-black">Urgency</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("assigned")} className="font-black">Assigner</button></th><th className="px-4 py-3">SLA</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("status")} className="font-black">Status</button></th><th className="px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200 bg-white">{isLoading ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={30} /><strong className="block text-sm font-black text-slate-900">Loading ticket data...</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Table UI is ready. Incident records are loading here only.</span></td></tr> : pageRows.length === 0 ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Ticket className="mx-auto mb-3 text-slate-400" size={30} /><strong className="block text-sm font-black text-slate-900">No incident found</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Try reset filter or create a new request.</span></td></tr> : pageRows.map((row, index) => { const id = getIncidentId(row); const sla = getSlaMeta(row, now); return <tr key={id || index} onClick={() => setSelectedIncidentId(id)} className={cx("cursor-pointer align-top transition hover:bg-blue-50/40", selectedIncidentId === id && "bg-blue-50")}><td className="px-4 py-4"><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-black text-slate-600">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-900">{id || "—"}</strong></td><td className="px-4 py-4 font-semibold text-slate-600">{formatDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)}</td><td className="px-4 py-4"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-black text-blue-700">{initialText(getRequester(row))}</span><strong className="font-black text-slate-800">{getRequester(row)}</strong></div></td><td className="px-4 py-4"><span className="inline-flex max-w-[9rem] items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-slate-700"><Monitor size={12} />{getAsset(row)}</span></td><td className="px-4 py-4"><strong className="block font-black text-slate-950">{getTitle(row)}</strong><small className="mt-1 block max-w-[18rem] text-xs font-semibold text-slate-500">{[row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" / ") || getDescription(row) || "No classification"}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", priorityTone(getPriority(row)))}>{getPriority(row)}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{getAssigned(row)}</strong><small className="block text-xs font-semibold text-slate-500">{row.assignedLevel || row.AssignedLevel || "No level"}</small></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{sla.label}</strong><small className="block text-xs font-semibold text-slate-500">{sla.detail}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", statusTone(getStatus(row)))}>{getStatus(row)}</span></td><td className="px-4 py-4"><div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => startEdit(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100" aria-label="Edit"><Pencil size={14} /></button><button type="button" onClick={() => deleteIncident(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label="Delete"><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>
+                {renderPagination()}
               </div>
             </section>
           )}
         </section>
       </div>
 
-      {selectedIncident && viewMode === "list" && <aside className="fixed bottom-4 right-4 top-4 z-40 w-[min(24rem,calc(100vw-2rem))] overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-3"><div><span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Ticket Detail</span><h3 className="mt-1 text-lg font-black text-slate-950">{getIncidentId(selectedIncident)}</h3></div><button type="button" onClick={() => setSelectedIncidentId("")} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"><X size={15} /></button></div><div className="space-y-3"><div className="rounded-2xl border border-slate-200 bg-slate-50 p-3"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Incident</span><strong className="mt-1 block text-sm font-black text-slate-950">{getTitle(selectedIncident)}</strong><p className="mt-2 text-sm font-semibold text-slate-600">{getDescription(selectedIncident) || "No description"}</p></div>{[["Requester", getRequester(selectedIncident)], ["Asset", getAsset(selectedIncident)], ["Urgency", getPriority(selectedIncident)], ["Assigner", getAssigned(selectedIncident)], ["Status", getStatus(selectedIncident)]].map(([label, value]) => <div key={label} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">{label}</span><strong className="text-right text-sm font-black text-slate-800">{value}</strong></div>)}<div className="flex gap-2 pt-2"><button type="button" onClick={() => startEdit(selectedIncident)} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-black text-white"><Pencil size={14} /> Edit</button><button type="button" onClick={() => deleteIncident(selectedIncident)} className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 text-sm font-black text-rose-700"><Trash2 size={14} /> Delete</button></div></div></aside>}
-      {selectedKb && <aside className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" onClick={() => setSelectedKb(null)}><section className="w-[min(44rem,100%)] rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center justify-between gap-3 border-b border-slate-200 p-4"><div><span className="text-[0.68rem] font-black uppercase tracking-[0.14em] text-slate-500">Knowledge Article</span><h3 className="mt-1 text-lg font-black text-slate-950">{valueOf(selectedKb, ["title", "Title"], "Untitled article")}</h3></div><button type="button" onClick={() => setSelectedKb(null)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-600"><X size={15} /></button></div><div className="grid gap-3 p-4"><div><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Incident Details</span><p className="mt-1 text-sm font-semibold text-slate-700">{valueOf(selectedKb, ["incidentDetails", "IncidentDetails", "description", "Description"], "-")}</p></div><div><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Resolution</span><p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">{valueOf(selectedKb, ["resolution", "Resolution", "solution", "Solution"], "-")}</p></div></div></section></aside>}
+      {selectedIncident && viewMode === "list" && <aside className="fixed right-4 top-24 z-40 w-[min(26rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><button type="button" onClick={() => setSelectedIncidentId("")} className="float-right grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500"><X size={14} /></button><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Ticket Details</span><h3 className="mt-1 text-lg font-black">{getIncidentId(selectedIncident)}</h3><p className="mt-2 text-sm font-semibold text-slate-600">{getTitle(selectedIncident)}</p><div className="mt-4 grid gap-3 text-sm"><div><span className="font-black text-slate-500">Requester</span><strong className="block text-slate-900">{getRequester(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Asset</span><strong className="block text-slate-900">{getAsset(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Assigner</span><strong className="block text-slate-900">{getAssigned(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Status</span><strong className="block text-slate-900">{getStatus(selectedIncident)}</strong></div></div></aside>}
+      {selectedKb && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setSelectedKb(null)}><section className="w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setSelectedKb(null)} className="float-right grid h-9 w-9 place-items-center rounded-xl border border-slate-200"><X size={14} /></button><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Article</span><h2 className="mt-1 text-xl font-black">{selectedKb.title || selectedKb.Title || "Untitled article"}</h2><p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-slate-600">{selectedKb.resolution || selectedKb.Resolution || selectedKb.incidentDetails || selectedKb.IncidentDetails || "No detail."}</p></section></div>}
     </main>
   );
 }
