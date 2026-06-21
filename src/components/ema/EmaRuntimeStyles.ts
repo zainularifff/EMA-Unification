@@ -229,49 +229,55 @@ html body .ema-detail-form-footer { flex: 0 0 auto !important; display: flex !im
 
 html body main[data-section="service-desk"] > div > section > div:first-child {
   align-items: center !important;
-  grid-template-columns: minmax(0, 1fr) minmax(30rem, 36rem) !important;
+  grid-template-columns: minmax(0, 1fr) minmax(34rem, 42rem) !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child {
   align-self: center !important;
   min-width: 0 !important;
   width: 100% !important;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  gap: .55rem !important;
+  grid-template-columns: repeat(4, minmax(7.6rem, 1fr)) !important;
+  gap: .65rem !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div {
   min-width: 0 !important;
-  min-height: 3.15rem !important;
+  min-height: 4rem !important;
   display: grid !important;
   grid-template-columns: auto minmax(0, 1fr) !important;
   grid-template-areas: "value label" !important;
   align-items: center !important;
-  column-gap: .58rem !important;
-  border-width: 1px !important;
-  border-radius: .9rem !important;
+  column-gap: .75rem !important;
+  border-width: 2px !important;
+  border-radius: 1rem !important;
   background: linear-gradient(180deg,#ffffff 0%,#f8fbff 100%) !important;
-  padding: .52rem .58rem !important;
+  padding: .72rem .82rem !important;
   box-shadow: none !important;
 }
-html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(1) { border-color: #bfdbfe !important; }
-html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) { border-color: #fed7aa !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(1) { border-color: #93c5fd !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) { border-color: #fca5a5 !important; background: linear-gradient(180deg,#ffffff 0%,#fff7f7 100%) !important; }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(3) { border-color: #c7d2fe !important; }
-html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(4) { border-color: #bbf7d0 !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(4) { border-color: #86efac !important; }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > span {
   grid-area: label !important;
   min-width: 0 !important;
-  color: #475569 !important;
-  font-size: .62rem !important;
-  line-height: 1.05 !important;
+  color: #334155 !important;
+  font-size: .68rem !important;
+  line-height: 1.1 !important;
   letter-spacing: .08em !important;
   white-space: normal !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) > span {
+  color: #b91c1c !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > strong {
   grid-area: value !important;
   margin-top: 0 !important;
-  min-width: 1.35rem !important;
+  min-width: 1.55rem !important;
   color: #0f172a !important;
-  font-size: 1.35rem !important;
+  font-size: 1.65rem !important;
   line-height: 1 !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) > strong {
+  color: #991b1b !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > small {
   display: none !important;
