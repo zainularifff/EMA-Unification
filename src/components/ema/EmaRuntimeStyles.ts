@@ -229,41 +229,71 @@ html body .ema-detail-form-footer { flex: 0 0 auto !important; display: flex !im
 
 html body main[data-section="service-desk"] > div > section > div:first-child {
   align-items: center !important;
-  grid-template-columns: minmax(0, 1fr) minmax(34rem, 42rem) !important;
+  grid-template-columns: minmax(0, 1fr) minmax(38rem, 46rem) !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child {
   align-self: center !important;
   min-width: 0 !important;
   width: 100% !important;
-  grid-template-columns: repeat(4, minmax(7.6rem, 1fr)) !important;
-  gap: .65rem !important;
+  grid-template-columns: repeat(4, minmax(8.6rem, 1fr)) !important;
+  gap: .75rem !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div {
+  position: relative !important;
   min-width: 0 !important;
-  min-height: 4rem !important;
+  min-height: 4.85rem !important;
   display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) !important;
-  grid-template-areas: "value label" !important;
+  grid-template-columns: 2.6rem minmax(0, 1fr) !important;
+  grid-template-areas: "icon value" "icon label" !important;
   align-items: center !important;
-  column-gap: .75rem !important;
+  column-gap: .8rem !important;
+  row-gap: .12rem !important;
   border-width: 2px !important;
-  border-radius: 1rem !important;
-  background: linear-gradient(180deg,#ffffff 0%,#f8fbff 100%) !important;
-  padding: .72rem .82rem !important;
-  box-shadow: none !important;
+  border-style: solid !important;
+  border-radius: 1.05rem !important;
+  background: #ffffff !important;
+  padding: .8rem .9rem !important;
+  box-shadow: 0 10px 24px rgba(15,23,42,.045) !important;
 }
-html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(1) { border-color: #93c5fd !important; }
-html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) { border-color: #fca5a5 !important; background: linear-gradient(180deg,#ffffff 0%,#fff7f7 100%) !important; }
-html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(3) { border-color: #c7d2fe !important; }
-html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(4) { border-color: #86efac !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div::before {
+  grid-area: icon !important;
+  width: 2.55rem !important;
+  height: 2.55rem !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: .9rem !important;
+  font-size: 1rem !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(1) {
+  border-color: #93c5fd !important;
+  background: linear-gradient(180deg,#ffffff 0%,#f8fbff 100%) !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(1)::before { content: "🎫" !important; background: #eff6ff !important; color: #2563eb !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) {
+  border-color: #f87171 !important;
+  background: linear-gradient(180deg,#ffffff 0%,#fff7f7 100%) !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2)::before { content: "!" !important; background: #fee2e2 !important; color: #dc2626 !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(3) {
+  border-color: #fbbf24 !important;
+  background: linear-gradient(180deg,#ffffff 0%,#fffbeb 100%) !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(3)::before { content: "⏱" !important; background: #fef3c7 !important; color: #d97706 !important; }
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(4) {
+  border-color: #a5b4fc !important;
+  background: linear-gradient(180deg,#ffffff 0%,#f5f7ff 100%) !important;
+}
+html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(4)::before { content: "↻" !important; background: #eef2ff !important; color: #4f46e5 !important; }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > span {
   grid-area: label !important;
   min-width: 0 !important;
-  color: #334155 !important;
-  font-size: .68rem !important;
+  color: #475569 !important;
+  font-size: .7rem !important;
   line-height: 1.1 !important;
-  letter-spacing: .08em !important;
-  white-space: normal !important;
+  letter-spacing: .07em !important;
+  white-space: nowrap !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) > span {
   color: #b91c1c !important;
@@ -271,13 +301,14 @@ html body main[data-section="service-desk"] > div > section > div:first-child > 
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > strong {
   grid-area: value !important;
   margin-top: 0 !important;
-  min-width: 1.55rem !important;
+  min-width: 0 !important;
   color: #0f172a !important;
-  font-size: 1.65rem !important;
-  line-height: 1 !important;
+  font-size: 1.85rem !important;
+  font-weight: 950 !important;
+  line-height: .95 !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div:nth-child(2) > strong {
-  color: #991b1b !important;
+  color: #dc2626 !important;
 }
 html body main[data-section="service-desk"] > div > section > div:first-child > div:last-child > div > small {
   display: none !important;
