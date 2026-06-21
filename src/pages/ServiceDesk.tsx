@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
-  AlertCircle,
   ArrowRightLeft,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Download,
   Eye,
@@ -24,9 +24,10 @@ import {
   X,
 } from "lucide-react";
 import { incidents as incidentsService, incidentCategories as incidentCategoriesService } from "../services/IncidentService";
-import { users as usersService, roles as rolesService } from "../services/UserService";
+import { users as usersService } from "../services/UserService";
 import { assets as assetsService } from "../services/AssetService";
 import { knowledgeBase as knowledgeBaseService } from "../services/KnowledgeBaseService";
+import { EmaToastViewport, type EmaToastTone } from "../components/ema";
 
 type QueueKey =
   | "all"
@@ -41,9 +42,10 @@ type QueueKey =
   | "resolved"
   | "knowledge";
 
-type ToastState = { type: "success" | "error" | "warning" | "info"; message: string } | null;
+type ToastState = { id?: string | number; type: EmaToastTone; message: string } | null;
 type SortConfig = { key: string; direction: "asc" | "desc" };
 type AnyRow = Record<string, any>;
+type SelectOption = { value: string; label: string; disabled?: boolean };
 
 const STATUS_OPTIONS = ["Awaiting", "In Progress", "Pending Approval", "Pending User", "Pending Vendor", "On Site", "Resolved", "Rejected"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
@@ -232,10 +234,6 @@ function priorityTone(priority: string) {
   return "bg-slate-50 text-slate-700 ring-slate-200";
 }
 
-function selectClass() {
-  return "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-extrabold text-slate-800 shadow-sm outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
-}
-
 function inputClass() {
   return "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-4 focus:ring-blue-100";
 }
@@ -248,11 +246,88 @@ function labelClass() {
   return "grid gap-1 text-xs font-black uppercase tracking-[0.08em] text-slate-500";
 }
 
+function ServiceDeskSelect({
+  value,
+  options,
+  placeholder = "Select",
+  disabled,
+  onChange,
+}: {
+  value: string;
+  options: SelectOption[];
+  placeholder?: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selected = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleClick = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+        className={cx(
+          "flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-sm font-extrabold text-slate-800 shadow-sm outline-none transition hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50",
+          open && "border-blue-300 ring-4 ring-blue-100"
+        )}
+        aria-expanded={open}
+      >
+        <span className="min-w-0 truncate">{selected?.label || placeholder}</span>
+        <ChevronDown size={15} className={cx("shrink-0 text-slate-500 transition", open && "rotate-180 text-blue-600")} />
+      </button>
+      {open && !disabled && (
+        <div className="absolute left-0 top-[calc(100%+0.45rem)] z-[90] max-h-72 w-full min-w-[13rem] overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <button
+                key={`${option.value}-${option.label}`}
+                type="button"
+                disabled={option.disabled}
+                onClick={() => {
+                  if (option.disabled) return;
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={cx(
+                  "flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-sm font-extrabold transition disabled:cursor-not-allowed disabled:opacity-50",
+                  active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-blue-700"
+                )}
+              >
+                <span className="min-w-0 truncate">{option.label}</span>
+                {active ? <span className="text-blue-600">✓</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ServiceDesk() {
   const [currentUser] = useState<AnyRow>(() => readCurrentUser());
   const [incidents, setIncidents] = useState<AnyRow[]>([]);
   const [users, setUsers] = useState<AnyRow[]>([]);
-  const [roles, setRoles] = useState<AnyRow[]>([]);
   const [assets, setAssets] = useState<AnyRow[]>([]);
   const [categories, setCategories] = useState<AnyRow[]>([]);
   const [knowledgeBase, setKnowledgeBase] = useState<AnyRow[]>([]);
@@ -313,15 +388,13 @@ export default function ServiceDesk() {
   async function loadLookups() {
     setIsLookupLoading(true);
     try {
-      const [userRows, roleRows, categoryRows, assetRows, kbRows] = await Promise.allSettled([
+      const [userRows, categoryRows, assetRows, kbRows] = await Promise.allSettled([
         usersService.getAll(),
-        rolesService.getAll(),
         incidentCategoriesService.getAll(),
         assetsService.getAll(),
         knowledgeBaseService.getAll(),
       ]);
       if (userRows.status === "fulfilled") setUsers(Array.isArray(userRows.value) ? userRows.value : []);
-      if (roleRows.status === "fulfilled") setRoles(Array.isArray(roleRows.value) ? roleRows.value : []);
       if (categoryRows.status === "fulfilled") setCategories(Array.isArray(categoryRows.value) ? categoryRows.value : []);
       if (assetRows.status === "fulfilled") setAssets(Array.isArray(assetRows.value) ? assetRows.value : []);
       if (kbRows.status === "fulfilled") setKnowledgeBase(Array.isArray(kbRows.value) ? kbRows.value : []);
@@ -544,6 +617,7 @@ export default function ServiceDesk() {
   const categoryOptions = useMemo(() => categories.map((row) => getCategoryName(row)).filter(Boolean), [categories]);
   const assetOptions = useMemo(() => assets.map((asset) => getAsset(asset)).filter((asset) => asset && asset !== "—"), [assets]);
   const activeQueueLabel = queueItems.find((item) => item.key === activeQueue)?.label || "All Tickets";
+  const toastItems = toast ? [{ id: toast.id || `${toast.type}-${toast.message}`, tone: toast.type, title: toast.type === "success" ? "Success" : toast.type === "error" ? "Action failed" : toast.type === "warning" ? "Attention" : "Information", message: toast.message }] : [];
 
   function exportCsv() {
     const headers = ["No", "Req No", "Submitted", "Requester", "Asset", "Incident", "Urgency", "Assigned", "SLA", "Status"];
@@ -569,20 +643,7 @@ export default function ServiceDesk() {
 
   return (
     <main data-section="service-desk" className="min-h-screen bg-slate-50 p-4 text-slate-950">
-      {toast && (
-        <div className="fixed right-5 top-5 z-[80] flex w-[min(24rem,calc(100vw-2rem))] items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
-          <div className={cx("grid h-10 w-10 place-items-center rounded-xl", toast.type === "success" ? "bg-emerald-50 text-emerald-600" : toast.type === "error" ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600")}>
-            {toast.type === "success" ? <CheckCircle2 size={18} /> : toast.type === "error" ? <AlertCircle size={18} /> : <Clock size={18} />}
-          </div>
-          <div className="min-w-0 flex-1">
-            <strong className="block text-sm font-black text-slate-900">{toast.type === "success" ? "Success" : toast.type === "error" ? "Action failed" : "Information"}</strong>
-            <span className="mt-1 block text-sm font-semibold text-slate-600">{toast.message}</span>
-          </div>
-          <button type="button" onClick={() => setToast(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close toast">
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      <EmaToastViewport items={toastItems} onClose={() => setToast(null)} />
 
       <div className="grid gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
         <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -639,10 +700,10 @@ export default function ServiceDesk() {
             </div>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               {[
-                { label: "Open Tickets", value: queueCounts.open, note: "support workload", tone: "blue" },
-                { label: "SLA Risk", value: queueCounts.slaRisk, note: "near due / breached", tone: "rose" },
-                { label: "Awaiting", value: queueCounts.awaiting, note: "new requests", tone: "amber" },
-                { label: "In Progress", value: queueCounts.inProgress, note: "active handling", tone: "violet" },
+                { label: "Open Tickets", value: queueCounts.open, note: "support workload" },
+                { label: "SLA Risk", value: queueCounts.slaRisk, note: "near due / breached" },
+                { label: "Awaiting", value: queueCounts.awaiting, note: "new requests" },
+                { label: "In Progress", value: queueCounts.inProgress, note: "active handling" },
               ].map((kpi) => (
                 <div key={kpi.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <span className="text-[0.68rem] font-black uppercase tracking-[0.08em] text-slate-500">{kpi.label}</span>
@@ -716,13 +777,13 @@ export default function ServiceDesk() {
                   <label className={cx(labelClass(), "lg:col-span-2")}>Incident Title<input value={formData.title || ""} onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))} className={inputClass()} placeholder="Example: Laptop cannot connect to network" /></label>
                   <label className={cx(labelClass(), "lg:col-span-2")}>Description<textarea value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className={textareaClass()} placeholder="Describe the issue, impact and required support." /></label>
                   <label className={labelClass()}>Requester<input value={formData.requesterName || ""} onChange={(e) => setFormData((prev) => ({ ...prev, requesterName: e.target.value }))} className={inputClass()} /></label>
-                  <label className={labelClass()}>Asset<select value={formData.assetId || ""} onChange={(e) => setFormData((prev) => ({ ...prev, assetId: e.target.value }))} className={selectClass()}><option value="">No asset selected</option>{assetOptions.map((asset) => <option key={asset} value={asset}>{asset}</option>)}</select></label>
-                  <label className={labelClass()}>Urgency<select value={formData.priority || "Medium"} onChange={(e) => setFormData((prev) => ({ ...prev, priority: e.target.value }))} className={selectClass()}>{PRIORITY_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                  <label className={labelClass()}>Status<select value={formData.status || "Awaiting"} onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value }))} className={selectClass()} disabled={formMode === "create"}>{STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                  <label className={labelClass()}>Category<select value={formData.category || ""} onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))} className={selectClass()}><option value="">No category</option>{categoryOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                  <label className={labelClass()}>Asset<ServiceDeskSelect value={formData.assetId || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assetId: value }))} placeholder="No asset selected" options={[{ value: "", label: "No asset selected" }, ...assetOptions.map((asset) => ({ value: asset, label: asset }))]} /></label>
+                  <label className={labelClass()}>Urgency<ServiceDeskSelect value={formData.priority || "Medium"} onChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))} options={PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
+                  <label className={labelClass()}>Status<ServiceDeskSelect value={formData.status || "Awaiting"} onChange={(value) => setFormData((prev) => ({ ...prev, status: value }))} disabled={formMode === "create"} options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
+                  <label className={labelClass()}>Category<ServiceDeskSelect value={formData.category || ""} onChange={(value) => setFormData((prev) => ({ ...prev, category: value }))} placeholder="No category" options={[{ value: "", label: "No category" }, ...categoryOptions.map((item) => ({ value: item, label: item }))]} /></label>
                   <label className={labelClass()}>Device Type<input value={formData.deviceType || ""} onChange={(e) => setFormData((prev) => ({ ...prev, deviceType: e.target.value }))} className={inputClass()} placeholder="Laptop, Desktop, Server..." /></label>
-                  <label className={labelClass()}>Assigned Level<select value={formData.assignedLevel || ""} onChange={(e) => setFormData((prev) => ({ ...prev, assignedLevel: e.target.value, assignedTo: "" }))} className={selectClass()}><option value="">Not assigned</option>{SUPPORT_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
-                  <label className={labelClass()}>Assigned Engineer<select value={formData.assignedTo || ""} onChange={(e) => setFormData((prev) => ({ ...prev, assignedTo: e.target.value }))} className={selectClass()}><option value="">Unassigned</option>{engineerOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+                  <label className={labelClass()}>Assigned Level<ServiceDeskSelect value={formData.assignedLevel || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedLevel: value, assignedTo: "" }))} placeholder="Not assigned" options={[{ value: "", label: "Not assigned" }, ...SUPPORT_LEVELS.map((level) => ({ value: level, label: level }))]} /></label>
+                  <label className={labelClass()}>Assigned Engineer<ServiceDeskSelect value={formData.assignedTo || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedTo: value }))} placeholder="Unassigned" options={[{ value: "", label: "Unassigned" }, ...engineerOptions.map((name) => ({ value: name, label: name }))]} /></label>
                   <label className={cx(labelClass(), "lg:col-span-2")}>Action Plan<textarea value={formData.actionPlan || ""} onChange={(e) => setFormData((prev) => ({ ...prev, actionPlan: e.target.value }))} className={textareaClass()} placeholder="Resolution steps or next action." /></label>
                 </div>
 
@@ -752,10 +813,10 @@ export default function ServiceDesk() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <label className={labelClass()}>Status<select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={selectClass()}><option value="All">All status</option>{STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                  <label className={labelClass()}>Urgency<select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={selectClass()}><option value="All">All urgency</option>{PRIORITY_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                  <label className={labelClass()}>Assignee<select value={filterAssignedTo} onChange={(e) => setFilterAssignedTo(e.target.value)} className={selectClass()}><option value="All">All assignee</option><option value="Unassigned">Unassigned</option>{engineerOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
-                  <label className={labelClass()}>SLA<select value={filterSla} onChange={(e) => setFilterSla(e.target.value)} className={selectClass()}><option value="All">All SLA</option>{["On Time", "Near Due", "Overdue", "Resolved", "No SLA"].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+                  <label className={labelClass()}>Status<ServiceDeskSelect value={filterStatus} onChange={setFilterStatus} options={[{ value: "All", label: "All status" }, ...STATUS_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={labelClass()}>Urgency<ServiceDeskSelect value={filterPriority} onChange={setFilterPriority} options={[{ value: "All", label: "All urgency" }, ...PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label>
+                  <label className={labelClass()}>Assignee<ServiceDeskSelect value={filterAssignedTo} onChange={setFilterAssignedTo} options={[{ value: "All", label: "All assignee" }, { value: "Unassigned", label: "Unassigned" }, ...engineerOptions.map((name) => ({ value: name, label: name }))]} /></label>
+                  <label className={labelClass()}>SLA<ServiceDeskSelect value={filterSla} onChange={setFilterSla} options={[{ value: "All", label: "All SLA" }, ...["On Time", "Near Due", "Overdue", "Resolved", "No SLA"].map((item) => ({ value: item, label: item }))]} /></label>
                 </div>
 
                 {showAdvanced && (
