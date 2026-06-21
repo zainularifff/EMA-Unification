@@ -174,9 +174,12 @@ export function Sidebar() {
     return activeSection?.title || "Dashboard";
   }, [location.pathname]);
 
-  const [openSection, setOpenSection] = useState<string>(activeSectionTitle);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [openSection, setOpenSection] = useState<string>("");
 
   useEffect(() => {
+    if (!isSidebarOpen) return;
+
     const activeSection = navSections.find((section) =>
       section.collapsible && section.items.some((item) => isRouteActive(location.pathname, item.path))
     );
@@ -184,10 +187,26 @@ export function Sidebar() {
     if (activeSection) {
       setOpenSection(activeSection.title);
     }
-  }, [location.pathname]);
+  }, [location.pathname, isSidebarOpen]);
 
   const toggleSection = (sectionTitle: string) => {
+    if (!isSidebarOpen) {
+      setIsSidebarOpen(true);
+      setOpenSection(sectionTitle);
+      return;
+    }
+
     setOpenSection((current) => (current === sectionTitle ? "" : sectionTitle));
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen((current) => {
+      const next = !current;
+      if (next && !openSection) {
+        setOpenSection(activeSectionTitle);
+      }
+      return next;
+    });
   };
 
   const handleLogout = () => {
@@ -198,26 +217,43 @@ export function Sidebar() {
   const displayName = getDisplayName(accessUser);
   const roleLabel = getSidebarRoleLabel(accessUser);
   const fullRoleLabel = getUserRoles(accessUser).join(" • ") || roleLabel;
+  const asideWidthClass = isSidebarOpen ? "w-72 px-4" : "w-20 px-3";
+  const iconOnlyLinkClass = !isSidebarOpen ? "justify-center px-0" : "";
 
   return (
-    <aside className="sticky top-0 flex h-screen w-72 shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-950 px-4 py-5 text-slate-100 shadow-2xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="mb-6 flex items-center gap-3">
+    <aside
+      className={`sticky top-0 flex h-screen ${asideWidthClass} shrink-0 flex-col overflow-y-auto overflow-x-hidden bg-slate-950 py-5 text-slate-100 shadow-2xl transition-all duration-300 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
+    >
+      <div className={`mb-6 flex items-center ${isSidebarOpen ? "gap-3" : "justify-center"}`}>
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
           <Box size={23} />
         </div>
 
-        <div className="min-w-0">
-          <div className="truncate text-base font-extrabold tracking-tight text-white">EMA System</div>
-          <div className="truncate text-xs font-semibold uppercase tracking-wide text-slate-400">Operations Console</div>
-        </div>
+        {isSidebarOpen && (
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-base font-extrabold tracking-tight text-white">EMA System</div>
+            <div className="truncate text-xs font-semibold uppercase tracking-wide text-slate-400">Operations Console</div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/10 text-slate-200 transition hover:bg-white hover:text-slate-950"
+          title={isSidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+          aria-label={isSidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+          aria-expanded={isSidebarOpen}
+        >
+          {isSidebarOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        </button>
       </div>
 
-      <div className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Main Category</div>
+      {isSidebarOpen && <div className="mb-3 mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Main Category</div>}
 
       <nav className="flex flex-1 flex-col gap-1">
         {navSections.map((section) => {
           const SectionIcon = section.icon;
-          const isOpen = openSection === section.title;
+          const isOpen = isSidebarOpen && openSection === section.title;
           const hasActiveItem = section.items.some((item) => isRouteActive(location.pathname, item.path));
 
           if (!section.collapsible) {
@@ -231,14 +267,16 @@ export function Sidebar() {
               return (
                 <div
                   key={section.title}
-                  className={`${sidebarLinkBase} ${sidebarLinkMuted}`}
+                  className={`${sidebarLinkBase} ${iconOnlyLinkClass} ${sidebarLinkMuted}`}
                   title={item.comingSoon ? "Coming soon" : "Access restricted"}
                 >
                   <Icon size={17} />
-                  <span className="min-w-0 flex-1 truncate">{section.title}</span>
-                  <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300">
-                    {item.comingSoon ? "Soon" : "Locked"}
-                  </span>
+                  {isSidebarOpen && <span className="min-w-0 flex-1 truncate">{section.title}</span>}
+                  {isSidebarOpen && (
+                    <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-300">
+                      {item.comingSoon ? "Soon" : "Locked"}
+                    </span>
+                  )}
                 </div>
               );
             }
@@ -247,10 +285,11 @@ export function Sidebar() {
               <NavLink
                 key={section.title}
                 to={item.path}
-                className={`${sidebarLinkBase} ${isActive ? sidebarLinkActive : ""}`}
+                title={!isSidebarOpen ? section.title : undefined}
+                className={`${sidebarLinkBase} ${iconOnlyLinkClass} ${isActive ? sidebarLinkActive : ""}`}
               >
                 <Icon size={17} />
-                <span className="min-w-0 truncate">{section.title}</span>
+                {isSidebarOpen && <span className="min-w-0 truncate">{section.title}</span>}
               </NavLink>
             );
           }
@@ -259,14 +298,15 @@ export function Sidebar() {
             <div key={section.title} className="grid gap-1">
               <button
                 type="button"
-                className={`${sidebarLinkBase} border-0 ${hasActiveItem && !isOpen ? sidebarLinkActive : ""}`}
+                className={`${sidebarLinkBase} ${iconOnlyLinkClass} border-0 ${hasActiveItem && !isOpen ? sidebarLinkActive : ""}`}
                 onClick={() => toggleSection(section.title)}
                 aria-expanded={isOpen}
                 aria-controls={`sidebar-section-${section.title.replace(/\s+/g, "-").toLowerCase()}`}
+                title={!isSidebarOpen ? section.title : undefined}
               >
                 <SectionIcon size={17} />
-                <span className="min-w-0 flex-1 truncate text-left">{section.title}</span>
-                {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                {isSidebarOpen && <span className="min-w-0 flex-1 truncate text-left">{section.title}</span>}
+                {isSidebarOpen && (isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
               </button>
 
               {isOpen && (
@@ -315,24 +355,31 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-6 space-y-3 border-t border-white/10 pt-4">
-        <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-white/10 p-3 ring-1 ring-white/10" title={`${displayName} • ${fullRoleLabel}`}>
+        <div
+          className={`flex min-w-0 items-center ${isSidebarOpen ? "gap-3 p-3" : "justify-center p-2"} rounded-2xl bg-white/10 ring-1 ring-white/10`}
+          title={`${displayName} • ${fullRoleLabel}`}
+        >
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white ring-1 ring-white/10">
             <ShieldCheck size={18} />
           </div>
 
-          <div className="min-w-0">
-            <div className="truncate font-bold leading-tight text-white">{displayName}</div>
-            <div className="truncate text-xs text-slate-400">{roleLabel}</div>
-          </div>
+          {isSidebarOpen && (
+            <div className="min-w-0">
+              <div className="truncate font-bold leading-tight text-white">{displayName}</div>
+              <div className="truncate text-xs text-slate-400">{roleLabel}</div>
+            </div>
+          )}
         </div>
 
         <button
           type="button"
           onClick={handleLogout}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white text-sm font-bold text-slate-950 transition hover:bg-slate-100"
+          className={`${isSidebarOpen ? "w-full justify-center px-4" : "w-11 justify-center px-0"} inline-flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white text-sm font-bold text-slate-950 transition hover:bg-slate-100`}
+          title="Logout"
+          aria-label="Logout"
         >
           <LogOut size={17} />
-          Logout
+          {isSidebarOpen && <span>Logout</span>}
         </button>
       </div>
     </aside>
