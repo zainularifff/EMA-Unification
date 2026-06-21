@@ -71,6 +71,7 @@ const css = `
   display: grid !important;
   gap: .25rem !important;
   overflow: auto !important;
+  overscroll-behavior: contain !important;
   border: 1px solid #d8e4f2 !important;
   border-radius: .85rem !important;
   background: #ffffff !important;
@@ -163,6 +164,11 @@ function openSelect(select: HTMLSelectElement, button: HTMLButtonElement, textNo
   menu.setAttribute("role", "listbox");
   menu.setAttribute("aria-label", select.getAttribute("aria-label") || "EMA select");
 
+  menu.addEventListener("click", (event) => event.stopPropagation());
+  menu.addEventListener("mousedown", (event) => event.stopPropagation());
+  menu.addEventListener("wheel", (event) => event.stopPropagation(), { passive: true });
+  menu.addEventListener("scroll", (event) => event.stopPropagation());
+
   Array.from(select.options).forEach((option) => {
     const item = document.createElement("button");
     item.type = "button";
@@ -252,6 +258,14 @@ function upgradeAllSelects() {
   document.querySelectorAll<HTMLSelectElement>(".ema-filter-field select, .ema-toolbar select, main[data-section='users'] select, .ema-module-root select").forEach((select) => upgradeSelect(select as UpgradedSelect));
 }
 
+function handleDocumentScroll(event: Event) {
+  if (!openMenu || !openTrigger) return;
+  const target = event.target as Node | null;
+
+  if (target && openMenu.contains(target)) return;
+  positionMenu(openTrigger, openMenu);
+}
+
 if (typeof document !== "undefined") {
   ensureStyles();
   upgradeAllSelects();
@@ -263,7 +277,7 @@ if (typeof document !== "undefined") {
     closeMenu();
   });
   window.addEventListener("resize", closeMenu);
-  window.addEventListener("scroll", closeMenu, true);
+  window.addEventListener("scroll", handleDocumentScroll, true);
 }
 
 export {};
