@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   ArrowRightLeft,
   BookOpen,
@@ -32,10 +32,9 @@ import { EmaToastViewport, type EmaToastItem, type EmaToastTone } from "../compo
 
 type AnyRow = Record<string, any>;
 type QueueKey = "all" | "my" | "sla-risk" | "unassigned" | "awaiting" | "in-progress" | "pending-user" | "pending-vendor" | "on-site" | "resolved" | "knowledge";
-type ToastState = { id?: string | number; type: EmaToastTone; message: string } | null;
+type ToastState = { type: EmaToastTone; message: string } | null;
 type SelectOption = { value: string; label: string; disabled?: boolean };
-type SortConfig = { key: string; direction: "asc" | "desc" };
-type ConfirmState = { ticketId: string; row: AnyRow; loading?: boolean } | null;
+type ConfirmState = { ticketId: string; loading?: boolean } | null;
 
 const STATUS_OPTIONS = ["Awaiting", "In Progress", "Pending Approval", "Pending User", "Pending Vendor", "On Site", "Resolved", "Rejected"];
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
@@ -61,20 +60,18 @@ function valueOf(row: AnyRow | null | undefined, keys: string[], fallback = "") 
   return fallback;
 }
 
-function unique(values: string[]) {
-  const seen = new Set<string>();
-  return values
-    .map((value) => String(value || "").trim())
-    .filter((value) => {
-      const key = value.toLowerCase();
-      if (!value || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
 function normalizeText(value: any) {
   return String(value || "").trim().toLowerCase();
+}
+
+function unique(values: string[]) {
+  const seen = new Set<string>();
+  return values.map((value) => String(value || "").trim()).filter((value) => {
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function getIncidentId(row: AnyRow | null | undefined) {
@@ -87,6 +84,24 @@ function getUserName(row: AnyRow | null | undefined) {
 
 function getUserId(row: AnyRow | null | undefined) {
   return valueOf(row, ["id", "ID", "userID", "UserID", "userId", "UserId", "email", "Email"], getUserName(row));
+}
+
+function readCurrentUser() {
+  if (typeof window === "undefined") return { name: "Current User", role: "Admin" };
+  const keys = ["user", "authUser", "currentUser", "emaUser", "ema-user", "userData", "auth", "ema-auth", "authData", "loginUser"];
+  for (const key of keys) {
+    try {
+      const raw = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const user = parsed?.user || parsed?.data?.user || parsed?.data || parsed?.profile || parsed;
+      const name = getUserName(user);
+      if (name) return { ...user, id: getUserId(user), name, role: valueOf(user, ["role", "Role", "roleName", "RoleName"], "Admin") };
+    } catch {
+      // ignore bad storage
+    }
+  }
+  return { name: "Current User", role: "Admin" };
 }
 
 function normalizeSupportLevelName(value: any) {
@@ -107,10 +122,7 @@ function getUserRoleNames(user: AnyRow | null | undefined) {
   if (Array.isArray(user.Roles)) roleSources.push(...user.Roles);
   if (Array.isArray(user.userRoles)) roleSources.push(...user.userRoles);
   roleSources.push(user.roleName, user.RoleName, user.role, user.Role, user.role?.name, user.role?.RoleName, user.supportLevel, user.SupportLevel, user.designation, user.Designation, user.department, user.Department);
-  return roleSources
-    .flatMap((role) => String(getRoleDisplayName(role) || "").split(/[,|;]/))
-    .map((role) => normalizeSupportLevelName(role))
-    .filter(Boolean);
+  return roleSources.flatMap((role) => String(getRoleDisplayName(role) || "").split(/[,|;]/)).map(normalizeSupportLevelName).filter(Boolean);
 }
 
 function isSupportRoleName(roleName: any) {
@@ -125,26 +137,12 @@ function userMatchesSupportLevel(user: AnyRow, supportLevel: string) {
 }
 
 function getCategoryName(row: AnyRow | null | undefined) {
-  return valueOf(row, ["name", "Name", "label", "Label", "title", "Title", "categoryTitle", "CategoryTitle", "categoryName", "CategoryName", "subcategoryName", "SubCategoryName", "subCategoryName", "detailName", "DetailName"]);
-}
-
-function getCategoryId(row: AnyRow | null | undefined) {
-  return valueOf(row, ["id", "ID", "categoryID", "CategoryID", "incidentCategoryID", "IncidentCategoryID", "subcategoryID", "SubCategoryID", "detailID", "DetailID", "value", "Value"], getCategoryName(row));
-}
-
-function getCategoryType(row: AnyRow | null | undefined) {
-  return normalizeText(valueOf(row, ["type", "Type", "level", "Level", "kind", "Kind", "categoryType", "CategoryType"]));
-}
-
-function getParentCategoryKey(row: AnyRow | null | undefined) {
-  return valueOf(row, ["parentId", "ParentID", "parentID", "ParentId", "parentCategoryId", "ParentCategoryID", "parentCategory", "ParentCategory", "parentName", "ParentName", "categoryParent", "CategoryParent"]);
+  return valueOf(row, ["name", "Name", "label", "Label", "title", "Title", "categoryName", "CategoryName", "subcategoryName", "SubCategoryName", "subCategoryName", "detailName", "DetailName"]);
 }
 
 function getArray(row: AnyRow | null | undefined, keys: string[]) {
   if (!row) return [];
-  for (const key of keys) {
-    if (Array.isArray(row[key])) return row[key];
-  }
+  for (const key of keys) if (Array.isArray(row[key])) return row[key];
   return [];
 }
 
@@ -152,7 +150,6 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
   const categoryNames: string[] = [];
   const subByCategory = new Map<string, string[]>();
   const detailsByCategorySub = new Map<string, string[]>();
-  const idNameMap = new Map<string, string>();
   const keyOf = (value: any) => normalizeText(value);
   const addCategory = (category: string) => {
     const text = String(category || "").trim();
@@ -180,53 +177,24 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
   };
 
   rows.forEach((row) => {
-    const name = getCategoryName(row);
-    const id = getCategoryId(row);
-    if (id && name) idNameMap.set(keyOf(id), name);
-    if (name) idNameMap.set(keyOf(name), name);
-  });
-
-  rows.forEach((row) => {
-    const rowName = getCategoryName(row);
-    const rowId = getCategoryId(row);
-    const type = getCategoryType(row);
-    const parent = getParentCategoryKey(row);
     const categoryValue = valueOf(row, ["category", "Category", "categoryName", "CategoryName", "mainCategory", "MainCategory"]);
     const subValue = valueOf(row, ["subcategory", "Subcategory", "subCategory", "SubCategory", "subCategoryName", "SubCategoryName", "subcategoryName", "SubcategoryName"]);
     const detailValue = valueOf(row, ["detail", "Detail", "incidentDetail", "IncidentDetail", "detailName", "DetailName"]);
+    const name = getCategoryName(row);
     if (categoryValue) addCategory(categoryValue);
     if (categoryValue && subValue) addSubcategory(categoryValue, subValue);
     if (categoryValue && detailValue) addDetail(categoryValue, subValue, detailValue);
-    const isRootCategory = rowName && !subValue && !detailValue && (!parent || (type.includes("category") && !type.includes("sub") && !type.includes("detail")));
-    const rootName = categoryValue || (isRootCategory ? rowName : "");
+    const rootName = categoryValue || (!subValue && !detailValue ? name : "");
     if (rootName) {
       addCategory(rootName);
-      const childRows = getArray(row, ["subcategories", "Subcategories", "SubCategories", "subCategories", "children", "Children", "items", "Items"]);
-      childRows.forEach((child: AnyRow) => {
+      getArray(row, ["subcategories", "Subcategories", "SubCategories", "subCategories", "children", "Children", "items", "Items"]).forEach((child: AnyRow) => {
         const childName = getCategoryName(child) || valueOf(child, ["subcategory", "Subcategory", "subCategory", "SubCategory"]);
         if (!childName) return;
         addSubcategory(rootName, childName);
-        getArray(child, ["details", "Details", "incidentDetails", "IncidentDetails", "children", "Children", "items", "Items"]).forEach((detailRow: AnyRow) => {
-          addDetail(rootName, childName, getCategoryName(detailRow) || valueOf(detailRow, ["detail", "Detail", "incidentDetail", "IncidentDetail"]));
-        });
+        getArray(child, ["details", "Details", "incidentDetails", "IncidentDetails", "children", "Children", "items", "Items"]).forEach((detailRow: AnyRow) => addDetail(rootName, childName, getCategoryName(detailRow) || valueOf(detailRow, ["detail", "Detail", "incidentDetail", "IncidentDetail"])));
       });
-      getArray(row, ["details", "Details", "incidentDetails", "IncidentDetails"]).forEach((detailRow: AnyRow) => {
-        addDetail(rootName, "", getCategoryName(detailRow) || valueOf(detailRow, ["detail", "Detail", "incidentDetail", "IncidentDetail"]));
-      });
+      getArray(row, ["details", "Details", "incidentDetails", "IncidentDetails"]).forEach((detailRow: AnyRow) => addDetail(rootName, "", getCategoryName(detailRow) || valueOf(detailRow, ["detail", "Detail", "incidentDetail", "IncidentDetail"])));
     }
-    if (parent && rowName) {
-      const parentName = idNameMap.get(keyOf(parent)) || parent;
-      const parentIsCategory = categoryNames.some((cat) => keyOf(cat) === keyOf(parentName));
-      if (parentIsCategory && !type.includes("detail")) addSubcategory(parentName, rowName);
-      subByCategory.forEach((subs, catKey) => {
-        const matchedSub = subs.find((sub) => keyOf(sub) === keyOf(parentName));
-        if (matchedSub) {
-          const category = categoryNames.find((cat) => keyOf(cat) === catKey) || "";
-          addDetail(category, matchedSub, rowName);
-        }
-      });
-    }
-    if (rowId && rowName) idNameMap.set(keyOf(rowId), rowName);
   });
 
   incidents.forEach((row) => {
@@ -238,14 +206,15 @@ function buildCategoryCatalog(rows: AnyRow[], incidents: AnyRow[]) {
     if (category && detail) addDetail(category, subcategory, detail);
   });
 
-  const getSubcategories = (category: string) => unique(subByCategory.get(keyOf(category)) || []);
-  const getDetails = (category: string, subcategory: string) => {
-    const directKey = `${keyOf(category)}::${keyOf("__direct__")}`;
-    const subKey = `${keyOf(category)}::${keyOf(subcategory)}`;
-    return unique([...(detailsByCategorySub.get(subKey) || []), ...(!subcategory ? detailsByCategorySub.get(directKey) || [] : [])]);
+  return {
+    categories: unique(categoryNames),
+    getSubcategories: (category: string) => unique(subByCategory.get(keyOf(category)) || []),
+    getDetails: (category: string, subcategory: string) => {
+      const directKey = `${keyOf(category)}::${keyOf("__direct__")}`;
+      const subKey = `${keyOf(category)}::${keyOf(subcategory)}`;
+      return unique([...(detailsByCategorySub.get(subKey) || []), ...(!subcategory ? detailsByCategorySub.get(directKey) || [] : [])]);
+    },
   };
-
-  return { categories: unique(categoryNames), getSubcategories, getDetails };
 }
 
 function getStatus(row: AnyRow | null | undefined) {
@@ -289,20 +258,13 @@ function getAssetOwnerId(asset: AnyRow | null | undefined) {
   return valueOf(asset, ["ownerId", "OwnerID", "userID", "UserID", "userId", "UserId", "requesterId", "RequesterID", "customerId", "CustomerID", "email", "Email"], getAssetOwner(asset));
 }
 
-function inferAssetBrand(...values: any[]) {
-  const text = values.map((value) => String(value || "")).join(" ").toLowerCase();
-  if (text.includes("dell") || text.includes("latitude") || text.includes("optiplex")) return "Dell";
-  if (text.includes("hewlett") || text.includes("hp ") || text.startsWith("hp") || text.includes("probook") || text.includes("elitebook")) return "HP";
-  if (text.includes("lenovo") || text.includes("thinkpad") || text.includes("thinkcentre")) return "Lenovo";
-  if (text.includes("apple") || text.includes("macbook") || text.includes("imac")) return "Apple";
-  if (text.includes("microsoft") || text.includes("surface")) return "Microsoft";
-  if (text.includes("acer")) return "Acer";
-  if (text.includes("asus")) return "ASUS";
-  return "";
-}
-
 function getAssetBrand(asset: AnyRow | null | undefined) {
-  return valueOf(asset, ["brand", "Brand", "manufacturer", "Manufacturer", "vendor", "Vendor"], inferAssetBrand(getAssetModel(asset), getAssetValue(asset)));
+  const model = getAssetModel(asset).toLowerCase();
+  const text = `${valueOf(asset, ["brand", "Brand", "manufacturer", "Manufacturer", "vendor", "Vendor"])} ${model}`.toLowerCase();
+  if (text.includes("dell") || text.includes("latitude") || text.includes("optiplex")) return "Dell";
+  if (text.includes("hp") || text.includes("probook") || text.includes("elitebook")) return "HP";
+  if (text.includes("lenovo") || text.includes("thinkpad")) return "Lenovo";
+  return valueOf(asset, ["brand", "Brand", "manufacturer", "Manufacturer", "vendor", "Vendor"]);
 }
 
 function getAssetModel(asset: AnyRow | null | undefined) {
@@ -345,42 +307,12 @@ function makeIncidentId() {
   return `INC-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 90 + 10)}`;
 }
 
-function readCurrentUser() {
-  if (typeof window === "undefined") return { name: "Current User", role: "Admin" };
-  const keys = ["user", "authUser", "currentUser", "emaUser", "ema-user", "userData", "auth", "ema-auth", "authData", "loginUser"];
-  for (const key of keys) {
-    try {
-      const raw = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const user = parsed?.user || parsed?.data?.user || parsed?.data || parsed?.profile || parsed;
-      const name = getUserName(user);
-      if (name) return { ...user, id: getUserId(user), name, role: valueOf(user, ["role", "Role", "roleName", "RoleName"], "Admin") };
-    } catch {
-      // ignore storage value
-    }
-  }
-  return { name: "Current User", role: "Admin" };
-}
-
 function getStoredAuthToken() {
   if (typeof window === "undefined") return "";
   const directKeys = ["token", "accessToken", "authToken", "emaToken", "ema-token"];
   for (const key of directKeys) {
     const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
     if (value && value !== "undefined" && value !== "null") return value.replace(/^Bearer\s+/i, "");
-  }
-  const objectKeys = ["user", "authUser", "currentUser", "emaUser", "ema-user", "userData", "auth", "ema-auth", "authData", "loginUser"];
-  for (const key of objectKeys) {
-    try {
-      const raw = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const token = parsed?.token || parsed?.accessToken || parsed?.authToken || parsed?.data?.token || parsed?.data?.accessToken || parsed?.data?.authToken;
-      if (token) return String(token).replace(/^Bearer\s+/i, "");
-    } catch {
-      // ignore storage value
-    }
   }
   return "";
 }
@@ -453,10 +385,7 @@ function emptyForm(currentUser: AnyRow) {
     deviceType: "",
     assignedLevel: "",
     assignedTo: "",
-    rootCause: "",
     actionPlan: "",
-    additionalMemo: "",
-    remarks: "",
     createdAt: new Date().toISOString(),
   };
 }
@@ -504,66 +433,14 @@ function labelClass() {
 
 function ServiceDeskSelect({ value, options, placeholder = "Select", disabled, onChange }: { value: string; options: SelectOption[]; placeholder?: string; disabled?: boolean; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = options.find((option) => option.value === value);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleClick = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative min-w-0">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
-        className={cx(
-          "flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-sm font-extrabold text-slate-800 shadow-sm outline-none transition hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50",
-          open && "border-blue-300 ring-4 ring-blue-100"
-        )}
-        aria-expanded={open}
-      >
+    <div className="relative min-w-0" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
+      <button type="button" disabled={disabled} onClick={() => setOpen((current) => !current)} className={cx("flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-sm font-extrabold text-slate-800 shadow-sm outline-none transition hover:border-blue-300 hover:bg-blue-50/40 focus:border-blue-300 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50", open && "border-blue-300 ring-4 ring-blue-100")} aria-expanded={open}>
         <span className="min-w-0 truncate">{selected?.label || placeholder}</span>
         <ChevronDown size={15} className={cx("shrink-0 text-slate-500 transition", open && "rotate-180 text-blue-600")} />
       </button>
-      {open && !disabled && (
-        <div className="absolute left-0 top-[calc(100%+0.45rem)] z-[100] max-h-72 w-full min-w-[13rem] overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">
-          {options.map((option) => {
-            const active = option.value === value;
-            return (
-              <button
-                key={`${option.value}-${option.label}`}
-                type="button"
-                disabled={option.disabled}
-                onClick={() => {
-                  if (option.disabled) return;
-                  onChange(option.value);
-                  setOpen(false);
-                }}
-                className={cx(
-                  "flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-sm font-extrabold transition disabled:cursor-not-allowed disabled:opacity-50",
-                  active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-blue-700"
-                )}
-              >
-                <span className="min-w-0 truncate">{option.label}</span>
-                {active ? <span className="text-blue-600">✓</span> : null}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {open && !disabled && <div className="absolute left-0 top-[calc(100%+0.45rem)] z-[100] max-h-72 w-full min-w-[13rem] overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl">{options.map((option) => { const active = option.value === value; return <button key={`${option.value}-${option.label}`} type="button" disabled={option.disabled} onMouseDown={(event) => event.preventDefault()} onClick={() => { if (option.disabled) return; onChange(option.value); setOpen(false); }} className={cx("flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-sm font-extrabold transition disabled:cursor-not-allowed disabled:opacity-50", active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-blue-700")}><span className="min-w-0 truncate">{option.label}</span>{active ? <span className="text-blue-600">✓</span> : null}</button>; })}</div>}
     </div>
   );
 }
@@ -584,6 +461,7 @@ export default function ServiceDesk() {
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [formData, setFormData] = useState<AnyRow>(() => emptyForm(currentUser));
   const [selectedIncidentId, setSelectedIncidentId] = useState("");
+  const [selectedQueue, setSelectedQueue] = useState<QueueKey>("all");
   const [selectedKb, setSelectedKb] = useState<AnyRow | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -593,7 +471,7 @@ export default function ServiceDesk() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "createdAt", direction: "desc" });
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" }>({ key: "createdAt", direction: "desc" });
   const [page, setPage] = useState(1);
   const [now, setNow] = useState(new Date());
   const [toast, setToast] = useState<ToastState>(null);
@@ -617,7 +495,7 @@ export default function ServiceDesk() {
 
   useEffect(() => {
     setPage(1);
-  }, [activeQueue, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSla, dateFrom, dateTo]);
+  }, [selectedQueue, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSla, dateFrom, dateTo]);
 
   async function loadIncidents(silent = false) {
     if (!silent) setIsLoading(true);
@@ -636,13 +514,7 @@ export default function ServiceDesk() {
   async function loadLookups() {
     setIsLookupLoading(true);
     try {
-      const [userRows, roleRows, categoryRows, assetRows, kbRows] = await Promise.allSettled([
-        usersService.getAll(),
-        rolesService.getAll(),
-        incidentCategoriesService.getAll(),
-        assetsService.getAll(),
-        knowledgeBaseService.getAll(),
-      ]);
+      const [userRows, roleRows, categoryRows, assetRows, kbRows] = await Promise.allSettled([usersService.getAll(), rolesService.getAll(), incidentCategoriesService.getAll(), assetsService.getAll(), knowledgeBaseService.getAll()]);
       if (userRows.status === "fulfilled") setUsers(Array.isArray(userRows.value) ? userRows.value : []);
       if (roleRows.status === "fulfilled") setRoles(Array.isArray(roleRows.value) ? roleRows.value : []);
       if (categoryRows.status === "fulfilled") setCategories(Array.isArray(categoryRows.value) ? categoryRows.value : []);
@@ -674,9 +546,7 @@ export default function ServiceDesk() {
     setIsLoadingAttachments(true);
     try {
       const token = getStoredAuthToken();
-      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(id)}/attachments`), {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(id)}/attachments`), { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       if (!response.ok) throw new Error(`Attachment load failed with status ${response.status}`);
       const data = await response.json();
       const rows = Array.isArray(data) ? data : Array.isArray(data?.attachments) ? data.attachments : Array.isArray(data?.data) ? data.data : [];
@@ -697,9 +567,8 @@ export default function ServiceDesk() {
       event.target.value = "";
       return;
     }
-    const existingAttachmentCount = incidentAttachments.length;
     const existingAttachmentTotalSize = incidentAttachments.reduce((total, attachment) => total + Number(attachment?.size || attachment?.fileSize || attachment?.FileSize || 0), 0);
-    if (existingAttachmentCount >= INCIDENT_ATTACHMENT_MAX_FILES) {
+    if (incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES) {
       setToast({ type: "error", message: `Maximum ${INCIDENT_ATTACHMENT_MAX_FILES} attachments are allowed per ticket.` });
       event.target.value = "";
       return;
@@ -719,11 +588,7 @@ export default function ServiceDesk() {
       const body = new FormData();
       body.append("file", file);
       const token = getStoredAuthToken();
-      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments`), {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body,
-      });
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments`), { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : undefined, body });
       if (!response.ok) {
         const errorMessage = await readAttachmentError(response);
         throw new Error(errorMessage || `Attachment upload failed with status ${response.status}`);
@@ -745,10 +610,7 @@ export default function ServiceDesk() {
     if (!incidentId || !safeFilename) return;
     try {
       const token = getStoredAuthToken();
-      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments/${encodeURIComponent(safeFilename)}`), {
-        method: "DELETE",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
+      const response = await fetch(getServiceDeskApiUrl(`/api/incidents/${encodeURIComponent(incidentId)}/attachments/${encodeURIComponent(safeFilename)}`), { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : undefined });
       if (!response.ok) throw new Error(`Attachment delete failed with status ${response.status}`);
       await loadIncidentAttachments(incidentId);
       setToast({ type: "success", message: "Attachment deleted." });
@@ -767,16 +629,7 @@ export default function ServiceDesk() {
     const owner = getAssetOwner(asset);
     const ownerId = getAssetOwnerId(asset);
     const deviceType = getAssetDeviceType(asset);
-    setFormData((prev) => ({
-      ...prev,
-      assetId: getAssetValue(asset),
-      assetBrand: getAssetBrand(asset),
-      assetModel: getAssetModel(asset),
-      assetOS: getAssetOS(asset),
-      deviceType: deviceType || prev.deviceType,
-      requesterName: owner || prev.requesterName,
-      requesterId: ownerId || prev.requesterId,
-    }));
+    setFormData((prev) => ({ ...prev, assetId: getAssetValue(asset), assetBrand: getAssetBrand(asset), assetModel: getAssetModel(asset), assetOS: getAssetOS(asset), deviceType: deviceType || prev.deviceType, requesterName: owner || prev.requesterName, requesterId: ownerId || prev.requesterId }));
   }
 
   function startCreate() {
@@ -790,26 +643,7 @@ export default function ServiceDesk() {
   function startEdit(row: AnyRow) {
     const incidentId = getIncidentId(row);
     setFormMode("edit");
-    setFormData({
-      ...emptyForm(currentUser),
-      ...row,
-      id: incidentId,
-      title: getTitle(row),
-      description: getDescription(row),
-      priority: getPriority(row),
-      status: getStatus(row),
-      requesterName: getRequester(row),
-      assetId: getAsset(row) === "—" ? "" : getAsset(row),
-      assetBrand: valueOf(row, ["assetBrand", "AssetBrand", "brand", "Brand"]),
-      assetModel: valueOf(row, ["assetModel", "AssetModel", "model", "Model"]),
-      assetOS: valueOf(row, ["assetOS", "AssetOS", "os", "OS"]),
-      deviceType: valueOf(row, ["deviceType", "DeviceType"]),
-      category: valueOf(row, ["category", "Category"]),
-      subcategory: valueOf(row, ["subcategory", "Subcategory", "subCategory", "SubCategory"]),
-      incidentDetail: valueOf(row, ["incidentDetail", "IncidentDetail", "detail", "Detail"]),
-      assignedLevel: valueOf(row, ["assignedLevel", "AssignedLevel", "supportLevel", "SupportLevel"]),
-      assignedTo: getAssigned(row) === "Unassigned" ? "" : getAssigned(row),
-    });
+    setFormData({ ...emptyForm(currentUser), ...row, id: incidentId, title: getTitle(row), description: getDescription(row), priority: getPriority(row), status: getStatus(row), requesterName: getRequester(row), assetId: getAsset(row) === "—" ? "" : getAsset(row), assetBrand: valueOf(row, ["assetBrand", "AssetBrand", "brand", "Brand"]), assetModel: valueOf(row, ["assetModel", "AssetModel", "model", "Model"]), assetOS: valueOf(row, ["assetOS", "AssetOS", "os", "OS"]), deviceType: valueOf(row, ["deviceType", "DeviceType"]), category: valueOf(row, ["category", "Category"]), subcategory: valueOf(row, ["subcategory", "Subcategory", "subCategory", "SubCategory"]), incidentDetail: valueOf(row, ["incidentDetail", "IncidentDetail", "detail", "Detail"]), assignedLevel: valueOf(row, ["assignedLevel", "AssignedLevel", "supportLevel", "SupportLevel"]), assignedTo: getAssigned(row) === "Unassigned" ? "" : getAssigned(row) });
     setSelectedIncidentId(incidentId);
     setIncidentAttachments([]);
     if (incidentId) void loadIncidentAttachments(incidentId);
@@ -820,28 +654,11 @@ export default function ServiceDesk() {
     event.preventDefault();
     const title = String(formData.title || "").trim();
     const description = String(formData.description || "").trim();
-    if (!title) {
-      setToast({ type: "error", message: "Incident title is required." });
-      return;
-    }
-    if (!description) {
-      setToast({ type: "error", message: "Incident description is required." });
-      return;
-    }
+    if (!title) return setToast({ type: "error", message: "Incident title is required." });
+    if (!description) return setToast({ type: "error", message: "Incident description is required." });
     setIsSaving(true);
     try {
-      const payload = {
-        ...formData,
-        id: formMode === "edit" ? getIncidentId(formData) : formData.id || makeIncidentId(),
-        title,
-        description,
-        status: formMode === "create" ? "Awaiting" : formData.status || "Awaiting",
-        priority: formData.priority || "Medium",
-        requesterName: formData.requesterName || getUserName(currentUser) || "Current User",
-        requesterId: formData.requesterId || getUserId(currentUser),
-        reporterId: formData.reporterId || getUserId(currentUser),
-        createdAt: formData.createdAt || new Date().toISOString(),
-      };
+      const payload = { ...formData, id: formMode === "edit" ? getIncidentId(formData) : formData.id || makeIncidentId(), title, description, status: formMode === "create" ? "Awaiting" : formData.status || "Awaiting", priority: formData.priority || "Medium", requesterName: formData.requesterName || getUserName(currentUser) || "Current User", requesterId: formData.requesterId || getUserId(currentUser), reporterId: formData.reporterId || getUserId(currentUser), createdAt: formData.createdAt || new Date().toISOString() };
       if (formMode === "create") await incidentsService.create(payload);
       else await incidentsService.update(payload);
       setToast({ type: "success", message: formMode === "create" ? "Ticket created successfully." : "Ticket updated successfully." });
@@ -857,8 +674,7 @@ export default function ServiceDesk() {
 
   function deleteIncident(row: AnyRow) {
     const id = getIncidentId(row);
-    if (!id) return;
-    setConfirmDelete({ ticketId: id, row });
+    if (id) setConfirmDelete({ ticketId: id });
   }
 
   async function confirmDeleteTicket() {
@@ -893,7 +709,18 @@ export default function ServiceDesk() {
     setSortConfig((current) => ({ key, direction: current.key === key && current.direction === "asc" ? "desc" : "asc" }));
   }
 
-  const activeQueue = useMemo(() => selectedIncidentId ? "all" : undefined, [selectedIncidentId]);
+  const queueKey = selectedIncidentId ? "all" : selectedQueue;
+  const categoryCatalog = useMemo(() => buildCategoryCatalog(categories, incidents), [categories, incidents]);
+  const categoryOptions = categoryCatalog.categories;
+  const subcategoryOptions = formData.category ? categoryCatalog.getSubcategories(formData.category) : [];
+  const detailOptions = formData.category ? categoryCatalog.getDetails(formData.category, formData.subcategory || "") : [];
+  const assetOptions = useMemo(() => unique(assets.map(getAssetValue).filter(Boolean)), [assets]);
+  const selectedAsset = useMemo(() => assets.find((row) => getAssetValue(row) === formData.assetId || getAsset(row) === formData.assetId) || null, [assets, formData.assetId]);
+  const supportLevelOptions = useMemo(() => unique([...SUPPORT_LEVELS, ...roles.map(getRoleDisplayName), ...users.flatMap(getUserRoleNames)].map(normalizeSupportLevelName)).filter((role) => SUPPORT_LEVELS.includes(role)), [roles, users]);
+  const engineerOptions = useMemo(() => formData.assignedLevel ? unique(users.filter((user) => getUserRoleNames(user).some(isSupportRoleName)).filter((user) => userMatchesSupportLevel(user, formData.assignedLevel)).map(getUserName).filter(Boolean)) : [], [users, formData.assignedLevel]);
+  const filterAssigneeOptions = useMemo(() => unique(incidents.map(getAssigned).filter((name) => name && name !== "Unassigned")), [incidents]);
+  const toastItems = useMemo<EmaToastItem[]>(() => toast ? [{ id: "service-desk-toast", tone: toast.type, title: toast.type === "success" ? "Success" : toast.type === "error" ? "Action failed" : toast.type === "warning" ? "Attention" : "Information", message: toast.message }] : [], [toast]);
+
   const queueCounts = useMemo(() => {
     const counts = { all: incidents.length, open: 0, my: 0, slaRisk: 0, unassigned: 0, awaiting: 0, inProgress: 0, pendingUser: 0, pendingVendor: 0, onSite: 0, resolved: 0, kb: knowledgeBase.length };
     incidents.forEach((row) => {
@@ -914,8 +741,6 @@ export default function ServiceDesk() {
     return counts;
   }, [incidents, knowledgeBase.length, now, currentUser]);
 
-  const [selectedQueue, setSelectedQueue] = useState<QueueKey>("all");
-  const queueKey = activeQueue || selectedQueue;
   const queueItems = [
     { key: "all" as QueueKey, label: "All Tickets", sub: "Complete service queue", count: queueCounts.all, icon: Ticket },
     { key: "my" as QueueKey, label: "My Assigned", sub: "Owned by current agent", count: queueCounts.my, icon: User },
@@ -954,51 +779,22 @@ export default function ServiceDesk() {
       if (dateFrom && created && created < new Date(`${dateFrom}T00:00:00`)) return false;
       if (dateTo && created && created > new Date(`${dateTo}T23:59:59`)) return false;
       if (!search) return true;
-      const haystack = [getIncidentId(row), getRequester(row), getAsset(row), getTitle(row), getDescription(row), getStatus(row), getPriority(row), getAssigned(row), row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" ").toLowerCase();
-      return haystack.includes(search);
+      return [getIncidentId(row), getRequester(row), getAsset(row), getTitle(row), getDescription(row), status, priority, assigned, row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" ").toLowerCase().includes(search);
     });
   }, [incidents, queueKey, searchTerm, filterStatus, filterPriority, filterAssignedTo, filterSla, dateFrom, dateTo, now, currentUser]);
 
-  const sortedIncidents = useMemo(() => {
-    return [...filteredIncidents].sort((a, b) => {
-      const getValue = (row: AnyRow) => {
-        if (sortConfig.key === "id") return getIncidentId(row);
-        if (sortConfig.key === "createdAt") return parseDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)?.getTime() || 0;
-        if (sortConfig.key === "requester") return getRequester(row);
-        if (sortConfig.key === "title") return getTitle(row);
-        if (sortConfig.key === "priority") return getPriority(row);
-        if (sortConfig.key === "assigned") return getAssigned(row);
-        return getStatus(row);
-      };
-      const av = getValue(a);
-      const bv = getValue(b);
-      const result = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
-      return sortConfig.direction === "asc" ? result : -result;
-    });
-  }, [filteredIncidents, sortConfig]);
+  const sortedIncidents = useMemo(() => [...filteredIncidents].sort((a, b) => {
+    const getValue = (row: AnyRow) => sortConfig.key === "id" ? getIncidentId(row) : sortConfig.key === "createdAt" ? parseDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)?.getTime() || 0 : sortConfig.key === "requester" ? getRequester(row) : sortConfig.key === "title" ? getTitle(row) : sortConfig.key === "priority" ? getPriority(row) : sortConfig.key === "assigned" ? getAssigned(row) : getStatus(row);
+    const av = getValue(a);
+    const bv = getValue(b);
+    const result = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
+    return sortConfig.direction === "asc" ? result : -result;
+  }), [filteredIncidents, sortConfig]);
 
   const totalPages = Math.max(1, Math.ceil(sortedIncidents.length / PAGE_SIZE));
   const pageRows = sortedIncidents.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const selectedIncident = incidents.find((row) => getIncidentId(row) === selectedIncidentId) || null;
   const activeQueueLabel = queueItems.find((item) => item.key === queueKey)?.label || "All Tickets";
-
-  const categoryCatalog = useMemo(() => buildCategoryCatalog(categories, incidents), [categories, incidents]);
-  const categoryOptions = categoryCatalog.categories;
-  const subcategoryOptions = formData.category ? categoryCatalog.getSubcategories(formData.category) : [];
-  const detailOptions = formData.category ? categoryCatalog.getDetails(formData.category, formData.subcategory || "") : [];
-  const assetOptions = useMemo(() => unique(assets.map(getAssetValue).filter(Boolean)), [assets]);
-  const selectedAsset = useMemo(() => assets.find((row) => getAssetValue(row) === formData.assetId || getAsset(row) === formData.assetId) || null, [assets, formData.assetId]);
-  const supportLevelOptions = useMemo(() => unique([...SUPPORT_LEVELS, ...roles.map(getRoleDisplayName), ...users.flatMap(getUserRoleNames)]).filter((role) => SUPPORT_LEVELS.includes(normalizeSupportLevelName(role))).map(normalizeSupportLevelName), [roles, users]);
-  const engineerOptions = useMemo(() => {
-    if (!formData.assignedLevel) return [];
-    return unique(users.filter((user) => getUserRoleNames(user).some(isSupportRoleName)).filter((user) => userMatchesSupportLevel(user, formData.assignedLevel)).map(getUserName).filter(Boolean));
-  }, [users, formData.assignedLevel]);
-  const filterAssigneeOptions = useMemo(() => unique(incidents.map(getAssigned).filter((name) => name && name !== "Unassigned")), [incidents]);
-  const toastItems = useMemo<EmaToastItem[]>(() => {
-    if (!toast) return [];
-    const title = toast.type === "success" ? "Success" : toast.type === "error" ? "Action failed" : toast.type === "warning" ? "Attention" : "Information";
-    return [{ id: toast.id ?? "service-desk-toast", tone: toast.type, title, message: toast.message }];
-  }, [toast]);
 
   function exportCsv() {
     const headers = ["Req No", "Submitted", "Requester", "Asset", "Incident", "Urgency", "Assigner", "SLA", "Status"];
@@ -1013,184 +809,23 @@ export default function ServiceDesk() {
     URL.revokeObjectURL(url);
   }
 
-  function printTable() {
-    window.print();
-  }
-
   function renderPagination() {
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3">
-        <span className="text-sm font-bold text-slate-500">Page {page} of {totalPages}</span>
-        <div className="flex items-center gap-2">
-          <button type="button" disabled={page === 1} onClick={() => setPage(1)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">«</button>
-          <button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">‹</button>
-          <span className="grid h-9 min-w-9 place-items-center rounded-xl bg-blue-600 px-3 text-sm font-black text-white">{page}</span>
-          <button type="button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">›</button>
-          <button type="button" disabled={page === totalPages} onClick={() => setPage(totalPages)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">»</button>
-        </div>
-      </div>
-    );
+    return <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3"><span className="text-sm font-bold text-slate-500">Page {page} of {totalPages}</span><div className="flex items-center gap-2"><button type="button" disabled={page === 1} onClick={() => setPage(1)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">«</button><button type="button" disabled={page === 1} onClick={() => setPage((current) => Math.max(1, current - 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">‹</button><span className="grid h-9 min-w-9 place-items-center rounded-xl bg-blue-600 px-3 text-sm font-black text-white">{page}</span><button type="button" disabled={page === totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">›</button><button type="button" disabled={page === totalPages} onClick={() => setPage(totalPages)} className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white font-black text-slate-600 disabled:opacity-40">»</button></div></div>;
   }
 
   return (
     <main data-section="service-desk" className="min-h-screen bg-slate-50 text-slate-900">
       <EmaToastViewport items={toastItems} onClose={() => setToast(null)} />
-      {confirmDelete && (
-        <div className="fixed inset-0 z-[2147483300] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm">
-          <section className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
-              <div>
-                <span className="text-xs font-black uppercase tracking-[0.12em] text-rose-500">Delete Ticket</span>
-                <h2 className="mt-1 text-xl font-black text-slate-950">Confirm delete</h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">Ticket {confirmDelete.ticketId} will be removed from Service Desk.</p>
-              </div>
-              <button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X size={16} /></button>
-            </div>
-            <div className="p-5">
-              <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">This action cannot be undone. Continue only if this ticket should be deleted.</div>
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4">
-              <button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button>
-              <button type="button" onClick={() => void confirmDeleteTicket()} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-600 bg-rose-600 px-5 text-sm font-black text-white shadow-sm hover:bg-rose-700 disabled:opacity-60">{confirmDelete.loading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}Delete Ticket</button>
-            </div>
-          </section>
-        </div>
-      )}
+      {confirmDelete && <div className="fixed inset-0 z-[2147483300] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm"><section className="w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"><div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-rose-500">Delete Ticket</span><h2 className="mt-1 text-xl font-black text-slate-950">Confirm delete</h2><p className="mt-1 text-sm font-semibold text-slate-500">Ticket {confirmDelete.ticketId} will be removed from Service Desk.</p></div><button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X size={16} /></button></div><div className="p-5"><div className="rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm font-semibold text-rose-700">This action cannot be undone. Continue only if this ticket should be deleted.</div></div><div className="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4"><button type="button" onClick={() => setConfirmDelete(null)} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button><button type="button" onClick={() => void confirmDeleteTicket()} disabled={confirmDelete.loading} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-600 bg-rose-600 px-5 text-sm font-black text-white shadow-sm hover:bg-rose-700 disabled:opacity-60">{confirmDelete.loading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}Delete Ticket</button></div></section></div>}
 
       <div className="grid min-h-screen gap-4 p-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Service Center</span>
-            <h2 className="mt-1 text-xl font-black">Service Desk</h2>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Ticket queue and support operation</p>
-          </div>
-          <nav className="grid gap-2">
-            {queueItems.map((item) => {
-              const Icon = item.icon;
-              const active = queueKey === item.key || (viewMode === "kb" && item.key === "knowledge");
-              return (
-                <button key={item.key} type="button" onClick={() => { setSelectedQueue(item.key); setSelectedIncidentId(""); setViewMode(item.key === "knowledge" ? "kb" : "list"); }} className={cx("grid grid-cols-[2.4rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-3 text-left transition", active ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}>
-                  <span className={cx("grid h-9 w-9 place-items-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}><Icon size={15} /></span>
-                  <span className="min-w-0"><strong className="block truncate text-sm font-black">{item.label}</strong><small className="block truncate text-xs font-semibold text-slate-500">{item.sub}</small></span>
-                  <b className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{item.count}</b>
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
+        <aside className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Service Center</span><h2 className="mt-1 text-xl font-black">Service Desk</h2><p className="mt-1 text-sm font-semibold text-slate-500">Ticket queue and support operation</p></div><nav className="grid gap-2">{queueItems.map((item) => { const Icon = item.icon; const active = queueKey === item.key || (viewMode === "kb" && item.key === "knowledge"); return <button key={item.key} type="button" onClick={() => { setSelectedQueue(item.key); setSelectedIncidentId(""); setViewMode(item.key === "knowledge" ? "kb" : "list"); }} className={cx("grid grid-cols-[2.4rem_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border p-3 text-left transition", active ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}><span className={cx("grid h-9 w-9 place-items-center rounded-xl", active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500")}><Icon size={15} /></span><span className="min-w-0"><strong className="block truncate text-sm font-black">{item.label}</strong><small className="block truncate text-xs font-semibold text-slate-500">{item.sub}</small></span><b className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">{item.count}</b></button>; })}</nav></aside>
 
-        <section className="min-w-0 space-y-4">
-          <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(24rem,0.85fr)]">
-            <div>
-              <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Incident Command Center</span>
-              <h1 className="mt-1 text-2xl font-black">Service Desk</h1>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Manage tickets, assignments, SLA risk and support activity.</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                ["Open Tickets", queueCounts.open, "support workload"],
-                ["SLA Risk", queueCounts.slaRisk, "near due / breached"],
-                ["Awaiting", queueCounts.awaiting, "new requests"],
-                ["In Progress", queueCounts.inProgress, "active handling"],
-              ].map(([label, value, note]) => (
-                <div key={String(label)} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">{label}</span><strong className="mt-2 block text-2xl font-black text-slate-950">{value}</strong><small className="text-xs font-bold text-slate-500">{note}</small></div>
-              ))}
-            </div>
-          </div>
+        <section className="min-w-0 space-y-4"><div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(24rem,0.85fr)]"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Incident Command Center</span><h1 className="mt-1 text-2xl font-black">Service Desk</h1><p className="mt-1 text-sm font-semibold text-slate-500">Manage tickets, assignments, SLA risk and support activity.</p></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Open Tickets", queueCounts.open, "support workload"], ["SLA Risk", queueCounts.slaRisk, "near due / breached"], ["Awaiting", queueCounts.awaiting, "new requests"], ["In Progress", queueCounts.inProgress, "active handling"]].map(([label, value, note]) => <div key={String(label)} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">{label}</span><strong className="mt-2 block text-2xl font-black text-slate-950">{value}</strong><small className="text-xs font-bold text-slate-500">{note}</small></div>)}</div></div>
 
-          {viewMode === "form" ? (
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <form onSubmit={saveIncident}>
-                <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4">
-                  <div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{formMode === "create" ? "Create Ticket" : "Edit Ticket"}</span><h2 className="mt-1 text-xl font-black">{formMode === "create" ? "New Incident Request" : `Update ${getIncidentId(formData)}`}</h2></div>
-                  <button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"><X size={14} />Cancel</button>
-                </div>
-                <div className="grid gap-4 p-4 lg:grid-cols-2">
-                  <label className={cx(labelClass(), "lg:col-span-2")}>Incident Title<input value={formData.title || ""} onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))} className={inputClass()} placeholder="Example: Laptop cannot connect to network" /></label>
-                  <label className={cx(labelClass(), "lg:col-span-2")}>Description<textarea value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className={textareaClass()} placeholder="Describe the issue, impact and required support." /></label>
-                  <label className={labelClass()}>Requester<input value={formData.requesterName || ""} onChange={(e) => setFormData((prev) => ({ ...prev, requesterName: e.target.value }))} className={inputClass()} /></label>
-                  <label className={labelClass()}>Asset<ServiceDeskSelect value={formData.assetId || ""} onChange={selectAsset} placeholder="No asset selected" options={[{ value: "", label: "No asset selected" }, ...assetOptions.map((asset) => ({ value: asset, label: asset }))]} /></label>
-                  {selectedAsset && <div className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 lg:col-span-2 md:grid-cols-4"><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Owner</span><strong className="mt-1 block text-sm font-black text-slate-900">{getAssetOwner(selectedAsset) || formData.requesterName || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Brand</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetBrand || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Model</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetModel || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">OS / Type</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetOS || formData.deviceType || "-"}</strong></div></div>}
-                  <label className={labelClass()}>Urgency<ServiceDeskSelect value={formData.priority || "Medium"} onChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))} options={PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
-                  <label className={labelClass()}>Status<ServiceDeskSelect value={formData.status || "Awaiting"} onChange={(value) => setFormData((prev) => ({ ...prev, status: value }))} disabled={formMode === "create"} options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></label>
-                  <label className={labelClass()}>Category<ServiceDeskSelect value={formData.category || ""} onChange={(value) => setFormData((prev) => ({ ...prev, category: value, subcategory: "", incidentDetail: "" }))} placeholder={isLookupLoading ? "Loading category..." : "No category"} options={[{ value: "", label: isLookupLoading ? "Loading category..." : "No category" }, ...categoryOptions.map((item) => ({ value: item, label: item }))]} /></label>
-                  <label className={labelClass()}>Sub Category<ServiceDeskSelect value={formData.subcategory || ""} onChange={(value) => setFormData((prev) => ({ ...prev, subcategory: value, incidentDetail: "" }))} disabled={!formData.category || subcategoryOptions.length === 0} placeholder={subcategoryOptions.length ? "No sub category" : "No sub category mapped"} options={[{ value: "", label: subcategoryOptions.length ? "No sub category" : "No sub category mapped" }, ...subcategoryOptions.map((item) => ({ value: item, label: item }))]} /></label>
-                  <label className={labelClass()}>Detail<ServiceDeskSelect value={formData.incidentDetail || ""} onChange={(value) => setFormData((prev) => ({ ...prev, incidentDetail: value }))} disabled={!formData.category || (subcategoryOptions.length > 0 && !formData.subcategory) || detailOptions.length === 0} placeholder={detailOptions.length ? "No detail" : "No detail mapped"} options={[{ value: "", label: detailOptions.length ? "No detail" : "No detail mapped" }, ...detailOptions.map((item) => ({ value: item, label: item }))]} /></label>
-                  <label className={labelClass()}>Device Type<ServiceDeskSelect value={formData.deviceType || ""} onChange={(value) => setFormData((prev) => ({ ...prev, deviceType: value }))} placeholder="Select device type" options={[{ value: "", label: formData.deviceType || "Select device type" }, ...unique([formData.deviceType, ...DEVICE_TYPES]).filter(Boolean).map((item) => ({ value: item, label: item }))]} /></label>
-                  <label className={labelClass()}>Assigner Level<ServiceDeskSelect value={formData.assignedLevel || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedLevel: value, assignedTo: "" }))} placeholder="Not assigned" options={[{ value: "", label: "Not assigned" }, ...supportLevelOptions.map((level) => ({ value: level, label: level }))]} /></label>
-                  <label className={labelClass()}>Assigned Engineer<ServiceDeskSelect value={formData.assignedTo || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedTo: value }))} disabled={Boolean(formData.assignedLevel) && engineerOptions.length === 0} placeholder={formData.assignedLevel ? "Select engineer" : "Choose level first"} options={[{ value: "", label: formData.assignedLevel ? "Unassigned" : "Choose level first" }, ...engineerOptions.map((name) => ({ value: name, label: name }))]} /></label>
-                  {formData.assignedLevel && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600 lg:col-span-2"><strong className="font-black text-slate-900">{engineerOptions.length}</strong> engineer(s) matched for <strong className="font-black text-slate-900">{formData.assignedLevel}</strong> based on user roles.</div>}
-                  <label className={cx(labelClass(), "lg:col-span-2")}>Action Plan<textarea value={formData.actionPlan || ""} onChange={(e) => setFormData((prev) => ({ ...prev, actionPlan: e.target.value }))} className={textareaClass()} placeholder="Resolution steps or next action." /></label>
-
-                  {formMode === "edit" && getIncidentId(formData) && (
-                    <section className="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Attachment</span>
-                          <h3 className="mt-1 text-base font-black text-slate-950">Ticket Attachments</h3>
-                          <p className="mt-1 text-sm font-semibold text-slate-500">Maximum {INCIDENT_ATTACHMENT_MAX_FILES} files, {INCIDENT_ATTACHMENT_MAX_MB}MB each. PDF, Office, image and TXT supported.</p>
-                        </div>
-                        <label className={cx("inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700", (isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES) && "pointer-events-none opacity-60")}>
-                          {isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                          {isUploadingAttachment ? "Uploading..." : "Upload Attachment"}
-                          <input type="file" className="hidden" accept={INCIDENT_ATTACHMENT_ALLOWED_TYPES} disabled={isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES} onChange={(event) => void uploadIncidentAttachment(event)} />
-                        </label>
-                      </div>
-                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
-                        {isLoadingAttachments ? (
-                          <div className="flex items-center justify-center gap-2 p-6 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin text-blue-600" />Loading attachments...</div>
-                        ) : incidentAttachments.length === 0 ? (
-                          <div className="p-6 text-center text-sm font-semibold text-slate-500">No attachment uploaded for this ticket yet.</div>
-                        ) : (
-                          <div className="divide-y divide-slate-200">
-                            {incidentAttachments.map((file, index) => {
-                              const filename = String(file?.filename || file?.fileName || file?.FileName || file?.name || file?.Name || `Attachment ${index + 1}`);
-                              const sizeLabel = formatAttachmentSize(file?.size || file?.fileSize || file?.FileSize);
-                              const url = getIncidentAttachmentUrl(file);
-                              return (
-                                <div key={`${filename}-${index}`} className="flex flex-wrap items-center justify-between gap-3 p-3">
-                                  <div className="min-w-0">
-                                    <strong className="block truncate text-sm font-black text-slate-900">{filename}</strong>
-                                    <span className="text-xs font-semibold text-slate-500">{sizeLabel || "Uploaded file"}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    {url !== "#" && <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-blue-700 hover:bg-blue-50"><Download size={14} />View</a>}
-                                    <button type="button" onClick={() => void deleteIncidentAttachment(filename)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label={`Delete ${filename}`}><Trash2 size={14} /></button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  )}
-                </div>
-                <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4"><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button><button type="submit" disabled={isSaving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}{isSaving ? "Saving..." : formMode === "create" ? "Create Ticket" : "Update Ticket"}</button></div>
-              </form>
-            </section>
-          ) : viewMode === "kb" ? (
-            <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-4 flex items-center justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Base</span><h2 className="text-xl font-black">Resolution Articles</h2></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">Back to Tickets</button></div>
-              <div className="overflow-hidden rounded-2xl border border-slate-200"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-16 px-4 py-3">No</th><th className="px-4 py-3">Knowledge Base</th><th className="w-28 px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200">{knowledgeBase.length === 0 ? <tr><td colSpan={3} className="px-4 py-12 text-center text-sm font-semibold text-slate-500">No knowledge base article found.</td></tr> : knowledgeBase.map((kb, index) => <tr key={kb.id || kb.title || index}><td className="px-4 py-3 font-black text-slate-500">{index + 1}</td><td className="px-4 py-3"><strong className="font-black text-slate-900">{kb.title || kb.Title || "Untitled article"}</strong></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedKb(kb)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600"><Eye size={14} /></button></td></tr>)}</tbody></table></div>
-            </section>
-          ) : (
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="space-y-3 border-b border-slate-200 p-3">
-                <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={startCreate} className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700"><Plus size={15} /> Create Ticket</button><div className="flex h-11 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm"><Search size={16} className="text-slate-400" /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search request no, requester, asset, incident..." className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400" /></div><button type="button" disabled={!searchTerm && filterStatus === "All" && filterPriority === "All" && filterAssignedTo === "All" && filterSla === "All" && !dateFrom && !dateTo} onClick={resetFilters} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"><X size={14} /> Reset</button><button type="button" disabled={isRefreshing} onClick={refreshPage} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600 shadow-sm hover:bg-blue-50 disabled:opacity-50" aria-label="Refresh"><RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} /></button><button type="button" onClick={() => setShowAdvanced((value) => !value)} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Advanced filters"><Filter size={16} /></button><button type="button" onClick={exportCsv} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Export"><Download size={16} /></button><button type="button" onClick={printTable} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Print"><Printer size={16} /></button></div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><label className={labelClass()}>Status<ServiceDeskSelect value={filterStatus} onChange={setFilterStatus} options={[{ value: "All", label: "All status" }, ...STATUS_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Urgency<ServiceDeskSelect value={filterPriority} onChange={setFilterPriority} options={[{ value: "All", label: "All urgency" }, ...PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Assigner<ServiceDeskSelect value={filterAssignedTo} onChange={setFilterAssignedTo} options={[{ value: "All", label: "All assigner" }, { value: "Unassigned", label: "Unassigned" }, ...filterAssigneeOptions.map((name) => ({ value: name, label: name }))]} /></label><label className={labelClass()}>SLA<ServiceDeskSelect value={filterSla} onChange={setFilterSla} options={[{ value: "All", label: "All SLA" }, ...["On Time", "Near Due", "Overdue", "Resolved", "No SLA"].map((item) => ({ value: item, label: item }))]} /></label></div>
-                {showAdvanced && <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-4"><label className={labelClass()}>Date From<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inputClass()} /></label><label className={labelClass()}>Date To<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputClass()} /></label><div className="flex items-end text-sm font-semibold text-slate-500 xl:col-span-2">Advanced filters are applied directly to the table without hiding the UI.</div></div>}
-              </div>
-              <div className="p-3">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm font-black text-slate-900">{activeQueueLabel}</strong><span className="ml-2 text-sm font-semibold text-slate-500">{isLoading ? "Loading tickets..." : `${sortedIncidents.length.toLocaleString()} record(s)`}</span></div>{isLookupLoading && <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"><Loader2 size={13} className="animate-spin" /> Loading filters</span>}</div>
-                <div className="overflow-x-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[82rem] text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-14 px-4 py-3">No</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("id")} className="font-black">Req No</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("createdAt")} className="font-black">Submitted</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("requester")} className="font-black">Requester</button></th><th className="px-4 py-3">Asset</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("title")} className="font-black">Incident</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("priority")} className="font-black">Urgency</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("assigned")} className="font-black">Assigner</button></th><th className="px-4 py-3">SLA</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("status")} className="font-black">Status</button></th><th className="px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200 bg-white">{isLoading ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={30} /><strong className="block text-sm font-black text-slate-900">Loading ticket data...</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Table UI is ready. Incident records are loading here only.</span></td></tr> : pageRows.length === 0 ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Ticket className="mx-auto mb-3 text-slate-400" size={30} /><strong className="block text-sm font-black text-slate-900">No incident found</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Try reset filter or create a new request.</span></td></tr> : pageRows.map((row, index) => { const id = getIncidentId(row); const sla = getSlaMeta(row, now); return <tr key={id || index} onClick={() => setSelectedIncidentId(id)} className={cx("cursor-pointer align-top transition hover:bg-blue-50/40", selectedIncidentId === id && "bg-blue-50")}><td className="px-4 py-4"><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-black text-slate-600">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-900">{id || "—"}</strong></td><td className="px-4 py-4 font-semibold text-slate-600">{formatDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)}</td><td className="px-4 py-4"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-black text-blue-700">{initialText(getRequester(row))}</span><strong className="font-black text-slate-800">{getRequester(row)}</strong></div></td><td className="px-4 py-4"><span className="inline-flex max-w-[9rem] items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-slate-700"><Monitor size={12} />{getAsset(row)}</span></td><td className="px-4 py-4"><strong className="block font-black text-slate-950">{getTitle(row)}</strong><small className="mt-1 block max-w-[18rem] text-xs font-semibold text-slate-500">{[row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" / ") || getDescription(row) || "No classification"}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", priorityTone(getPriority(row)))}>{getPriority(row)}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{getAssigned(row)}</strong><small className="block text-xs font-semibold text-slate-500">{row.assignedLevel || row.AssignedLevel || "No level"}</small></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{sla.label}</strong><small className="block text-xs font-semibold text-slate-500">{sla.detail}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", statusTone(getStatus(row)))}>{getStatus(row)}</span></td><td className="px-4 py-4"><div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => startEdit(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100" aria-label="Edit"><Pencil size={14} /></button><button type="button" onClick={() => deleteIncident(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label="Delete"><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>
-                {renderPagination()}
-              </div>
-            </section>
-          )}
+          {viewMode === "form" ? <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><form onSubmit={saveIncident}><div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{formMode === "create" ? "Create Ticket" : "Edit Ticket"}</span><h2 className="mt-1 text-xl font-black">{formMode === "create" ? "New Incident Request" : `Update ${getIncidentId(formData)}`}</h2></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"><X size={14} />Cancel</button></div><div className="grid gap-4 p-4 lg:grid-cols-2"><label className={cx(labelClass(), "lg:col-span-2")}>Incident Title<input value={formData.title || ""} onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))} className={inputClass()} placeholder="Example: Laptop cannot connect to network" /></label><label className={cx(labelClass(), "lg:col-span-2")}>Description<textarea value={formData.description || ""} onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))} className={textareaClass()} placeholder="Describe the issue, impact and required support." /></label><label className={labelClass()}>Requester<input value={formData.requesterName || ""} onChange={(e) => setFormData((prev) => ({ ...prev, requesterName: e.target.value }))} className={inputClass()} /></label><label className={labelClass()}>Asset<ServiceDeskSelect value={formData.assetId || ""} onChange={(value) => { const asset = assets.find((row) => getAssetValue(row) === value || getAsset(row) === value); if (!value || !asset) setFormData((prev) => ({ ...prev, assetId: "", assetBrand: "", assetModel: "", assetOS: "", deviceType: "" })); else { const owner = getAssetOwner(asset); const ownerId = getAssetOwnerId(asset); setFormData((prev) => ({ ...prev, assetId: getAssetValue(asset), assetBrand: getAssetBrand(asset), assetModel: getAssetModel(asset), assetOS: getAssetOS(asset), deviceType: getAssetDeviceType(asset) || prev.deviceType, requesterName: owner || prev.requesterName, requesterId: ownerId || prev.requesterId })); } }} placeholder="No asset selected" options={[{ value: "", label: "No asset selected" }, ...assetOptions.map((asset) => ({ value: asset, label: asset }))]} /></label>{selectedAsset && <div className="grid gap-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-3 lg:col-span-2 md:grid-cols-4"><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Owner</span><strong className="mt-1 block text-sm font-black text-slate-900">{getAssetOwner(selectedAsset) || formData.requesterName || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Brand</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetBrand || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">Model</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetModel || "-"}</strong></div><div><span className="text-[0.65rem] font-black uppercase tracking-[0.08em] text-blue-500">OS / Type</span><strong className="mt-1 block text-sm font-black text-slate-900">{formData.assetOS || formData.deviceType || "-"}</strong></div></div>}<label className={labelClass()}>Urgency<ServiceDeskSelect value={formData.priority || "Medium"} onChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))} options={PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))} /></label><label className={labelClass()}>Status<ServiceDeskSelect value={formData.status || "Awaiting"} onChange={(value) => setFormData((prev) => ({ ...prev, status: value }))} disabled={formMode === "create"} options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} /></label><label className={labelClass()}>Category<ServiceDeskSelect value={formData.category || ""} onChange={(value) => setFormData((prev) => ({ ...prev, category: value, subcategory: "", incidentDetail: "" }))} placeholder={isLookupLoading ? "Loading category..." : "No category"} options={[{ value: "", label: isLookupLoading ? "Loading category..." : "No category" }, ...categoryOptions.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Sub Category<ServiceDeskSelect value={formData.subcategory || ""} onChange={(value) => setFormData((prev) => ({ ...prev, subcategory: value, incidentDetail: "" }))} disabled={!formData.category || subcategoryOptions.length === 0} placeholder={subcategoryOptions.length ? "No sub category" : "No sub category mapped"} options={[{ value: "", label: subcategoryOptions.length ? "No sub category" : "No sub category mapped" }, ...subcategoryOptions.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Detail<ServiceDeskSelect value={formData.incidentDetail || ""} onChange={(value) => setFormData((prev) => ({ ...prev, incidentDetail: value }))} disabled={!formData.category || (subcategoryOptions.length > 0 && !formData.subcategory) || detailOptions.length === 0} placeholder={detailOptions.length ? "No detail" : "No detail mapped"} options={[{ value: "", label: detailOptions.length ? "No detail" : "No detail mapped" }, ...detailOptions.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Device Type<ServiceDeskSelect value={formData.deviceType || ""} onChange={(value) => setFormData((prev) => ({ ...prev, deviceType: value }))} placeholder="Select device type" options={[{ value: "", label: formData.deviceType || "Select device type" }, ...unique([formData.deviceType, ...DEVICE_TYPES]).filter(Boolean).map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Assigner Level<ServiceDeskSelect value={formData.assignedLevel || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedLevel: value, assignedTo: "" }))} placeholder="Not assigned" options={[{ value: "", label: "Not assigned" }, ...supportLevelOptions.map((level) => ({ value: level, label: level }))]} /></label><label className={labelClass()}>Assigned Engineer<ServiceDeskSelect value={formData.assignedTo || ""} onChange={(value) => setFormData((prev) => ({ ...prev, assignedTo: value }))} disabled={Boolean(formData.assignedLevel) && engineerOptions.length === 0} placeholder={formData.assignedLevel ? "Select engineer" : "Choose level first"} options={[{ value: "", label: formData.assignedLevel ? "Unassigned" : "Choose level first" }, ...engineerOptions.map((name) => ({ value: name, label: name }))]} /></label>{formData.assignedLevel && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-600 lg:col-span-2"><strong className="font-black text-slate-900">{engineerOptions.length}</strong> engineer(s) matched for <strong className="font-black text-slate-900">{formData.assignedLevel}</strong> based on user roles.</div>}<label className={cx(labelClass(), "lg:col-span-2")}>Action Plan<textarea value={formData.actionPlan || ""} onChange={(e) => setFormData((prev) => ({ ...prev, actionPlan: e.target.value }))} className={textareaClass()} placeholder="Resolution steps or next action." /></label>{formMode === "edit" && getIncidentId(formData) && <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:col-span-2"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.08em] text-slate-500">Attachment</span><h3 className="mt-1 text-base font-black text-slate-950">Ticket Attachments</h3><p className="mt-1 text-sm font-semibold text-slate-500">Maximum {INCIDENT_ATTACHMENT_MAX_FILES} files, {INCIDENT_ATTACHMENT_MAX_MB}MB each. PDF, Office, image and TXT supported.</p></div><label className={cx("inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700", (isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES) && "pointer-events-none opacity-60")}>{isUploadingAttachment ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}{isUploadingAttachment ? "Uploading..." : "Upload Attachment"}<input type="file" className="hidden" accept={INCIDENT_ATTACHMENT_ALLOWED_TYPES} disabled={isUploadingAttachment || incidentAttachments.length >= INCIDENT_ATTACHMENT_MAX_FILES} onChange={(event) => void uploadIncidentAttachment(event)} /></label></div><div className="mt-4 rounded-2xl border border-slate-200 bg-white">{isLoadingAttachments ? <div className="flex items-center justify-center gap-2 p-6 text-sm font-bold text-slate-500"><Loader2 size={16} className="animate-spin text-blue-600" />Loading attachments...</div> : incidentAttachments.length === 0 ? <div className="p-6 text-center text-sm font-semibold text-slate-500">No attachment uploaded for this ticket yet.</div> : <div className="divide-y divide-slate-200">{incidentAttachments.map((file, index) => { const filename = String(file?.filename || file?.fileName || file?.FileName || file?.name || file?.Name || `Attachment ${index + 1}`); const sizeLabel = formatAttachmentSize(file?.size || file?.fileSize || file?.FileSize); const url = getIncidentAttachmentUrl(file); return <div key={`${filename}-${index}`} className="flex flex-wrap items-center justify-between gap-3 p-3"><div className="min-w-0"><strong className="block truncate text-sm font-black text-slate-900">{filename}</strong><span className="text-xs font-semibold text-slate-500">{sizeLabel || "Uploaded file"}</span></div><div className="flex items-center gap-2">{url !== "#" && <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-blue-700 hover:bg-blue-50"><Download size={14} />View</a>}<button type="button" onClick={() => void deleteIncidentAttachment(filename)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label={`Delete ${filename}`}><Trash2 size={14} /></button></div></div>; })}</div>}</div></section>}</div><div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 bg-slate-50 p-4"><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">Cancel</button><button type="submit" disabled={isSaving} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-5 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60">{isSaving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}{isSaving ? "Saving..." : formMode === "create" ? "Create Ticket" : "Update Ticket"}</button></div></form></section> : viewMode === "kb" ? <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-4 flex items-center justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Base</span><h2 className="text-xl font-black">Resolution Articles</h2></div><button type="button" onClick={() => setViewMode("list")} className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">Back to Tickets</button></div><div className="overflow-hidden rounded-2xl border border-slate-200"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-16 px-4 py-3">No</th><th className="px-4 py-3">Knowledge Base</th><th className="w-28 px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200">{knowledgeBase.length === 0 ? <tr><td colSpan={3} className="px-4 py-12 text-center text-sm font-semibold text-slate-500">No knowledge base article found.</td></tr> : knowledgeBase.map((kb, index) => <tr key={kb.id || kb.title || index}><td className="px-4 py-3 font-black text-slate-500">{index + 1}</td><td className="px-4 py-3"><strong className="font-black text-slate-900">{kb.title || kb.Title || "Untitled article"}</strong></td><td className="px-4 py-3 text-right"><button type="button" onClick={() => setSelectedKb(kb)} className="inline-grid h-9 w-9 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600"><Eye size={14} /></button></td></tr>)}</tbody></table></div></section> : <section className="rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="space-y-3 border-b border-slate-200 p-3"><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={startCreate} className="inline-flex h-11 items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700"><Plus size={15} /> Create Ticket</button><div className="flex h-11 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 shadow-sm"><Search size={16} className="text-slate-400" /><input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search request no, requester, asset, incident..." className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400" /></div><button type="button" disabled={!searchTerm && filterStatus === "All" && filterPriority === "All" && filterAssignedTo === "All" && filterSla === "All" && !dateFrom && !dateTo} onClick={resetFilters} className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"><X size={14} /> Reset</button><button type="button" disabled={isRefreshing} onClick={refreshPage} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-blue-600 shadow-sm hover:bg-blue-50 disabled:opacity-50" aria-label="Refresh"><RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} /></button><button type="button" onClick={() => setShowAdvanced((value) => !value)} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Advanced filters"><Filter size={16} /></button><button type="button" onClick={exportCsv} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Export"><Download size={16} /></button><button type="button" onClick={() => window.print()} className="inline-grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50" aria-label="Print"><Printer size={16} /></button></div><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><label className={labelClass()}>Status<ServiceDeskSelect value={filterStatus} onChange={setFilterStatus} options={[{ value: "All", label: "All status" }, ...STATUS_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Urgency<ServiceDeskSelect value={filterPriority} onChange={setFilterPriority} options={[{ value: "All", label: "All urgency" }, ...PRIORITY_OPTIONS.map((item) => ({ value: item, label: item }))]} /></label><label className={labelClass()}>Assigner<ServiceDeskSelect value={filterAssignedTo} onChange={setFilterAssignedTo} options={[{ value: "All", label: "All assigner" }, { value: "Unassigned", label: "Unassigned" }, ...filterAssigneeOptions.map((name) => ({ value: name, label: name }))]} /></label><label className={labelClass()}>SLA<ServiceDeskSelect value={filterSla} onChange={setFilterSla} options={[{ value: "All", label: "All SLA" }, ...["On Time", "Near Due", "Overdue", "Resolved", "No SLA"].map((item) => ({ value: item, label: item }))]} /></label></div>{showAdvanced && <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-4"><label className={labelClass()}>Date From<input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inputClass()} /></label><label className={labelClass()}>Date To<input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputClass()} /></label><div className="flex items-end text-sm font-semibold text-slate-500 xl:col-span-2">Advanced filters are applied directly to the table without hiding the UI.</div></div>}</div><div className="p-3"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><strong className="text-sm font-black text-slate-900">{activeQueueLabel}</strong><span className="ml-2 text-sm font-semibold text-slate-500">{isLoading ? "Loading tickets..." : `${sortedIncidents.length.toLocaleString()} record(s)`}</span></div>{isLookupLoading && <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"><Loader2 size={13} className="animate-spin" /> Loading filters</span>}</div><div className="overflow-x-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[82rem] text-left text-sm"><thead className="bg-slate-50 text-xs font-black uppercase tracking-[0.08em] text-slate-500"><tr><th className="w-14 px-4 py-3">No</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("id")} className="font-black">Req No</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("createdAt")} className="font-black">Submitted</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("requester")} className="font-black">Requester</button></th><th className="px-4 py-3">Asset</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("title")} className="font-black">Incident</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("priority")} className="font-black">Urgency</button></th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("assigned")} className="font-black">Assigner</button></th><th className="px-4 py-3">SLA</th><th className="px-4 py-3"><button type="button" onClick={() => requestSort("status")} className="font-black">Status</button></th><th className="px-4 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-slate-200 bg-white">{isLoading ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Loader2 className="mx-auto mb-3 animate-spin text-blue-600" size={30} /><strong className="block text-sm font-black text-slate-900">Loading ticket data...</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Table UI is ready. Incident records are loading here only.</span></td></tr> : pageRows.length === 0 ? <tr><td colSpan={11} className="px-4 py-16 text-center"><Ticket className="mx-auto mb-3 text-slate-400" size={30} /><strong className="block text-sm font-black text-slate-900">No incident found</strong><span className="mt-1 block text-sm font-semibold text-slate-500">Try reset filter or create a new request.</span></td></tr> : pageRows.map((row, index) => { const id = getIncidentId(row); const sla = getSlaMeta(row, now); return <tr key={id || index} onClick={() => setSelectedIncidentId(id)} className={cx("cursor-pointer align-top transition hover:bg-blue-50/40", selectedIncidentId === id && "bg-blue-50")}><td className="px-4 py-4"><span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-black text-slate-600">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-900">{id || "—"}</strong></td><td className="px-4 py-4 font-semibold text-slate-600">{formatDate(row.createdAt || row.CreatedAt || row.submittedAt || row.SubmittedAt)}</td><td className="px-4 py-4"><div className="flex items-center gap-2"><span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-xs font-black text-blue-700">{initialText(getRequester(row))}</span><strong className="font-black text-slate-800">{getRequester(row)}</strong></div></td><td className="px-4 py-4"><span className="inline-flex max-w-[9rem] items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-xs font-black text-slate-700"><Monitor size={12} />{getAsset(row)}</span></td><td className="px-4 py-4"><strong className="block font-black text-slate-950">{getTitle(row)}</strong><small className="mt-1 block max-w-[18rem] text-xs font-semibold text-slate-500">{[row.category, row.subcategory, row.incidentDetail].filter(Boolean).join(" / ") || getDescription(row) || "No classification"}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", priorityTone(getPriority(row)))}>{getPriority(row)}</span></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{getAssigned(row)}</strong><small className="block text-xs font-semibold text-slate-500">{row.assignedLevel || row.AssignedLevel || "No level"}</small></td><td className="px-4 py-4"><strong className="font-black text-slate-800">{sla.label}</strong><small className="block text-xs font-semibold text-slate-500">{sla.detail}</small></td><td className="px-4 py-4"><span className={cx("inline-flex rounded-full px-2 py-1 text-xs font-black ring-1", statusTone(getStatus(row)))}>{getStatus(row)}</span></td><td className="px-4 py-4"><div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => startEdit(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100" aria-label="Edit"><Pencil size={14} /></button><button type="button" onClick={() => deleteIncident(row)} className="grid h-9 w-9 place-items-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100" aria-label="Delete"><Trash2 size={14} /></button></div></td></tr>; })}</tbody></table></div>{renderPagination()}</div></section>}
         </section>
       </div>
-
       {selectedIncident && viewMode === "list" && <aside className="fixed right-4 top-24 z-40 w-[min(26rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"><button type="button" onClick={() => setSelectedIncidentId("")} className="float-right grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500"><X size={14} /></button><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Ticket Details</span><h3 className="mt-1 text-lg font-black">{getIncidentId(selectedIncident)}</h3><p className="mt-2 text-sm font-semibold text-slate-600">{getTitle(selectedIncident)}</p><div className="mt-4 grid gap-3 text-sm"><div><span className="font-black text-slate-500">Requester</span><strong className="block text-slate-900">{getRequester(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Asset</span><strong className="block text-slate-900">{getAsset(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Assigner</span><strong className="block text-slate-900">{getAssigned(selectedIncident)}</strong></div><div><span className="font-black text-slate-500">Status</span><strong className="block text-slate-900">{getStatus(selectedIncident)}</strong></div></div></aside>}
       {selectedKb && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm" onClick={() => setSelectedKb(null)}><section className="w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}><button type="button" onClick={() => setSelectedKb(null)} className="float-right grid h-9 w-9 place-items-center rounded-xl border border-slate-200"><X size={14} /></button><span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Knowledge Article</span><h2 className="mt-1 text-xl font-black">{selectedKb.title || selectedKb.Title || "Untitled article"}</h2><p className="mt-4 whitespace-pre-wrap text-sm font-semibold text-slate-600">{selectedKb.resolution || selectedKb.Resolution || selectedKb.incidentDetails || selectedKb.IncidentDetails || "No detail."}</p></section></div>}
     </main>
