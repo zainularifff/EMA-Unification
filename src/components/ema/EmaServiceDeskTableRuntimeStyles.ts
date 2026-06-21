@@ -143,6 +143,12 @@ html body main[data-section="service-desk"] table th:nth-child(10),
 html body main[data-section="service-desk"] table td:nth-child(10) {
   width: 7.4rem !important;
 }
+html body main[data-section="service-desk"] table tbody tr {
+  cursor: default !important;
+}
+html body main[data-section="service-desk"] > aside.fixed.right-4.top-24 {
+  display: none !important;
+}
 `;
 
 function injectServiceDeskTableStyles() {
@@ -178,12 +184,22 @@ function applyServiceDeskStatusKeys() {
   });
 }
 
+function blockServiceDeskRowDetail(event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  if (!target?.closest('main[data-section="service-desk"]')) return;
+  if (target.closest('button, a, input, textarea, select, [role="button"]')) return;
+  const row = target.closest('main[data-section="service-desk"] table tbody tr');
+  if (!row) return;
+  event.stopPropagation();
+}
+
 injectServiceDeskTableStyles();
 applyServiceDeskStatusKeys();
 
 if (typeof window !== "undefined") {
   window.setTimeout(applyServiceDeskStatusKeys, 0);
   window.setTimeout(applyServiceDeskStatusKeys, 250);
+  document.addEventListener("click", blockServiceDeskRowDetail, true);
 
   const observer = new MutationObserver(() => applyServiceDeskStatusKeys());
   observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
