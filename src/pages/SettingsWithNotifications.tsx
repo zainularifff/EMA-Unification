@@ -3,7 +3,9 @@ import LegacySettings from "./Settings";
 import NotificationChannelsSettings from "../components/settings/NotificationChannelsSettings";
 
 type SettingsView = "settings" | "management" | "notifications";
-type ManagementSection = "aging" | "pricing" | "policy";
+type ManagementSection = "incident" | "aging" | "policy";
+
+const MANAGEMENT_CONTROL_SECTIONS = new Set(["incident", "aging", "policy"]);
 
 function readInitialView(): SettingsView {
   if (typeof window === "undefined") return "settings";
@@ -16,13 +18,13 @@ function readInitialView(): SettingsView {
 }
 
 function readManagementSection(): ManagementSection {
-  if (typeof window === "undefined") return "aging";
+  if (typeof window === "undefined") return "incident";
   const hash = String(window.location.hash || "").toLowerCase();
   const query = new URLSearchParams(window.location.search);
   const section = `${query.get("section") || ""} ${hash}`.toLowerCase();
-  if (section.includes("pricing")) return "pricing";
+  if (section.includes("aging")) return "aging";
   if (section.includes("policy")) return "policy";
-  return "aging";
+  return "incident";
 }
 
 function setImportantStyle(element: HTMLElement | null | undefined, styles: Record<string, string>) {
@@ -73,12 +75,27 @@ function alignSettingsPortalDropdowns() {
   });
 }
 
+function syncSettingsMenuVisibility(root: HTMLElement) {
+  const view = document.body.dataset.settingsView || document.documentElement.dataset.settingsView || "settings";
+
+  root.querySelectorAll<HTMLButtonElement>(".settings-menu .setting-btn[data-section]").forEach((button) => {
+    const section = String(button.dataset.section || "");
+    const isManagementItem = MANAGEMENT_CONTROL_SECTIONS.has(section);
+    const hidden = view === "management" ? !isManagementItem : view === "settings" ? isManagementItem : false;
+    setImportantStyle(button, {
+      display: hidden ? "none" : "grid",
+    });
+  });
+}
+
 function applyLegacySettingsUiFixes() {
   if (typeof document === "undefined") return;
 
   const host = document.querySelector<HTMLElement>(".settings-view-host");
   const root = host?.querySelector<HTMLElement>(".settings-module-root");
   if (!host || !root) return;
+
+  syncSettingsMenuVisibility(root);
 
   setImportantStyle(host, {
     minHeight: "0",
@@ -135,7 +152,6 @@ function applyLegacySettingsUiFixes() {
     setImportantStyle(button, {
       width: "100%",
       minHeight: "2.75rem",
-      display: "grid",
       gridTemplateColumns: "2.1rem minmax(0, 1fr)",
       alignItems: "center",
       justifyContent: "stretch",
@@ -318,12 +334,22 @@ function applyLegacySettingsUiFixes() {
     borderRadius: "0.95rem",
   });
 
-  root.querySelectorAll<HTMLElement>(".role-standard-row").forEach((row) => {
+  root.querySelectorAll<HTMLElement>(".role-standard-row:not(.access-standard-row)").forEach((row) => {
     setImportantStyle(row, {
       display: "grid",
       gridTemplateColumns: "3.5rem minmax(20rem, 1fr) 10rem 10rem 8rem",
       alignItems: "center",
       minWidth: "62rem",
+      minHeight: "3.05rem",
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>(".access-standard-row").forEach((row) => {
+    setImportantStyle(row, {
+      display: "grid",
+      gridTemplateColumns: "3.5rem minmax(22rem, 1fr) 10rem 10rem 9rem 7.5rem 6rem",
+      alignItems: "center",
+      minWidth: "78rem",
       minHeight: "3.05rem",
     });
   });
