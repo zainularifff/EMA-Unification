@@ -68,12 +68,8 @@ type InternetStats = {
   totalCounts: number;
 };
 
-type MeteringAction = "start" | "collect" | "stop";
-
 const WEB_METERING_JOB_TYPE = 10300;
-const WEB_METERING_START_COMMAND = 1404;
 const WEB_METERING_COLLECT_COMMAND = 1407;
-const WEB_METERING_STOP_COMMAND = 1409;
 const URL_RULE_PAGE_SIZE = 10;
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -168,11 +164,12 @@ function normalizeStats(payload: unknown, fallbackRows: InternetUsageRow[]): Int
   const record = asRecord(payload);
   const rows = extractArray<Record<string, unknown>>(payload);
   const source = rows[0] || record;
-  const totalRecords = numberFrom(source, ["totalRecords", "TotalRecords", "Total", "Count"], fallbackRows.length);
-  const totalDomains = numberFrom(source, ["totalDomains", "TotalDomains", "DomainCount"], new Set(fallbackRows.map((row) => row.domainName)).size);
-  const totalUsageSeconds = numberFrom(source, ["totalUsageSeconds", "TotalUsageSeconds", "UsedTime", "Duration"], fallbackRows.reduce((sum, row) => sum + row.usedTime, 0));
-  const totalCounts = numberFrom(source, ["totalCounts", "TotalCounts", "Counts", "Hits"], fallbackRows.reduce((sum, row) => sum + row.counts, 0));
-  return { totalRecords, totalDomains, totalUsageSeconds, totalCounts };
+  return {
+    totalRecords: numberFrom(source, ["totalRecords", "TotalRecords", "Total", "Count"], fallbackRows.length),
+    totalDomains: numberFrom(source, ["totalDomains", "TotalDomains", "DomainCount"], new Set(fallbackRows.map((row) => row.domainName)).size),
+    totalUsageSeconds: numberFrom(source, ["totalUsageSeconds", "TotalUsageSeconds", "UsedTime", "Duration"], fallbackRows.reduce((sum, row) => sum + row.usedTime, 0)),
+    totalCounts: numberFrom(source, ["totalCounts", "TotalCounts", "Counts", "Hits"], fallbackRows.reduce((sum, row) => sum + row.counts, 0)),
+  };
 }
 
 function normalizeDepartmentNodes(payload: unknown): TreeNodeType[] {
@@ -196,14 +193,13 @@ function normalizeUrlNodes(payload: unknown): TreeNodeType[] {
   return rows.map((row, index) => {
     const urlMainIdn = numberFrom(row, ["URLMain_Idn", "UrlMain_Idn", "urlMainIdn", "URLID", "urlID", "id"], index + 1);
     const label = textFrom(row, ["DomainName", "Domain", "URL", "Url", "Name", "label"], `URL ${urlMainIdn}`);
-    const restrict = numberFrom(row, ["Restrict", "restrict", "IsRestricted", "Blocked"], 0);
     return {
       id: `url-${urlMainIdn}`,
       label,
       type: "url",
       urlMainIdn,
       url: textFrom(row, ["URL", "Url", "DomainName", "Domain"], label),
-      restrict,
+      restrict: numberFrom(row, ["Restrict", "restrict", "IsRestricted", "Blocked"], 0),
       count: numberFrom(row, ["Count", "TotalCount", "Hits"], 0),
       raw: row,
     };
@@ -227,21 +223,17 @@ function filterNodes(nodes: TreeNodeType[], query: string): TreeNodeType[] {
     .filter(Boolean) as TreeNodeType[];
 }
 
-function buildActionPayload(node: TreeNodeType | null) {
+function buildCollectPayload(node: TreeNodeType | null) {
   return {
     Job_Type: WEB_METERING_JOB_TYPE,
+    Job_Command: WEB_METERING_COLLECT_COMMAND,
+    command: WEB_METERING_COLLECT_COMMAND,
     Object_Rel_Idn: node?.objectRelIdn,
     Object_Root_Idn: node?.objectRootIdn,
     Object_DeviceID: node?.objectDeviceID,
     URLMain_Idn: node?.urlMainIdn ?? -1,
     urlID: node?.urlMainIdn ?? -1,
   };
-}
-
-function getActionCommand(action: MeteringAction) {
-  if (action === "start") return WEB_METERING_START_COMMAND;
-  if (action === "stop") return WEB_METERING_STOP_COMMAND;
-  return WEB_METERING_COLLECT_COMMAND;
 }
 
 function EmaSpinner({ label = "Loading..." }: { label?: string }) {
@@ -271,7 +263,7 @@ export default function InternetMetering() {
   const [error, setError] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [showAddUrlModal, setShowAddUrlModal] = useState(false);
-  const [actionLoading, setActionLoading] = useState<MeteringAction | null>(null);
+  const [collectLoading, setCollectLoading] = useState(false);
 
   const rootNode: TreeNodeType = useMemo(
     () => ({
@@ -371,22 +363,18 @@ export default function InternetMetering() {
     void loadUsage();
   }, [selectedNodeId, fromDate, toDate]);
 
-  const runMeteringAction = async (action: MeteringAction) => {
+  const collectUsage = async () => {
     setMessage("");
     setError("");
-    setActionLoading(action);
+    setCollectLoading(true);
     try {
-      await internetMeteringService.runMeteringAction(action, {
-        ...buildActionPayload(selectedNode),
-        Job_Command: getActionCommand(action),
-        command: getActionCommand(action),
-      });
-      setMessage(`Internet metering ${action} request submitted.`);
+      await internetMeteringService.runMeteringAction("collect", buildCollectPayload(selectedNode));
+      setMessage("Internet metering collect request submitted.");
       await loadUsage();
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Unable to ${action} internet metering.`);
+      setError(err instanceof Error ? err.message : "Unable to collect internet metering.");
     } finally {
-      setActionLoading(null);
+      setCollectLoading(false);
     }
   };
 
@@ -541,14 +529,25 @@ export default function InternetMetering() {
                   <Plus size={15} />
                   Add URL
                 </EmaButton>
-                <EmaButton variant="primary" onClick={() => void runMeteringAction("collect")} disabled={actionLoading !== null || loading}>
+                <EmaButton variant="primary" onClick={() => void collectUsage()} disabled={collectLoading || loading}>
                   <Activity size={15} />
-                  {actionLoading === "collect" ? "Collecting..." : "Collect"}
+                  {collectLoading ? "Collecting..." : "Collect"}
                 </EmaButton>
               </>
             }
             search={<EmaSearchInput value={search} onChange={setSearch} placeholder="Search domain, device or date..." />}
             right={
+              <>
+                <EmaButton variant="secondary" onClick={() => void loadUsage()} disabled={loading}>
+                  <RefreshCw size={15} />
+                </EmaButton>
+                <EmaButton variant="primary" onClick={exportRows} disabled={filteredRows.length === 0 || loading}>
+                  <Download size={15} />
+                  Export
+                </EmaButton>
+              </>
+            }
+            filters={
               <>
                 <EmaFilterField label="Start Date">
                   <input
@@ -576,14 +575,6 @@ export default function InternetMetering() {
                   }}
                 >
                   Reset
-                </EmaButton>
-                <EmaButton variant="secondary" onClick={() => void loadUsage()} disabled={loading}>
-                  <RefreshCw size={15} />
-                  Refresh
-                </EmaButton>
-                <EmaButton variant="primary" onClick={exportRows} disabled={filteredRows.length === 0 || loading}>
-                  <Download size={15} />
-                  Export
                 </EmaButton>
               </>
             }
