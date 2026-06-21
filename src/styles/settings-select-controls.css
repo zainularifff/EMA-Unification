@@ -1,0 +1,120 @@
+/* Settings-only dropdown/select polish.
+   Applied while the Settings page is active, including menus rendered through portals. */
+
+html body .settings-with-notifications .setting-select-trigger,
+html body .settings-with-notifications .uam-filter-trigger,
+html body .role-modal .setting-select-trigger,
+html body .role-modal .uam-filter-trigger,
+html body .user-modal .setting-select-trigger,
+html body .user-modal .uam-filter-trigger,
+html body .pricing-confirm-modal .setting-select-trigger,
+html body .pricing-confirm-modal .uam-filter-trigger {
+  appearance: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 2.55rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+  border: 1px solid #d9e5f4 !important;
+  border-radius: 0.85rem !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+html body .settings-with-notifications .setting-select-trigger:hover,
+html body .settings-with-notifications .uam-filter-trigger:hover,
+html body .role-modal .setting-select-trigger:hover,
+html body .role-modal .uam-filter-trigger:hover,
+html body .user-modal .setting-select-trigger:hover,
+html body .user-modal .uam-filter-trigger:hover {
+  border-color: #93c5fd !important;
+  background: #f8fbff !important;
+}
+
+html body .settings-with-notifications .setting-select-trigger:focus-visible,
+html body .settings-with-notifications .uam-filter-trigger:focus-visible,
+html body .role-modal .setting-select-trigger:focus-visible,
+html body .role-modal .uam-filter-trigger:focus-visible,
+html body .user-modal .setting-select-trigger:focus-visible,
+html body .user-modal .uam-filter-trigger:focus-visible {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+  outline: none !important;
+}
+
+html body .settings-with-notifications .setting-select-trigger svg,
+html body .settings-with-notifications .uam-filter-trigger svg,
+html body .role-modal .setting-select-trigger svg,
+html body .role-modal .uam-filter-trigger svg,
+html body .user-modal .setting-select-trigger svg,
+html body .user-modal .uam-filter-trigger svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  min-width: 1rem !important;
+  color: #475569 !important;
+}
+
+html.ema-settings-page-active body .setting-select-menu,
+html.ema-settings-page-active body .uam-filter-menu-portal {
+  overflow: auto !important;
+  border: 1px solid #d9e5f4 !important;
+  border-radius: 0.85rem !important;
+  background: #ffffff !important;
+  padding: 0.25rem !important;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16) !important;
+}
+
+html.ema-settings-page-active body .setting-select-menu button,
+html.ema-settings-page-active body .uam-filter-menu-portal button {
+  width: 100% !important;
+  min-height: 2.25rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.65rem !important;
+  border: 0 !important;
+  border-radius: 0.65rem !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  padding: 0 0.7rem !important;
+  text-align: left !important;
+  font-size: 0.82rem !important;
+  font-weight: 800 !important;
+  line-height: 1.15 !important;
+}
+
+html.ema-settings-page-active body .setting-select-menu button:hover,
+html.ema-settings-page-active body .uam-filter-menu-portal button:hover {
+  background: #f1f5f9 !important;
+  color: #1d4ed8 !important;
+}
+
+html.ema-settings-page-active body .setting-select-menu button[aria-selected='true'],
+html.ema-settings-page-active body .setting-select-menu button.selected,
+html.ema-settings-page-active body .setting-select-menu button.is-selected,
+html.ema-settings-page-active body .uam-filter-menu-portal button[aria-selected='true'],
+html.ema-settings-page-active body .uam-filter-menu-portal button.selected,
+html.ema-settings-page-active body .uam-filter-menu-portal button.is-selected {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html.ema-settings-page-active body .setting-select-menu button svg,
+html.ema-settings-page-active body .uam-filter-menu-portal button svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  flex: 0 0 1rem !important;
+}
+
+html body .role-modal-body .form-field:has(.setting-select-trigger),
+html body .user-modal-body .form-field:has(.setting-select-trigger),
+html body .settings-with-notifications .form-field:has(.setting-select-trigger) {
+  align-content: start !important;
+}
