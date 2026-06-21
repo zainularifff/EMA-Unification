@@ -32,6 +32,47 @@ function setImportantStyle(element: HTMLElement | null | undefined, styles: Reco
   });
 }
 
+function alignSettingsPortalDropdowns() {
+  if (typeof document === "undefined") return;
+
+  const modal = document.querySelector<HTMLElement>(
+    ".role-modal-backdrop.open .role-modal, .user-modal-backdrop.open .user-modal, .pricing-confirm-backdrop.open .pricing-confirm-modal"
+  );
+  const menu = document.querySelector<HTMLElement>(".setting-select-menu, .uam-filter-menu-portal");
+  if (!modal || !menu) return;
+
+  const trigger = modal.querySelector<HTMLButtonElement>(
+    ".setting-select-trigger[aria-expanded='true'], .uam-filter-trigger[aria-expanded='true']"
+  );
+  if (!trigger) return;
+
+  const rect = trigger.getBoundingClientRect();
+  const viewportPadding = 16;
+  const gap = 6;
+  const menuWidth = Math.max(rect.width, 220);
+  const estimatedHeight = Math.min(220, Math.max(84, menu.scrollHeight || 120));
+  const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
+  const availableAbove = rect.top - viewportPadding;
+  const openAbove = availableBelow < estimatedHeight && availableAbove > availableBelow;
+  const maxHeight = Math.max(84, Math.min(estimatedHeight, openAbove ? availableAbove : availableBelow));
+  const left = Math.min(
+    Math.max(viewportPadding, rect.left),
+    Math.max(viewportPadding, window.innerWidth - menuWidth - viewportPadding)
+  );
+  const top = openAbove
+    ? Math.max(viewportPadding, rect.top - maxHeight - gap)
+    : Math.min(rect.bottom + gap, window.innerHeight - maxHeight - viewportPadding);
+
+  setImportantStyle(menu, {
+    position: "fixed",
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${menuWidth}px`,
+    maxHeight: `${maxHeight}px`,
+    zIndex: "2147483646",
+  });
+}
+
 function applyLegacySettingsUiFixes() {
   if (typeof document === "undefined") return;
 
@@ -339,6 +380,8 @@ function applyLegacySettingsUiFixes() {
     svg.style.setProperty("min-width", "1rem", "important");
     svg.style.setProperty("max-width", "1rem", "important");
   });
+
+  alignSettingsPortalDropdowns();
 }
 
 export default function SettingsWithNotifications() {
@@ -376,10 +419,16 @@ export default function SettingsWithNotifications() {
     const observer = new MutationObserver(apply);
     if (host) observer.observe(host, { childList: true, subtree: true });
 
-    const timer = window.setInterval(applyLegacySettingsUiFixes, 250);
+    const timer = window.setInterval(applyLegacySettingsUiFixes, 120);
+    const repositionOnScroll = () => alignSettingsPortalDropdowns();
+    window.addEventListener("resize", repositionOnScroll);
+    window.addEventListener("scroll", repositionOnScroll, true);
+
     return () => {
       observer.disconnect();
       window.clearInterval(timer);
+      window.removeEventListener("resize", repositionOnScroll);
+      window.removeEventListener("scroll", repositionOnScroll, true);
     };
   }, [view, managementSection]);
 
