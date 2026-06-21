@@ -1,2873 +1,1474 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { ArrowLeft, ArrowRight, Ban, Building2, ChevronDown, ChevronRight, Folder, FolderOpen, Globe, Info, Laptop, Layers, Link as LinkIcon, ListChecks, Loader2, Lock, Package, Plus, RefreshCw, RotateCcw, Save, Search, Server, ShieldAlert, ShieldCheck, Trash2, X, } from 'lucide-react';
-import restrictionService, { getCurrentLoginId, RestrictionModule, RestrictionPackage, RestrictionPackageFile, PackageManagerPayload, RestrictionPolicyDetail, RestrictionPolicyRow, RestrictionStatusRow, RestrictionTarget, RestrictionTreeNode, WebGroup, WebGroupUrl, WhitelistSoftware, } from '../services/restrictionService';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Ban,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Folder,
+  FolderOpen,
+  Laptop,
+  Layers,
+  Loader2,
+  Package,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
+import restrictionService, {
+  getCurrentLoginId,
+  type RestrictionPackage,
+  type RestrictionPolicyDetail,
+  type RestrictionPolicyRow,
+  type RestrictionStatusRow,
+  type RestrictionTarget,
+  type RestrictionTreeNode,
+  type WhitelistSoftware,
+} from '../services/restrictionService';
+import { EmaToastViewport, type EmaToastItem, type EmaToastTone } from '../components/ema/EmaToast';
+
+type AppModule = 'appBlacklist' | 'appWhitelist';
 type SubTab = 'status' | 'settings' | 'policyStatus';
-type NoticeTone = 'success' | 'warning' | 'error' | 'info';
-type NoticeState = {
-    id: number;
-    text: string;
-    tone: NoticeTone;
-} | null;
-type ModuleConfig = {
-    id: RestrictionModule;
-    label: string;
-    helper: string;
-    policyType: number;
-    icon: LucideIcon;
-    color: 'rose' | 'emerald' | 'blue';
-    tabs: SubTab[];
-};
+
 type FormState = {
-    policyId: number;
-    inheritPolicy: boolean;
-    exception: boolean;
-    updateInterval: string;
-    weeklyPolicy: boolean;
-    useSchedule: boolean;
-    schedule1: string;
-    schedule2: string;
-    schedule3: string;
-    schedule4: string;
-    appRestrictType: '1' | '2' | '3';
-    versionCompare: boolean;
-    appNoticeMessage: string;
-    processRestrictType: '0' | '1' | '2' | '3';
-    processNoticeMessage: string;
-    fontRestrictType: '0' | '1' | '2' | '3';
-    fontNoticeMessage: string;
-    webRestrictType: '1' | '2';
-    defaultUrl: string;
+  policyId: number;
+  inheritPolicy: boolean;
+  exception: boolean;
+  updateInterval: string;
+  weeklyPolicy: boolean;
+  useSchedule: boolean;
+  schedule1: string;
+  schedule2: string;
+  schedule3: string;
+  schedule4: string;
+  appRestrictType: '1' | '2' | '3';
+  versionCompare: boolean;
+  appNoticeMessage: string;
+  processRestrictType: '0' | '1' | '2' | '3';
+  processNoticeMessage: string;
+  fontRestrictType: '0' | '1' | '2' | '3';
+  fontNoticeMessage: string;
 };
-const modules: ModuleConfig[] = [
-    {
-        id: 'appBlacklist',
-        label: 'App Restriction',
-        helper: 'S/W restriction blacklist',
-        policyType: 1006,
-        icon: ShieldAlert,
-        color: 'rose',
-        tabs: ['status', 'settings', 'policyStatus'],
-    },
-    {
-        id: 'appWhitelist',
-        label: 'App Whitelist',
-        helper: 'Default permitted software',
-        policyType: 1012,
-        icon: ShieldCheck,
-        color: 'emerald',
-        tabs: ['status', 'settings', 'policyStatus'],
-    },
+
+const MODULES: Array<{
+  id: AppModule;
+  label: string;
+  shortLabel: string;
+  helper: string;
+  icon: typeof ShieldAlert;
+  tone: 'rose' | 'emerald';
+}> = [
+  {
+    id: 'appBlacklist',
+    label: 'App Restriction',
+    shortLabel: 'Restriction',
+    helper: 'Block unauthorized software and executable usage.',
+    icon: ShieldAlert,
+    tone: 'rose',
+  },
+  {
+    id: 'appWhitelist',
+    label: 'App Whitelist',
+    shortLabel: 'Whitelist',
+    helper: 'Permit approved software and application execution.',
+    icon: ShieldCheck,
+    tone: 'emerald',
+  },
 ];
-const tabLabels: Record<SubTab, string> = {
-    status: 'Restriction Status',
-    settings: 'Policy Settings',
-    policyStatus: 'Policy Status',
+
+const TAB_LABELS: Record<SubTab, string> = {
+  status: 'Restriction Status',
+  settings: 'Policy Settings',
+  policyStatus: 'Policy Status',
 };
-const initialForm: FormState = {
-    policyId: 0,
-    inheritPolicy: false,
-    exception: false,
-    updateInterval: '120',
-    weeklyPolicy: false,
-    useSchedule: false,
-    schedule1: '',
-    schedule2: '',
-    schedule3: '',
-    schedule4: '',
-    appRestrictType: '1',
-    versionCompare: false,
-    appNoticeMessage: '',
-    processRestrictType: '0',
-    processNoticeMessage: '',
-    fontRestrictType: '0',
-    fontNoticeMessage: '',
-    webRestrictType: '1',
-    defaultUrl: '127.0.0.1',
+
+const DEFAULT_FORM: FormState = {
+  policyId: 0,
+  inheritPolicy: false,
+  exception: false,
+  updateInterval: '120',
+  weeklyPolicy: false,
+  useSchedule: false,
+  schedule1: '',
+  schedule2: '',
+  schedule3: '',
+  schedule4: '',
+  appRestrictType: '1',
+  versionCompare: false,
+  appNoticeMessage: '',
+  processRestrictType: '0',
+  processNoticeMessage: '',
+  fontRestrictType: '0',
+  fontNoticeMessage: '',
 };
-const dayOptions = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-const APPWEB_TABLE_PAGE_SIZE = 10;
-const APPWEB_SETTING_LIST_PAGE_SIZE = 8;
-type AppTableColumn<RowType> = {
-    key: keyof RowType | string;
-    header: ReactNode;
-    width?: number | string;
-    align?: 'start' | 'center' | 'end';
-    render?: (row: RowType, index: number) => ReactNode;
-};
-type AppTableProps<RowType extends {
-    [key: string]: any;
-}> = {
-    columns: AppTableColumn<RowType>[];
-    rows: RowType[];
-    rowKey?: keyof RowType | string | ((row: RowType, index: number) => string | number);
-    loading?: boolean;
-    emptyTitle?: string;
-    emptyDescription?: string;
-    summary?: ReactNode;
-};
-type AppButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'size'> & {
-    size?: 'sm' | 'md';
-    variant?: 'primary' | 'secondary' | 'light';
-    loading?: boolean;
-    leftIcon?: ReactNode;
-};
-type CompactPaginationProps = {
-    page: number;
-    totalPages: number;
-    totalCount: number;
-    pageSize?: number;
-    onPageChange: (page: number) => void;
-};
-function CompactPagination({ page, totalPages, totalCount, pageSize = APPWEB_SETTING_LIST_PAGE_SIZE, onPageChange, }: CompactPaginationProps) {
-    if (totalPages <= 1)
-        return null;
-    const safePage = Math.min(Math.max(page, 1), totalPages);
-    const start = (safePage - 1) * pageSize + 1;
-    const end = Math.min(totalCount, safePage * pageSize);
-    const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter((item) => {
-        if (totalPages <= 5)
-            return true;
-        return item === 1 || item === totalPages || Math.abs(item - safePage) <= 1;
-    });
-    return (<div>
-      <span>{start}-{end} of {totalCount}</span>
-      <div aria-label="Pagination controls">
-        <button type="button" disabled={safePage === 1} onClick={() => onPageChange(safePage - 1)}>
-          Prev
-        </button>
-        {pages.map((item, index) => {
-            const previous = pages[index - 1];
-            const needsGap = previous && item - previous > 1;
-            return (<span key={item}>
-              {needsGap && <span>...</span>}
-              <button type="button" onClick={() => onPageChange(item)}>
-                {item}
-              </button>
-            </span>);
-        })}
-        <button type="button" disabled={safePage === totalPages} onClick={() => onPageChange(safePage + 1)}>
-          Next
-        </button>
-      </div>
-    </div>);
+
+const DAY_OPTIONS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const TABLE_PAGE_SIZE = 10;
+const LOOKUP_PAGE_SIZE = 8;
+
+function cn(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
 }
-function getPaginationState<T>(items: T[], page: number, pageSize = APPWEB_SETTING_LIST_PAGE_SIZE) {
-    const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-    const safePage = Math.min(Math.max(page, 1), totalPages);
-    const startIndex = (safePage - 1) * pageSize;
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString().slice(0, 10);
+}
+
+function asArray<T = any>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.data)) return record.data as T[];
+    if (Array.isArray(record.rows)) return record.rows as T[];
+    if (Array.isArray(record.recordset)) return record.recordset as T[];
+  }
+  return [];
+}
+
+function cleanText(value: unknown, fallback = '') {
+  if (value === undefined || value === null) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+}
+
+function pick(row: Record<string, unknown> | null | undefined, keys: string[], fallback = '-') {
+  if (!row) return fallback;
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') return String(value);
+  }
+
+  const normalized = Object.entries(row).map(([key, value]) => [
+    key.toLowerCase().replace(/[\s_\-().]/g, ''),
+    value,
+  ]);
+  const map = Object.fromEntries(normalized);
+
+  for (const key of keys) {
+    const value = map[key.toLowerCase().replace(/[\s_\-().]/g, '')];
+    if (value !== undefined && value !== null && String(value).trim() !== '') return String(value);
+  }
+
+  return fallback;
+}
+
+function pickNumber(row: Record<string, unknown> | null | undefined, keys: string[], fallback = 0) {
+  const value = pick(row, keys, '');
+  const parsed = Number(String(value).replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getNodeLabel(node: RestrictionTreeNode) {
+  return cleanText(
+    node.label ||
+      node.name ||
+      node.Object_Rel_Name ||
+      node.Object_Full_Name ||
+      node.ComputerName ||
+      node.Object_DeviceID ||
+      node.MDM_DeviceID,
+    'Unnamed scope'
+  );
+}
+
+function getNodeId(node: RestrictionTreeNode, index = 0) {
+  return cleanText(
+    node.id ||
+      node.ID ||
+      node.Object_Rel_Idn ||
+      node.Object_Root_Idn ||
+      node.target_id ||
+      node.Object_DeviceID ||
+      node.MDM_DeviceID,
+    `node-${index}`
+  );
+}
+
+function getNodeType(node: RestrictionTreeNode): 'root' | 'department' | 'device' {
+  const rawType = String(node.type || node.Type || '').toLowerCase();
+  if (rawType.includes('device') || node.Object_Root_Idn || node.Object_DeviceID || node.MDM_DeviceID) return 'device';
+  if (rawType.includes('root') || rawType.includes('org')) return 'root';
+  return 'department';
+}
+
+function getChildren(node: RestrictionTreeNode): RestrictionTreeNode[] {
+  return asArray<RestrictionTreeNode>(node.children || node.Children || node.items || node.nodes);
+}
+
+function getTarget(node: RestrictionTreeNode, index = 0): RestrictionTarget {
+  const nodeType = getNodeType(node);
+  const label = getNodeLabel(node);
+
+  if (nodeType === 'root') {
     return {
-        totalPages,
-        safePage,
-        startIndex,
-        pageItems: items.slice(startIndex, startIndex + pageSize),
+      id: 'root',
+      label: 'All Branches',
+      type: 'root',
+      target_type: 1,
+      target_id: '-1',
+      Object_Full_Name: 'Root Policy',
     };
-}
-function getFastRowKey(row: Record<string, unknown>, index: number, keys: string[]) {
-    for (const key of keys) {
-        const value = row[key];
-        if (value !== undefined && value !== null && String(value).trim() !== '')
-            return `${key}-${value}`;
-    }
-    return `row-${index}`;
-}
-function AppButton({ size = 'md', variant = 'primary', loading = false, leftIcon, children, disabled, ...props }: AppButtonProps) {
-    const sizeClass = size === 'sm' ? 'btn-sm' : '';
-    const variantClass = variant === 'primary' ? 'primary-btn' : variant === 'secondary' ? 'soft-btn' : 'soft-btn';
-    return (<button type="button" disabled={disabled || loading} {...props}>
-      {loading ? <Loader2 size={13}/> : leftIcon}
-      {children}
-    </button>);
-}
-function AppTable<RowType extends {
-    [key: string]: any;
-}>({ columns, rows, rowKey, loading = false, emptyTitle = 'No records', emptyDescription = 'No data available.', summary, }: AppTableProps<RowType>) {
-    const [page, setPage] = useState(1);
-    const totalPages = Math.max(1, Math.ceil(rows.length / APPWEB_TABLE_PAGE_SIZE));
-    const safePage = Math.min(page, totalPages);
-    const startIndex = (safePage - 1) * APPWEB_TABLE_PAGE_SIZE;
-    const pagedRows = rows.slice(startIndex, startIndex + APPWEB_TABLE_PAGE_SIZE);
-    useEffect(() => {
-        setPage(1);
-    }, [rows.length]);
-    const resolveRowKey = (row: RowType, index: number) => {
-        if (typeof rowKey === 'function')
-            return rowKey(row, index);
-        if (rowKey && row[rowKey as keyof RowType] !== undefined)
-            return String(row[rowKey as keyof RowType]);
-        return `${startIndex + index}`;
+  }
+
+  if (nodeType === 'device') {
+    const rootId = cleanText(node.Object_Root_Idn || node.objectRootIdn || node.MDM_Asset_Idn || node.assetId || node.target_id || node.id || index);
+    return {
+      id: `device-${rootId}`,
+      label,
+      type: 'device',
+      target_type: 3,
+      target_id: rootId,
+      Object_Root_Idn: rootId,
+      Object_DeviceID: node.Object_DeviceID || node.MDM_DeviceID || node.DeviceID || '',
+      Object_Full_Name: node.Object_Full_Name || node.Department || node.Branch || '',
     };
-    const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter((item) => {
-        if (totalPages <= 7)
-            return true;
-        return item === 1 || item === totalPages || Math.abs(item - safePage) <= 1;
-    });
-    const pageStart = rows.length === 0 ? 0 : startIndex + 1;
-    const pageEnd = Math.min(rows.length, startIndex + APPWEB_TABLE_PAGE_SIZE);
-    return (<div>
-      {summary && <div>{summary}</div>}
-      <div>
-        <table>
+  }
+
+  const relationId = cleanText(node.Object_Rel_Idn || node.objectRelIdn || node.target_id || node.id || index);
+  return {
+    id: `department-${relationId}`,
+    label,
+    type: 'department',
+    target_type: 2,
+    target_id: relationId,
+    Object_Rel_Idn: relationId,
+    Object_Full_Name: node.Object_Full_Name || node.path || label,
+  };
+}
+
+function countDevices(node: RestrictionTreeNode): number {
+  const directCount = pickNumber(node as Record<string, unknown>, ['count', 'badge', 'total', 'deviceCount', 'TotalDevices'], 0);
+  if (directCount > 0) return directCount;
+  if (getNodeType(node) === 'device') return 1;
+  return getChildren(node).reduce((total, child) => total + countDevices(child), 0);
+}
+
+function filterTree(nodes: RestrictionTreeNode[], query: string): RestrictionTreeNode[] {
+  const search = query.trim().toLowerCase();
+  if (!search) return nodes;
+
+  return nodes
+    .map((node) => {
+      const label = [
+        getNodeLabel(node),
+        node.Object_Full_Name,
+        node.Object_DeviceID,
+        node.MDM_DeviceID,
+        node.type,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      const children = filterTree(getChildren(node), search);
+      if (label.includes(search) || children.length) return { ...node, children };
+      return null;
+    })
+    .filter(Boolean) as RestrictionTreeNode[];
+}
+
+function findFirstTarget(nodes: RestrictionTreeNode[]): RestrictionTarget | null {
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    const target = getTarget(node, index);
+    if (target) return target;
+
+    const nested = findFirstTarget(getChildren(node));
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function getPackageId(item: Partial<RestrictionPackage | WhitelistSoftware> | null | undefined): string {
+  if (!item) return '';
+  return cleanText(
+    (item as any).SW_Pkg_Idn ||
+      (item as any).SW_Pkg_IDN ||
+      (item as any).sw_pkg_idn ||
+      (item as any).PackageID ||
+      (item as any).packageId ||
+      (item as any).WLSWIdn ||
+      (item as any).WLSWIDN ||
+      (item as any).id ||
+      (item as any).ID
+  );
+}
+
+function getPackageName(item: Partial<RestrictionPackage | WhitelistSoftware> | null | undefined): string {
+  if (!item) return 'Unnamed package';
+  return cleanText(
+    (item as any).SW_Pkg_Name ||
+      (item as any).SW_Pkg_NAME ||
+      (item as any).PackageName ||
+      (item as any).packageName ||
+      (item as any).Name ||
+      (item as any).name ||
+      (item as any).SW_Name ||
+      (item as any).softwareName,
+    'Unnamed package'
+  );
+}
+
+function getPolicySetting(policy: RestrictionPolicyDetail | null, key: string, fallback = '') {
+  if (!policy) return fallback;
+  const direct = policy.settings?.[key] ?? policy[key];
+  if (direct !== undefined && direct !== null && String(direct).trim() !== '') return String(direct);
+
+  const settingItems = asArray<any>(policy.settingItems || policy.items || policy.settingsList);
+  const found = settingItems.find((item) => cleanText(item.policy_key || item.key).toLowerCase() === key.toLowerCase());
+  if (found?.policy_value !== undefined && found?.policy_value !== null) return String(found.policy_value);
+
+  return fallback;
+}
+
+function getPolicySettingValues(policy: RestrictionPolicyDetail | null, key: string): string[] {
+  if (!policy) return [];
+  const settingItems = asArray<any>(policy.settingItems || policy.items || policy.settingsList);
+  return settingItems
+    .filter((item) => cleanText(item.policy_key || item.key).toLowerCase() === key.toLowerCase())
+    .sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0))
+    .map((item) => cleanText(item.policy_value || item.value))
+    .filter(Boolean);
+}
+
+function splitDays(value: string) {
+  if (!value) return [];
+  const upper = value.toUpperCase();
+  if (upper.includes(',')) return upper.split(',').map((item) => item.trim()).filter(Boolean);
+  return DAY_OPTIONS.filter((day) => upper.includes(day));
+}
+
+function createFormFromPolicy(module: AppModule, policy: RestrictionPolicyDetail | null): FormState {
+  const schedules = getPolicySettingValues(policy, 'SoftwareRestrictSchedule');
+
+  return {
+    policyId: Number(policy?.policy_id || policy?.PolicyID || policy?.id || 0),
+    inheritPolicy: getPolicySetting(policy, 'parent_policy', '0') !== '0' || getPolicySetting(policy, 'use_parent_policy', '0') === '1',
+    exception: getPolicySetting(policy, 'use_policy', '1') === '0',
+    updateInterval: getPolicySetting(policy, module === 'appWhitelist' ? 'update_log_interval' : 'update_policy_result_interval', '120'),
+    weeklyPolicy: getPolicySetting(policy, 'use_weekly_policy', '0') === '1',
+    useSchedule: getPolicySetting(policy, 'use_schedule', '0') === '1',
+    schedule1: schedules[0] || '',
+    schedule2: schedules[1] || '',
+    schedule3: schedules[2] || '',
+    schedule4: schedules[3] || '',
+    appRestrictType: (getPolicySetting(policy, 'SoftwareRestrictType', '1') as FormState['appRestrictType']) || '1',
+    versionCompare: getPolicySetting(policy, 'SoftwareRestrictCheckVerson', '0') === '1',
+    appNoticeMessage: getPolicySetting(policy, 'SoftwareRestrictMessage', ''),
+    processRestrictType: (getPolicySetting(policy, 'process_restrict_type', '0') as FormState['processRestrictType']) || '0',
+    processNoticeMessage: getPolicySetting(policy, 'process_restrict_message', ''),
+    fontRestrictType: (getPolicySetting(policy, 'font_restrict_type', '0') as FormState['fontRestrictType']) || '0',
+    fontNoticeMessage: getPolicySetting(policy, 'font_restrict_message', ''),
+  };
+}
+
+function extractSelectedPolicyIds(policy: RestrictionPolicyDetail | null, sourceRows: Array<RestrictionPackage | WhitelistSoftware>) {
+  if (!policy) return [];
+
+  const direct = [
+    ...asArray<any>(policy.package_list),
+    ...asArray<any>(policy.packages),
+    ...asArray<any>(policy.selectedPackages),
+    ...asArray<any>(policy.whitelistSoftware),
+  ];
+
+  const directIds = direct.map((item) => (typeof item === 'object' ? getPackageId(item) : cleanText(item))).filter(Boolean);
+  if (directIds.length) return directIds;
+
+  const settingItems = asArray<any>(policy.settingItems || policy.items || policy.settingsList);
+  const values = settingItems
+    .filter((item) => /package|software|whitelist/i.test(cleanText(item.policy_key || item.key)))
+    .map((item) => cleanText(item.policy_value || item.value))
+    .filter(Boolean);
+
+  if (values.length) return values;
+
+  return sourceRows.filter((row: any) => row.Selected || row.selected || row.use_policy).map(getPackageId).filter(Boolean);
+}
+
+function getStatusColor(value: string) {
+  const text = value.toLowerCase();
+  if (text.includes('blocked') || text.includes('denied') || text.includes('restrict')) return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (text.includes('allowed') || text.includes('success') || text.includes('installed')) return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (text.includes('pending') || text.includes('waiting')) return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-slate-200 bg-slate-50 text-slate-700';
+}
+
+function Table({
+  columns,
+  rows,
+  loading,
+  emptyText = 'No records found.',
+}: {
+  columns: Array<{ key: string; label: string; render?: (row: any, index: number) => ReactNode }>;
+  rows: any[];
+  loading?: boolean;
+  emptyText?: string;
+}) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * TABLE_PAGE_SIZE;
+  const pageRows = rows.slice(start, start + TABLE_PAGE_SIZE);
+
+  useEffect(() => setPage(1), [rows.length]);
+
+  return (
+    <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-white">
+      <div className="overflow-auto">
+        <table className="min-w-full border-separate border-spacing-0 text-left">
           <thead>
-            <tr>
-              {columns.map((column) => (<th key={String(column.key)}>
-                  {column.header}
-                </th>))}
+            <tr className="bg-slate-50">
+              {columns.map((column) => (
+                <th
+                  key={column.key}
+                  className="whitespace-nowrap border-b border-slate-200 px-5 py-4 text-[11px] font-black uppercase tracking-[0.16em] text-slate-500"
+                >
+                  {column.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {loading ? (<tr>
-                <td colSpan={columns.length}>
-                  <span>
-                    <Loader2 size={16}/> Loading records...
-                  </span>
+            {loading ? (
+              <tr>
+                <td colSpan={columns.length} className="px-5 py-14 text-center">
+                  <div className="inline-flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
+                    <Loader2 size={16} className="animate-spin" />
+                    Loading records...
+                  </div>
                 </td>
-              </tr>) : pagedRows.length === 0 ? (<tr>
-                <td colSpan={columns.length}>
-                  <div>{emptyTitle}</div>
-                  <div>{emptyDescription}</div>
+              </tr>
+            ) : pageRows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="px-5 py-14 text-center text-sm font-bold text-slate-500">
+                  {emptyText}
                 </td>
-              </tr>) : (pagedRows.map((row, rowIndex) => (<tr key={resolveRowKey(row, rowIndex)}>
-                  {columns.map((column) => {
-                const value = column.render ? column.render(row, startIndex + rowIndex) : row[column.key as keyof RowType];
-                return (<td key={String(column.key)}>
-                        {value as ReactNode}
-                      </td>);
-            })}
-                </tr>)))}
+              </tr>
+            ) : (
+              pageRows.map((row, index) => (
+                <tr key={`${pick(row, ['id', 'ID', 'Object_DeviceID', 'ComputerName'], 'row')}-${start + index}`} className="transition hover:bg-slate-50">
+                  {columns.map((column) => (
+                    <td key={column.key} className="border-b border-slate-100 px-5 py-4 align-top text-sm font-semibold text-slate-700">
+                      {column.render ? column.render(row, start + index) : pick(row, [column.key])}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {rows.length > APPWEB_TABLE_PAGE_SIZE && (<div>
-          <span>{pageStart}-{pageEnd} of {rows.length}</span>
-          <div aria-label="Table pagination controls">
-            <button type="button" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+      {rows.length > TABLE_PAGE_SIZE ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-4">
+          <span className="text-sm font-bold text-slate-500">
+            {rows.length === 0 ? 0 : start + 1}-{Math.min(rows.length, start + TABLE_PAGE_SIZE)} of {rows.length}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-black text-slate-600 disabled:opacity-40"
+            >
               Prev
             </button>
-            {pages.map((item, index) => {
-                const previous = pages[index - 1];
-                const needsGap = previous && item - previous > 1;
-                return (<span key={item}>
-                  {needsGap && <span>...</span>}
-                  <button type="button" onClick={() => setPage(item)}>
-                    {item}
-                  </button>
-                </span>);
-            })}
-            <button type="button" disabled={safePage === totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+            <span className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-black text-white">{safePage}</span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-black text-slate-600 disabled:opacity-40"
+            >
               Next
             </button>
           </div>
-        </div>)}
-    </div>);
+        </div>
+      ) : null}
+    </div>
+  );
 }
-const fieldClass = 'setting-input';
-const labelClass = 'form-field-label';
-const sectionTitleClass = 'section-tag';
-const colorClasses = {
-    rose: {
-        icon: 'bg-rose-600 text-white shadow-rose-200',
-        soft: 'border-rose-100 bg-rose-50 text-rose-700',
-        dot: 'bg-rose-500',
-    },
-    emerald: {
-        icon: 'bg-emerald-600 text-white shadow-emerald-200',
-        soft: 'border-emerald-100 bg-emerald-50 text-emerald-700',
-        dot: 'bg-emerald-500',
-    },
-    blue: {
-        icon: 'bg-blue-600 text-white shadow-blue-200',
-        soft: 'border-blue-100 bg-blue-50 text-blue-700',
-        dot: 'bg-blue-500',
-    },
-};
-const today = () => new Date().toISOString().slice(0, 10);
-const daysAgo = (days: number) => {
-    const date = new Date();
-    date.setDate(date.getDate() - days);
-    return date.toISOString().slice(0, 10);
-};
-const getRowText = (row: Record<string, unknown>, keys: string[], fallback = '-'): string => {
-    const normalizedEntries = Object.entries(row).map(([key, value]) => [
-        key.toLowerCase().replace(/[\s_\-().]/g, ''),
-        value,
-    ]);
-    const normalizedRow = Object.fromEntries(normalizedEntries);
-    for (const key of keys) {
-        const normalizedKey = key.toLowerCase().replace(/[\s_\-().]/g, '');
-        const value = normalizedRow[normalizedKey];
-        if (value !== undefined && value !== null && String(value).trim() !== '') {
-            return String(value);
-        }
-    }
-    return fallback;
-};
-const getRestrictionDisplayLabel = (node: Pick<RestrictionTreeNode, 'type' | 'label'>, depth = 0) => {
-    const label = String(node.label || '').trim();
-    if (depth === 0 || node.type === 'org' || node.type === 'root')
-        return 'All Branches';
-    return label || 'Unnamed Scope';
-};
-const toTarget = (node: RestrictionTreeNode): RestrictionTarget | null => {
-    if (node.type === 'org' || node.type === 'root') {
-        return {
-            id: node.id || 'organization',
-            label: getRestrictionDisplayLabel(node, 0),
-            type: 'root',
-            target_type: 1,
-            target_id: '-1',
-            Object_Full_Name: 'Root Policy',
-        };
-    }
-    if (!node.target_type || !node.target_id)
-        return null;
-    return {
-        id: node.id,
-        label: node.label,
-        type: node.type,
-        target_type: node.target_type,
-        target_id: node.target_id,
-        Object_Rel_Idn: node.Object_Rel_Idn,
-        Object_Root_Idn: node.Object_Root_Idn,
-        Object_DeviceID: node.Object_DeviceID,
-        Object_Full_Name: node.Object_Full_Name,
-    };
-};
-const findFirstTarget = (nodes: RestrictionTreeNode[]): RestrictionTarget | null => {
-    for (const node of nodes) {
-        const target = toTarget(node);
-        if (target)
-            return target;
-        const childTarget = findFirstTarget(node.children || []);
-        if (childTarget)
-            return childTarget;
-    }
-    return null;
-};
-const filterRestrictionTree = (nodes: RestrictionTreeNode[], query: string): RestrictionTreeNode[] => {
-    const search = query.trim().toLowerCase();
-    if (!search)
-        return nodes;
-    return nodes
-        .map((node) => {
-        const children = filterRestrictionTree(node.children || [], search);
-        const matches = [node.label, node.Object_Full_Name, node.Object_DeviceID, node.type]
-            .filter(Boolean)
-            .some((value) => String(value).toLowerCase().includes(search));
-        if (matches)
-            return { ...node };
-        return children.length ? { ...node, children } : null;
-    })
-        .filter((node): node is RestrictionTreeNode => Boolean(node));
-};
-const getSetting = (policy: RestrictionPolicyDetail | null, key: string, fallback = '') => {
-    if (!policy)
-        return fallback;
-    const direct = policy.settings?.[key];
-    if (direct !== undefined && direct !== null && String(direct) !== '')
-        return String(direct);
-    const item = policy.settingItems?.find((entry) => entry.policy_key === key);
-    return item?.policy_value !== undefined ? String(item.policy_value) : fallback;
-};
-const getSettingValues = (policy: RestrictionPolicyDetail | null, key: string): string[] => {
-    if (!policy?.settingItems)
-        return [];
-    return policy.settingItems
-        .filter((entry) => entry.policy_key === key)
-        .sort((a, b) => Number(a.seq || 0) - Number(b.seq || 0))
-        .map((entry) => String(entry.policy_value || ''))
-        .filter(Boolean);
-};
-const splitDays = (value: string) => {
-    if (!value)
-        return [];
-    const upper = value.toUpperCase();
-    if (upper.includes(','))
-        return upper.split(',').map((day) => day.trim()).filter(Boolean);
-    return dayOptions.filter((day) => upper.includes(day));
-};
-const pickRuntimeValue = (item: Record<string, unknown> | null | undefined, keys: string[]) => {
-    if (!item)
-        return undefined;
-    for (const key of keys) {
-        const value = item[key];
-        if (value !== undefined && value !== null && String(value).trim() !== '')
-            return value;
-    }
-    const existingKey = Object.keys(item).find((itemKey) => keys.some((key) => itemKey.toLowerCase() === key.toLowerCase()));
-    if (!existingKey)
-        return undefined;
-    const value = item[existingKey];
-    return value !== undefined && value !== null && String(value).trim() !== '' ? value : undefined;
-};
-const normalizeSelectionKey = (value: unknown): string => value === undefined || value === null ? '' : String(value).trim().toLowerCase().replace(/\s+/g, ' ');
-const getPackageId = (item: Partial<RestrictionPackage> | null | undefined): string => {
-    const value = pickRuntimeValue(item as Record<string, unknown> | null | undefined, [
-        'SW_Pkg_Idn',
-        'SW_Pkg_IDN',
-        'sw_pkg_idn',
-        'SW_PKG_IDN',
-        'PackageID',
-        'packageId',
-        'id',
-    ]);
-    return value === undefined || value === null ? '' : String(value);
-};
-const getPackageName = (item: Partial<RestrictionPackage> | null | undefined): string => {
-    const value = pickRuntimeValue(item as Record<string, unknown> | null | undefined, [
-        'SW_Pkg_Name',
-        'SW_Pkg_NAME',
-        'sw_pkg_name',
-        'SW_PKG_NAME',
-        'PackageName',
-        'packageName',
-        'Name',
-        'name',
-    ]);
-    return value === undefined || value === null ? '' : String(value);
-};
-const getWhitelistId = (item: Partial<WhitelistSoftware> | null | undefined): string => {
-    const value = pickRuntimeValue(item as Record<string, unknown> | null | undefined, [
-        'WLSWIdn',
-        'WLSWIDN',
-        'wlSwIdn',
-        'wlsw_idn',
-        'id',
-    ]);
-    return value === undefined || value === null ? '' : String(value);
-};
-const getWhitelistName = (item: Partial<WhitelistSoftware> | null | undefined): string => {
-    const value = pickRuntimeValue(item as Record<string, unknown> | null | undefined, [
-        'Name',
-        'name',
-        'SW_Name',
-        'softwareName',
-    ]);
-    return value === undefined || value === null ? '' : String(value);
-};
-const uniqueStrings = (values: Array<string | number | null | undefined>): string[] => [
-    ...new Set(values.map((value) => (value === undefined || value === null ? '' : String(value))).filter(Boolean)),
-];
-function resolveAppRestrictionApiBaseUrl() {
-    const envUrl = ((import.meta.env.VITE_API_BASE_URL as string | undefined) || (import.meta.env.VITE_API_URL as string | undefined) || '').trim();
-    if (envUrl)
-        return envUrl.replace(/\/+$/, '');
-    return '';
+
+function Select({
+  value,
+  options,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        className="h-12 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50 disabled:bg-slate-100 disabled:text-slate-400"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+    </div>
+  );
 }
-const APP_RESTRICTION_API_BASE_URL = resolveAppRestrictionApiBaseUrl();
-const APP_RESTRICTION_TOKEN_KEYS = ['ema-access-token', 'ema-token', 'accessToken', 'token', 'authToken', 'jwtToken', 'bearerToken'];
-const APP_RESTRICTION_AUTH_KEYS = ['ema-auth', 'auth', 'user', 'ema-user', 'currentUser', 'authUser', 'ema-current-user'];
-type FallbackDepartmentRow = Record<string, unknown> & {
-    Object_Rel_Idn?: number;
-    Object_Rel_Name?: string;
-    Object_Full_Name?: string;
-    children?: FallbackDepartmentRow[];
-};
-type FallbackAssetRow = Record<string, unknown> & {
-    _Idn?: number;
-    Object_Root_Idn?: number;
-    MDM_Asset_Idn?: number;
-    Object_DeviceID?: string;
-    MDM_DeviceID?: string;
-    ComputerName?: string;
-    MDM_DeviceName?: string;
-    Object_Client_Name?: string;
-    Object_Full_Name?: string;
-};
-function findAppRestrictionTokenInValue(value: unknown, depth = 0): string {
-    if (!value || depth > 5)
-        return '';
-    if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (trimmed.startsWith('eyJ'))
-            return trimmed;
-        try {
-            return findAppRestrictionTokenInValue(JSON.parse(trimmed), depth + 1);
-        }
-        catch {
-            return '';
-        }
-    }
-    if (Array.isArray(value)) {
-        for (const item of value) {
-            const token = findAppRestrictionTokenInValue(item, depth + 1);
-            if (token)
-                return token;
-        }
-        return '';
-    }
-    if (typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        const data = record.data && typeof record.data === 'object' && !Array.isArray(record.data) ? record.data as Record<string, unknown> : null;
-        const direct = record.token || record.accessToken || record.authToken || record.jwt || record.jwtToken || record.bearerToken || data?.token || data?.accessToken;
-        if (typeof direct === 'string' && direct.trim())
-            return direct.trim();
-        for (const nestedValue of Object.values(record)) {
-            const token = findAppRestrictionTokenInValue(nestedValue, depth + 1);
-            if (token)
-                return token;
-        }
-    }
-    return '';
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <label className="mb-2 block text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">{children}</label>;
 }
-function getAppRestrictionStoredToken() {
-    if (typeof window === 'undefined')
-        return '';
-    const storages = [window.localStorage, window.sessionStorage];
-    for (const storage of storages) {
-        for (const key of APP_RESTRICTION_TOKEN_KEYS) {
-            const value = storage.getItem(key);
-            if (value?.trim())
-                return value.trim();
-        }
-        for (const key of APP_RESTRICTION_AUTH_KEYS) {
-            const token = findAppRestrictionTokenInValue(storage.getItem(key));
-            if (token)
-                return token;
-        }
-    }
-    return '';
-}
-async function appRestrictionApiGet<T>(path: string): Promise<T> {
-    const headers = new Headers();
-    headers.set('Accept', 'application/json');
-    const token = getAppRestrictionStoredToken();
-    if (token)
-        headers.set('Authorization', `Bearer ${token}`);
-    const response = await fetch(`${APP_RESTRICTION_API_BASE_URL}${path}`, {
-        method: 'GET',
-        headers,
-        credentials: 'include',
+
+export default function AppRestriction() {
+  const [activeModule, setActiveModule] = useState<AppModule>('appBlacklist');
+  const [activeTab, setActiveTab] = useState<SubTab>('status');
+  const [treeNodes, setTreeNodes] = useState<RestrictionTreeNode[]>([]);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['root', 'organization']));
+  const [selectedTarget, setSelectedTarget] = useState<RestrictionTarget | null>(null);
+  const [treeSearch, setTreeSearch] = useState('');
+  const [statusSearch, setStatusSearch] = useState('');
+  const [policySearch, setPolicySearch] = useState('');
+  const [packageSearch, setPackageSearch] = useState('');
+  const [startDate, setStartDate] = useState(daysAgo(30));
+  const [endDate, setEndDate] = useState(today());
+  const [includeSub, setIncludeSub] = useState(true);
+  const [loadingTree, setLoadingTree] = useState(false);
+  const [loadingData, setLoadingData] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [policyRows, setPolicyRows] = useState<RestrictionPolicyRow[]>([]);
+  const [statusRows, setStatusRows] = useState<RestrictionStatusRow[]>([]);
+  const [packages, setPackages] = useState<RestrictionPackage[]>([]);
+  const [whitelistSoftware, setWhitelistSoftware] = useState<WhitelistSoftware[]>([]);
+  const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+  const [selectedPackageIds, setSelectedPackageIds] = useState<string[]>([]);
+  const [selectedWhitelistIds, setSelectedWhitelistIds] = useState<string[]>([]);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [toasts, setToasts] = useState<EmaToastItem[]>([]);
+  const toastIdRef = useRef(0);
+
+  const moduleConfig = MODULES.find((item) => item.id === activeModule) || MODULES[0];
+  const ModuleIcon = moduleConfig.icon;
+  const isWhitelist = activeModule === 'appWhitelist';
+  const filteredTree = useMemo(() => filterTree(treeNodes, treeSearch), [treeNodes, treeSearch]);
+  const selectedLookupRows = isWhitelist ? whitelistSoftware : packages;
+  const selectedIds = isWhitelist ? selectedWhitelistIds : selectedPackageIds;
+
+  const filteredLookupRows = useMemo(() => {
+    const search = packageSearch.trim().toLowerCase();
+    return selectedLookupRows.filter((row) => {
+      const text = [
+        getPackageName(row),
+        getPackageId(row),
+        pick(row, ['SW_Pkg_Company', 'Company', 'vendor'], ''),
+        pick(row, ['SW_Catg', 'category', 'Category'], ''),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return !search || text.includes(search);
     });
-    const text = await response.text();
-    let payload: unknown = null;
+  }, [selectedLookupRows, packageSearch]);
+
+  const filteredStatusRows = useMemo(() => {
+    const search = statusSearch.trim().toLowerCase();
+    return statusRows.filter((row) => {
+      const text = Object.values(row || {}).join(' ').toLowerCase();
+      return !search || text.includes(search);
+    });
+  }, [statusRows, statusSearch]);
+
+  const filteredPolicyRows = useMemo(() => {
+    const search = policySearch.trim().toLowerCase();
+    return policyRows.filter((row) => {
+      const text = Object.values(row || {}).join(' ').toLowerCase();
+      return !search || text.includes(search);
+    });
+  }, [policyRows, policySearch]);
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        label: 'Target',
+        value: selectedTarget?.label || 'All Branches',
+        icon: Layers,
+        tone: 'border-blue-200 text-blue-700 bg-blue-50',
+      },
+      {
+        label: isWhitelist ? 'Allowed Software' : 'Blocked Packages',
+        value: selectedIds.length,
+        icon: Package,
+        tone: isWhitelist ? 'border-emerald-200 text-emerald-700 bg-emerald-50' : 'border-rose-200 text-rose-700 bg-rose-50',
+      },
+      {
+        label: 'Status Rows',
+        value: statusRows.length,
+        icon: CheckCircle2,
+        tone: 'border-indigo-200 text-indigo-700 bg-indigo-50',
+      },
+      {
+        label: 'Policy Rows',
+        value: policyRows.length,
+        icon: Ban,
+        tone: 'border-amber-200 text-amber-700 bg-amber-50',
+      },
+    ],
+    [isWhitelist, policyRows.length, selectedIds.length, selectedTarget?.label, statusRows.length]
+  );
+
+  const addToast = useCallback((tone: EmaToastTone, title: string, message?: string) => {
+    toastIdRef.current += 1;
+    const toast: EmaToastItem = { id: `${Date.now()}-${toastIdRef.current}`, tone, title, message };
+    setToasts((items) => [...items.slice(-2), toast]);
+    window.setTimeout(() => {
+      setToasts((items) => items.filter((item) => item.id !== toast.id));
+    }, 3200);
+  }, []);
+
+  const loadTree = useCallback(async () => {
+    setLoadingTree(true);
     try {
-        payload = text ? JSON.parse(text) : null;
-    }
-    catch {
-        throw new Error('Unable to load branch scope.');
-    }
-    if (!response.ok) {
-        const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : null;
-        throw new Error(String(record?.message || record?.error || 'Unable to load branch scope.'));
-    }
-    return payload as T;
-}
-function unwrapAppRestrictionRows<T>(payload: unknown): T[] {
-    if (Array.isArray(payload))
-        return payload as T[];
-    const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : null;
-    if (!record)
-        return [];
-    const data = record.data;
-    if (Array.isArray(data))
-        return data as T[];
-    if (data && typeof data === 'object' && !Array.isArray(data)) {
-        const dataRecord = data as Record<string, unknown>;
-        for (const key of ['departments', 'assets', 'rows', 'recordset', 'data']) {
-            if (Array.isArray(dataRecord[key]))
-                return dataRecord[key] as T[];
-        }
-    }
-    for (const key of ['departments', 'assets', 'rows', 'recordset', 'result']) {
-        if (Array.isArray(record[key]))
-            return record[key] as T[];
-    }
-    return [];
-}
-function pickAppRestrictionNumber(row: Record<string, unknown>, keys: string[], fallback = 0) {
-    for (const key of keys) {
-        const value = row[key];
-        const parsed = Number(String(value ?? '').replace(/,/g, ''));
-        if (Number.isFinite(parsed) && parsed !== 0)
-            return parsed;
-    }
-    const lowerKeys = Object.keys(row);
-    for (const wanted of keys) {
-        const match = lowerKeys.find((key) => key.toLowerCase() === wanted.toLowerCase());
-        if (!match)
-            continue;
-        const parsed = Number(String(row[match] ?? '').replace(/,/g, ''));
-        if (Number.isFinite(parsed) && parsed !== 0)
-            return parsed;
-    }
-    return fallback;
-}
-function pickAppRestrictionText(row: Record<string, unknown>, keys: string[], fallback = '') {
-    for (const key of keys) {
-        const value = row[key];
-        if (value !== undefined && value !== null && String(value).trim() !== '')
-            return String(value).trim();
-    }
-    const lowerKeys = Object.keys(row);
-    for (const wanted of keys) {
-        const match = lowerKeys.find((key) => key.toLowerCase() === wanted.toLowerCase());
-        if (!match)
-            continue;
-        const value = row[match];
-        if (value !== undefined && value !== null && String(value).trim() !== '')
-            return String(value).trim();
-    }
-    return fallback;
-}
-function mapAppRestrictionAssetFallback(row: FallbackAssetRow, index: number, parentName: string): RestrictionTreeNode {
-    const record = row as Record<string, unknown>;
-    const objectRootIdn = pickAppRestrictionNumber(record, ['Object_Root_Idn', '_Idn', 'MDM_Asset_Idn', 'assetId', 'id'], index + 1);
-    const objectDeviceId = pickAppRestrictionText(record, ['Object_DeviceID', 'MDM_DeviceID', 'DeviceID', 'deviceID'], '');
-    const label = pickAppRestrictionText(record, ['ComputerName', 'MDM_DeviceName', 'Object_Client_Name', 'DeviceName', 'name', 'label'], objectDeviceId || `Device ${index + 1}`);
-    return {
-        id: `device-${objectRootIdn || objectDeviceId || label}`,
-        label,
-        type: 'device',
-        target_type: 3,
-        target_id: String(objectRootIdn || objectDeviceId || label),
-        Object_Root_Idn: objectRootIdn,
-        Object_DeviceID: objectDeviceId,
-        Object_Full_Name: pickAppRestrictionText(record, ['Object_Full_Name', 'Department', 'Branch'], parentName),
-        children: [],
-    } as RestrictionTreeNode;
-}
-async function mapAppRestrictionDepartmentFallback(row: FallbackDepartmentRow, index: number, parentName = ''): Promise<RestrictionTreeNode> {
-    const record = row as Record<string, unknown>;
-    const relationId = pickAppRestrictionNumber(record, ['Object_Rel_Idn', 'relationID', 'relationId', 'id', 'ID'], index + 1);
-    const label = pickAppRestrictionText(record, ['Object_Rel_Name', 'RelationName', 'DepartmentName', 'Object_Full_Name', 'name', 'label'], `Branch ${index + 1}`);
-    const fullName = pickAppRestrictionText(record, ['Object_Full_Name', 'FullName', 'path'], parentName ? `${parentName} \\ ${label}` : label);
-    const childDepartments = unwrapAppRestrictionRows<FallbackDepartmentRow>((record.children as unknown[]) || []);
-    const nestedDepartments = await Promise.all(childDepartments.map((child, childIndex) => mapAppRestrictionDepartmentFallback(child, childIndex, fullName)));
-    let assetRows: FallbackAssetRow[] = [];
-    if (relationId > 0) {
-        try {
-            const assetPayload = await appRestrictionApiGet<unknown>(`/api/assets/${relationId}`);
-            assetRows = unwrapAppRestrictionRows<FallbackAssetRow>(assetPayload);
-        }
-        catch {
-            assetRows = [];
-        }
-    }
-    const deviceNodes = assetRows.map((asset, assetIndex) => mapAppRestrictionAssetFallback(asset, assetIndex, fullName));
-    return {
-        id: `department-${relationId || label}`,
-        label,
-        type: 'department',
-        target_type: 2,
-        target_id: String(relationId || label),
-        Object_Rel_Idn: relationId,
-        Object_Full_Name: fullName,
-        children: [...nestedDepartments, ...deviceNodes],
-    } as RestrictionTreeNode;
-}
-async function buildAppRestrictionFallbackTree(): Promise<RestrictionTreeNode[]> {
-    const payload = await appRestrictionApiGet<unknown>('/api/departments');
-    const departments = unwrapAppRestrictionRows<FallbackDepartmentRow>(payload);
-    const departmentNodes = await Promise.all(departments.map((department, index) => mapAppRestrictionDepartmentFallback(department, index)));
-    return [
-        {
-            id: 'organization',
-            label: 'All Branches',
-            type: 'root',
-            target_type: 1,
-            target_id: '-1',
-            Object_Full_Name: 'Root Policy',
-            children: departmentNodes,
-        } as RestrictionTreeNode,
-    ];
-}
-function getRestrictionTreeCount(node: RestrictionTreeNode): number {
-    const record = node as RestrictionTreeNode & Record<string, unknown>;
-    const directCandidates = [record.badge, record.count, record.total, record.Total, record.deviceCount, record.DeviceCount, record.TotalDevices];
-    for (const candidate of directCandidates) {
-        const parsed = Number(String(candidate ?? '').replace(/,/g, ''));
-        if (Number.isFinite(parsed) && parsed > 0)
-            return parsed;
-    }
-    if (node.type === 'device')
-        return 1;
-    return (node.children || []).reduce((total, child) => total + getRestrictionTreeCount(child), 0);
-}
-function formatRestrictionTreeCount(value: number) {
-    if (!Number.isFinite(value) || value <= 0)
-        return '';
-    return new Intl.NumberFormat('en-MY').format(value);
-}
-const createFormFromPolicy = (module: RestrictionModule, policy: RestrictionPolicyDetail | null, selectedTarget: RestrictionTarget | null): FormState => {
-    const schedules = module === 'webRestriction'
-        ? getSettingValues(policy, 'WebRestrictSchedule')
-        : getSettingValues(policy, 'SoftwareRestrictSchedule');
-    const expectedSource = selectedTarget?.type === 'device' ? 'device' : selectedTarget?.type === 'root' ? 'root' : 'department';
-    const inheritedFromParent = Boolean(policy?.source && policy.source !== 'none' && selectedTarget && policy.source !== expectedSource);
-    return {
-        policyId: Number(policy?.policy_id || 0),
-        inheritPolicy: inheritedFromParent || getSetting(policy, 'parent_policy', '0') !== '0',
-        exception: getSetting(policy, 'use_policy', '1') === '0',
-        updateInterval: getSetting(policy, module === 'appWhitelist' ? 'update_log_interval' : 'update_policy_result_interval', '120'),
-        weeklyPolicy: getSetting(policy, 'use_weekly_policy', '0') === '1',
-        useSchedule: getSetting(policy, 'use_schedule', '0') === '1',
-        schedule1: schedules[0] || '',
-        schedule2: schedules[1] || '',
-        schedule3: schedules[2] || '',
-        schedule4: schedules[3] || '',
-        appRestrictType: (getSetting(policy, 'SoftwareRestrictType', '1') as FormState['appRestrictType']) || '1',
-        versionCompare: getSetting(policy, 'SoftwareRestrictCheckVerson', '0') === '1',
-        appNoticeMessage: getSetting(policy, 'SoftwareRestrictMessage', ''),
-        processRestrictType: (getSetting(policy, 'process_restrict_type', '0') as FormState['processRestrictType']) || '0',
-        processNoticeMessage: getSetting(policy, 'process_restrict_message', ''),
-        fontRestrictType: (getSetting(policy, 'font_restrict_type', '0') as FormState['fontRestrictType']) || '0',
-        fontNoticeMessage: getSetting(policy, 'font_restrict_message', ''),
-        webRestrictType: (getSetting(policy, 'WebRestrictType', '1') as FormState['webRestrictType']) || '1',
-        defaultUrl: getSetting(policy, 'WebRestrictMessage', '127.0.0.1'),
-    };
-};
-export default function AppWebRestriction() {
-    const [activeModule, setActiveModule] = useState<RestrictionModule>('appBlacklist');
-    const [activeTab, setActiveTab] = useState<SubTab>('status');
-    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-    const [treeNodes, setTreeNodes] = useState<RestrictionTreeNode[]>([]);
-    const [targetTreeSearch, setTargetTreeSearch] = useState('');
-    const [selectedTarget, setSelectedTarget] = useState<RestrictionTarget | null>(null);
-    const [policyDetail, setPolicyDetail] = useState<RestrictionPolicyDetail | null>(null);
-    const [policyRows, setPolicyRows] = useState<RestrictionPolicyRow[]>([]);
-    const [statusRows, setStatusRows] = useState<RestrictionStatusRow[]>([]);
-    const [packages, setPackages] = useState<RestrictionPackage[]>([]);
-    const [whitelistSoftware, setWhitelistSoftware] = useState<WhitelistSoftware[]>([]);
-    const [webGroups, setWebGroups] = useState<WebGroup[]>([]);
-    const [webGroupUrls, setWebGroupUrls] = useState<WebGroupUrl[]>([]);
-    const [selectedWebsiteGroupId, setSelectedWebsiteGroupId] = useState<number | null>(null);
-    const [selectedDays, setSelectedDays] = useState<string[]>([]);
-    const [form, setForm] = useState<FormState>(initialForm);
-    const [selectedPackageIds, setSelectedPackageIds] = useState<string[]>([]);
-    const [selectedPackageRows, setSelectedPackageRows] = useState<RestrictionPackage[]>([]);
-    const [selectedWhitelistIds, setSelectedWhitelistIds] = useState<string[]>([]);
-    const [selectedWhitelistRows, setSelectedWhitelistRows] = useState<WhitelistSoftware[]>([]);
-    const [webUrls, setWebUrls] = useState<string[]>([]);
-    const [webPolicyPage, setWebPolicyPage] = useState(1);
-    const [webGroupUrlPage, setWebGroupUrlPage] = useState(1);
-    const [newUrl, setNewUrl] = useState('');
-    const [showWebGroupManager, setShowWebGroupManager] = useState(false);
-    const [webGroupName, setWebGroupName] = useState('');
-    const [webGroupDescription, setWebGroupDescription] = useState('');
-    const [webGroupDomainInput, setWebGroupDomainInput] = useState('');
-    const [editingWebGroup, setEditingWebGroup] = useState<WebGroup | null>(null);
-    const [searchText, setSearchText] = useState('');
-    const [startDate, setStartDate] = useState(daysAgo(30));
-    const [endDate, setEndDate] = useState(today());
-    const [includeSub, setIncludeSub] = useState(true);
-    const [showManageSoftware, setShowManageSoftware] = useState(false);
-    const [manageSearchText, setManageSearchText] = useState('');
-    const [manageFileTab, setManageFileTab] = useState<'process' | 'font'>('process');
-    const [showPackageManager, setShowPackageManager] = useState(false);
-    const [packageManagerRows, setPackageManagerRows] = useState<RestrictionPackage[]>([]);
-    const [selectedManagerPackage, setSelectedManagerPackage] = useState<RestrictionPackage | null>(null);
-    const [packageManagerSearch, setPackageManagerSearch] = useState('');
-    const [packageFileSearch, setPackageFileSearch] = useState('');
-    const [packageInventoryFiles, setPackageInventoryFiles] = useState<RestrictionPackageFile[]>([]);
-    const [packageForm, setPackageForm] = useState<PackageManagerPayload>({ SW_Pkg_Name: '', SW_Pkg_Company: '', License_Qnt: 0, Use_Statistices: 1, Cur_Count: 0, SW_Package_EtcInfo: '', SW_Catg: 0, Selected: 1 });
-    const [packageManagerLoading, setPackageManagerLoading] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [message, setMessage] = useState<string | null>(null);
-    const [notice, setNotice] = useState<NoticeState>(null);
-    const noticeTimerRef = useRef<number | null>(null);
-    const treeInitializedRef = useRef(false);
-    const moduleConfig = modules.find((module) => module.id === activeModule) || modules[0];
-    const filteredTreeNodes = useMemo(() => filterRestrictionTree(treeNodes, targetTreeSearch), [treeNodes, targetTreeSearch]);
-    const tone = colorClasses[moduleConfig.color];
-    // App Whitelist must stay editable even when the displayed effective policy is inherited.
-    // Saving App Whitelist for a selected device/department should create/update a policy
-    // on that selected target instead of keeping it locked to Root/parent policy.
-    const isInherited = activeModule === 'appWhitelist' ? false : form.inheritPolicy;
-    useEffect(() => {
-        if (!message)
-            return;
-        const lower = message.toLowerCase();
-        const tone: NoticeTone = lower.includes('failed') || lower.includes('error') || lower.includes('cannot')
-            ? 'error'
-            : lower.includes('required') || lower.includes('first') || lower.includes('select') || lower.includes('enter') || lower.includes('no ')
-                ? 'warning'
-                : lower.includes('loading') || lower.includes('requested')
-                    ? 'info'
-                    : 'success';
-        setNotice({ id: Date.now(), text: message, tone });
-        if (noticeTimerRef.current)
-            window.clearTimeout(noticeTimerRef.current);
-        noticeTimerRef.current = window.setTimeout(() => setNotice(null), tone === 'error' ? 6500 : 4500);
-        return () => {
-            if (noticeTimerRef.current) {
-                window.clearTimeout(noticeTimerRef.current);
-                noticeTimerRef.current = null;
-            }
-        };
-    }, [message]);
-    const dismissNotice = () => {
-        if (noticeTimerRef.current) {
-            window.clearTimeout(noticeTimerRef.current);
-            noticeTimerRef.current = null;
-        }
-        setNotice(null);
-    };
-    useEffect(() => {
-        setWebPolicyPage(1);
-    }, [webUrls.length, activeModule, activeTab]);
-    useEffect(() => {
-        setWebGroupUrlPage(1);
-    }, [webGroupUrls.length, selectedWebsiteGroupId, activeModule, activeTab]);
-    useEffect(() => {
-        document.documentElement.classList.add('ema-settings-page-active', 'ema-appwebrestriction-page-active');
-        document.body.classList.add('ema-settings-page-active', 'ema-appwebrestriction-page-active');
-        return () => {
-            document.documentElement.classList.remove('ema-settings-page-active', 'ema-appwebrestriction-page-active');
-            document.body.classList.remove('ema-settings-page-active', 'ema-appwebrestriction-page-active');
-        };
-    }, []);
-    const loadTree = useCallback(async () => {
-        try {
-            setLoading(true);
-            let data = await restrictionService.getTree();
-            if (!Array.isArray(data) || data.length === 0) {
-                data = await buildAppRestrictionFallbackTree();
-            }
-            setTreeNodes(data);
-            setExpandedGroups((previous) => {
-                if (treeInitializedRef.current)
-                    return previous;
-                const initialExpanded = new Set<string>();
-                data.forEach((node) => {
-                    initialExpanded.add(node.id);
-                    (node.children || []).slice(0, 5).forEach((child) => initialExpanded.add(child.id));
-                });
-                treeInitializedRef.current = true;
-                return initialExpanded;
-            });
-            setSelectedTarget((previous) => {
-                if (previous)
-                    return previous;
-                return findFirstTarget(data) || null;
-            });
-        }
-        catch (error) {
-            try {
-                const fallbackTree = await buildAppRestrictionFallbackTree();
-                setTreeNodes(fallbackTree);
-                setExpandedGroups((previous) => {
-                    if (treeInitializedRef.current)
-                        return previous;
-                    const initialExpanded = new Set<string>();
-                    fallbackTree.forEach((node) => {
-                        initialExpanded.add(node.id);
-                        (node.children || []).slice(0, 5).forEach((child) => initialExpanded.add(child.id));
-                    });
-                    treeInitializedRef.current = true;
-                    return initialExpanded;
-                });
-                setSelectedTarget((previous) => previous || findFirstTarget(fallbackTree));
-                setMessage(null);
-            }
-            catch {
-                setTreeNodes([]);
-                setMessage('Branch view is not available right now.');
-            }
-        }
-        finally {
-            setLoading(false);
-        }
-    }, []);
-    const loadLookups = useCallback(async () => {
-        try {
-            const [packageData, whitelistData, groupData] = await Promise.all([
-                restrictionService.getPackages(),
-                restrictionService.getWhitelistSoftware(),
-                restrictionService.getWebGroups(),
-            ]);
-            setPackages(packageData);
-            setWhitelistSoftware(whitelistData);
-            setWebGroups(groupData);
-            setSelectedWebsiteGroupId((previous) => previous || groupData[0]?.idx || null);
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to load restriction lookup data.');
-        }
-    }, []);
-    const loadPolicyData = useCallback(async () => {
-        const target: RestrictionTarget = selectedTarget || {
-            id: 'root-policy',
-            label: 'All Branches',
-            type: 'root',
-            target_type: 1,
-            target_id: '-1',
-            Object_Full_Name: 'Root Policy',
-        };
-        try {
-            setLoading(true);
-            const [detail, policies, status] = await Promise.all([
-                restrictionService.getEffectivePolicy(activeModule, target),
-                restrictionService.getPolicyList(activeModule, target),
-                activeModule === 'webRestriction'
-                    ? Promise.resolve([])
-                    : restrictionService.getRestrictionStatus(activeModule, target, {
-                        startDate,
-                        endDate,
-                        includeSub: includeSub ? 1 : 0,
-                    }),
-            ]);
-            setPolicyDetail(detail);
-            setPolicyRows(policies);
-            setStatusRows(status);
-            setForm(createFormFromPolicy(activeModule, detail, target));
-            const policyPackages = detail.packages || [];
-            const policyWhitelist = detail.whitelistSoftware || [];
-            const policyPackageIds = detail.selectedPackageIds?.length
-                ? detail.selectedPackageIds
-                : policyPackages.map((item) => getPackageId(item));
-            const policyWhitelistIds = detail.selectedWhitelistIds?.length
-                ? detail.selectedWhitelistIds
-                : policyWhitelist.map((item) => getWhitelistId(item));
-            setSelectedDays(splitDays(getSetting(detail, 'work_weekly', '')));
-            setSelectedPackageRows(policyPackages);
-            setSelectedPackageIds(uniqueStrings(policyPackageIds));
-            setSelectedWhitelistRows(policyWhitelist);
-            setSelectedWhitelistIds(uniqueStrings(policyWhitelistIds));
-            setWebUrls(detail.urls || getSettingValues(detail, 'WebRestrictUrl'));
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to load restriction policy data.');
-        }
-        finally {
-            setLoading(false);
-        }
-    }, [activeModule, selectedTarget, startDate, endDate, includeSub]);
-    const loadWebGroupUrls = useCallback(async () => {
-        if (!selectedWebsiteGroupId) {
-            setWebGroupUrls([]);
-            return;
-        }
-        try {
-            const urls = await restrictionService.getWebGroupUrls(selectedWebsiteGroupId);
-            setWebGroupUrls(urls);
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to load website group URLs.');
-        }
-    }, [selectedWebsiteGroupId]);
-    useEffect(() => {
-        loadTree();
-        loadLookups();
-    }, [loadTree, loadLookups]);
-    useEffect(() => {
-        if (activeModule === 'webRestriction' && activeTab === 'status')
-            setActiveTab('settings');
-    }, [activeModule, activeTab]);
-    useEffect(() => {
-        loadPolicyData();
-    }, [loadPolicyData]);
-    useEffect(() => {
-        loadWebGroupUrls();
-    }, [loadWebGroupUrls]);
-    const summaryCards = useMemo(() => {
-        const appliedStatus = form.exception ? 'Disabled' : 'Enabled';
-        const source = policyDetail?.source === 'none' ? 'No policy' : policyDetail?.source || 'No policy';
-        if (activeModule === 'appBlacklist') {
-            return [
-                { label: 'Policy Type', value: '1006', helper: 'App blacklist', icon: ShieldAlert, tone: 'rose' },
-                { label: 'Selected Packages', value: selectedPackageIds.length, helper: 'Blocked package list', icon: Package, tone: 'amber' },
-                { label: 'Restriction', value: appRestrictionLabel(form.appRestrictType), helper: appliedStatus, icon: Ban, tone: 'slate' },
-                { label: 'Policy Source', value: source, helper: policyDetail?.version || '-', icon: Layers, tone: 'blue' },
-            ];
-        }
-        if (activeModule === 'appWhitelist') {
-            return [
-                { label: 'Policy Type', value: '1012', helper: 'Default permitted apps', icon: ShieldCheck, tone: 'emerald' },
-                { label: 'Permit Software', value: selectedWhitelistIds.length, helper: 'Whitelist entries', icon: ListChecks, tone: 'emerald' },
-                { label: 'Process Rule', value: whitelistProcessLabel(form.processRestrictType), helper: appliedStatus, icon: Lock, tone: 'slate' },
-                { label: 'Policy Source', value: source, helper: policyDetail?.version || '-', icon: Layers, tone: 'blue' },
-            ];
-        }
-        return [
-            { label: 'Policy Type', value: '1005', helper: 'Web restriction', icon: Globe, tone: 'blue' },
-            { label: 'Website URLs', value: webUrls.length, helper: 'Policy URL list', icon: LinkIcon, tone: 'blue' },
-            { label: 'Restriction Type', value: form.webRestrictType === '1' ? 'Block list' : 'Allow only', helper: appliedStatus, icon: Ban, tone: 'slate' },
-            { label: 'Policy Source', value: source, helper: policyDetail?.version || '-', icon: Layers, tone: 'blue' },
-        ];
-    }, [activeModule, form, policyDetail, selectedPackageIds.length, selectedWhitelistIds.length, webUrls.length]);
-    const filteredPackages = useMemo(() => {
-        const query = searchText.toLowerCase();
-        return packages.filter((item) => {
-            const text = `${item.SW_Pkg_Name || ''} ${item.FileName || ''} ${item.Manufacturer || ''}`.toLowerCase();
-            return !query || text.includes(query);
-        });
-    }, [packages, searchText]);
-    const filteredWhitelistSoftware = useMemo(() => {
-        const query = searchText.toLowerCase();
-        return whitelistSoftware.filter((item) => {
-            const text = `${item.Name || ''} ${item.Vendor || ''} ${item.Type || ''}`.toLowerCase();
-            return !query || text.includes(query);
-        });
-    }, [whitelistSoftware, searchText]);
-    const selectedPackages = useMemo(() => {
-        const rowById = new Map<string, RestrictionPackage>();
-        selectedPackageRows.forEach((item) => {
-            const id = getPackageId(item);
-            if (id)
-                rowById.set(id, item);
-        });
-        packages.forEach((item) => {
-            const id = getPackageId(item);
-            if (id && selectedPackageIds.includes(id) && !rowById.has(id))
-                rowById.set(id, item);
-        });
-        return selectedPackageIds
-            .map((id) => rowById.get(id))
-            .filter((item): item is RestrictionPackage => Boolean(item));
-    }, [packages, selectedPackageIds, selectedPackageRows]);
-    const selectedWhitelist = useMemo(() => {
-        const rowById = new Map<string, WhitelistSoftware>();
-        selectedWhitelistRows.forEach((item) => {
-            const id = getWhitelistId(item);
-            if (id)
-                rowById.set(id, item);
-        });
-        whitelistSoftware.forEach((item) => {
-            const id = getWhitelistId(item);
-            if (id && selectedWhitelistIds.includes(id) && !rowById.has(id))
-                rowById.set(id, item);
-        });
-        return selectedWhitelistIds
-            .map((id) => rowById.get(id))
-            .filter((item): item is WhitelistSoftware => Boolean(item));
-    }, [selectedWhitelistIds, selectedWhitelistRows, whitelistSoftware]);
-    const availablePackages = useMemo(() => {
-        const selectedIdSet = new Set(selectedPackageIds.map((id) => normalizeSelectionKey(id)).filter(Boolean));
-        const selectedNameSet = new Set(selectedPackages
-            .map((item) => normalizeSelectionKey(getPackageName(item)))
-            .filter(Boolean));
-        return filteredPackages.filter((item) => {
-            const packageId = normalizeSelectionKey(getPackageId(item));
-            const packageName = normalizeSelectionKey(getPackageName(item));
-            if (packageId && selectedIdSet.has(packageId))
-                return false;
-            if (packageName && selectedNameSet.has(packageName))
-                return false;
-            return true;
-        });
-    }, [filteredPackages, selectedPackageIds, selectedPackages]);
-    const availableWhitelistSoftware = useMemo(() => {
-        const selectedIdSet = new Set(selectedWhitelistIds.map((id) => normalizeSelectionKey(id)).filter(Boolean));
-        const selectedNameSet = new Set(selectedWhitelist
-            .map((item) => normalizeSelectionKey(getWhitelistName(item)))
-            .filter(Boolean));
-        return filteredWhitelistSoftware.filter((item) => {
-            const softwareId = normalizeSelectionKey(getWhitelistId(item));
-            const softwareName = normalizeSelectionKey(getWhitelistName(item));
-            if (softwareId && selectedIdSet.has(softwareId))
-                return false;
-            if (softwareName && selectedNameSet.has(softwareName))
-                return false;
-            return true;
-        });
-    }, [filteredWhitelistSoftware, selectedWhitelist, selectedWhitelistIds]);
-    const filteredManageWhitelistSoftware = useMemo(() => {
-        const query = manageSearchText.toLowerCase().trim();
-        if (!query)
-            return whitelistSoftware;
-        return whitelistSoftware.filter((item) => {
-            const text = `${getWhitelistName(item)} ${item.Vendor || ''} ${item.Type || ''} ${getWhitelistId(item)}`.toLowerCase();
-            return text.includes(query);
-        });
-    }, [manageSearchText, whitelistSoftware]);
-    const filteredPackageManagerRows = useMemo(() => {
-        const query = packageManagerSearch.toLowerCase().trim();
-        if (!query)
-            return packageManagerRows;
-        return packageManagerRows.filter((item) => {
-            const text = `${getPackageName(item)} ${item.SW_Pkg_Company || ''} ${item.sample_file || ''} ${item.SW_Package_EtcInfo || ''}`.toLowerCase();
-            return text.includes(query);
-        });
-    }, [packageManagerRows, packageManagerSearch]);
-    const updateForm = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-        setForm((previous) => ({ ...previous, [key]: value }));
-    };
-    const toggleDay = (day: string) => {
-        setSelectedDays((previous) => previous.includes(day) ? previous.filter((item) => item !== day) : [...previous, day]);
-    };
-    const handleTargetClick = (node: RestrictionTreeNode) => {
-        const target = toTarget(node);
-        if (!target)
-            return;
-        setSelectedTarget(target);
-        setMessage(null);
-    };
-    const toggleExpand = (nodeId: string) => {
-        setExpandedGroups((previous) => {
-            const next = new Set(previous);
-            if (next.has(nodeId))
-                next.delete(nodeId);
-            else
-                next.add(nodeId);
-            return next;
-        });
-    };
-    const movePackage = (id: string, selected: boolean) => {
-        const packageRow = packages.find((item) => getPackageId(item) === id) || selectedPackageRows.find((item) => getPackageId(item) === id);
-        const packageName = packageRow ? getPackageName(packageRow) : 'Package';
-        if (selected) {
-            setSelectedPackageIds((previous) => previous.filter((item) => item !== id));
-            setSelectedPackageRows((previous) => previous.filter((item) => getPackageId(item) !== id));
-            setMessage(`${packageName} removed from selected package list.`);
-            return;
-        }
-        setSelectedPackageIds((previous) => uniqueStrings([...previous, id]));
-        if (packageRow) {
-            setSelectedPackageRows((previous) => {
-                if (previous.some((item) => getPackageId(item) === id))
-                    return previous;
-                return [...previous, packageRow];
-            });
-        }
-        setMessage(`${packageName} added to selected package list.`);
-    };
-    const moveWhitelist = (id: string, selected: boolean) => {
-        const whitelistRow = whitelistSoftware.find((item) => getWhitelistId(item) === id) || selectedWhitelistRows.find((item) => getWhitelistId(item) === id);
-        const softwareName = whitelistRow ? getWhitelistName(whitelistRow) : 'Software';
-        if (selected) {
-            setSelectedWhitelistIds((previous) => previous.filter((item) => item !== id));
-            setSelectedWhitelistRows((previous) => previous.filter((item) => getWhitelistId(item) !== id));
-            setMessage(`${softwareName} removed from permitted software list.`);
-            return;
-        }
-        setSelectedWhitelistIds((previous) => uniqueStrings([...previous, id]));
-        if (whitelistRow) {
-            setSelectedWhitelistRows((previous) => {
-                if (previous.some((item) => getWhitelistId(item) === id))
-                    return previous;
-                return [...previous, whitelistRow];
-            });
-        }
-        setMessage(`${softwareName} added to permitted software list.`);
-    };
-    const addPolicyUrl = () => {
-        const url = newUrl.trim();
-        if (!url) {
-            setMessage('Enter a website URL or domain first.');
-            return;
-        }
-        setWebUrls((previous) => [...new Set([...previous, url])]);
-        setNewUrl('');
-        setMessage(`${url} added to website list.`);
-    };
-    const addGroupUrlsToPolicy = () => {
-        if (webGroupUrls.length === 0) {
-            setMessage('No URLs found in this website group. Add domains into the group first.');
-            return;
-        }
-        const urls = webGroupUrls.map((item) => item.url);
-        setWebUrls((previous) => [...new Set([...previous, ...urls])]);
-        setMessage(`${urls.length} website${urls.length === 1 ? '' : 's'} from this group added to the policy website list.`);
-    };
-    const normalizeWebDomain = (value: string) => {
-        return value
-            .trim()
-            .replace(/^https?:\/\//i, '')
-            .replace(/^www\./i, '')
-            .split(/[\s,]+/)[0]
-            .split('/')[0]
-            .toLowerCase();
-    };
-    const openWebGroupManager = async () => {
-        setShowWebGroupManager(true);
-        if (selectedWebsiteGroupId) {
-            const group = webGroups.find((item) => item.idx === selectedWebsiteGroupId) || null;
-            setEditingWebGroup(group);
-            setWebGroupName(group?.name || '');
-            setWebGroupDescription(group?.description || '');
-        }
-        else {
-            setEditingWebGroup(null);
-            setWebGroupName('');
-            setWebGroupDescription('');
-        }
-        setWebGroupDomainInput('');
-        await loadLookups();
-        await loadWebGroupUrls();
-    };
-    const selectWebGroupForEditing = async (group: WebGroup) => {
-        setEditingWebGroup(group);
-        setSelectedWebsiteGroupId(group.idx);
-        setWebGroupName(group.name || '');
-        setWebGroupDescription(group.description || '');
-        setWebGroupDomainInput('');
-        try {
-            const urls = await restrictionService.getWebGroupUrls(group.idx);
-            setWebGroupUrls(urls);
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to load website group URLs.');
-        }
-    };
-    const resetWebGroupEditor = () => {
-        setEditingWebGroup(null);
-        setSelectedWebsiteGroupId(null);
-        setWebGroupUrls([]);
-        setWebGroupName('');
-        setWebGroupDescription('');
-        setWebGroupDomainInput('');
-    };
-    const saveWebGroup = async () => {
-        const name = webGroupName.trim();
-        if (!name) {
-            setMessage('Website group name is required.');
-            return;
-        }
-        try {
-            setLoading(true);
-            const result = editingWebGroup
-                ? await restrictionService.updateWebGroup(editingWebGroup.idx, name, webGroupDescription)
-                : await restrictionService.createWebGroup(name, [], webGroupDescription);
-            const saved = result.data;
-            setMessage(editingWebGroup ? 'Website group updated.' : 'Website group created. Add domain names into the group next.');
-            await loadLookups();
-            if (saved?.idx) {
-                setEditingWebGroup(saved);
-                setSelectedWebsiteGroupId(saved.idx);
-                setWebGroupName(saved.name || name);
-                setWebGroupDescription(saved.description || webGroupDescription || '');
-                const urls = await restrictionService.getWebGroupUrls(saved.idx);
-                setWebGroupUrls(urls);
-            }
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to save website group.'));
-        }
-        finally {
-            setLoading(false);
-        }
-    };
-    const deleteWebGroup = async (group: WebGroup) => {
-        if (!window.confirm(`Delete website group "${group.name}" and all URLs inside it?`))
-            return;
-        try {
-            setLoading(true);
-            await restrictionService.deleteWebGroup(group.idx);
-            setMessage('Website group deleted.');
-            if (editingWebGroup?.idx === group.idx || selectedWebsiteGroupId === group.idx) {
-                resetWebGroupEditor();
-            }
-            await loadLookups();
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to delete website group.'));
-        }
-        finally {
-            setLoading(false);
-        }
-    };
-    const addUrlToWebGroup = async () => {
-        const groupId = editingWebGroup?.idx || selectedWebsiteGroupId;
-        const domain = normalizeWebDomain(webGroupDomainInput);
-        if (!groupId) {
-            setMessage('Create or select a website group first.');
-            return;
-        }
-        if (!domain) {
-            setMessage('Enter a domain name first. Do not include http:// or https://.');
-            return;
-        }
-        try {
-            setLoading(true);
-            await restrictionService.addWebGroupUrl(groupId, domain);
-            setWebGroupDomainInput('');
-            setMessage('Domain added to website group.');
-            const urls = await restrictionService.getWebGroupUrls(groupId);
-            setWebGroupUrls(urls);
-            await loadLookups();
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to add domain to website group.'));
-        }
-        finally {
-            setLoading(false);
-        }
-    };
-    const deleteUrlFromWebGroup = async (item: WebGroupUrl) => {
-        try {
-            setLoading(true);
-            await restrictionService.deleteWebGroupUrl(item.idx, item.seq);
-            setMessage('Domain removed from website group.');
-            const urls = await restrictionService.getWebGroupUrls(item.idx);
-            setWebGroupUrls(urls);
-            await loadLookups();
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to remove domain from website group.'));
-        }
-        finally {
-            setLoading(false);
-        }
-    };
-    const resetPackageForm = () => {
-        setSelectedManagerPackage(null);
-        setPackageForm({
-            SW_Pkg_Name: '',
-            SW_Pkg_Company: '',
-            License_Qnt: 0,
-            Use_Statistices: 1,
-            Cur_Count: 0,
-            SW_Package_EtcInfo: '',
-            SW_Catg: 0,
-            Selected: 1,
-        });
-        setPackageInventoryFiles([]);
-        setPackageFileSearch('');
-    };
-    const loadPackageManager = useCallback(async (search = packageManagerSearch) => {
-        try {
-            setPackageManagerLoading(true);
-            const data = await restrictionService.getPackageManagerPackages(search, true);
-            setPackageManagerRows(data);
-            if (selectedManagerPackage) {
-                const refreshed = data.find((item) => getPackageId(item) === getPackageId(selectedManagerPackage));
-                if (refreshed) {
-                    const detail = await restrictionService.getPackageManagerPackage(getPackageId(refreshed));
-                    setSelectedManagerPackage(detail);
-                    setPackageForm({
-                        SW_Pkg_Name: detail.SW_Pkg_Name || '',
-                        SW_Pkg_Company: detail.SW_Pkg_Company || '',
-                        License_Qnt: Number(detail.License_Qnt || 0),
-                        Use_Statistices: Number(detail.Use_Statistices ?? 1),
-                        Cur_Count: Number(detail.Cur_Count || 0),
-                        SW_Package_EtcInfo: detail.SW_Package_EtcInfo || '',
-                        SW_Catg: Number(detail.SW_Catg || 0),
-                        Selected: Number(detail.Selected ?? 1),
-                    });
-                }
-            }
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to load application packages.');
-        }
-        finally {
-            setPackageManagerLoading(false);
-        }
-    }, [packageManagerSearch, selectedManagerPackage]);
-    const openPackageManager = async () => {
-        setShowPackageManager(true);
-        setMessage(null);
-        await loadPackageManager('');
-    };
-    const selectManagerPackage = async (item: RestrictionPackage) => {
-        try {
-            setPackageManagerLoading(true);
-            const detail = await restrictionService.getPackageManagerPackage(getPackageId(item));
-            setSelectedManagerPackage(detail);
-            setPackageForm({
-                SW_Pkg_Name: detail.SW_Pkg_Name || '',
-                SW_Pkg_Company: detail.SW_Pkg_Company || '',
-                License_Qnt: Number(detail.License_Qnt || 0),
-                Use_Statistices: Number(detail.Use_Statistices ?? 1),
-                Cur_Count: Number(detail.Cur_Count || 0),
-                SW_Package_EtcInfo: detail.SW_Package_EtcInfo || '',
-                SW_Catg: Number(detail.SW_Catg || 0),
-                Selected: Number(detail.Selected ?? 1),
-            });
-            setPackageInventoryFiles([]);
-            setPackageFileSearch('');
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to open package.');
-        }
-        finally {
-            setPackageManagerLoading(false);
-        }
-    };
-    const saveManagerPackage = async () => {
-        if (!packageForm.SW_Pkg_Name.trim()) {
-            setMessage('Package name is required.');
-            return;
-        }
-        try {
-            setPackageManagerLoading(true);
-            const packageId = selectedManagerPackage ? getPackageId(selectedManagerPackage) : '';
-            const result = packageId
-                ? await restrictionService.updatePackageManagerPackage(packageId, packageForm)
-                : await restrictionService.createPackageManagerPackage(packageForm);
-            const detail = result.data;
-            if (detail) {
-                setSelectedManagerPackage(detail);
-                setPackageForm({
-                    SW_Pkg_Name: detail.SW_Pkg_Name || packageForm.SW_Pkg_Name,
-                    SW_Pkg_Company: detail.SW_Pkg_Company || packageForm.SW_Pkg_Company || '',
-                    License_Qnt: Number(detail.License_Qnt ?? packageForm.License_Qnt ?? 0),
-                    Use_Statistices: Number(detail.Use_Statistices ?? packageForm.Use_Statistices ?? 1),
-                    Cur_Count: Number(detail.Cur_Count ?? packageForm.Cur_Count ?? 0),
-                    SW_Package_EtcInfo: detail.SW_Package_EtcInfo || packageForm.SW_Package_EtcInfo || '',
-                    SW_Catg: Number(detail.SW_Catg ?? packageForm.SW_Catg ?? 0),
-                    Selected: Number(detail.Selected ?? packageForm.Selected ?? 1),
-                });
-            }
-            setMessage(packageId ? 'Package updated.' : 'Package created. You can now search Software Inventory EXE files and add them into this package.');
-            await loadPackageManager(packageManagerSearch);
-            await loadLookups();
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to save package.'));
-        }
-        finally {
-            setPackageManagerLoading(false);
-        }
-    };
-    const deleteManagerPackage = async (item: RestrictionPackage) => {
-        const packageId = getPackageId(item);
-        if (!packageId)
-            return;
-        if (!window.confirm(`Delete package "${getPackageName(item)}"? Packages used by policies will be blocked by the API.`))
-            return;
-        try {
-            setPackageManagerLoading(true);
-            await restrictionService.deletePackageManagerPackage(packageId);
-            setMessage('Package deleted.');
-            if (selectedManagerPackage && getPackageId(selectedManagerPackage) === packageId)
-                resetPackageForm();
-            await loadPackageManager(packageManagerSearch);
-            await loadLookups();
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to delete package.'));
-        }
-        finally {
-            setPackageManagerLoading(false);
-        }
-    };
-    const searchInventoryFilesForPackage = async () => {
-        try {
-            setPackageManagerLoading(true);
-            const data = await restrictionService.searchPackageManagerFiles(packageFileSearch, 'EXE');
-            setPackageInventoryFiles(data);
-            setMessage(`Found ${data.length} EXE file${data.length === 1 ? '' : 's'} from Software Inventory.`);
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to search software inventory files.');
-        }
-        finally {
-            setPackageManagerLoading(false);
-        }
-    };
-    const addInventoryFileToPackage = async (file: RestrictionPackageFile) => {
-        const packageId = selectedManagerPackage ? getPackageId(selectedManagerPackage) : '';
-        if (!packageId) {
-            setMessage('Save or select a package before adding files.');
-            return;
-        }
-        try {
-            setPackageManagerLoading(true);
-            const result = await restrictionService.addPackageManagerFile(packageId, {
-                FileName: file.FileName,
-                FileVersion: file.FileVersion || '',
-                FileVersionSub: '%',
-                FileSize: file.FileSize || 0,
-                bHide: 0,
-            });
-            if (result.data)
-                setSelectedManagerPackage(result.data);
-            setMessage('File added to package.');
-            await loadPackageManager(packageManagerSearch);
-            await loadLookups();
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to add package file.'));
-        }
-        finally {
-            setPackageManagerLoading(false);
-        }
-    };
-    const addManualFileToPackage = async () => {
-        const fileName = packageFileSearch.trim();
-        if (!fileName) {
-            setMessage('Enter a file name first.');
-            return;
-        }
-        await addInventoryFileToPackage({ FileName: fileName, FileVersion: '', FileVersionSub: '%', FileSize: 0 });
-    };
-    const deletePackageFile = async (file: RestrictionPackageFile) => {
-        const packageId = selectedManagerPackage ? getPackageId(selectedManagerPackage) : '';
-        if (!packageId || !file.ID)
-            return;
-        try {
-            setPackageManagerLoading(true);
-            const result = await restrictionService.deletePackageManagerFile(packageId, file.ID);
-            if (result.data)
-                setSelectedManagerPackage(result.data);
-            setMessage('File removed from package.');
-            await loadPackageManager(packageManagerSearch);
-            await loadLookups();
-        }
-        catch (error) {
-            const apiMessage = (error as {
-                response?: {
-                    data?: {
-                        message?: string;
-                        error?: string;
-                    };
-                };
-            })?.response?.data?.message;
-            setMessage(apiMessage || (error instanceof Error ? error.message : 'Failed to remove package file.'));
-        }
-        finally {
-            setPackageManagerLoading(false);
-        }
-    };
-    const handleSavePolicy = async () => {
-        if (!selectedTarget) {
-            setMessage('Select a department, device, or root policy first.');
-            return;
-        }
-        try {
-            setSaving(true);
-            setMessage(null);
-            const policyBelongsToSelectedTarget = Boolean(policyDetail?.source &&
-                policyDetail.source !== 'none' &&
-                ((selectedTarget.type === 'device' && policyDetail.source === 'device') ||
-                    (selectedTarget.type === 'department' && policyDetail.source === 'department') ||
-                    (selectedTarget.type === 'root' && policyDetail.source === 'root')) &&
-                String(policyDetail.target_type || '') === String(selectedTarget.target_type) &&
-                String(policyDetail.target_id || '') === String(selectedTarget.target_id));
-            const basePayload = {
-                // If the form is displaying an inherited policy, do not send that inherited
-                // policy_id back as the selected target's policy. The backend will create
-                // or update the policy for selectedTarget only.
-                policy_id: policyBelongsToSelectedTarget ? form.policyId : 0,
-                target_type: selectedTarget.target_type,
-                target_id: selectedTarget.target_id,
-                use_parent_policy: activeModule === 'appWhitelist' ? '0' as const : (form.inheritPolicy ? '1' as const : '0' as const),
-                use_policy: form.exception ? '0' as const : '1' as const,
-                update_interval: form.updateInterval || '120',
-                use_weekly_policy: form.weeklyPolicy ? '1' as const : '0' as const,
-                day_select: selectedDays.join(','),
-                use_schedule: form.useSchedule ? '1' as const : '0' as const,
-                login_id: getCurrentLoginId(),
-                console_ip: '',
-            };
-            if (activeModule === 'appBlacklist') {
-                await restrictionService.savePolicy(activeModule, {
-                    ...basePayload,
-                    restrict_type: form.appRestrictType,
-                    restrict_message: form.appNoticeMessage,
-                    version_compare: form.versionCompare ? '1' : '0',
-                    softwareRestrictSchedule1: form.schedule1,
-                    softwareRestrictSchedule2: form.schedule2,
-                    softwareRestrictSchedule3: form.schedule3,
-                    softwareRestrictSchedule4: form.schedule4,
-                    package_list: selectedPackageIds,
-                });
-            }
-            else if (activeModule === 'appWhitelist') {
-                await restrictionService.savePolicy(activeModule, {
-                    ...basePayload,
-                    restrict_type: form.processRestrictType,
-                    restrict_message: form.processNoticeMessage,
-                    font_restrict_type: form.fontRestrictType,
-                    font_restrict_message: form.fontNoticeMessage,
-                    package_list: selectedWhitelistIds,
-                });
-            }
-            else {
-                await restrictionService.savePolicy(activeModule, {
-                    ...basePayload,
-                    web_restrict_type: form.webRestrictType,
-                    default_url: form.defaultUrl,
-                    RestrictSchedule1: form.schedule1,
-                    RestrictSchedule2: form.schedule2,
-                    RestrictSchedule3: form.schedule3,
-                    RestrictSchedule4: form.schedule4,
-                    web_list: webUrls,
-                });
-            }
-            setMessage(`${moduleConfig.label} policy saved successfully.`);
-            await loadPolicyData();
-        }
-        catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Failed to save policy.');
-        }
-        finally {
-            setSaving(false);
-        }
-    };
-    const renderTree = (nodes: RestrictionTreeNode[], depth = 0) => (<div>
-      {nodes.map((node) => {
-            const hasChildren = Boolean(node.children?.length);
-            const isOpen = expandedGroups.has(node.id);
-            const target = toTarget(node);
-            const isSelected = Boolean(target && selectedTarget?.id === target.id);
-            const isRootNode = depth === 0 || node.type === 'org' || node.type === 'root';
-            const isDevice = node.type === 'device';
-            const displayLabel = getRestrictionDisplayLabel(node, depth);
-            const Icon = isDevice ? Laptop : hasChildren && isOpen ? FolderOpen : Folder;
-            const treeCount = getRestrictionTreeCount(node);
-            const countLabel = formatRestrictionTreeCount(treeCount);
-            const handleNodeAction = () => {
-                if (hasChildren)
-                    toggleExpand(node.id);
-                if (target)
-                    handleTargetClick(node);
-            };
-            return (<div key={node.id}>
-            <div>
-              <button type="button" aria-label={hasChildren ? (isOpen ? `Collapse ${displayLabel}` : `Expand ${displayLabel}`) : displayLabel} onClick={(event) => {
-                    event.stopPropagation();
-                    if (hasChildren)
-                        toggleExpand(node.id);
-                }}>
-                {hasChildren ? (isOpen ? <ChevronDown size={14}/> : <ChevronRight size={14}/>) : <span aria-hidden="true"/>}
-              </button>
+      const data = await restrictionService.getTree();
+      const nodes = Array.isArray(data) ? data : [];
+      setTreeNodes(nodes);
 
-              <button type="button" title={node.Object_Full_Name || displayLabel} onClick={handleNodeAction}>
-                <span><Icon size={15}/></span>
-                <span>{displayLabel}</span>
-                {!isRootNode && countLabel ? <span>{countLabel}</span> : null}
-              </button>
+      setSelectedTarget((current) => current || findFirstTarget(nodes));
+      setExpandedNodes((current) => {
+        const next = new Set(current);
+        nodes.slice(0, 2).forEach((node, index) => next.add(getNodeId(node, index)));
+        return next;
+      });
+    } catch (error) {
+      addToast('error', 'Unable to load branch scope', error instanceof Error ? error.message : 'Please check restriction API.');
+    } finally {
+      setLoadingTree(false);
+    }
+  }, [addToast]);
 
-              <span />
+  const loadLookups = useCallback(async () => {
+    const [packageRows, whitelistRows] = await Promise.all([
+      restrictionService.getPackages().catch(() => []),
+      restrictionService.getWhitelistSoftware().catch(() => []),
+    ]);
+
+    setPackages(Array.isArray(packageRows) ? packageRows : []);
+    setWhitelistSoftware(Array.isArray(whitelistRows) ? whitelistRows : []);
+    return {
+      packages: Array.isArray(packageRows) ? packageRows : [],
+      whitelistSoftware: Array.isArray(whitelistRows) ? whitelistRows : [],
+    };
+  }, []);
+
+  const loadPolicyData = useCallback(async () => {
+    if (!selectedTarget) return;
+
+    setLoadingData(true);
+    try {
+      const [lookups, effectivePolicy, policies, statuses] = await Promise.all([
+        loadLookups(),
+        restrictionService.getEffectivePolicy(activeModule, selectedTarget),
+        restrictionService.getPolicyList(activeModule, selectedTarget).catch(() => []),
+        restrictionService
+          .getRestrictionStatus(activeModule, selectedTarget, {
+            search: statusSearch || undefined,
+            startDate,
+            endDate,
+            includeSub: includeSub ? 1 : 0,
+          })
+          .catch(() => []),
+      ]);
+
+      const nextPolicy = (effectivePolicy || {}) as RestrictionPolicyDetail;
+      const sourceRows = activeModule === 'appWhitelist' ? lookups.whitelistSoftware : lookups.packages;
+
+      setForm(createFormFromPolicy(activeModule, nextPolicy));
+      setSelectedDays(splitDays(getPolicySetting(nextPolicy, 'day_select', '')));
+      setPolicyRows(Array.isArray(policies) ? policies : []);
+      setStatusRows(Array.isArray(statuses) ? statuses : []);
+
+      const selected = extractSelectedPolicyIds(nextPolicy, sourceRows);
+      if (activeModule === 'appWhitelist') {
+        setSelectedWhitelistIds(selected);
+      } else {
+        setSelectedPackageIds(selected);
+      }
+    } catch (error) {
+      addToast('error', 'Unable to load policy', error instanceof Error ? error.message : 'Please check restriction API.');
+    } finally {
+      setLoadingData(false);
+    }
+  }, [activeModule, addToast, endDate, includeSub, loadLookups, selectedTarget, startDate, statusSearch]);
+
+  useEffect(() => {
+    void loadTree();
+  }, [loadTree]);
+
+  useEffect(() => {
+    void loadPolicyData();
+  }, [loadPolicyData]);
+
+  useEffect(() => {
+    setStatusSearch('');
+    setPolicySearch('');
+    setPackageSearch('');
+  }, [activeModule]);
+
+  function updateForm(key: keyof FormState, value: any) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleDay(day: string) {
+    setSelectedDays((current) => (current.includes(day) ? current.filter((item) => item !== day) : [...current, day]));
+  }
+
+  function togglePackage(id: string) {
+    if (!id) return;
+
+    if (isWhitelist) {
+      setSelectedWhitelistIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+      return;
+    }
+
+    setSelectedPackageIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  async function savePolicy() {
+    if (!selectedTarget) {
+      addToast('warning', 'Select target first', 'Choose a branch or device before saving policy.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const targetType = selectedTarget.target_type ?? selectedTarget.targetType ?? 1;
+      const targetId = selectedTarget.target_id ?? selectedTarget.targetId ?? selectedTarget.id ?? '-1';
+      const basePayload = {
+        policy_id: form.policyId || 0,
+        target_type: targetType,
+        target_id: targetId,
+        Object_Rel_Idn: selectedTarget.Object_Rel_Idn,
+        Object_Root_Idn: selectedTarget.Object_Root_Idn,
+        Object_DeviceID: selectedTarget.Object_DeviceID,
+        use_parent_policy: isWhitelist ? '0' : form.inheritPolicy ? '1' : '0',
+        use_policy: form.exception ? '0' : '1',
+        update_interval: form.updateInterval || '120',
+        use_weekly_policy: form.weeklyPolicy ? '1' : '0',
+        day_select: selectedDays.join(','),
+        use_schedule: form.useSchedule ? '1' : '0',
+        login_id: getCurrentLoginId(),
+        console_ip: '',
+      };
+
+      if (activeModule === 'appBlacklist') {
+        await restrictionService.savePolicy(activeModule, {
+          ...basePayload,
+          restrict_type: form.appRestrictType,
+          restrict_message: form.appNoticeMessage,
+          version_compare: form.versionCompare ? '1' : '0',
+          softwareRestrictSchedule1: form.schedule1,
+          softwareRestrictSchedule2: form.schedule2,
+          softwareRestrictSchedule3: form.schedule3,
+          softwareRestrictSchedule4: form.schedule4,
+          package_list: selectedPackageIds,
+        });
+      } else {
+        await restrictionService.savePolicy(activeModule, {
+          ...basePayload,
+          restrict_type: form.processRestrictType,
+          restrict_message: form.processNoticeMessage,
+          font_restrict_type: form.fontRestrictType,
+          font_restrict_message: form.fontNoticeMessage,
+          package_list: selectedWhitelistIds,
+        });
+      }
+
+      addToast('success', 'Policy saved', `${moduleConfig.label} saved successfully.`);
+      await loadPolicyData();
+    } catch (error) {
+      addToast('error', 'Policy save failed', error instanceof Error ? error.message : 'Please check the backend API.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function renderTree(nodes: RestrictionTreeNode[], depth = 0) {
+    return (
+      <div className={depth ? 'ml-3 space-y-1 border-l border-slate-100 pl-3' : 'space-y-1'}>
+        {nodes.map((node, index) => {
+          const id = getNodeId(node, index);
+          const label = getNodeLabel(node);
+          const children = getChildren(node);
+          const isOpen = expandedNodes.has(id);
+          const target = getTarget(node, index);
+          const isSelected = selectedTarget?.id === target.id;
+          const nodeType = getNodeType(node);
+          const Icon = nodeType === 'device' ? Laptop : isOpen ? FolderOpen : Folder;
+          const total = countDevices(node);
+
+          return (
+            <div key={id}>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                  onClick={() => setExpandedNodes((current) => {
+                    const next = new Set(current);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  })}
+                >
+                  {children.length ? (isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />) : <span className="h-3 w-3" />}
+                </button>
+                <button
+                  type="button"
+                  title={cleanText(node.Object_Full_Name || label)}
+                  onClick={() => {
+                    setSelectedTarget(target);
+                    if (children.length) {
+                      setExpandedNodes((current) => new Set(current).add(id));
+                    }
+                  }}
+                  className={cn(
+                    'group flex min-w-0 flex-1 items-center gap-2 rounded-2xl border px-3 py-2 text-left transition',
+                    isSelected
+                      ? 'border-blue-300 bg-blue-50 text-blue-700 shadow-sm'
+                      : 'border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-50'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'grid h-8 w-8 shrink-0 place-items-center rounded-xl',
+                      isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-white'
+                    )}
+                  >
+                    {nodeType === 'root' ? <Layers size={15} /> : <Icon size={15} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-black">{nodeType === 'root' ? 'All Branches' : label}</span>
+                    <span className="block truncate text-[11px] font-bold text-slate-400">{nodeType === 'device' ? 'Device' : 'Branch'}</span>
+                  </span>
+                  {total ? (
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-500">{total}</span>
+                  ) : null}
+                </button>
+              </div>
+              {children.length && isOpen ? renderTree(children, depth + 1) : null}
             </div>
-
-            {hasChildren && isOpen ? renderTree(node.children || [], depth + 1) : null}
-          </div>);
+          );
         })}
-    </div>);
-    return (<main data-section="appwebrestriction">
-      
-      {notice && (<div>
-          <div>
-            <span><Info size={17}/></span>
+      </div>
+    );
+  }
+
+  function renderSettings() {
+    return (
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)]">
+        <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <strong>
-                {notice.tone === 'error' ? 'Action failed' : notice.tone === 'warning' ? 'Action needed' : notice.tone === 'info' ? 'Status update' : 'Action completed'}
-              </strong>
-              <span>{notice.text}</span>
+              <span className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">Policy Control</span>
+              <h3 className="mt-1 text-xl font-black text-slate-950">{moduleConfig.label}</h3>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Scope: {selectedTarget?.label || 'No target selected'}
+              </p>
             </div>
-            <button type="button" onClick={dismissNotice} aria-label="Dismiss notification">
-              <X size={14}/>
+            <button
+              type="button"
+              onClick={savePolicy}
+              disabled={saving || loadingData || !selectedTarget}
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Save Policy
             </button>
           </div>
-        </div>)}
-      <div>
-        <aside>
-          <div>
-            <span>APP RESTRICTION</span>
-            <strong>Restriction Control</strong>
-            <small>Device scope and application policies.</small>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {!isWhitelist ? (
+              <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <span>
+                  <span className="block text-sm font-black text-slate-900">Inherit Parent Policy</span>
+                  <span className="text-xs font-semibold text-slate-500">Use parent branch setting for this scope.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.inheritPolicy}
+                  onChange={(event) => updateForm('inheritPolicy', event.target.checked)}
+                  className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+              </label>
+            ) : null}
+
+            <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span>
+                <span className="block text-sm font-black text-slate-900">Exception</span>
+                <span className="text-xs font-semibold text-slate-500">Disable policy enforcement for selected scope.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={form.exception}
+                onChange={(event) => updateForm('exception', event.target.checked)}
+                className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+            </label>
+
+            <div>
+              <FieldLabel>Update Interval</FieldLabel>
+              <input
+                value={form.updateInterval}
+                onChange={(event) => updateForm('updateInterval', event.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                placeholder="120"
+              />
+            </div>
+
+            <div>
+              <FieldLabel>{isWhitelist ? 'Process Restrict Type' : 'App Restrict Type'}</FieldLabel>
+              <Select
+                value={isWhitelist ? form.processRestrictType : form.appRestrictType}
+                onChange={(value) => updateForm(isWhitelist ? 'processRestrictType' : 'appRestrictType', value)}
+                options={
+                  isWhitelist
+                    ? [
+                        { value: '0', label: 'Not configured' },
+                        { value: '1', label: 'Allow only whitelist' },
+                        { value: '2', label: 'Audit only' },
+                        { value: '3', label: 'Block unknown process' },
+                      ]
+                    : [
+                        { value: '1', label: 'Block package' },
+                        { value: '2', label: 'Audit package' },
+                        { value: '3', label: 'Block and notify' },
+                      ]
+                }
+              />
+            </div>
+
+            {isWhitelist ? (
+              <div>
+                <FieldLabel>Font Restrict Type</FieldLabel>
+                <Select
+                  value={form.fontRestrictType}
+                  onChange={(value) => updateForm('fontRestrictType', value)}
+                  options={[
+                    { value: '0', label: 'Not configured' },
+                    { value: '1', label: 'Allow approved fonts' },
+                    { value: '2', label: 'Audit fonts' },
+                    { value: '3', label: 'Block unknown fonts' },
+                  ]}
+                />
+              </div>
+            ) : (
+              <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <span>
+                  <span className="block text-sm font-black text-slate-900">Version Compare</span>
+                  <span className="text-xs font-semibold text-slate-500">Compare file version during detection.</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.versionCompare}
+                  onChange={(event) => updateForm('versionCompare', event.target.checked)}
+                  className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+              </label>
+            )}
+
+            <div className="md:col-span-2">
+              <FieldLabel>{isWhitelist ? 'Process Notice Message' : 'Notice Message'}</FieldLabel>
+              <textarea
+                value={isWhitelist ? form.processNoticeMessage : form.appNoticeMessage}
+                onChange={(event) => updateForm(isWhitelist ? 'processNoticeMessage' : 'appNoticeMessage', event.target.value)}
+                className="min-h-[96px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                placeholder="Message shown to endpoint user."
+              />
+            </div>
+
+            {isWhitelist ? (
+              <div className="md:col-span-2">
+                <FieldLabel>Font Notice Message</FieldLabel>
+                <textarea
+                  value={form.fontNoticeMessage}
+                  onChange={(event) => updateForm('fontNoticeMessage', event.target.value)}
+                  className="min-h-[96px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                  placeholder="Message shown when font policy applies."
+                />
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <aside className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+          <span className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">Schedule</span>
+          <h3 className="mt-1 text-lg font-black text-slate-950">Weekly Policy Window</h3>
+
+          <div className="mt-4 space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span>
+                <span className="block text-sm font-black text-slate-900">Use Weekly Policy</span>
+                <span className="text-xs font-semibold text-slate-500">Enable day based restriction policy.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={form.weeklyPolicy}
+                onChange={(event) => updateForm('weeklyPolicy', event.target.checked)}
+                className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+            </label>
+
+            <div className="grid grid-cols-4 gap-2">
+              {DAY_OPTIONS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleDay(day)}
+                  className={cn(
+                    'rounded-2xl border px-3 py-2 text-xs font-black transition',
+                    selectedDays.includes(day)
+                      ? 'border-blue-300 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600'
+                  )}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+
+            <label className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <span>
+                <span className="block text-sm font-black text-slate-900">Use Schedule</span>
+                <span className="text-xs font-semibold text-slate-500">Add up to 4 time windows.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={form.useSchedule}
+                onChange={(event) => updateForm('useSchedule', event.target.checked)}
+                className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+            </label>
+
+            {(['schedule1', 'schedule2', 'schedule3', 'schedule4'] as const).map((key, index) => (
+              <div key={key}>
+                <FieldLabel>Schedule {index + 1}</FieldLabel>
+                <input
+                  value={form[key]}
+                  onChange={(event) => updateForm(key, event.target.value)}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                  placeholder="09:00-18:00"
+                />
+              </div>
+            ))}
+          </div>
+        </aside>
+
+        <section className="xl:col-span-2 rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <span className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
+                {isWhitelist ? 'Whitelist Software' : 'Restricted Package'}
+              </span>
+              <h3 className="mt-1 text-lg font-black text-slate-950">
+                {selectedIds.length} selected from {selectedLookupRows.length}
+              </h3>
+            </div>
+            <label className="relative w-full max-w-md">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input
+                value={packageSearch}
+                onChange={(event) => setPackageSearch(event.target.value)}
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+                placeholder={isWhitelist ? 'Search whitelist software...' : 'Search package...'}
+              />
+            </label>
           </div>
 
-          <nav role="tablist" aria-label="Restriction module navigation">
-            {modules.map((item) => {
-            const Icon = item.icon;
-            const selected = item.id === activeModule;
-            return (<button key={item.id} type="button" title={`${item.label} - ${item.helper}`} onClick={() => {
-                    setActiveModule(item.id);
-                    setActiveTab(item.tabs[0]);
-                    setSearchText('');
-                    setMessage(null);
-                }}>
-                  <span><Icon size={16}/></span>
-                  <span><strong>{item.label}</strong><small>{item.helper}</small></span>
-                </button>);
-        })}
-          </nav>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {filteredLookupRows.slice(0, LOOKUP_PAGE_SIZE * 3).map((row) => {
+              const id = getPackageId(row);
+              const selected = selectedIds.includes(id);
 
+              return (
+                <button
+                  key={id || getPackageName(row)}
+                  type="button"
+                  onClick={() => togglePackage(id)}
+                  className={cn(
+                    'flex min-w-0 items-center gap-3 rounded-[20px] border p-4 text-left transition',
+                    selected
+                      ? isWhitelist
+                        ? 'border-emerald-300 bg-emerald-50'
+                        : 'border-rose-300 bg-rose-50'
+                      : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'grid h-10 w-10 shrink-0 place-items-center rounded-2xl',
+                      selected ? (isWhitelist ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : 'bg-slate-100 text-slate-500'
+                    )}
+                  >
+                    {selected ? <CheckCircle2 size={17} /> : <Package size={17} />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-black text-slate-900">{getPackageName(row)}</span>
+                    <span className="block truncate text-xs font-bold text-slate-500">
+                      {pick(row as Record<string, unknown>, ['SW_Pkg_Company', 'Company', 'vendor', 'SW_Catg', 'category'], 'No company')}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+
+            {!filteredLookupRows.length ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm font-bold text-slate-500 md:col-span-2 xl:col-span-3">
+                No package/software found.
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderStatus() {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-slate-200 bg-white p-4">
           <div>
-            <div>
-              <div>
-                <Search size={15}/>
-                <input id="restrictionSidebarSearch" value={targetTreeSearch} onChange={(event) => setTargetTreeSearch(event.target.value)} placeholder="Search branch / device..."/>
-                {targetTreeSearch && <button type="button" onClick={() => setTargetTreeSearch('')}><X size={14}/></button>}
-              </div>
+            <span className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">Status Monitor</span>
+            <h3 className="mt-1 text-lg font-black text-slate-950">Restriction Status</h3>
+          </div>
 
-              <div role="tree" aria-label="App restriction branch tree">
-                {loading && treeNodes.length === 0 ? (<div><Loader2 size={14}/> Loading branch scope...</div>) : filteredTreeNodes.length > 0 ? (renderTree(filteredTreeNodes)) : (<div>No branch or device found.</div>)}
-              </div>
+          <div className="flex flex-1 flex-wrap justify-end gap-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+            />
+            <input
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+            />
+            <label className="flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={includeSub}
+                onChange={(event) => setIncludeSub(event.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              Include sub
+            </label>
+            <button
+              type="button"
+              onClick={loadPolicyData}
+              disabled={loadingData}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700 disabled:bg-slate-300"
+            >
+              {loadingData ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        <label className="relative block">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            value={statusSearch}
+            onChange={(event) => setStatusSearch(event.target.value)}
+            className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+            placeholder="Search device, branch, package, status..."
+          />
+        </label>
+
+        <Table
+          loading={loadingData}
+          rows={filteredStatusRows}
+          emptyText="No restriction status records found."
+          columns={[
+            {
+              key: 'device',
+              label: 'Device',
+              render: (row) => (
+                <div>
+                  <strong className="block font-black text-slate-900">{pick(row, ['ComputerName', 'DeviceName', 'Object_DeviceID', 'MDM_DeviceID', 'hostname'])}</strong>
+                  <span className="block text-xs font-bold text-slate-500">{pick(row, ['Object_Full_Name', 'Branch', 'Department'], '')}</span>
+                </div>
+              ),
+            },
+            {
+              key: 'target',
+              label: 'Package / Software',
+              render: (row) => pick(row, ['SW_Pkg_Name', 'PackageName', 'SoftwareName', 'Name', 'FileName']),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (row) => {
+                const status = pick(row, ['Status', 'status', 'Result', 'result', 'RestrictStatus'], 'Unknown');
+                return (
+                  <span className={cn('inline-flex rounded-full border px-3 py-1 text-xs font-black', getStatusColor(status))}>
+                    {status}
+                  </span>
+                );
+              },
+            },
+            {
+              key: 'time',
+              label: 'Last Updated',
+              render: (row) => pick(row, ['LastUpdated', 'updatedAt', 'CreateDate', 'createdAt', 'LogDate'], '-'),
+            },
+          ]}
+        />
+      </div>
+    );
+  }
+
+  function renderPolicyStatus() {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-slate-200 bg-white p-4">
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">Policy Registry</span>
+            <h3 className="mt-1 text-lg font-black text-slate-950">Policy Status</h3>
+          </div>
+          <label className="relative w-full max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              value={policySearch}
+              onChange={(event) => setPolicySearch(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+              placeholder="Search policy row..."
+            />
+          </label>
+        </div>
+
+        <Table
+          loading={loadingData}
+          rows={filteredPolicyRows}
+          emptyText="No policy status records found."
+          columns={[
+            {
+              key: 'target',
+              label: 'Target',
+              render: (row) => (
+                <div>
+                  <strong className="block font-black text-slate-900">{pick(row, ['TargetName', 'Object_Full_Name', 'Object_Rel_Name', 'ComputerName', 'target'])}</strong>
+                  <span className="block text-xs font-bold text-slate-500">{pick(row, ['Object_DeviceID', 'target_type', 'source'], '')}</span>
+                </div>
+              ),
+            },
+            {
+              key: 'policy',
+              label: 'Policy',
+              render: (row) => pick(row, ['PolicyName', 'policy_name', 'policy_id', 'PolicyID']),
+            },
+            {
+              key: 'type',
+              label: 'Type',
+              render: (row) => pick(row, ['PolicyType', 'policyType', 'restrict_type', 'source']),
+            },
+            {
+              key: 'updated',
+              label: 'Updated',
+              render: (row) => pick(row, ['UpdatedAt', 'updatedAt', 'ModifyDate', 'CreateDate'], '-'),
+            },
+          ]}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-50 px-5 py-5" data-section="app-restriction">
+      <EmaToastViewport items={toasts} onClose={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
+
+      <div className="grid min-h-[calc(100vh-7rem)] grid-cols-1 gap-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
+        <aside className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+            <span className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">App Restriction</span>
+            <h2 className="mt-1 text-xl font-black text-slate-950">Restriction Control</h2>
+            <p className="mt-1 text-sm font-semibold leading-snug text-slate-500">
+              Branch and device scope for application policy.
+            </p>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 rounded-[20px] border border-slate-200 bg-slate-50 p-1">
+            {MODULES.map((module) => {
+              const Icon = module.icon;
+              const selected = module.id === activeModule;
+              return (
+                <button
+                  key={module.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveModule(module.id);
+                    setActiveTab('status');
+                  }}
+                  className={cn(
+                    'flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-sm font-black transition',
+                    selected ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  )}
+                >
+                  <Icon size={16} />
+                  {module.shortLabel}
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="relative mt-4 block">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              value={treeSearch}
+              onChange={(event) => setTreeSearch(event.target.value)}
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-10 text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+              placeholder="Search branch / device..."
+            />
+            {treeSearch ? (
+              <button
+                type="button"
+                onClick={() => setTreeSearch('')}
+                className="absolute right-3 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </label>
+
+          <div className="mt-4 rounded-[22px] border border-slate-200 bg-white p-3">
+            <div className="mb-3 rounded-2xl bg-blue-50 px-4 py-3">
+              <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-blue-500">Selected Scope</span>
+              <strong className="mt-1 block truncate text-sm font-black text-slate-950">{selectedTarget?.label || 'No target selected'}</strong>
+              <span className="block truncate text-xs font-bold text-slate-500">{selectedTarget?.Object_Full_Name || 'Choose branch or device'}</span>
+            </div>
+
+            <div className="max-h-[calc(100vh-24rem)] overflow-auto pr-1">
+              {loadingTree && treeNodes.length === 0 ? (
+                <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">
+                  <Loader2 size={16} className="animate-spin" />
+                  Loading branch scope...
+                </div>
+              ) : filteredTree.length ? (
+                renderTree(filteredTree)
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-center text-sm font-bold text-slate-500">
+                  No branch or device found.
+                </div>
+              )}
             </div>
           </div>
         </aside>
 
-        <section>
-          <div>
-            <div>
-              <div>
-                <span>Policy Management</span>
-                <ChevronRight size={12}/>
-                <span>{moduleConfig.label}</span>
-              </div>
-              <h2>App Restriction</h2>
-              <p>
-                Selected target: {selectedTarget?.label || 'None'}
-                {selectedTarget?.Object_Full_Name ? ` (${selectedTarget.Object_Full_Name})` : ''}
-              </p>
-            </div>
-
-            <div>
-              {summaryCards.map((card) => (<button key={card.label} type="button">
-                  <span>{card.label}</span>
-                  <strong>{card.value}</strong>
-                  <small>{card.helper}</small>
-                </button>))}
-            </div>
-          </div>
-
-
-
-          <div>
-            <div>
-              <div>
-                {moduleConfig.tabs.map((tab) => (<button key={tab} type="button" onClick={() => setActiveTab(tab)}>
-                    {tabLabels[tab]}
-                  </button>))}
-              </div>
-
-              {(activeModule === 'appBlacklist' || activeModule === 'appWhitelist') && (<div>
-                  <button type="button" onClick={openPackageManager}>
-                    <Package size={13}/> Package Manager
-                  </button>
-                </div>)}
-            </div>
-
-            <div>
-              {activeTab === 'status' && activeModule !== 'webRestriction' && renderRestrictionStatus()}
-              {activeTab === 'settings' && renderPolicySettings()}
-              {activeTab === 'policyStatus' && renderPolicyStatus()}
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {showManageSoftware && renderManageSoftwareModal()}
-      {showPackageManager && renderPackageManagerModal()}
-      {showWebGroupManager && renderWebGroupManagerModal()}
-    </main>);
-    function renderRestrictionStatus() {
-        const rows = Array.isArray(statusRows) ? statusRows : [];
-        const appBlacklistMode = activeModule === 'appBlacklist';
-        const statusTitle = appBlacklistMode ? 'App Restriction Status' : 'App Whitelist Restriction Status';
-        const emptyMessage = selectedTarget
-            ? 'No restriction status data found for this target and selected duration.'
-            : 'No target selected yet. Showing root policy scope when available.';
-        type StatusTableRow = RestrictionStatusRow & Record<string, any>;
-        const appColumns: AppTableColumn<StatusTableRow>[] = [
-            {
-                key: 'SW_Pkg_Name',
-                header: 'Application Package Name',
-                render: (row) => getRowText(row, ['SW_Pkg_Name', 'SW_PKG_NAME', 'packageName', 'Application Package Name']),
-            },
-            {
-                key: 'evt_cnt',
-                header: 'Attempts',
-                align: 'end',
-                width: 120,
-                render: (row) => getRowText(row, ['evt_cnt', 'EVT_CNT', 'attempts', 'Number of Attempts']),
-            },
-            {
-                key: 'user_cnt',
-                header: 'Affected Devices',
-                align: 'end',
-                width: 150,
-                render: (row) => getRowText(row, ['user_cnt', 'USER_CNT', 'deviceCount', 'Affected Devices']),
-            },
-        ];
-        const whitelistColumns: AppTableColumn<StatusTableRow>[] = [
-            {
-                key: 'EVT_TYPE',
-                header: 'Type',
-                width: 120,
-                render: (row) => getRowText(row, ['EVT_TYPE', 'evt_type', 'Type']),
-            },
-            {
-                key: 'FILENAME',
-                header: 'File Name',
-                render: (row) => getRowText(row, ['FILENAME', 'filename', 'File Name']),
-            },
-            {
-                key: 'EVT_CNT',
-                header: 'Attempts',
-                align: 'end',
-                width: 120,
-                render: (row) => getRowText(row, ['EVT_CNT', 'evt_cnt', 'attempts', 'Number of Attempts']),
-            },
-            {
-                key: 'USER_CNT',
-                header: 'Affected Devices',
-                align: 'end',
-                width: 150,
-                render: (row) => getRowText(row, ['USER_CNT', 'user_cnt', 'deviceCount', 'Affected Devices']),
-            },
-        ];
-        return (<div>
-        <div>
-          <div>
-            <div>
-              <label>Start Date</label>
-              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)}/>
-            </div>
-            <div>
-              <label>End Date</label>
-              <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)}/>
-            </div>
-            <div>
-              <label>
-                <input type="checkbox" checked={includeSub} onChange={(event) => setIncludeSub(event.target.checked)}/>
-                <span>Include Sub-Dept</span>
-              </label>
-            </div>
-            <div>
-              <AppButton size="sm" variant="primary" onClick={loadPolicyData} loading={loading} leftIcon={<RefreshCw size={13}/>}>
-                Refresh
-              </AppButton>
-            </div>
-          </div>
-        </div>
-
-        <AppTable<StatusTableRow> columns={appBlacklistMode ? appColumns : whitelistColumns} rows={rows as StatusTableRow[]} rowKey={(row, index) => getFastRowKey(row, index, ['SW_Pkg_Name', 'SW_PKG_NAME', 'FILENAME', 'EVT_TYPE', 'evt_cnt', 'EVT_CNT'])} loading={loading} emptyTitle="No status records" emptyDescription={emptyMessage} summary={(<>
-              <div>
-                <strong>{statusTitle}</strong>
-                <span>{selectedTarget?.label || 'All Branches'} · {startDate} until {endDate}</span>
-              </div>
-              <span>
-                {loading ? 'Loading...' : `${rows.length} record${rows.length === 1 ? '' : 's'}`}
-              </span>
-            </>)}/>
-      </div>);
-    }
-    function renderPolicyActionButtons() {
-        return (<div>
-        <AppButton size="sm" variant="secondary" onClick={loadPolicyData} leftIcon={<RotateCcw size={14}/>}>
-          Restore Policy
-        </AppButton>
-        <AppButton size="sm" variant="primary" onClick={handleSavePolicy} disabled={!selectedTarget || saving} loading={saving} leftIcon={<Save size={14}/>}>
-          Save Policy
-        </AppButton>
-      </div>);
-    }
-    function renderBasicSettingsSection(layout: 'default' | 'whitelist' = 'default') {
-        return (<section>
-        <div>
-          <div>
-            <h4>Basic Setting</h4>
-            <p>Policy assignment, update interval and inheritance control.</p>
-          </div>
-          <span>
-            {policyDetail?.source || 'none'} policy
-          </span>
-        </div>
-
-        <div>
-          <div>
-            <label>Policy ID</label>
-            <input value={form.policyId || 'New Policy'} disabled/>
-          </div>
-          <div>
-            <label>Result Update Interval (min.)</label>
-            <input value={form.updateInterval} onChange={(event) => updateForm('updateInterval', event.target.value)} disabled={isInherited}/>
-          </div>
-          <div>
-            <label>
-              <input type="checkbox" checked={form.inheritPolicy} disabled={selectedTarget?.type === 'root'} onChange={(event) => updateForm('inheritPolicy', event.target.checked)}/>
-              <span>Inherit Policy</span>
-            </label>
-          </div>
-          <div>
-            <label>
-              <input type="checkbox" checked={form.exception} disabled={isInherited} onChange={(event) => updateForm('exception', event.target.checked)}/>
-              <span>Do not apply restriction / Exception</span>
-            </label>
-          </div>
-        </div>
-
-        {isInherited && (<div>
-            This target is currently using an inherited policy{policyDetail?.sourceLabel ? ` from ${policyDetail.sourceLabel}` : ''}. Uncheck Inherit Policy to create or update a custom policy for the selected target.
-          </div>)}
-      </section>);
-    }
-    function renderPolicySettings() {
-        const settingsIntro = {
-            appBlacklist: 'Configure application blocking method, weekly schedule and package selection for the selected target.',
-            appWhitelist: 'Configure permitted software behaviour, process control, font control and software selection for the selected target.',
-            webRestriction: 'Configure website restriction behaviour, schedule and website list for the selected target.',
-        }[activeModule];
-        if (activeModule === 'appWhitelist') {
-            return (<div>
-          <div>
-            <strong>{moduleConfig.label} Policy Settings</strong>
-            <span>{settingsIntro}</span>
-          </div>
-
-          <div>
-            {renderBasicSettingsSection('whitelist')}
-            {renderWhitelistRestrictionSettings()}
-          </div>
-
-          {renderWhitelistSelector()}
-          {renderPolicyActionButtons()}
-        </div>);
-        }
-        return (<div>
-        <div>
-          <strong>{moduleConfig.label} Policy Settings</strong>
-          <span>{settingsIntro}</span>
-        </div>
-
-        <div>
-          {renderBasicSettingsSection()}
-          {activeModule === 'appBlacklist' && renderAppRestrictionSettings()}
-          {activeModule === 'webRestriction' && renderWebRestrictionSettings()}
-        </div>
-
-        {(activeModule === 'appBlacklist' || activeModule === 'webRestriction') && renderWeeklyAndSchedule()}
-        {activeModule === 'appBlacklist' && renderPackageSelector()}
-        {activeModule === 'webRestriction' && renderWebsiteSelector()}
-
-        {renderPolicyActionButtons()}
-      </div>);
-    }
-    function renderAppRestrictionSettings() {
-        const options: Array<[
-            FormState['appRestrictType'],
-            string,
-            string
-        ]> = [
-            ['1', 'Restrict', 'Block the selected package list.'],
-            ['2', 'Warning Message + Restrict', 'Warn users and block the app.'],
-            ['3', 'Warning Message', 'Show warning without blocking.'],
-        ];
-        return (<section>
-        <div>
-          <div>
-            <h4>Restriction Method</h4>
-            <p>Choose how the app restriction policy responds when a selected package is detected.</p>
-          </div>
-          <span>{appRestrictionLabel(form.appRestrictType)}</span>
-        </div>
-
-        <div>
-          {options.map(([value, label, helper]) => (<div key={value}>
-              <label>
-                <input type="radio" name="appRestrictType" checked={form.appRestrictType === value} disabled={isInherited} onChange={() => updateForm('appRestrictType', value)}/>
-                <span>
-                  <strong>{label}</strong>
-                  <small>{helper}</small>
-                </span>
-              </label>
-            </div>))}
-        </div>
-
-        <div>
-          <label>Warning Message</label>
-          <textarea value={form.appNoticeMessage} onChange={(event) => updateForm('appNoticeMessage', event.target.value)} disabled={isInherited} placeholder="Message shown to the user when this policy triggers."/>
-        </div>
-
-        <label>
-          <input type="checkbox" checked={form.versionCompare} disabled={isInherited} onChange={(event) => updateForm('versionCompare', event.target.checked)}/>
-          <span>Version comparison</span>
-        </label>
-      </section>);
-    }
-    function renderWhitelistRestrictionSettings() {
-        const processOptions: Array<[
-            FormState['processRestrictType'],
-            string
-        ]> = [
-            ['0', 'None'],
-            ['1', 'Warning Message'],
-            ['2', 'Restriction'],
-            ['3', 'Warning Message + Restriction'],
-        ];
-        const fontOptions: Array<[
-            FormState['fontRestrictType'],
-            string
-        ]> = [
-            ['0', 'None'],
-            ['1', 'Warning Message'],
-            ['2', 'Delete Font File'],
-            ['3', 'Warning Message + Delete Font File'],
-        ];
-        return (<>
-        <section>
-          <div>
-            <div>
-              <h4>Restriction of Process</h4>
-              <p>Control process behaviour for software outside the permitted list.</p>
-            </div>
-            <span>{whitelistProcessLabel(form.processRestrictType)}</span>
-          </div>
-
-          <div>
-            {processOptions.map(([value, label]) => (<div key={value}>
-                <label>
-                  <input type="radio" name="processRestrictType" checked={form.processRestrictType === value} disabled={isInherited} onChange={() => updateForm('processRestrictType', value)}/>
-                  <span>{label}</span>
-                </label>
-              </div>))}
-          </div>
-
-          <div>
-            <div>
-              <label>Notice Message (max 249 characters)</label>
-              <span>{form.processNoticeMessage.length}/249</span>
-            </div>
-            <textarea maxLength={249} value={form.processNoticeMessage} onChange={(event) => updateForm('processNoticeMessage', event.target.value)} disabled={isInherited} placeholder="Message shown when the process policy triggers."/>
-          </div>
-        </section>
-
-        <section>
-          <div>
-            <div>
-              <h4>Restriction of Font</h4>
-              <p>Control font file handling for software outside the permitted list.</p>
-            </div>
-            <span>{whitelistFontLabel(form.fontRestrictType)}</span>
-          </div>
-
-          <div>
-            {fontOptions.map(([value, label]) => (<div key={value}>
-                <label>
-                  <input type="radio" name="fontRestrictType" checked={form.fontRestrictType === value} disabled={isInherited} onChange={() => updateForm('fontRestrictType', value)}/>
-                  <span>{label}</span>
-                </label>
-              </div>))}
-          </div>
-
-          <div>
-            <div>
-              <label>Notice Message (max 249 characters)</label>
-              <span>{form.fontNoticeMessage.length}/249</span>
-            </div>
-            <textarea maxLength={249} value={form.fontNoticeMessage} onChange={(event) => updateForm('fontNoticeMessage', event.target.value)} disabled={isInherited} placeholder="Message shown when the font policy triggers."/>
-          </div>
-        </section>
-      </>);
-    }
-    function renderWebRestrictionSettings() {
-        const options: Array<[
-            FormState['webRestrictType'],
-            string,
-            string
-        ]> = [
-            ['1', 'Block Website List', 'Deny access to websites in the list.'],
-            ['2', 'Only Allow Website List', 'Allow only websites in the list.'],
-        ];
-        return (<section>
-        <div>
-          <div>
-            <h4>Restriction Type</h4>
-            <p>Choose whether the website list is treated as a block list or an allow list.</p>
-          </div>
-          <span>{webRestrictionLabel(form.webRestrictType)}</span>
-        </div>
-
-        <div>
-          {options.map(([value, label, helper]) => (<div key={value}>
-              <label>
-                <input type="radio" name="webRestrictType" checked={form.webRestrictType === value} disabled={isInherited} onChange={() => updateForm('webRestrictType', value)}/>
-                <span>
-                  <strong>{label}</strong>
-                  <small>{helper}</small>
-                </span>
-              </label>
-            </div>))}
-        </div>
-
-        <div>
-          <label>Move to default URL</label>
-          <input value={form.defaultUrl} onChange={(event) => updateForm('defaultUrl', event.target.value)} disabled={isInherited} placeholder="127.0.0.1"/>
-        </div>
-      </section>);
-    }
-    function renderWeeklyAndSchedule() {
-        return (<section>
-        <div>
-          <div>
-            <div>
-              <h4>Weekly Policy</h4>
-              <p>Select the days where this policy should be active.</p>
-            </div>
-            <label>
-              <input type="checkbox" checked={form.weeklyPolicy} disabled={isInherited} onChange={(event) => updateForm('weeklyPolicy', event.target.checked)}/>
-              <span>Enable</span>
-            </label>
-          </div>
-
-          <div>
-            {dayOptions.map((day) => (<div key={day}>
-                <button type="button" disabled={!form.weeklyPolicy || isInherited} onClick={() => toggleDay(day)}>
-                  {day}
-                </button>
-              </div>))}
-          </div>
-        </div>
-
-        <div>
-          <div>
-            <div>
-              <h4>Restricted Time</h4>
-              <p>Run the policy all day or only during selected time ranges.</p>
-            </div>
-            <div>
-              <button type="button" disabled={isInherited} onClick={() => updateForm('useSchedule', false)}>All Day</button>
-              <button type="button" disabled={isInherited} onClick={() => updateForm('useSchedule', true)}>Schedule</button>
-            </div>
-          </div>
-
-          <div>
-            {(['schedule1', 'schedule2', 'schedule3', 'schedule4'] as const).map((key, index) => (<div key={key}>
-                <label>Schedule {index + 1} (HH:mm-HH:mm)</label>
-                <input value={form[key]} onChange={(event) => updateForm(key, event.target.value)} placeholder="09:00-18:00" disabled={!form.useSchedule || isInherited}/>
-              </div>))}
-          </div>
-        </div>
-      </section>);
-    }
-    function renderPackageSelector() {
-        return (<DualListSection title="Package Selection" leftTitle="Selected Package List" rightTitle="Package List" searchText={searchText} setSearchText={setSearchText} disabled={isInherited} leftItems={selectedPackages.map((item) => ({ id: getPackageId(item), title: getPackageName(item) || `Package ${getPackageId(item)}`, meta: item.FileName || item.Manufacturer || '-' }))} rightItems={availablePackages.map((item) => ({ id: getPackageId(item), title: getPackageName(item) || `Package ${getPackageId(item)}`, meta: item.FileName || item.Manufacturer || '-' }))} onMoveLeft={(id) => movePackage(id, false)} onMoveRight={(id) => movePackage(id, true)}/>);
-    }
-    function renderWhitelistSelector() {
-        return (<DualListSection title="Permit Software List" leftTitle="Permit Software List" rightTitle="All Software List" searchText={searchText} setSearchText={setSearchText} disabled={isInherited} leftItems={selectedWhitelist.map((item) => ({ id: getWhitelistId(item), title: getWhitelistName(item) || `Software ${getWhitelistId(item)}`, meta: item.Type || item.Vendor || '-' }))} rightItems={availableWhitelistSoftware.map((item) => ({ id: getWhitelistId(item), title: getWhitelistName(item) || `Software ${getWhitelistId(item)}`, meta: item.Type || item.Vendor || '-' }))} onMoveLeft={(id) => moveWhitelist(id, false)} onMoveRight={(id) => moveWhitelist(id, true)}/>);
-    }
-    function renderWebsiteSelector() {
-        const policyUrlPagination = getPaginationState<string>(webUrls, webPolicyPage);
-        const groupUrlPagination = getPaginationState<WebGroupUrl>(webGroupUrls, webGroupUrlPage);
-        return (<section>
-        <div>
-          <div>
-            <div>
-              <h4>Website List</h4>
-              <p>Add website domains for the selected web restriction policy.</p>
-            </div>
-            <span>{webUrls.length} URL{webUrls.length === 1 ? '' : 's'}</span>
-          </div>
-
-          <div>
-            <input value={newUrl} onChange={(event) => setNewUrl(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && addPolicyUrl()} placeholder="example.com" disabled={isInherited}/>
-            <AppButton size="sm" variant="primary" onClick={addPolicyUrl} disabled={isInherited} leftIcon={<Plus size={13}/>}>
-              Add
-            </AppButton>
-          </div>
-
-          <div>
-            <div>
-              {webUrls.length === 0 ? (<div>No URLs added to this policy.</div>) : policyUrlPagination.pageItems.map((url) => (<div key={url}>
+        <section className="min-w-0 space-y-5">
+          <div className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="max-w-xl">
+                <span className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">Policy Operations</span>
+                <div className="mt-2 flex items-center gap-3">
+                  <span
+                    className={cn(
+                      'grid h-12 w-12 place-items-center rounded-2xl border',
+                      moduleConfig.tone === 'rose'
+                        ? 'border-rose-200 bg-rose-50 text-rose-600'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                    )}
+                  >
+                    <ModuleIcon size={22} />
+                  </span>
                   <div>
-                    <span><LinkIcon size={13}/></span>
-                    <strong>{url}</strong>
+                    <h1 className="text-2xl font-black text-slate-950">{moduleConfig.label}</h1>
+                    <p className="text-sm font-semibold text-slate-500">{moduleConfig.helper}</p>
                   </div>
-                  <div>
-                    <button type="button" disabled={isInherited} onClick={() => {
-                    setWebUrls((previous) => previous.filter((item) => item !== url));
-                    setMessage(`${url} removed from website list.`);
-                }} aria-label={`Remove ${url}`}>
-                      <Trash2 size={13}/>
-                    </button>
-                  </div>
-                </div>))}
-            </div>
-            <CompactPagination page={policyUrlPagination.safePage} totalPages={policyUrlPagination.totalPages} totalCount={webUrls.length} onPageChange={setWebPolicyPage}/>
-          </div>
-        </div>
-
-        <div>
-          <div>
-            <div>
-              <h4>Website Group</h4>
-              <p>Select a saved website group and add its URLs into this policy.</p>
-            </div>
-            <span>{webGroupUrls.length} URL{webGroupUrls.length === 1 ? '' : 's'}</span>
-          </div>
-
-          <div>
-            <AppButton size="sm" variant="secondary" onClick={openWebGroupManager} leftIcon={<Globe size={13}/>}>
-              Edit Website Group
-            </AppButton>
-            <AppButton size="sm" variant="secondary" onClick={addGroupUrlsToPolicy} disabled={isInherited || webGroupUrls.length === 0} leftIcon={<ArrowLeft size={13}/>}>
-              Add Group URLs
-            </AppButton>
-          </div>
-
-          <div>
-            <label>Website Group</label>
-            <select value={selectedWebsiteGroupId || ''} onChange={(event) => setSelectedWebsiteGroupId(Number(event.target.value) || null)}>
-              <option value="">Select group</option>
-              {webGroups.map((group) => (<option key={group.idx} value={group.idx}>{group.name} ({group.url_count || 0})</option>))}
-            </select>
-          </div>
-
-          <div>
-            <div>
-              {webGroupUrls.length === 0 ? (<div>No URLs found in selected website group.</div>) : groupUrlPagination.pageItems.map((item) => (<div key={`${item.idx}-${item.seq}`}>
-                  <div>
-                    <span><Globe size={13}/></span>
-                    <strong>{item.url}</strong>
-                  </div>
-                </div>))}
-            </div>
-            <CompactPagination page={groupUrlPagination.safePage} totalPages={groupUrlPagination.totalPages} totalCount={webGroupUrls.length} onPageChange={setWebGroupUrlPage}/>
-          </div>
-        </div>
-      </section>);
-    }
-    function renderPolicyStatus() {
-        const rows = Array.isArray(policyRows) ? policyRows : [];
-        type PolicyTableRow = RestrictionPolicyRow & Record<string, any>;
-        const columns: AppTableColumn<PolicyTableRow>[] = [
-            {
-                key: 'target_name',
-                header: 'Target',
-                render: (row) => row.target_name || row.target_id || '-',
-            },
-            {
-                key: 'object_full_name',
-                header: 'Department',
-                render: (row) => row.object_full_name || '-',
-            },
-            {
-                key: 'use_policy',
-                header: 'Applied',
-                width: 110,
-                align: 'center',
-                render: (row) => (<span>
-            {row.use_policy || 'O'}
-          </span>),
-            },
-            {
-                key: 'Version',
-                header: 'Policy Version',
-                width: 170,
-                render: (row) => <code>{row.Version || row.version || '-'}</code>,
-            },
-        ];
-        return (<div>
-        <div role="alert">
-          This policy list shows policy information for clients or departments that do not inherit their parent policies.
-        </div>
-
-        <AppTable<PolicyTableRow> columns={columns} rows={rows as PolicyTableRow[]} rowKey={(row, index) => getFastRowKey(row, index, ['policy_id', 'target_id', 'Version', 'version'])} loading={loading} emptyTitle="No custom policy status" emptyDescription="No custom policy status found for this scope." summary={(<>
-              <div>
-                <strong>Policy Status List</strong>
-                <span>{moduleConfig.label} · {selectedTarget?.label || 'All Branches'}</span>
-              </div>
-              <span>
-                {loading ? 'Loading...' : `${rows.length} record${rows.length === 1 ? '' : 's'}`}
-              </span>
-            </>)}/>
-      </div>);
-    }
-    function renderWebGroupManagerModal() {
-        const activeGroupId = editingWebGroup?.idx || selectedWebsiteGroupId || 0;
-        const canEditUrls = Boolean(activeGroupId);
-        return (<div>
-        <div>
-          <div>
-            <div>
-              <p>Website Restriction</p>
-              <h3>Edit Website Group</h3>
-              <p>Create a website category, enter domain names without http:// or https://, then add the group URLs into the policy list.</p>
-            </div>
-            <button type="button" onClick={() => setShowWebGroupManager(false)}>
-              <X size={18}/>
-            </button>
-          </div>
-
-          <div>
-            <aside>
-              <div>
-                <div>
-                  <h4>Website Group</h4>
-                  <p>Reusable URL categories stored in TSWB_URL_GROUP.</p>
-                </div>
-                <button type="button" onClick={resetWebGroupEditor}>
-                  New
-                </button>
-              </div>
-
-              <div>
-                {webGroups.length === 0 ? (<div>No website group yet. Click New, enter a group name, then Save Group.</div>) : webGroups.map((group) => {
-                const selected = activeGroupId === group.idx;
-                return (<button key={group.idx} type="button" onClick={() => selectWebGroupForEditing(group)}>
-                      <div>
-                        <div>
-                          <p>{group.name}</p>
-                          <p>{group.description || 'Website restriction group'}</p>
-                        </div>
-                        <span>{group.url_count || 0} URLs</span>
-                      </div>
-                    </button>);
-            })}
-              </div>
-            </aside>
-
-            <main>
-              <div>
-                <div>
-                  <label>Group Name</label>
-                  <input value={webGroupName} onChange={(event) => setWebGroupName(event.target.value)} placeholder="Example: Social Networking"/>
-                </div>
-                <div>
-                  <label>Description</label>
-                  <input value={webGroupDescription} onChange={(event) => setWebGroupDescription(event.target.value)} placeholder="Optional note"/>
                 </div>
               </div>
 
-              <div>
-                <button type="button" onClick={saveWebGroup} disabled={loading}>
-                  {loading ? <Loader2 size={14}/> : <Save size={14}/>} {editingWebGroup ? 'Save Group' : 'Create Group'}
-                </button>
-                {editingWebGroup && (<button type="button" onClick={() => deleteWebGroup(editingWebGroup)} disabled={loading}>
-                    <Trash2 size={14}/> Delete Group
-                  </button>)}
-              </div>
-
-              {!canEditUrls && (<div>
-                  Create or select a website group first. After that, add domain names into the group.
-                </div>)}
-
-              <section>
-                <div>
-                  <div>
-                    <h4>Domain names in this group</h4>
-                    <p>Enter domain names only. Do not include http:// or https://.</p>
-                  </div>
-                  <span>{webGroupUrls.length} URLs</span>
-                </div>
-
-                <div>
-                  <input value={webGroupDomainInput} onChange={(event) => setWebGroupDomainInput(event.target.value)} onKeyDown={(event) => canEditUrls && event.key === 'Enter' && addUrlToWebGroup()} disabled={!canEditUrls || loading} placeholder={canEditUrls ? 'example.com' : 'Create or select a group first'}/>
-                  <button type="button" onClick={addUrlToWebGroup} disabled={!canEditUrls || loading}>
-                    <Plus size={13}/> Add
-                  </button>
-                </div>
-
-                <div>
-                  {webGroupUrls.length === 0 ? (<div>No domain names in this group.</div>) : webGroupUrls.map((item) => (<div key={`${item.idx}-${item.seq}`}>
-                      <div>
-                        <Globe size={13}/>
-                        <span>{item.url}</span>
-                      </div>
-                      <button type="button" onClick={() => deleteUrlFromWebGroup(item)} disabled={loading}>
-                        <Trash2 size={13}/>
-                      </button>
-                    </div>))}
-                </div>
-
-                <div>
-                  <button type="button" onClick={() => { addGroupUrlsToPolicy(); setShowWebGroupManager(false); }} disabled={isInherited || webGroupUrls.length === 0}>
-                    <ArrowLeft size={14}/> Add this group to policy website list
-                  </button>
-                </div>
-              </section>
-            </main>
-          </div>
-        </div>
-      </div>);
-    }
-    function renderPackageManagerModal() {
-        const files = selectedManagerPackage?.files || [];
-        const selectedPackageId = selectedManagerPackage ? getPackageId(selectedManagerPackage) : '';
-        const isPackageSaved = Boolean(selectedPackageId);
-        return (<div>
-        <div>
-          <div>
-            <div>
-              <p>Application Package Editor</p>
-              <h3>Package Manager</h3>
-              <p>Step 1: create or select a package. Step 2: search Software Inventory EXE records and add them into that package.</p>
-            </div>
-            <button type="button" onClick={() => setShowPackageManager(false)}>
-              <X size={18}/>
-            </button>
-          </div>
-
-          <div>
-            <aside>
-              <div>
-                <div>
-                  <Search size={14}/>
-                  <input value={packageManagerSearch} onChange={(event) => setPackageManagerSearch(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && loadPackageManager(packageManagerSearch)} placeholder="Search package or file"/>
-                </div>
-                <button type="button" onClick={() => loadPackageManager(packageManagerSearch)}>
-                  Search
-                </button>
-                <button type="button" onClick={resetPackageForm}>
-                  New
-                </button>
-              </div>
-
-              <div>
-                {filteredPackageManagerRows.length === 0 ? (<div>No packages found.</div>) : filteredPackageManagerRows.map((item) => {
-                const id = getPackageId(item);
-                const selected = selectedPackageId === id;
-                return (<button key={id} type="button" onClick={() => selectManagerPackage(item)}>
-                      <div>
-                        <div>
-                          <p>{getPackageName(item)}</p>
-                          <p>{item.SW_Pkg_Company || item.sample_file || '-'}</p>
-                        </div>
-                        <div>
-                          <span>{item.file_count || 0} files</span>
-                          <span>
-                            {item.used_policy_count || 0} policies
-                          </span>
+              <div className="grid w-full grid-cols-2 gap-3 lg:w-auto lg:grid-cols-4">
+                {summaryCards.map((card) => {
+                  const Icon = card.icon;
+                  return (
+                    <div key={card.label} className={cn('min-w-[9rem] rounded-[20px] border-2 bg-white px-4 py-3', card.tone)}>
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/80">
+                          <Icon size={18} />
+                        </span>
+                        <div className="min-w-0">
+                          <strong className="block truncate text-lg font-black">{card.value}</strong>
+                          <span className="block truncate text-[11px] font-black uppercase tracking-[0.12em]">{card.label}</span>
                         </div>
                       </div>
-                    </button>);
-            })}
-              </div>
-            </aside>
-
-            <main>
-              <div>
-                <div>
-                  <label>Package Name</label>
-                  <input value={packageForm.SW_Pkg_Name} onChange={(event) => setPackageForm((prev) => ({ ...prev, SW_Pkg_Name: event.target.value }))} placeholder="Example: Google Chrome"/>
-                </div>
-                <div>
-                  <label>Company / Vendor</label>
-                  <input value={packageForm.SW_Pkg_Company || ''} onChange={(event) => setPackageForm((prev) => ({ ...prev, SW_Pkg_Company: event.target.value }))} placeholder="Example: Google LLC"/>
-                </div>
-                <div>
-                  <label>Category ID</label>
-                  <input type="number" value={packageForm.SW_Catg || 0} onChange={(event) => setPackageForm((prev) => ({ ...prev, SW_Catg: Number(event.target.value || 0) }))}/>
-                </div>
-                <div>
-                  <label>Active</label>
-                  <select value={String(packageForm.Selected ?? 1)} onChange={(event) => setPackageForm((prev) => ({ ...prev, Selected: Number(event.target.value) }))}>
-                    <option value="1">Yes</option>
-                    <option value="0">No</option>
-                  </select>
-                </div>
-                <div>
-                  <label>Etc Info / Description</label>
-                  <input value={packageForm.SW_Package_EtcInfo || ''} onChange={(event) => setPackageForm((prev) => ({ ...prev, SW_Package_EtcInfo: event.target.value }))} placeholder="Usually first executable name or package note"/>
-                </div>
-              </div>
-
-              <div>
-                <button type="button" onClick={saveManagerPackage} disabled={packageManagerLoading}>
-                  {packageManagerLoading ? <Loader2 size={14}/> : <Save size={14}/>} {selectedManagerPackage ? 'Save Package' : 'Create Package'}
-                </button>
-                {selectedManagerPackage && (<button type="button" onClick={() => deleteManagerPackage(selectedManagerPackage)} disabled={packageManagerLoading}>
-                    <Trash2 size={14}/> Delete Package
-                  </button>)}
-              </div>
-
-              {!isPackageSaved && (<div>
-                  Create the package first. After the package is saved and has a Package ID, the Software Inventory EXE search and Add buttons will be enabled.
-                </div>)}
-
-              <section>
-                <div>
-                  <div>
-                    <h4>Files inside package</h4>
-                    <p>Files are copied from collected Software Inventory EXE data into TSSI_PACKAGE_FILES.</p>
-                  </div>
-                  <span>{files.length} files</span>
-                </div>
-
-                <div>
-                  <input value={packageFileSearch} onChange={(event) => setPackageFileSearch(event.target.value)} onKeyDown={(event) => isPackageSaved && event.key === 'Enter' && searchInventoryFilesForPackage()} disabled={!isPackageSaved} placeholder={isPackageSaved ? 'Search inventory file name, e.g. chrome' : 'Create the package first before searching EXE files'}/>
-                  <button type="button" onClick={searchInventoryFilesForPackage} disabled={!isPackageSaved || packageManagerLoading}>Search Inventory</button>
-                  <button type="button" onClick={addManualFileToPackage} disabled={!isPackageSaved || packageManagerLoading}>Manual Add</button>
-                </div>
-
-                {isPackageSaved && packageInventoryFiles.length > 0 && (<div>
-                    {packageInventoryFiles.map((file, index) => (<div key={`${file.SW_Idn || file.FileName}-${index}`}>
-                        <div>
-                          <p>{file.FileName}</p>
-                          <p>Version: {file.FileVersion || '-'} {file.OriginalFileName ? ` / ${file.OriginalFileName}` : ''}</p>
-                        </div>
-                        <button type="button" onClick={() => addInventoryFileToPackage(file)} disabled={!isPackageSaved || packageManagerLoading}>Add</button>
-                      </div>))}
-                  </div>)}
-
-                {isPackageSaved && packageInventoryFiles.length === 0 && packageFileSearch.trim() && (<div>
-                    No search result is shown yet. Click Search Inventory to find collected EXE records from Software Inventory.
-                  </div>)}
-
-                <div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>File Name</th>
-                        <th>Version</th>
-                        <th>Size</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {files.length === 0 ? (<tr><td colSpan={4}>No files in this package.</td></tr>) : files.map((file) => (<tr key={file.ID || file.FileName}>
-                          <td>{file.FileName}</td>
-                          <td>{file.FileVersion || '-'}</td>
-                          <td>{file.FileSize || 0}</td>
-                          <td>
-                            <button type="button" onClick={() => deletePackageFile(file)}><Trash2 size={13}/></button>
-                          </td>
-                        </tr>))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </main>
-          </div>
-        </div>
-      </div>);
-    }
-    function renderManageSoftwareModal() {
-        return (<div>
-        <div>
-          <div>
-            <div>
-              <h3>Manage Software List</h3>
-              <p>Default permitted software and registered process/font file rules.</p>
-            </div>
-            <button type="button" onClick={() => setShowManageSoftware(false)}>
-              <X size={18}/>
-            </button>
-          </div>
-
-          <div>
-            <div>
-              <Info size={16}/>
-              <span>After changing the Use Restriction, use the information update button to refresh permitted software data before saving the related policy.</span>
-            </div>
-            <button type="button" onClick={() => {
-                loadLookups();
-                setMessage('Whitelist restriction information refresh requested.');
-            }}>
-              <RefreshCw size={14}/> Use Restriction Information Update
-            </button>
-          </div>
-
-          <div>
-            <section>
-              <div>
-                <h4>Software</h4>
-                <div>
-                  <button type="button" title="Save">
-                    <Save size={13}/>
-                  </button>
-                  <button type="button" title="Add">
-                    <Plus size={13}/>
-                  </button>
-                  <button type="button" title="Remove">
-                    <Trash2 size={13}/>
-                  </button>
-                </div>
-              </div>
-
-              <label>S/W Name</label>
-              <div>
-                <Search size={13}/>
-                <input value={manageSearchText} onChange={(event) => setManageSearchText(event.target.value)} placeholder="Search software name"/>
-              </div>
-
-              <div>
-                {filteredManageWhitelistSoftware.length === 0 ? (<div>No whitelist software found.</div>) : filteredManageWhitelistSoftware.map((item, index) => (<div key={`${getWhitelistId(item)}-${index}`}>
-                    <span>{index + 1}</span>
-                    <ShieldCheck size={13}/>
-                    <div>
-                      <p>{getWhitelistName(item) || `Software ${getWhitelistId(item)}`}</p>
-                      <p>ID: {getWhitelistId(item) || '-'}</p>
                     </div>
-                  </div>))}
+                  );
+                })}
               </div>
-            </section>
-
-            <section>
-              <div>
-                <div>
-                  <h4>Register File <span>(Permitted to run or use this registered file)</span></h4>
-                  <div>
-                    <button type="button" title="Edit">
-                      <ListChecks size={13}/>
-                    </button>
-                    <button type="button" title="Remove">
-                      <Trash2 size={13}/>
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Process / Font Name</th>
-                        <th>File Size (Compare)</th>
-                        <th>File Version (Compare)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedWhitelist.length === 0 ? (<tr>
-                          <td colSpan={4}>No registered permitted software selected in current policy.</td>
-                        </tr>) : selectedWhitelist.map((item) => (<tr key={`registered-${getWhitelistId(item)}`}>
-                          <td>{item.Type || 'Process'}</td>
-                          <td>{getWhitelistName(item) || '-'}</td>
-                          <td>-</td>
-                          <td>-</td>
-                        </tr>))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div>
-                <div>
-                  <h4>Register File <span>(Hash rule)</span></h4>
-                  <div>
-                    <button type="button" title="Add hash">
-                      <Plus size={13}/>
-                    </button>
-                    <button type="button" title="Remove hash">
-                      <Trash2 size={13}/>
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>File Name</th>
-                        <th>Hash (MD5)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedWhitelist.length === 0 ? (<tr>
-                          <td colSpan={2}>No hash rules found.</td>
-                        </tr>) : selectedWhitelist.map((item) => (<tr key={`hash-${getWhitelistId(item)}`}>
-                          <td>{getWhitelistName(item) || '-'}</td>
-                          <td>-</td>
-                        </tr>))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </section>
-
-            <section>
-              <h4>File information collected <span>(List of files registered in collector)</span></h4>
-              <div>
-                <label>File Name :</label>
-                <div>
-                  <input value={manageSearchText} onChange={(event) => setManageSearchText(event.target.value)} placeholder="Find collected file"/>
-                </div>
-                <button type="button">Find</button>
-                <button type="button">
-                  <ArrowLeft size={13}/> Add to allowed file list
-                </button>
-              </div>
-
-              <div>
-                <button type="button" onClick={() => setManageFileTab('process')}>
-                  Process
-                </button>
-                <button type="button" onClick={() => setManageFileTab('font')}>
-                  Font
-                </button>
-              </div>
-
-              <div>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{manageFileTab === 'process' ? 'Process Name' : 'Font Name'}</th>
-                      <th>Original File Name</th>
-                      <th>File Size</th>
-                      <th>File Version</th>
-                      <th>Company</th>
-                      <th>S/W Type</th>
-                      <th>Remark</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredManageWhitelistSoftware.length === 0 ? (<tr>
-                        <td colSpan={7}>No collected file information found.</td>
-                      </tr>) : filteredManageWhitelistSoftware.map((item) => (<tr key={`collected-${getWhitelistId(item)}`}>
-                        <td>{getWhitelistName(item) || '-'}</td>
-                        <td>{getWhitelistName(item) || '-'}</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>{item.Vendor || '-'}</td>
-                        <td>{item.Type || '-'}</td>
-                        <td>-</td>
-                      </tr>))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-        </div>
-      </div>);
-    }
-}
-type DualListItem = {
-    id: string;
-    title: string;
-    meta?: string;
-};
-type DualListSectionProps = {
-    title: string;
-    leftTitle: string;
-    rightTitle: string;
-    leftItems: DualListItem[];
-    rightItems: DualListItem[];
-    searchText: string;
-    setSearchText: (value: string) => void;
-    disabled?: boolean;
-    onMoveLeft: (id: string) => void;
-    onMoveRight: (id: string) => void;
-};
-function DualListSection({ title, leftTitle, rightTitle, leftItems, rightItems, searchText, setSearchText, disabled, onMoveLeft, onMoveRight, }: DualListSectionProps) {
-    return (<section>
-      <div>
-        <div>
-          <h4>{title}</h4>
-          <p>Move items between the available list and the policy selection list.</p>
-        </div>
-        <label>
-          <Search size={14}/>
-          <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search software or package"/>
-        </label>
-      </div>
-
-      <div>
-        <div>
-          <ListPanel title={leftTitle} items={leftItems} emptyText="No selected items." actionIcon={ArrowRight} disabled={disabled} onAction={onMoveRight}/>
-        </div>
-        <div>
-          <div>
-            <ArrowLeft size={18}/>
-            <ArrowRight size={18}/>
-          </div>
-        </div>
-        <div>
-          <ListPanel title={rightTitle} items={rightItems} emptyText="No available items." actionIcon={ArrowLeft} disabled={disabled} onAction={onMoveLeft}/>
-        </div>
-      </div>
-    </section>);
-}
-type ListPanelProps = {
-    title: string;
-    items: DualListItem[];
-    emptyText: string;
-    actionIcon: LucideIcon;
-    disabled?: boolean;
-    onAction: (id: string) => void;
-};
-function ListPanel({ title, items, emptyText, actionIcon: ActionIcon, disabled, onAction }: ListPanelProps) {
-    const [page, setPage] = useState(1);
-    const itemSignature = `${items.length}:${items[0]?.id || ''}:${items[items.length - 1]?.id || ''}`;
-    const pagination = getPaginationState<DualListItem>(items, page);
-    useEffect(() => {
-        setPage(1);
-    }, [itemSignature, title]);
-    return (<div>
-      <div>
-        <div>{title}</div>
-        <div>
-          <span>{items.length}</span>
-        </div>
-      </div>
-      <div>
-        {items.length === 0 ? (<div>{emptyText}</div>) : pagination.pageItems.map((item) => (<div key={item.id}>
-            <div>
-              <span><Package size={13}/></span>
-              <span>
-                <strong>{item.title}</strong>
-                <small>{item.meta || '-'}</small>
-              </span>
             </div>
-            <div>
-              <button type="button" disabled={disabled} onClick={() => onAction(item.id)} aria-label={`Move ${item.title}`}>
-                <ActionIcon size={13}/>
-              </button>
+          </div>
+
+          <div className="rounded-[26px] border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-2 pb-4">
+              <div className="flex flex-wrap gap-2">
+                {(['status', 'settings', 'policyStatus'] as SubTab[]).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={cn(
+                      'rounded-2xl px-4 py-3 text-sm font-black transition',
+                      activeTab === tab ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    )}
+                  >
+                    {TAB_LABELS[tab]}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusSearch('');
+                    setPolicySearch('');
+                    setPackageSearch('');
+                    setStartDate(daysAgo(30));
+                    setEndDate(today());
+                  }}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 hover:bg-slate-50"
+                >
+                  <RotateCcw size={15} />
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={loadPolicyData}
+                  disabled={loadingData}
+                  className="grid h-11 w-11 place-items-center rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                  title="Refresh"
+                >
+                  {loadingData ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                </button>
+              </div>
             </div>
-          </div>))}
+
+            <div className="p-3">
+              {activeTab === 'status' ? renderStatus() : activeTab === 'settings' ? renderSettings() : renderPolicyStatus()}
+            </div>
+          </div>
+        </section>
       </div>
-      <CompactPagination page={pagination.safePage} totalPages={pagination.totalPages} totalCount={items.length} onPageChange={setPage}/>
-    </div>);
-}
-function appRestrictionLabel(value: string) {
-    if (value === '2')
-        return 'Warn + restrict';
-    if (value === '3')
-        return 'Warning only';
-    return 'Restrict';
-}
-function whitelistProcessLabel(value: string) {
-    if (value === '1')
-        return 'Warning';
-    if (value === '2')
-        return 'Restriction';
-    if (value === '3')
-        return 'Warn + restrict';
-    return 'None';
-}
-function whitelistFontLabel(value: string) {
-    if (value === '1')
-        return 'Warning';
-    if (value === '2')
-        return 'Delete font file';
-    if (value === '3')
-        return 'Warn + delete';
-    return 'None';
-}
-function webRestrictionLabel(value: string) {
-    if (value === '2')
-        return 'Allow list only';
-    return 'Block list';
+    </main>
+  );
 }
