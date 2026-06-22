@@ -1,4 +1,4 @@
-const MANAGEMENT_SECTIONS = new Set(["incident", "pricing", "aging", "policy"]);
+const MANAGEMENT_SECTIONS = new Set(["incident", "pricing", "aging", "policy", "softwarePolicy"]);
 
 function applySettingsManagementMenu() {
   if (typeof document === "undefined") return;
