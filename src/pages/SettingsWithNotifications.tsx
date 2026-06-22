@@ -92,12 +92,13 @@ function fixAuditActivityLayout(root: HTMLElement) {
   const table = root.querySelector<HTMLElement>(".audit-standard-table");
   if (!table) return;
 
-  const columns = "3.25rem 10.5rem 8.5rem 7.75rem minmax(0, 1fr) 7rem";
+  const columns = "3.25rem 10rem 7.5rem 7.5rem minmax(42rem, 1fr) 7rem";
+  const minTableWidth = "77.25rem";
 
   setImportantStyle(table, {
     width: "100%",
     maxWidth: "100%",
-    overflowX: "hidden",
+    overflowX: "auto",
     overflowY: "auto",
   });
 
@@ -105,8 +106,8 @@ function fixAuditActivityLayout(root: HTMLElement) {
     setImportantStyle(row, {
       display: "grid",
       gridTemplateColumns: columns,
-      width: "100%",
-      minWidth: "0",
+      width: "max-content",
+      minWidth: minTableWidth,
       alignItems: "stretch",
       minHeight: row.classList.contains("head") ? "3.15rem" : "3.75rem",
     });
@@ -131,6 +132,14 @@ function fixAuditActivityLayout(root: HTMLElement) {
     });
   });
 
+  root.querySelectorAll<HTMLElement>(".audit-standard-row > .user-cell:nth-child(1), .audit-standard-row > .user-cell:nth-child(2), .audit-standard-row > .user-cell:nth-child(3), .audit-standard-row > .user-cell:nth-child(4), .audit-standard-row > .user-cell:nth-child(6)").forEach((cell) => {
+    setImportantStyle(cell, {
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+    });
+  });
+
   root.querySelectorAll<HTMLElement>(".audit-action-cell").forEach((cell) => {
     setImportantStyle(cell, {
       display: "block",
@@ -150,8 +159,8 @@ function fixAuditActivityLayout(root: HTMLElement) {
       whiteSpace: "normal",
       overflow: "visible",
       textOverflow: "clip",
-      overflowWrap: "break-word",
-      wordBreak: "normal",
+      overflowWrap: "anywhere",
+      wordBreak: "break-word",
       lineHeight: "1.25",
     });
   });
@@ -430,8 +439,6 @@ function applyLegacySettingsUiFixes() {
     });
   });
 
-  fixAuditActivityLayout(root);
-
   root.querySelectorAll<HTMLElement>(".user-row.head").forEach((row) => {
     setImportantStyle(row, {
       minHeight: "3rem",
@@ -485,6 +492,7 @@ function applyLegacySettingsUiFixes() {
     svg.style.setProperty("max-width", "1rem", "important");
   });
 
+  fixAuditActivityLayout(root);
   alignSettingsPortalDropdowns();
 }
 
