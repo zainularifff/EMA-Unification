@@ -88,6 +88,82 @@ function syncSettingsMenuVisibility(root: HTMLElement) {
   });
 }
 
+function fixAuditActivityLayout(root: HTMLElement) {
+  const table = root.querySelector<HTMLElement>(".audit-standard-table");
+  if (!table) return;
+
+  const columns = "3.25rem 10.5rem 8.5rem 7.75rem minmax(0, 1fr) 7rem";
+
+  setImportantStyle(table, {
+    width: "100%",
+    maxWidth: "100%",
+    overflowX: "hidden",
+    overflowY: "auto",
+  });
+
+  table.querySelectorAll<HTMLElement>(".audit-standard-row").forEach((row) => {
+    setImportantStyle(row, {
+      display: "grid",
+      gridTemplateColumns: columns,
+      width: "100%",
+      minWidth: "0",
+      alignItems: "stretch",
+      minHeight: row.classList.contains("head") ? "3.15rem" : "3.75rem",
+    });
+
+    Array.from(row.children).forEach((child, index) => {
+      if (!(child instanceof HTMLElement)) return;
+      const isActivity = index === 4;
+      setImportantStyle(child, {
+        gridColumn: String(index + 1),
+        gridRow: "1",
+        minWidth: "0",
+        maxWidth: "100%",
+        width: "100%",
+        display: isActivity ? "block" : "flex",
+        alignItems: isActivity ? "flex-start" : "center",
+        justifyContent: isActivity ? "flex-start" : "center",
+        textAlign: isActivity ? "left" : "center",
+        overflow: isActivity ? "visible" : "hidden",
+        padding: "0.65rem 0.65rem",
+        boxSizing: "border-box",
+      });
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>(".audit-action-cell").forEach((cell) => {
+    setImportantStyle(cell, {
+      display: "block",
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: "0",
+      whiteSpace: "normal",
+      overflow: "visible",
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>(".audit-action-cell strong, .audit-action-cell small").forEach((node) => {
+    setImportantStyle(node, {
+      display: "block",
+      width: "100%",
+      maxWidth: "100%",
+      whiteSpace: "normal",
+      overflow: "visible",
+      textOverflow: "clip",
+      overflowWrap: "break-word",
+      wordBreak: "normal",
+      lineHeight: "1.25",
+    });
+  });
+
+  root.querySelectorAll<HTMLElement>(".audit-action-cell small").forEach((node) => {
+    setImportantStyle(node, {
+      maxHeight: "none",
+      marginTop: "0.2rem",
+    });
+  });
+}
+
 function applyLegacySettingsUiFixes() {
   if (typeof document === "undefined") return;
 
@@ -353,6 +429,8 @@ function applyLegacySettingsUiFixes() {
       minHeight: "3.05rem",
     });
   });
+
+  fixAuditActivityLayout(root);
 
   root.querySelectorAll<HTMLElement>(".user-row.head").forEach((row) => {
     setImportantStyle(row, {
