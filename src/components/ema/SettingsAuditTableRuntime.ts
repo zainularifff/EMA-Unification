@@ -9,12 +9,13 @@ function applyAuditTableLayout() {
   const table = document.querySelector<HTMLElement>(".settings-with-notifications .audit-standard-table");
   if (!table) return;
 
-  const columns = "3.25rem 10.75rem 7.5rem 8.25rem minmax(0, 1fr) 7rem";
+  const columns = "3rem 10.5rem 8rem 6.25rem minmax(0, 1fr) 6.25rem";
 
   setCss(table, {
     display: "block",
     width: "100%",
     maxWidth: "100%",
+    minWidth: "0",
     overflowX: "hidden",
     overflowY: "auto",
   });
@@ -28,6 +29,7 @@ function applyAuditTableLayout() {
       maxWidth: "100%",
       alignItems: "stretch",
       minHeight: row.classList.contains("head") ? "3.15rem" : "3.75rem",
+      overflow: "visible",
     });
 
     Array.from(row.children).forEach((child, index) => {
@@ -43,7 +45,7 @@ function applyAuditTableLayout() {
         alignItems: isActivity ? "flex-start" : "center",
         justifyContent: isActivity ? "flex-start" : "center",
         textAlign: isActivity ? "left" : "center",
-        padding: "0.65rem 0.7rem",
+        padding: "0.65rem 0.6rem",
         overflow: isActivity ? "visible" : "hidden",
         whiteSpace: isActivity ? "normal" : "nowrap",
         textOverflow: isActivity ? "clip" : "ellipsis",
@@ -71,8 +73,8 @@ function applyAuditTableLayout() {
       whiteSpace: "normal",
       overflow: "visible",
       textOverflow: "clip",
-      overflowWrap: "anywhere",
-      wordBreak: "break-word",
+      overflowWrap: "break-word",
+      wordBreak: "normal",
       lineHeight: "1.25",
     });
   });
@@ -81,9 +83,9 @@ function applyAuditTableLayout() {
     setCss(node, { fontWeight: "950" });
   });
 
-  table.querySelectorAll<HTMLElement>(".audit-module-chip").forEach((chip) => {
-    setCss(chip, {
-      maxWidth: "7rem",
+  table.querySelectorAll<HTMLElement>(".audit-module-chip, .audit-user-chip, .audit-time-cell").forEach((node) => {
+    setCss(node, {
+      maxWidth: "100%",
       overflow: "hidden",
       textOverflow: "ellipsis",
       whiteSpace: "nowrap",
@@ -93,11 +95,16 @@ function applyAuditTableLayout() {
 
 if (typeof document !== "undefined") {
   const run = () => window.requestAnimationFrame(applyAuditTableLayout);
-  run();
-  window.setTimeout(run, 80);
-  window.setTimeout(run, 220);
-  window.setInterval(applyAuditTableLayout, 80);
-  new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+  const runAfterWrapper = () => {
+    run();
+    window.setTimeout(run, 20);
+    window.setTimeout(run, 80);
+  };
+
+  runAfterWrapper();
+  window.setInterval(applyAuditTableLayout, 30);
+  window.addEventListener("resize", runAfterWrapper);
+  new MutationObserver(runAfterWrapper).observe(document.documentElement, { childList: true, subtree: true, attributes: true });
 }
 
 export {};
