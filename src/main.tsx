@@ -33,6 +33,7 @@ import "./styles/settings-user-modal-layout.css";
 import "./styles/settings-user-table-clean.css";
 import "./styles/settings-module-control.css";
 import "./styles/settings-access-control.css";
+import "./components/ema/SettingsAuditTableRuntime";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
