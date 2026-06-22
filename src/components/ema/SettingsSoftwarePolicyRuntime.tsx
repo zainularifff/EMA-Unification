@@ -18,6 +18,46 @@ function setImportant(element: HTMLElement | null | undefined, styles: Record<st
   Object.entries(styles).forEach(([key, value]) => element.style.setProperty(key, value, "important"));
 }
 
+function isManagementView() {
+  if (typeof document === "undefined") return false;
+  const view = document.body.dataset.settingsView || document.documentElement.dataset.settingsView || "settings";
+  return view === "management";
+}
+
+function alignManagementKpiCards() {
+  if (typeof document === "undefined" || !isManagementView()) return;
+
+  const hero = document.querySelector<HTMLElement>(".settings-with-notifications .management-control-wrapper .settings-hero");
+  const score = document.querySelector<HTMLElement>(".settings-with-notifications .management-control-wrapper .settings-score");
+  if (!hero || !score) return;
+
+  setImportant(hero, {
+    display: "grid",
+    gridTemplateColumns: "minmax(18rem, 22rem) minmax(0, 1fr)",
+    alignItems: "stretch",
+    gap: "0.75rem",
+  });
+
+  setImportant(score, {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 18rem))",
+    justifyContent: "end",
+    alignItems: "stretch",
+    alignContent: "center",
+    gap: "0.65rem",
+    minWidth: "0",
+    width: "100%",
+  });
+
+  score.querySelectorAll<HTMLElement>(".score-box").forEach((box) => {
+    setImportant(box, {
+      width: "100%",
+      minWidth: "0",
+      minHeight: "4.35rem",
+    });
+  });
+}
+
 function ensureManagementSoftwareButton() {
   if (typeof document === "undefined") return;
   const view = document.body.dataset.settingsView || document.documentElement.dataset.settingsView || "settings";
@@ -97,6 +137,7 @@ function applySoftwarePolicyRuntime() {
   if (typeof document === "undefined") return;
   ensureManagementSoftwareButton();
   markSoftwareButtonActive();
+  alignManagementKpiCards();
 
   if (isSoftwarePolicyView()) {
     mountSoftwarePolicy();
@@ -111,7 +152,7 @@ if (typeof document !== "undefined") {
   window.addEventListener("hashchange", run);
   window.addEventListener("resize", run);
   new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-  window.setInterval(applySoftwarePolicyRuntime, 300);
+  window.setInterval(applySoftwarePolicyRuntime, 120);
 }
 
 export {};
