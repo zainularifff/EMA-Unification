@@ -36,6 +36,7 @@ import "./styles/settings-access-control.css";
 import "./styles/settings-incident-config.css";
 import "./styles/settings-device-pricing.css";
 import "./styles/settings-pc-aging.css";
+import "./styles/settings-pc-aging-overview-row.css";
 import "./components/ema/SettingsAuditTableRuntime";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
