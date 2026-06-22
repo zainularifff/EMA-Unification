@@ -15,31 +15,34 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .content-body {
+  min-height: 0 !important;
   padding: 0.65rem !important;
   overflow: auto !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-planning-module {
-  height: 100% !important;
   min-height: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
+  display: grid !important;
+  align-content: start !important;
   gap: 0.65rem !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-command-card {
-  flex: 0 0 auto !important;
   min-height: 0 !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: 0.75rem !important;
-  padding: 0.8rem 0.9rem !important;
+  padding: 0.75rem 0.9rem !important;
+  border: 1px solid #d7e2ef !important;
+  border-radius: 1rem !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04) !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-command-card h3,
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-card-head h4 {
-  margin: 0.18rem 0 0 !important;
+  margin: 0.15rem 0 0 !important;
   color: #0f172a !important;
   font-size: 0.95rem !important;
   font-weight: 950 !important;
@@ -48,7 +51,7 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-command-card p,
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-card-head p {
-  max-width: 68rem !important;
+  max-width: 70rem !important;
   margin: 0.2rem 0 0 !important;
   color: #475569 !important;
   font-size: 0.78rem !important;
@@ -56,13 +59,19 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
   line-height: 1.35 !important;
 }
 
+html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-command-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.5rem !important;
+}
+
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-workbench {
-  flex: 1 1 auto !important;
   min-height: 0 !important;
   display: grid !important;
   grid-template-columns: minmax(24rem, 0.9fr) minmax(32rem, 1.1fr) !important;
   gap: 0.75rem !important;
-  align-items: stretch !important;
+  align-items: start !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-form-card,
@@ -81,35 +90,40 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-card-head {
   flex: 0 0 auto !important;
   display: grid !important;
-  gap: 0.55rem !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+  gap: 0.65rem !important;
   padding: 0.8rem 0.85rem !important;
   border-bottom: 1px solid #e4edf7 !important;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-head {
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem) !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: start !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-filters {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
+  display: inline-grid !important;
+  grid-template-columns: 10rem 10rem !important;
   gap: 0.45rem !important;
   align-items: center !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-filters .soft-btn {
-  grid-column: 1 / -1 !important;
+  grid-column: auto !important;
   justify-self: end !important;
-  min-height: 2.1rem !important;
+  min-height: 2.15rem !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-form-grid {
-  flex: 1 1 auto !important;
+  flex: 0 0 auto !important;
   min-height: 0 !important;
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  align-content: start !important;
+  align-items: start !important;
+  grid-auto-rows: min-content !important;
   gap: 0.7rem !important;
   padding: 0.85rem !important;
 }
@@ -119,6 +133,8 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .form-field {
+  display: grid !important;
+  align-content: start !important;
   gap: 0.32rem !important;
   color: #334155 !important;
   font-size: 0.72rem !important;
@@ -128,14 +144,25 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .setting-input,
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .setting-select-trigger {
+  width: 100% !important;
+  height: 2.45rem !important;
   min-height: 2.45rem !important;
+  max-height: 2.45rem !important;
   border-radius: 0.82rem !important;
   font-size: 0.8rem !important;
+  box-sizing: border-box !important;
+}
+
+html body .settings-with-notifications .settings-module-root[data-section="resources"] input[type="date"].setting-input {
+  line-height: 2.45rem !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-textarea {
-  min-height: 4.7rem !important;
-  max-height: 7rem !important;
+  height: 5.2rem !important;
+  min-height: 5.2rem !important;
+  max-height: 6.5rem !important;
   resize: vertical !important;
 }
 
@@ -143,6 +170,7 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
   flex: 0 0 auto !important;
   display: flex !important;
   justify-content: flex-end !important;
+  align-items: center !important;
   gap: 0.5rem !important;
   padding: 0 0.85rem 0.85rem !important;
 }
@@ -177,8 +205,9 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-wrap {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
+  flex: 0 0 auto !important;
+  min-height: 16rem !important;
+  max-height: 24rem !important;
   overflow: auto !important;
   margin: 0.75rem 0.85rem 0 !important;
   border: 1px solid #dbe7f5 !important;
@@ -188,7 +217,7 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table {
   width: 100% !important;
-  min-width: 0 !important;
+  min-width: 44rem !important;
   table-layout: fixed !important;
   border-collapse: separate !important;
   border-spacing: 0 !important;
@@ -273,6 +302,7 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 }
 
 html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-row-actions {
+  display: inline-flex !important;
   flex-wrap: nowrap !important;
   justify-content: flex-start !important;
   gap: 0.35rem !important;
@@ -291,10 +321,7 @@ html body .settings-with-notifications .settings-module-root[data-section="resou
 }
 
 @media (max-width: 1280px) {
-  html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-workbench {
-    grid-template-columns: 1fr !important;
-  }
-
+  html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-workbench,
   html body .settings-with-notifications .settings-module-root[data-section="resources"] .resource-table-head {
     grid-template-columns: 1fr !important;
   }
