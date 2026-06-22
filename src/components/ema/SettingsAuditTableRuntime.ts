@@ -1,3 +1,5 @@
+import "../../styles/settings-device-pricing.css";
+
 function setCss(element: Element | null | undefined, styles: Record<string, string>) {
   if (!(element instanceof HTMLElement)) return;
   Object.entries(styles).forEach(([name, value]) => element.style.setProperty(name, value, "important"));
