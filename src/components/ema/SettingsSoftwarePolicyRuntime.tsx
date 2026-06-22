@@ -95,6 +95,20 @@ function markSoftwareButtonActive() {
   });
 }
 
+function getStandardSettingsContent() {
+  return document.querySelector<HTMLElement>(".settings-with-notifications .management-control-wrapper .settings-content");
+}
+
+function restoreStandardSettingsContent() {
+  const content = getStandardSettingsContent();
+  if (!content) return;
+
+  content.querySelectorAll<HTMLElement>(":scope > *").forEach((child) => {
+    if (child.classList.contains("software-policy-runtime-host")) return;
+    setImportant(child, { display: "" });
+  });
+}
+
 function unmountSoftwarePolicy() {
   if (softwarePolicyRoot) {
     softwarePolicyRoot.unmount();
@@ -102,20 +116,34 @@ function unmountSoftwarePolicy() {
   }
   if (softwarePolicyHost?.parentNode) softwarePolicyHost.parentNode.removeChild(softwarePolicyHost);
   softwarePolicyHost = null;
+  restoreStandardSettingsContent();
 
   document.querySelectorAll<HTMLElement>(".settings-view-host > *").forEach((child) => {
-    if (child.classList.contains("software-policy-runtime-host")) return;
     setImportant(child, { display: "" });
   });
 }
 
 function mountSoftwarePolicy() {
-  const viewHost = document.querySelector<HTMLElement>(".settings-view-host");
-  if (!viewHost) return;
+  const content = getStandardSettingsContent();
+  if (!content) return;
 
   document.querySelectorAll<HTMLElement>(".settings-view-host > *").forEach((child) => {
+    setImportant(child, { display: "" });
+  });
+
+  content.querySelectorAll<HTMLElement>(":scope > *").forEach((child) => {
     if (child.classList.contains("software-policy-runtime-host")) return;
     setImportant(child, { display: "none" });
+  });
+
+  setImportant(content, {
+    minWidth: "0",
+    minHeight: "0",
+    height: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "0.75rem",
+    overflow: "hidden",
   });
 
   if (!softwarePolicyHost) {
@@ -126,10 +154,14 @@ function mountSoftwarePolicy() {
       height: "100%",
       minHeight: "0",
       overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
     });
-    viewHost.appendChild(softwarePolicyHost);
+    content.appendChild(softwarePolicyHost);
     softwarePolicyRoot = createRoot(softwarePolicyHost);
     softwarePolicyRoot.render(<SoftwarePolicyManagement />);
+  } else if (softwarePolicyHost.parentElement !== content) {
+    content.appendChild(softwarePolicyHost);
   }
 }
 
