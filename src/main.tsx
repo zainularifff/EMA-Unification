@@ -40,6 +40,7 @@ import "./styles/settings-pc-aging-overview-row.css";
 import "./styles/settings-management-policy.css";
 import "./styles/settings-notification-channels.css";
 import "./styles/settings-software-policy.css";
+import "./styles/settings-software-policy-standard.css";
 import "./components/ema/SettingsAuditTableRuntime";
 import "./components/ema/SettingsSoftwarePolicyRuntime";
 import App from "./App";
