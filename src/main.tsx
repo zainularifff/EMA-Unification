@@ -38,6 +38,7 @@ import "./styles/settings-device-pricing.css";
 import "./styles/settings-pc-aging.css";
 import "./styles/settings-pc-aging-overview-row.css";
 import "./styles/settings-management-policy.css";
+import "./styles/settings-notification-channels.css";
 import "./components/ema/SettingsAuditTableRuntime";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
