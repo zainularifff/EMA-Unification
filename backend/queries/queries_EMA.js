@@ -1,5 +1,8 @@
 // backend/queries/queries_EMA.js
 
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 const sql = require("mssql");
 
 function readRequiredEnv(...names) {
@@ -15,7 +18,12 @@ const dbConfig = {
   user: process.env.DB_USER || process.env.SQL_USER,
   password: process.env.DB_PASSWORD || process.env.SQL_PASSWORD,
   server: readRequiredEnv("DB_SERVER", "SQL_SERVER"),
-  database: process.env.DB_DATABASE || process.env.SQL_DATABASE || "EMA",
+  database:
+    process.env.EMA_DB_DATABASE ||
+    process.env.DB_NAME ||
+    process.env.DB_DATABASE ||
+    process.env.SQL_DATABASE ||
+    "TCO2",
   port: Number(process.env.DB_PORT || process.env.SQL_PORT || 1433),
   options: {
     encrypt: String(process.env.DB_ENCRYPT || "false") === "true",
