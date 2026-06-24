@@ -1,19 +1,20 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const jwt = require('jsonwebtoken');
 const sql = require('mssql');
 const registerNotificationSettingsRoutes = require('./notificationSettingsRoutes');
 
 const dbConfig = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_NAME,
+  user: process.env.DB_USER || process.env.SQL_USER,
+  password: process.env.DB_PASSWORD || process.env.SQL_PASSWORD,
+  server: process.env.DB_SERVER || process.env.SQL_SERVER,
+  database: process.env.DB_NAME || process.env.DB_DATABASE || process.env.SQL_DATABASE || 'TCO2',
   connectionTimeout: 30000,
   requestTimeout: 60000,
   options: {
-    encrypt: false,
-    trustServerCertificate: true
+    encrypt: String(process.env.DB_ENCRYPT || 'false') === 'true',
+    trustServerCertificate: String(process.env.DB_TRUST_CERT || 'true') === 'true'
   }
 };
 
