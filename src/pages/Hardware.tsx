@@ -100,6 +100,10 @@ type ApiEnvelope<T> = {
   errorMessage?: string;
   data: T;
   totalRecords?: number;
+  totalDevices?: number;
+  category?: string;
+  label?: string;
+  code?: number;
   summary?: {
     total?: number;
     SuccessCount?: number;
@@ -179,6 +183,14 @@ type StatisticApiState = {
   description: string;
   rows: HardwareApiRow[];
   columns: string[];
+  totalDevices?: number;
+};
+
+type StatisticDetailState = {
+  title: string;
+  value: string;
+  rows: HardwareApiRow[];
+  columns: string[];
 };
 
 type HardwareScanMode = "all" | "folder" | "device";
@@ -245,7 +257,13 @@ type ApiAsset = {
   PlatformType?: string;
   Model?: string;
   ConnectionTime?: string;
-  ConnectionStatus?: string;
+  ConnectionStatus?: string | number | boolean;
+  RawConnectionStatus?: string | number | boolean;
+  IsOnline?: string | number | boolean;
+  isOnline?: string | number | boolean;
+  MDM_ConnectionStatus?: string | number | boolean;
+  MDMConnectionStatus?: string | number | boolean;
+  MDM_IsOnline?: string | number | boolean;
   IP?: string;
   Latitude?: string;
   Longitude?: string;
@@ -401,9 +419,16 @@ type DepartmentPath = {
 
 const PAGE_SIZE = 10;
 function resolveApiBaseUrl() {
-  const envUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+  const envUrl = (
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+    (import.meta.env.VITE_API_URL as string | undefined) ||
+    ""
+  ).trim();
+
   if (envUrl) return envUrl.replace(/\/$/, "");
 
+  // Match the Software page behavior: when no API base URL is configured,
+  // keep requests relative so the app can use the existing Vite/proxy setup.
   return "";
 }
 
@@ -498,7 +523,7 @@ function generateStatisticTree(): StatisticNode[] {
       ],
     },
     {
-      id: "ema-management",
+      id: "hardware-management",
       name: "Hardware Management",
       type: "category",
       icon: "settings",
@@ -509,7 +534,7 @@ function generateStatisticTree(): StatisticNode[] {
       ],
     },
     {
-      id: "ema-statistics",
+      id: "hardware-statistics",
       name: "Hardware Statistics",
       type: "category",
       icon: "cpu",
@@ -541,35 +566,54 @@ function normalizeHardwareStatRow(row: unknown): HardwareApiRow {
   }
 
   const record = asRecord(row) || {};
+  const normalized: HardwareApiRow = { ...record };
   const emptyKeyValue = record[""];
 
+  // Restore the original Connection Statistics array handling. Some legacy
+  // procedures return the full statistic row under an unnamed array column.
+  // Expanding it back into column1, column2, etc. keeps the previous
+  // Connection Statistics, Connection List and Client Version behaviour.
   if (Array.isArray(emptyKeyValue)) {
-    return emptyKeyValue.reduce<HardwareApiRow>((normalized, value, index) => {
-      normalized[`column${index + 1}`] = value;
-      return normalized;
+    return emptyKeyValue.reduce<HardwareApiRow>((expanded, value, index) => {
+      expanded[`column${index + 1}`] = value;
+      return expanded;
     }, { ...record, __rawArray: emptyKeyValue } as HardwareApiRow);
   }
 
-  if (emptyKeyValue !== undefined && emptyKeyValue !== null && String(emptyKeyValue).trim() !== "") {
-    const normalized: HardwareApiRow = { ...record };
-    const nonEmptyKeys = Object.keys(record).filter((key) => key !== "" && record[key] !== undefined && record[key] !== null && String(record[key]).trim() !== "");
-    const numericValue = Number(String(emptyKeyValue).replace(/,/g, ""));
+  const explicitCount = findHardwareRecordValue(record, ["count", "CCount", "Count", "Cnt", "DeviceCount", "TotalCount"]);
 
-    // Some statistic records return the label in a named column such as TCAVersion/OS
-    // and the count under an empty column name. Normalize that empty field as
-    // the count so all statistic tables can read it consistently.
-    if (Number.isFinite(numericValue)) {
-      normalized.Count = emptyKeyValue;
-      normalized.Cnt = emptyKeyValue;
-      normalized.column2 = emptyKeyValue;
-    } else if (nonEmptyKeys.length === 0) {
-      normalized.column1 = emptyKeyValue;
+  // spGetHWStat2 returns the hardware value under an unnamed SQL column and
+  // the number of matching devices under CCount. Keep the unnamed value as
+  // the item/rawValue, never as the count.
+  if (emptyKeyValue !== undefined && emptyKeyValue !== null && String(emptyKeyValue).trim() !== "") {
+    if (explicitCount !== undefined) {
+      normalized.item = normalized.item ?? emptyKeyValue;
+      normalized.rawValue = normalized.rawValue ?? emptyKeyValue;
+      normalized.column1 = normalized.column1 ?? emptyKeyValue;
+      normalized.count = normalized.count ?? explicitCount;
+      return normalized;
     }
 
-    return normalized;
+    const nonEmptyKeys = Object.keys(record).filter(
+      (key) => key !== "" && record[key] !== undefined && record[key] !== null && String(record[key]).trim() !== "",
+    );
+    const numericValue = Number(String(emptyKeyValue).replace(/,/g, ""));
+
+    // Preserve support for older procedures where a named column is the label
+    // and the unnamed numeric column is the count.
+    if (Number.isFinite(numericValue) && nonEmptyKeys.length > 0) {
+      normalized.Count = normalized.Count ?? emptyKeyValue;
+      normalized.Cnt = normalized.Cnt ?? emptyKeyValue;
+      normalized.column2 = normalized.column2 ?? emptyKeyValue;
+    } else {
+      normalized.item = normalized.item ?? emptyKeyValue;
+      normalized.rawValue = normalized.rawValue ?? emptyKeyValue;
+      normalized.column1 = normalized.column1 ?? emptyKeyValue;
+    }
   }
 
-  return record as HardwareApiRow;
+  if (normalized.count === undefined && explicitCount !== undefined) normalized.count = explicitCount;
+  return normalized;
 }
 
 function normalizeHardwareRows(value: unknown): HardwareApiRow[] {
@@ -591,6 +635,11 @@ function normalizeHardwareRows(value: unknown): HardwareApiRow[] {
 
 function getColumnsFromHardwareRows(rows: HardwareApiRow[]) {
   const preferred = [
+    "displayValue",
+    "item",
+    "rawValue",
+    "count",
+    "percentage",
     "Items",
     "Item",
     "Name",
@@ -694,6 +743,9 @@ function readHardwareNumber(row: HardwareApiRow, keys: string[], fallback = 0) {
 
 function getStatisticItemLabel(row: HardwareApiRow) {
   return readHardwareText(row, [
+    "displayValue",
+    "item",
+    "rawValue",
     "Items",
     "Item",
     "Name",
@@ -732,17 +784,53 @@ function getStatisticItemLabel(row: HardwareApiRow) {
 }
 
 function getStatisticCount(row: HardwareApiRow) {
-  return readHardwareNumber(row, ["Count", "Cnt", "CCount", "TotalCount", "DeviceCount", "No", "", "column2", "column3", "column4", "Total Device", "TotalDevice"], 0);
+  return readHardwareNumber(row, ["count", "CCount", "Count", "Cnt", "TotalCount", "DeviceCount", "No", "column2", "column3", "column4", "Total Device", "TotalDevice"], 0);
 }
 
 function getStatisticTotal(row: HardwareApiRow, fallback = 0) {
-  return readHardwareNumber(row, ["Total", "GrandTotal", "TotalDevices", "TotalDeviceCount"], fallback);
+  return readHardwareNumber(row, ["totalDevices", "Total", "GrandTotal", "TotalDevices", "TotalDeviceCount"], fallback);
 }
 
 function getStatisticPercentage(row: HardwareApiRow, count: number, total: number) {
-  const reportedPercentage = readHardwareNumber(row, ["Percentage", "Percent", "Rate", "Ratio"], NaN);
+  const reportedPercentage = readHardwareNumber(row, ["percentage", "Percentage", "Percent", "Rate", "Ratio"], NaN);
   if (Number.isFinite(reportedPercentage)) return reportedPercentage;
   return total > 0 ? (count / total) * 100 : 0;
+}
+
+function getStatisticRawValue(row: HardwareApiRow) {
+  const value = findHardwareRecordValue(row, [
+    "rawValue",
+    "RawValue",
+    "category_inventory",
+    "Category_Inventory",
+    "Value",
+    "item",
+    "Item",
+    "Items",
+    "column1",
+  ]);
+  return value === undefined || value === null ? "" : String(value).trim();
+}
+
+function formatStatisticDisplayItem(row: HardwareApiRow, selectedStatistic: string) {
+  const explicitDisplay = findHardwareRecordValue(row, ["displayValue"]);
+  if (explicitDisplay !== undefined && explicitDisplay !== null && String(explicitDisplay).trim() !== "") {
+    return String(explicitDisplay).trim();
+  }
+
+  const rawValue = getStatisticRawValue(row);
+  if (selectedStatistic === "stat-memory") {
+    const memoryMb = Number(rawValue.replace(/,/g, ""));
+    if (Number.isFinite(memoryMb) && memoryMb > 0) {
+      const memoryGb = memoryMb / 1024;
+      const roundedGb = Math.abs(memoryGb - Math.round(memoryGb)) < 0.05
+        ? String(Math.round(memoryGb))
+        : memoryGb.toFixed(1);
+      return `${roundedGb} GB`;
+    }
+  }
+
+  return getStatisticItemLabel(row);
 }
 
 function getRawHardwareArray(row: HardwareApiRow): unknown[] {
@@ -1003,11 +1091,11 @@ async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<A
   try {
     payload = rawBody ? JSON.parse(rawBody) : ({ success: response.ok, data: undefined as T } as ApiEnvelope<T>);
   } catch {
-    throw new Error("Unable to read the latest result.");
+    throw new Error("Unable to read server response.");
   }
 
   if (!response.ok || payload.success === false) {
-    throw new Error(payload.errorMessage || payload.message || `Action could not be completed. Status: ${response.status}`);
+    throw new Error(payload.errorMessage || payload.message || `Request failed: ${response.status}`);
   }
 
   return payload;
@@ -1035,7 +1123,7 @@ async function scanHardwareInventory(payload: HardwareScanPayload): Promise<ApiE
     description: payload.description ?? `Hardware inventory scan - ${payload.scanMode}`,
   };
 
-  return apiRequest<HardwareScanResult>("/api/ema-inventory/scan", {
+  return apiRequest<HardwareScanResult>("/api/hardware-inventory/scan", {
     method: "POST",
     body: JSON.stringify(requestPayload),
   });
@@ -1169,15 +1257,64 @@ function getGeoDateParts(value?: string) {
   return { dayDate: fallback, time: "-" };
 }
 
-function mapApiStatus(status?: string, asset?: ApiAsset): StatusType {
-  if (asset && deriveApiLockState(asset) === "locked") return "Locked";
+function isOnlineFlag(value: unknown) {
+  if (value === true) return true;
+  if (typeof value === "number") return value === 1;
 
-  const value = String(status || "").toLowerCase();
-  if (value.includes("unlock")) return "Online";
-  if (value.includes("lock")) return "Locked";
-  if (value.includes("online") || value === "1" || value === "connected") return "Online";
-  if (value.includes("offline") || value === "0" || value === "disconnected") return "Offline";
-  if (value.includes("stale") || value.includes("sync")) return "Stale Sync";
+  const text = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "yes", "y", "online", "connected"].includes(text);
+}
+
+function normalizeStatusText(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function mapApiStatus(status?: unknown, asset?: ApiAsset | Record<string, unknown> | null): StatusType {
+  const assetRecord = asRecord(asset);
+
+  if (assetRecord && deriveApiLockState(assetRecord as ApiAsset) === "locked") return "Locked";
+
+  const onlineFlags = [
+    assetRecord?.IsOnline,
+    assetRecord?.isOnline,
+    assetRecord?.MDM_IsOnline,
+    assetRecord?.mdmIsOnline,
+    assetRecord?.Online,
+    assetRecord?.online,
+  ];
+
+  if (onlineFlags.some(isOnlineFlag)) return "Online";
+
+  const candidates = [
+    status,
+    assetRecord?.ConnectionStatus,
+    assetRecord?.RawConnectionStatus,
+    assetRecord?.rawConnectionStatus,
+    assetRecord?.MDM_ConnectionStatus,
+    assetRecord?.MDMConnectionStatus,
+    assetRecord?.mdmConnectionStatus,
+    assetRecord?.MDMStatus,
+    assetRecord?.Status,
+    assetRecord?.status,
+  ];
+
+  let sawStale = false;
+  let sawOffline = false;
+
+  for (const candidate of candidates) {
+    const value = normalizeStatusText(candidate);
+    if (!value) continue;
+
+    if (value.includes("unlock")) return "Online";
+    if (value.includes("lost mode") || value.includes("locked") || value === "lock") return "Locked";
+    if (value.includes("online") || value === "1" || value === "connected" || value === "true" || value === "yes") return "Online";
+
+    if (value.includes("stale") || value.includes("sync")) sawStale = true;
+    if (value.includes("offline") || value === "0" || value === "disconnected" || value === "false" || value === "no") sawOffline = true;
+  }
+
+  if (sawStale) return "Stale Sync";
+  if (sawOffline) return "Offline";
   return "Offline";
 }
 
@@ -1242,8 +1379,9 @@ function enrichDeviceWithDetails(device: Device, payload: unknown): Device {
   if (!root) return { ...device, rawApi: payload };
 
   const mdm = asRecord(root.MDM);
-  const hwMainInfo =
-    firstRecord(root.HWMainInfo) || firstRecord(root.hwMainInfo) || firstRecord(root.MainInfo) || firstRecord(mdm?.HWMainInfo);
+  const rootHwMainInfo = firstRecord(root.HWMainInfo) || firstRecord(root.hwMainInfo) || firstRecord(root.MainInfo) || firstRecord(root.HWMain);
+  const mdmHwMainInfo = firstRecord(mdm?.HWMainInfo) || firstRecord(mdm?.hwMainInfo) || firstRecord(mdm?.HWMain) || firstRecord(mdm?.data);
+  const hwMainInfo = rootHwMainInfo || mdmHwMainInfo;
 
   const processor = pickValue(hwMainInfo, ["Processor", "CPU", "CPUName", "ProcessorName", "ProcessorType"]);
   const memory = pickValue(hwMainInfo, ["Memory", "RAM", "PhysicalMemory", "TotalPhysicalMemory", "TotalMemory"]);
@@ -1253,9 +1391,32 @@ function enrichDeviceWithDetails(device: Device, payload: unknown): Device {
   const computerName = pickValue(hwMainInfo, ["ComputerName", "DeviceName", "HostName"]);
   const ip = pickValue(hwMainInfo, ["IP", "IPAddress", "DeviceIPAddress", "DeviceLocalIPAddress"]);
   const latitude = pickValue(hwMainInfo, ["Latitude", "GPSLatitude", "Lat"]);
-  const longitude = pickValue(hwMainInfo, ["Longitude", "GPSLongitude", "Long", "Lng"]);
+  const longitude = pickValue(hwMainInfo, ["Longitude", "GPSLongitude", "Long", "Lng", "Longitute"]);
   const accuracy = pickValue(hwMainInfo, ["Accuracy", "GPSAccuracy", "LocationAccuracy"]);
-  const lastUpdate = pickValue(hwMainInfo, ["LastUpdate", "LastUpdated", "UpdateTime", "LocationTime"]);
+  const lastUpdate = pickValue(hwMainInfo, ["LastUpdate", "LastUpdated", "UpdateTime", "LocationTime", "LocationtimeStamp"]);
+  const connectionTime =
+    pickValue(mdmHwMainInfo, ["ConnectionTime", "LastTimeStamp", "DeviceTimeStamp", "LastUpdate"]) ||
+    pickValue(rootHwMainInfo, ["ConnectionTime", "LastTimeStamp", "DeviceTimeStamp", "LastUpdate"]);
+
+  // Detail API can contain mapped MDM data even when the list row is EM.
+  // Prefer MDM status as a fallback, because TS_OBJECT_ROOT may still be 0 while TSMDM_ASSET is Online.
+  const mdmStatus =
+    pickValue(mdmHwMainInfo, ["ConnectionStatus", "RawConnectionStatus", "Status"]) ||
+    findFirstDeepValue(mdm, ["ConnectionStatus", "RawConnectionStatus", "Status"]);
+  const mdmIsOnline =
+    pickValue(mdmHwMainInfo, ["IsOnline", "isOnline", "Online"]) ||
+    findFirstDeepValue(mdm, ["IsOnline", "isOnline", "Online"]);
+  const rootStatus =
+    pickValue(rootHwMainInfo, ["ConnectionStatus", "RawConnectionStatus", "Status"]) ||
+    pickValue(root, ["ConnectionStatus", "RawConnectionStatus", "Status"]);
+  const detailStatus = mapApiStatus(mdmStatus || rootStatus || device.status, {
+    ...(asRecord(device.rawApi) || {}),
+    ...(rootHwMainInfo || {}),
+    ConnectionStatus: rootStatus || mdmStatus || device.status,
+    MDM_ConnectionStatus: mdmStatus,
+    MDM_IsOnline: mdmIsOnline,
+  });
+
   const storage = buildStorageLabel(root);
   const previous = splitPlatformModel(device.platformModel);
 
@@ -1269,9 +1430,11 @@ function enrichDeviceWithDetails(device: Device, payload: unknown): Device {
     storage: storage || device.storage,
     platformModel: `${os || previous.platform} / ${model || previous.model}`,
     ip: ip || device.ip,
+    status: device.status === "Locked" ? "Locked" : detailStatus,
     latitude: latitude || device.latitude,
     longitude: longitude || device.longitude,
     accuracy: accuracy || device.accuracy,
+    lastConnected: connectionTime ? formatApiDate(connectionTime) : device.lastConnected,
     lastUpdate: lastUpdate ? formatApiDate(lastUpdate) : device.lastUpdate,
     rawApi: payload,
   };
@@ -1638,10 +1801,10 @@ function HardwareDropdown({
   }, [disabled]);
 
   return (
-    <div ref={dropdownRef} className={`ema-custom-select ${isOpen ? "is-open" : ""} ${disabled ? "is-disabled" : ""}`}>
+    <div ref={dropdownRef} className={`hardware-custom-select ${isOpen ? "is-open" : ""} ${disabled ? "is-disabled" : ""}`}>
       <button
         type="button"
-        className="ema-custom-select-trigger"
+        className="hardware-custom-select-trigger"
         onClick={() => !disabled && setIsOpen((current) => !current)}
         disabled={disabled}
         aria-label={label}
@@ -1653,7 +1816,7 @@ function HardwareDropdown({
       </button>
 
       {isOpen && (
-        <div className="ema-custom-select-menu" role="listbox" aria-label={label}>
+        <div className="hardware-custom-select-menu" role="listbox" aria-label={label}>
           {options.map((option) => {
             const isSelected = option.value === value;
 
@@ -1661,7 +1824,7 @@ function HardwareDropdown({
               <button
                 key={option.value}
                 type="button"
-                className={`ema-custom-select-option ${isSelected ? "is-selected" : ""}`}
+                className={`hardware-custom-select-option ${isSelected ? "is-selected" : ""}`}
                 role="option"
                 aria-selected={isSelected}
                 onClick={() => {
@@ -1670,7 +1833,7 @@ function HardwareDropdown({
                 }}
               >
                 <span>{option.label}</span>
-                {isSelected && <span className="ema-custom-select-check">✓</span>}
+                {isSelected && <span className="hardware-custom-select-check">✓</span>}
               </button>
             );
           })}
@@ -1683,7 +1846,7 @@ function HardwareDropdown({
 
 function DetailItem({ label, value, mono = false }: { label: string; value?: string | number; mono?: boolean }) {
   return (
-    <div className="ema-detail-item">
+    <div className="hardware-detail-item">
       <span>{label}</span>
       <strong className={mono ? "is-mono" : ""}>{value || "-"}</strong>
     </div>
@@ -1712,15 +1875,15 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
   ];
 
   return (
-    <div className="ema-detail-drawer-overlay ema-detail-form-overlay">
-      <aside className="ema-detail-drawer ema-detail-form-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="ema-detail-drawer-header">
-          <div className="ema-detail-title-wrap">
-            <div className="ema-detail-device-icon">
+    <div className="hardware-detail-drawer-overlay hardware-detail-form-overlay">
+      <aside className="hardware-detail-drawer hardware-detail-form-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="hardware-detail-drawer-header">
+          <div className="hardware-detail-title-wrap">
+            <div className="hardware-detail-device-icon">
               <Monitor size={22} />
             </div>
             <div>
-              <div className="ema-detail-eyebrow">Device Details</div>
+              <div className="hardware-detail-eyebrow">Device Details</div>
               <h2>{device.name}</h2>
               <p>
                 {device.os} • {device.ip} • {workgroup}
@@ -1728,34 +1891,34 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
             </div>
           </div>
 
-          <div className="ema-detail-header-actions">
-            <span className={`ema-detail-status ${getStatusClass(device.status)}`}>{device.status}</span>
-            <button type="button" className="ema-detail-close" onClick={onClose} aria-label="Close device detail form" title="Close">
+          <div className="hardware-detail-header-actions">
+            <span className={`hardware-detail-status ${getStatusClass(device.status)}`}>{device.status}</span>
+            <button type="button" className="hardware-detail-close" onClick={onClose} aria-label="Close device detail form" title="Close">
               <X size={18} />
             </button>
           </div>
         </div>
 
-        <div className="ema-detail-summary-grid">
-          <div className="ema-detail-summary-card">
+        <div className="hardware-detail-summary-grid">
+          <div className="hardware-detail-summary-card">
             <span>Last Connected</span>
             <strong>{device.lastConnected}</strong>
           </div>
-          <div className="ema-detail-summary-card">
+          <div className="hardware-detail-summary-card">
             <span>Agent</span>
             <strong>{device.objectAgent || "-"}</strong>
           </div>
-          <div className="ema-detail-summary-card">
+          <div className="hardware-detail-summary-card">
             <span>Storage Usage</span>
             <strong>{storageUsage === null ? "-" : `${storageUsage}%`}</strong>
           </div>
-          <div className="ema-detail-summary-card">
+          <div className="hardware-detail-summary-card">
             <span>Status</span>
             <strong>{device.status}</strong>
           </div>
         </div>
 
-        <div className="ema-detail-tabs">
+        <div className="hardware-detail-tabs">
           {detailTabs.map((tab) => (
             <button key={tab.key} type="button" className={activeTab === tab.key ? "is-active" : ""} onClick={() => setActiveTab(tab.key)}>
               {tab.label}
@@ -1763,10 +1926,10 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
           ))}
         </div>
 
-        <div className="ema-detail-body">
+        <div className="hardware-detail-body">
           {activeTab === "overview" && (
-            <div className="ema-detail-section-grid">
-              <div className="ema-detail-card">
+            <div className="hardware-detail-section-grid">
+              <div className="hardware-detail-card">
                 <h3>Device Identity</h3>
                 <DetailItem label="Device Name" value={device.name} />
                 <DetailItem label="Device ID" value={device.deviceIdentifier || device.id} mono />
@@ -1775,7 +1938,7 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
                 <DetailItem label="Model" value={model} />
                 <DetailItem label="Status" value={device.status} />
               </div>
-              <div className="ema-detail-card">
+              <div className="hardware-detail-card">
                 <h3>Operational Context</h3>
                 <DetailItem label="User" value={device.owner} />
                 <DetailItem label="Department" value={device.department} />
@@ -1788,8 +1951,8 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
           )}
 
           {activeTab === "hardware" && (
-            <div className="ema-detail-section-grid">
-              <div className="ema-detail-card">
+            <div className="hardware-detail-section-grid">
+              <div className="hardware-detail-card">
                 <h3>Hardware Profile</h3>
                 <DetailItem label="Platform" value={platform} />
                 <DetailItem label="Model" value={model} />
@@ -1798,7 +1961,7 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
                 <DetailItem label="Storage" value={device.storage} />
                 <DetailItem label="Last Update" value={device.lastUpdate} />
               </div>
-              <div className="ema-detail-card">
+              <div className="hardware-detail-card">
                 <h3>Asset Reference</h3>
                 <DetailItem label="Asset ID" value={device.assetId || "-"} mono />
                 <DetailItem label="Device Identifier" value={device.deviceIdentifier || "-"} mono />
@@ -1810,15 +1973,15 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
           )}
 
           {activeTab === "network" && (
-            <div className="ema-detail-section-grid">
-              <div className="ema-detail-card">
+            <div className="hardware-detail-section-grid">
+              <div className="hardware-detail-card">
                 <h3>Operating System</h3>
                 <DetailItem label="OS" value={device.os} />
                 <DetailItem label="Platform" value={platform} />
                 <DetailItem label="Model" value={model} />
                 <DetailItem label="Connection Status" value={device.status} />
               </div>
-              <div className="ema-detail-card">
+              <div className="hardware-detail-card">
                 <h3>Network</h3>
                 <DetailItem label="IP Address" value={device.ip} mono />
                 <DetailItem label="Workgroup" value={workgroup} />
@@ -1828,13 +1991,13 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
           )}
 
           {activeTab === "user" && (
-            <div className="ema-detail-section-grid">
-              <div className="ema-detail-card">
+            <div className="hardware-detail-section-grid">
+              <div className="hardware-detail-card">
                 <h3>User Ownership</h3>
                 <DetailItem label="Username" value={device.owner} />
                 <DetailItem label="Department" value={device.department} />
               </div>
-              <div className="ema-detail-card">
+              <div className="hardware-detail-card">
                 <h3>Access Context</h3>
                 <DetailItem label="Lock State" value={device.status === "Locked" ? "Locked" : "-"} />
                 <DetailItem label="Remote Access" value="Managed by agent" />
@@ -1846,64 +2009,79 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
           )}
 
           {activeTab === "storage" && (
-            <div className="ema-detail-section-grid">
-              <div className="ema-detail-card ema-detail-card-wide">
+            <div className="hardware-detail-section-grid">
+              <div className="hardware-detail-card">
                 <h3>Storage Utilisation</h3>
-                <div className="ema-storage-hero">
+                <DetailItem label="Primary Storage" value={device.storage} />
+                <DetailItem label="Storage Usage" value={storageUsage === null ? "-" : `${storageUsage}%`} />
+                <DetailItem label="Platform" value={platform} />
+                <DetailItem label="Last Update" value={device.lastUpdate} />
+              </div>
+              <div className="hardware-detail-card">
+                <h3>Capacity Reference</h3>
+                <div className="hardware-storage-hero">
                   <div>
-                    <span>Primary Storage</span>
-                    <strong>{device.storage}</strong>
+                    <span>Used Capacity</span>
+                    <strong>{storageUsage === null ? "-" : `${storageUsage}%`}</strong>
                   </div>
-                  <div className="ema-storage-percent">{storageUsage === null ? "-" : `${storageUsage}%`}</div>
+                  <div className="hardware-storage-percent">{storageUsage === null ? "-" : `${storageUsage}%`}</div>
                 </div>
-                {storageUsage !== null && (
-                  <div className="ema-storage-bar">
-                    <div style={{ width: `${storageUsage}%` }} />
-                  </div>
-                )}
-                <div className="ema-storage-grid">
-                  <DetailItem label="Storage" value={device.storage} />
-                  <DetailItem label="Storage Usage" value={storageUsage === null ? "-" : `${storageUsage}%`} />
+                <div className="hardware-storage-bar">
+                  <div style={{ width: `${storageUsage === null ? 0 : storageUsage}%` }} />
                 </div>
+                <DetailItem label="Device Name" value={device.name} />
+                <DetailItem label="Asset ID" value={device.assetId || "-"} mono />
               </div>
             </div>
           )}
 
           {activeTab === "timeline" && (
-            <div className="ema-detail-timeline">
-              <div className="ema-timeline-item is-current">
-                <span />
-                <div>
-                  <strong>Last connected</strong>
-                  <p>{device.lastConnected}</p>
-                  <small>Device record</small>
-                </div>
+            <div className="hardware-detail-section-grid">
+              <div className="hardware-detail-card">
+                <h3>Lifecycle Timeline</h3>
+                <DetailItem label="Last Connected" value={device.lastConnected} />
+                <DetailItem label="Last Update" value={device.lastUpdate} />
+                <DetailItem label="Current Status" value={device.status} />
+                <DetailItem label="Device Record" value={device.deviceIdentifier || device.id} mono />
               </div>
-              <div className="ema-timeline-item">
-                <span />
-                <div>
-                  <strong>Last update</strong>
-                  <p>{device.lastUpdate}</p>
-                  <small>Device record</small>
-                </div>
-              </div>
-              <div className="ema-timeline-item">
-                <span />
-                <div>
-                  <strong>Current status</strong>
-                  <p>{device.status}</p>
-                  <small>Device record</small>
+              <div className="hardware-detail-card">
+                <h3>Activity Reference</h3>
+                <div className="hardware-detail-clean-timeline">
+                  <div className="hardware-timeline-item is-current">
+                    <span />
+                    <div>
+                      <strong>Last connected</strong>
+                      <p>{device.lastConnected}</p>
+                      <small>Device record</small>
+                    </div>
+                  </div>
+                  <div className="hardware-timeline-item">
+                    <span />
+                    <div>
+                      <strong>Last update</strong>
+                      <p>{device.lastUpdate}</p>
+                      <small>Device record</small>
+                    </div>
+                  </div>
+                  <div className="hardware-timeline-item">
+                    <span />
+                    <div>
+                      <strong>Current status</strong>
+                      <p>{device.status}</p>
+                      <small>Device record</small>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="ema-detail-form-footer">
-          <button type="button" className="ema-btn link" onClick={onClose}>
+        <div className="hardware-detail-form-footer">
+          <button type="button" className="hardware-btn link" onClick={onClose}>
             Close
           </button>
-          <button type="button" className="ema-btn primary" onClick={onClose}>
+          <button type="button" className="hardware-btn primary" onClick={onClose}>
             Done
           </button>
         </div>
@@ -2071,18 +2249,22 @@ export default function HardwareInventory() {
   const [lockActionLoading, setLockActionLoading] = useState(false);
   const [note, setNote] = useState("Device action ready.");
   const hardwareQuickPanelRef = useRef<HTMLDivElement | null>(null);
+  const hardwareRegistryToolbarRef = useRef<HTMLDivElement | null>(null);
 
   const statisticTree = useMemo(() => generateStatisticTree(), []);
   const [expandedStatisticGroups, setExpandedStatisticGroups] = useState<Record<string, boolean>>({
     "connection-statistics": false,
-    "ema-management": false,
-    "ema-statistics": false,
+    "hardware-management": false,
+    "hardware-statistics": false,
     reports: false,
   });
   const [selectedStatistic, setSelectedStatistic] = useState<string>("conn-summary");
   const [statisticLoading, setStatisticLoading] = useState(false);
   const [statisticError, setStatisticError] = useState("");
   const [statisticApiData, setStatisticApiData] = useState<StatisticApiState | null>(null);
+  const [statisticDetail, setStatisticDetail] = useState<StatisticDetailState | null>(null);
+  const [statisticDetailLoading, setStatisticDetailLoading] = useState(false);
+  const [statisticDetailError, setStatisticDetailError] = useState("");
   const [hardwareScanLoading, setHardwareScanLoading] = useState(false);
 
   const showToast = useCallback((type: ToastType, title: string, message: string) => {
@@ -2114,37 +2296,14 @@ export default function HardwareInventory() {
       const departmentsResponse = await apiRequest<ApiDepartment[]>("/api/departments");
       const departmentTree = mapDepartmentTree(departmentsResponse.data || []);
       const departmentPaths = collectDepartmentPaths(departmentTree);
-      const deviceChunks = new Map<number, Device[]>();
 
       setDepartmentOptions(departmentPaths);
       setTreeNodes(departmentTree);
-      setApiDevices([]);
-      setSelectedDeviceId("NO-DEVICE");
-      setShowDeviceDetails(false);
-      setDetailDeviceId("NO-DEVICE");
-      setActiveModal(null);
-      setNote("Loading device records...");
-
-      const publishDevices = () => {
-        const partialDevices = Array.from(deviceChunks.values())
-          .flat()
-          .map(applyPersistentLockState)
-          .sort((a, b) => a.name.localeCompare(b.name));
-
-        setApiDevices(partialDevices);
-        return partialDevices;
-      };
 
       const assetResults = await Promise.allSettled(
         departmentPaths.map(async (department) => {
-          const response = await apiRequest<ApiAsset[]>(`/api/assets/${department.relationID}`);
-          const mappedDevices = (response.data || []).map((asset) => mapApiAssetToDevice(asset, department));
-
-          deviceChunks.set(department.relationID, mappedDevices);
-          const partialDevices = publishDevices();
-          setNote(`Loading device records... ${partialDevices.length} loaded`);
-
-          return mappedDevices;
+          const response = await apiRequest<ApiAsset[]>(`/api/assets/${department.relationID}?refresh=1&_=${Date.now()}`);
+          return (response.data || []).map((asset) => mapApiAssetToDevice(asset, department));
         })
       );
 
@@ -2155,6 +2314,9 @@ export default function HardwareInventory() {
 
       setApiDevices(nextDevices);
       setSelectedDeviceId((current) => (nextDevices.some((device) => device.id === current) ? current : "NO-DEVICE"));
+      setShowDeviceDetails(false);
+      setDetailDeviceId("NO-DEVICE");
+      setActiveModal(null);
       setNote(`Loaded ${nextDevices.length} devices. Select a device row to view available actions.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load hardware inventory.";
@@ -2172,7 +2334,7 @@ export default function HardwareInventory() {
 
     try {
       setNote(`Loading live details for ${device.name}...`);
-      const response = await apiRequest<unknown>(`/api/asset/${device.objectAgent}/${device.assetId}`);
+      const response = await apiRequest<unknown>(`/api/asset/${device.objectAgent}/${device.assetId}?refresh=1&_=${Date.now()}`);
       const enrichedDevice = enrichDeviceWithDetails(device, response.data);
       setApiDevices((current) => current.map((item) => (item.id === device.id ? enrichedDevice : item)));
       setNote(`${device.name} live details loaded.`);
@@ -2271,10 +2433,12 @@ export default function HardwareInventory() {
 
     const handleOutsidePointerDown = (event: PointerEvent) => {
       const panel = hardwareQuickPanelRef.current;
+      const toolbar = hardwareRegistryToolbarRef.current;
       const target = event.target;
 
       if (!panel || !(target instanceof Node)) return;
       if (panel.contains(target)) return;
+      if (toolbar?.contains(target)) return;
 
       setSelectedDeviceId("NO-DEVICE");
       setNote("Advanced action panel closed.");
@@ -2510,8 +2674,8 @@ export default function HardwareInventory() {
   };
 
   const renderSortIndicator = (key: SortKey) => {
-    if (sortConfig.key !== key) return <span className="ema-sort-icon">↕</span>;
-    return <span className="ema-sort-icon is-active">{sortConfig.direction === "asc" ? "↑" : "↓"}</span>;
+    if (sortConfig.key !== key) return <span className="hardware-sort-icon">↕</span>;
+    return <span className="hardware-sort-icon is-active">{sortConfig.direction === "asc" ? "↑" : "↓"}</span>;
   };
 
   const getSelectedRelationID = useCallback(() => {
@@ -2535,40 +2699,44 @@ export default function HardwareInventory() {
 
     try {
       let rows: HardwareApiRow[] = [];
+      let totalDevices: number | undefined;
       let description = descriptionPrefix;
+      setStatisticDetail(null);
+      setStatisticDetailError("");
 
       if (selectedStatistic === "conn-summary") {
-        const response = await apiRequest<HardwareApiRow[]>(`/api/ema-statistics/${relationID}/connection-summary`);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/connection-summary`);
         rows = normalizeHardwareRows(response);
         description = "Connection period summary";
       } else if (selectedStatistic === "conn-list") {
-        const response = await apiRequest<HardwareApiRow[]>(`/api/ema-statistics/${relationID}/connection-list`);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/connection-list`);
         rows = normalizeHardwareRows(response);
         description = "Client connection list";
       } else if (selectedStatistic === "client-version") {
-        const response = await apiRequest<HardwareApiRow[]>(`/api/ema-statistics/${relationID}/client-version`);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/client-version`);
         rows = normalizeHardwareRows(response);
         description = "Client version distribution";
       } else if (selectedStatistic === "changed-items") {
-        const response = await apiRequest<HardwareApiRow[]>(`/api/ema-management/${relationID}/changed-items`);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-management/${relationID}/changed-items`);
         rows = normalizeHardwareRows(response);
         description = "Changed hardware item statistics";
       } else if (selectedStatistic === "duplicated-ip") {
-        const response = await apiRequest<HardwareApiRow[]>("/api/ema-management/duplicate-ips");
+        const response = await apiRequest<HardwareApiRow[]>("/api/hardware-management/duplicate-ips");
         rows = normalizeHardwareRows(response);
         description = "Duplicated IP list";
       } else if (selectedStatistic.startsWith("stat-")) {
         const categoryKey = STATISTIC_CATEGORY_KEY_MAP[selectedStatistic];
-        const response = await apiRequest<HardwareApiRow[]>(`/api/ema-statistics/${relationID}/category/${categoryKey}`);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-statistics/${relationID}/category/${categoryKey}`);
         rows = normalizeHardwareRows(response);
+        totalDevices = Number(response.totalDevices || 0) || undefined;
         description = `${title} distribution`;
       } else if (selectedStatistic === "report-inventory") {
-        const response = await apiRequest<HardwareApiRow[]>(`/api/ema-reports/${relationID}/client-list`);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-reports/${relationID}/client-list`);
         rows = normalizeHardwareRows(response);
         description = "Hardware inventory report list";
       } else if (selectedStatistic.startsWith("report-")) {
         const reportKey = REPORT_KEY_MAP[selectedStatistic];
-        const response = await apiRequest<HardwareApiRow[]>(`/api/ema-reports/${relationID}/${reportKey}`);
+        const response = await apiRequest<HardwareApiRow[]>(`/api/hardware-reports/${relationID}/${reportKey}`);
         rows = normalizeHardwareRows(response);
         description = `${title} report`;
       }
@@ -2578,6 +2746,7 @@ export default function HardwareInventory() {
         description,
         rows,
         columns: getColumnsFromHardwareRows(rows),
+        totalDevices,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load hardware statistic data.";
@@ -2588,6 +2757,39 @@ export default function HardwareInventory() {
       setStatisticLoading(false);
     }
   }, [getSelectedRelationID, selectedFolderLabel, selectedStatistic, showToast]);
+
+  const loadHardwareStatisticDetail = useCallback(async (row: HardwareApiRow) => {
+    if (!selectedStatistic.startsWith("stat-")) return;
+
+    const categoryKey = STATISTIC_CATEGORY_KEY_MAP[selectedStatistic];
+    const rawValue = getStatisticRawValue(row);
+    if (!categoryKey || !rawValue) return;
+
+    const relationID = getSelectedRelationID();
+    const displayValue = formatStatisticDisplayItem(row, selectedStatistic);
+    setStatisticDetailLoading(true);
+    setStatisticDetailError("");
+    setStatisticDetail(null);
+
+    try {
+      const response = await apiRequest<HardwareApiRow[]>(
+        `/api/hardware-statistics/${relationID}/category/${categoryKey}/list?value=${encodeURIComponent(rawValue)}&mode=2`,
+      );
+      const detailRows = normalizeHardwareRows(response);
+      setStatisticDetail({
+        title: `${STATISTIC_TITLE_MAP[selectedStatistic] || "Hardware"}: ${displayValue}`,
+        value: rawValue,
+        rows: detailRows,
+        columns: getColumnsFromHardwareRows(detailRows),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load matching devices.";
+      setStatisticDetailError(message);
+      showToast("error", "Statistic detail failed", message);
+    } finally {
+      setStatisticDetailLoading(false);
+    }
+  }, [getSelectedRelationID, selectedStatistic, showToast]);
 
   useEffect(() => {
     if (activeTab !== "statistics") return;
@@ -2606,6 +2808,8 @@ export default function HardwareInventory() {
 
     setSelectedStatistic(node.id);
     setStatisticApiData(null);
+    setStatisticDetail(null);
+    setStatisticDetailError("");
     setStatisticError("");
     setPage(1);
     setNote(`Loading ${node.name} statistic data.`);
@@ -2736,7 +2940,7 @@ export default function HardwareInventory() {
     const link = document.createElement("a");
     const dateStamp = new Date().toISOString().slice(0, 10);
     link.href = url;
-    link.download = `ema-inventory-${dateStamp}.csv`;
+    link.download = `hardware-inventory-${dateStamp}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -3383,9 +3587,9 @@ export default function HardwareInventory() {
         const periodData = summaryMetrics.periods;
 
         return (
-          <div className="ema-stat-summary-layout">
-            <div className="ema-stat-summary-total">Total Connection(s) : {totalConnections}</div>
-            <table className="ema-stat-summary-table">
+          <div className="hardware-stat-summary-layout">
+            <div className="hardware-stat-summary-total">Total Connection(s) : {totalConnections}</div>
+            <table className="hardware-stat-summary-table">
               <thead>
                 <tr>
                   <th>Period</th>
@@ -3403,7 +3607,7 @@ export default function HardwareInventory() {
                 ))}
               </tbody>
             </table>
-            <div className="ema-stat-summary-reference">
+            <div className="hardware-stat-summary-reference">
               Reference Date - {new Date().toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" })}
             </div>
           </div>
@@ -3550,14 +3754,33 @@ export default function HardwareInventory() {
       }
 
       if (selectedStatistic.startsWith("stat-")) {
-        const summedCount = rows.reduce((sum, row) => sum + getStatisticCount(row), 0);
+        const distributionRows = rows
+          .map((row, index) => ({
+            row,
+            index,
+            item: formatStatisticDisplayItem(row, selectedStatistic),
+            rawValue: getStatisticRawValue(row),
+            count: getStatisticCount(row),
+          }))
+          .filter(({ item, rawValue, count }) => item !== "-" && Boolean(rawValue) && count > 0)
+          .sort((a, b) => b.count - a.count);
+
+        if (distributionRows.length === 0) {
+          return emptyState(
+            "No hardware statistics available",
+            "The selected category did not return any named hardware values.",
+          );
+        }
+
+        const summedCount = distributionRows.reduce((sum, entry) => sum + entry.count, 0);
         const reportedTotal = rows.reduce((max, row) => Math.max(max, getStatisticTotal(row, 0)), 0);
-        const totalCount = reportedTotal || summedCount || rows.length;
+        const totalCount = statisticApiData?.totalDevices || reportedTotal || summedCount;
+
         return (
           <div>
             <div className="mb-3">
               <h4 className="text-xs font-bold text-slate-900 uppercase tracking-tight">Distribution</h4>
-              <p className="text-[9px] text-slate-500 mt-0.5">Showing grouped hardware values by device count</p>
+              <p className="text-[9px] text-slate-500 mt-0.5">Showing hardware values by device count. Click a row to view matching devices.</p>
             </div>
             <table className="w-full text-xs text-left">
               <thead>
@@ -3568,28 +3791,96 @@ export default function HardwareInventory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {rows
-                  .map((row, index) => ({ row, index, item: getStatisticItemLabel(row), count: getStatisticCount(row) }))
-                  .sort((a, b) => b.count - a.count)
-                  .map(({ row, index, item, count }) => {
-                    const rawPercentage = getStatisticPercentage(row, count, totalCount);
-                    const percentage = Number.isFinite(rawPercentage) ? rawPercentage.toFixed(1) : "0.0";
-                    const barWidth = `${Math.max(0, Math.min(100, Number(percentage) || 0))}%`;
-                    return (
-                      <tr key={`${item}-${index}`} className="hover:bg-blue-50/30 transition-colors">
-                        <td className="px-3 py-2 text-[10px] font-medium text-slate-900">{item === "-" ? getStatisticItemLabel(row) : item}</td>
-                        <td className="px-3 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">{count}</span></td>
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: barWidth }} /></div>
-                            <span className="text-[10px] font-bold text-slate-600 w-10">{percentage}%</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                {distributionRows.map(({ row, index, item, rawValue, count }) => {
+                  const rawPercentage = getStatisticPercentage(row, count, totalCount);
+                  const percentage = Number.isFinite(rawPercentage) ? rawPercentage.toFixed(1) : "0.0";
+                  const barWidth = `${Math.max(0, Math.min(100, Number(percentage) || 0))}%`;
+                  return (
+                    <tr
+                      key={`${rawValue}-${index}`}
+                      className="hover:bg-blue-50/50 transition-colors cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => void loadHardwareStatisticDetail(row)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          void loadHardwareStatisticDetail(row);
+                        }
+                      }}
+                    >
+                      <td className="px-3 py-2 text-[10px] font-medium text-slate-900">{item}</td>
+                      <td className="px-3 py-2"><span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">{count}</span></td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-blue-500 rounded-full" style={{ width: barWidth }} /></div>
+                          <span className="text-[10px] font-bold text-slate-600 w-10">{percentage}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+
+            {statisticDetailLoading && (
+              <div className="mt-4 border-t border-slate-100 pt-4 text-center text-[10px] font-bold text-slate-500">
+                <RefreshCw className="w-4 h-4 inline-block mr-2 animate-spin text-blue-500" />
+                Loading matching devices...
+              </div>
+            )}
+
+            {statisticDetailError && (
+              <div className="mt-4 border-t border-slate-100 pt-4 text-[10px] font-medium text-rose-600">
+                <AlertCircle className="w-4 h-4 inline-block mr-2" />
+                {statisticDetailError}
+              </div>
+            )}
+
+            {statisticDetail && !statisticDetailLoading && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <h5 className="text-[10px] font-black text-slate-900 uppercase tracking-wider">{statisticDetail.title}</h5>
+                    <p className="text-[9px] text-slate-500 mt-0.5">{statisticDetail.rows.length} matching device record(s)</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[9px] font-bold text-slate-500 hover:text-slate-800"
+                    onClick={() => setStatisticDetail(null)}
+                  >
+                    Close details
+                  </button>
+                </div>
+
+                {statisticDetail.rows.length === 0 ? (
+                  <div className="py-5 text-center text-[10px] text-slate-400">No matching device records were returned.</div>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 border-b border-slate-100">
+                          {statisticDetail.columns.map((column) => (
+                            <th key={column} className="px-3 py-2 whitespace-nowrap">{formatHardwareLabel(column)}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {statisticDetail.rows.map((detailRow, detailIndex) => (
+                          <tr key={`stat-detail-${detailIndex}`} className="hover:bg-blue-50/30">
+                            {statisticDetail.columns.map((column) => (
+                              <td key={`${detailIndex}-${column}`} className="px-3 py-2 text-[10px] text-slate-600 whitespace-nowrap">
+                                {formatHardwareValue(detailRow[column])}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         );
       }
@@ -3651,20 +3942,20 @@ export default function HardwareInventory() {
     };
 
     return (
-      <div className="ema-stat-workbench ema-stat-workbench-clean">
-        <div className="ema-stat-commandbar ema-stat-commandbar-compact">
+      <div className="hardware-stat-workbench hardware-stat-workbench-clean">
+        <div className="hardware-stat-commandbar hardware-stat-commandbar-compact">
           <div>
             <h3>Hardware Statistics</h3>
             <p>{selectedCode}</p>
           </div>
-          <button type="button" className="ema-stat-refresh-btn" onClick={() => void loadSelectedStatisticData()} disabled={statisticLoading}>
+          <button type="button" className="hardware-stat-refresh-btn" onClick={() => void loadSelectedStatisticData()} disabled={statisticLoading}>
             <RefreshCw size={16} />
             {statisticLoading ? "Loading" : "Refresh"}
           </button>
         </div>
 
-        <div className="ema-stat-table-card ema-stat-table-card-inventory-layout">
-          <div className="ema-stat-table-scroll ema-stat-table-scroll-inventory-layout">
+        <div className="hardware-stat-table-card hardware-stat-table-card-inventory-layout">
+          <div className="hardware-stat-table-scroll hardware-stat-table-scroll-inventory-layout">
             {renderStatisticTable()}
           </div>
         </div>
@@ -3681,35 +3972,469 @@ export default function HardwareInventory() {
   ];
 
   return (
-    <main className={`settings-module-root ema-module-root ema-settings-pro container-fluid p-3 p-xl-4 ${hasSelectedDevice ? "has-selected-device" : "no-selected-device"}`} data-section={activeTab}>
+    <main className={`settings-module-root hardware-module-root ema-settings-pro container-fluid p-3 p-xl-4 ${hasSelectedDevice ? "has-selected-device" : "no-selected-device"}`} data-section={activeTab}>
       <style>{`
-.ema-module-root .settings-menu > .ema-module-sidebar-switcher {
+
+
+
+        /* Consistent Hardware detail drawer layout: all tabs keep the same clean form size. */
+        .hardware-module-root .hardware-detail-form-overlay,
+        .hardware-module-root .hardware-detail-drawer-overlay {
+          position: fixed !important;
+          inset: 0 !important;
+          z-index: 9999 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          padding: 72px 22px 22px 260px !important;
+          background: rgba(15, 23, 42, 0.38) !important;
+          backdrop-filter: blur(3px) !important;
+          overflow: hidden !important;
+        }
+
+        .hardware-module-root .hardware-detail-form-modal,
+        .hardware-module-root .hardware-detail-drawer {
+          position: relative !important;
+          inset: auto !important;
+          width: min(1000px, calc(100vw - 322px)) !important;
+          height: min(78vh, 740px) !important;
+          min-height: 620px !important;
+          max-height: calc(100vh - 104px) !important;
+          margin: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          overflow: hidden !important;
+          border: 1px solid rgba(203, 213, 225, 0.98) !important;
+          border-radius: 22px !important;
+          background: #ffffff !important;
+          box-shadow: 0 28px 80px rgba(15, 23, 42, 0.24) !important;
+          transform: none !important;
+        }
+
+        .hardware-module-root .hardware-detail-drawer-header {
+          flex: 0 0 auto !important;
+          min-height: 122px !important;
+          padding: 22px 26px 18px !important;
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 18px !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.96) !important;
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%) !important;
+        }
+
+        .hardware-module-root .hardware-detail-title-wrap {
+          min-width: 0 !important;
+          display: flex !important;
+          align-items: flex-start !important;
+          gap: 14px !important;
+        }
+
+        .hardware-module-root .hardware-detail-title-wrap h2 {
+          margin: 0 !important;
+          color: #0a2554 !important;
+          font-size: clamp(1.55rem, 2.2vw, 2.05rem) !important;
+          line-height: 1.04 !important;
+          font-weight: 950 !important;
+          letter-spacing: -0.045em !important;
+        }
+
+        .hardware-module-root .hardware-detail-title-wrap p {
+          margin: 6px 0 0 !important;
+          max-width: 620px !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          color: #64748b !important;
+          font-size: 0.78rem !important;
+          font-weight: 800 !important;
+        }
+
+        .hardware-module-root .hardware-detail-eyebrow {
+          color: #1858ff !important;
+          font-size: 0.68rem !important;
+          font-weight: 950 !important;
+          letter-spacing: 0.13em !important;
+          text-transform: uppercase !important;
+        }
+
+        .hardware-module-root .hardware-detail-device-icon {
+          width: 42px !important;
+          height: 42px !important;
+          flex: 0 0 42px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border: 1px solid #dbe7ff !important;
+          border-radius: 15px !important;
+          color: #1f63ff !important;
+          background: #eef4ff !important;
+        }
+
+        .hardware-module-root .hardware-detail-header-actions {
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 10px !important;
+          flex: 0 0 auto !important;
+        }
+
+        .hardware-module-root .hardware-detail-close {
+          width: 38px !important;
+          height: 38px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          border: 1px solid #d5e0ef !important;
+          border-radius: 14px !important;
+          background: #f8fbff !important;
+          color: #64748b !important;
+        }
+
+        .hardware-module-root .hardware-detail-summary-grid {
+          flex: 0 0 auto !important;
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          gap: 10px !important;
+          padding: 12px 26px !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+          background: #ffffff !important;
+        }
+
+        .hardware-module-root .hardware-detail-summary-card {
+          min-width: 0 !important;
+          height: 76px !important;
+          padding: 14px 16px !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: flex-start !important;
+          gap: 6px !important;
+          border: 1px solid #e1e8f2 !important;
+          border-radius: 16px !important;
+          background: #ffffff !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .hardware-detail-summary-card span {
+          min-width: 0 !important;
+          color: #334155 !important;
+          font-size: 0.75rem !important;
+          font-weight: 700 !important;
+          line-height: 1.15 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+
+        .hardware-module-root .hardware-detail-summary-card strong {
+          min-width: 0 !important;
+          color: #0a2554 !important;
+          font-size: 0.9rem !important;
+          line-height: 1.15 !important;
+          font-weight: 950 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          display: -webkit-box !important;
+          -webkit-line-clamp: 2 !important;
+          -webkit-box-orient: vertical !important;
+        }
+
+        .hardware-module-root .hardware-detail-tabs {
+          flex: 0 0 auto !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+          padding: 12px 26px 10px !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+          background: #ffffff !important;
+          overflow-x: auto !important;
+          scrollbar-width: none !important;
+        }
+
+        .hardware-module-root .hardware-detail-tabs::-webkit-scrollbar {
+          display: none !important;
+        }
+
+        .hardware-module-root .hardware-detail-tabs button {
+          height: 35px !important;
+          min-width: 74px !important;
+          padding: 0 14px !important;
+          border: 1px solid #dbe5f1 !important;
+          border-radius: 999px !important;
+          background: #ffffff !important;
+          color: #5b6b83 !important;
+          font-size: 0.72rem !important;
+          font-weight: 900 !important;
+          white-space: nowrap !important;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04) !important;
+        }
+
+        .hardware-module-root .hardware-detail-tabs button.is-active {
+          border-color: #1f63ff !important;
+          background: linear-gradient(135deg, #1f63ff 0%, #3457e8 100%) !important;
+          color: #ffffff !important;
+          box-shadow: 0 10px 22px rgba(31, 99, 255, 0.22) !important;
+        }
+
+        .hardware-module-root .hardware-detail-body {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;
+          padding: 14px 26px 22px !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          background: #ffffff !important;
+          scrollbar-gutter: stable !important;
+        }
+
+        .hardware-module-root .hardware-detail-section-grid {
+          min-height: 100% !important;
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 14px !important;
+          align-items: start !important;
+        }
+
+        .hardware-module-root .hardware-detail-card,
+        .hardware-module-root .hardware-detail-card.hardware-detail-card-wide {
+          min-width: 0 !important;
+          grid-column: auto !important;
+          min-height: 330px !important;
+          height: auto !important;
+          padding: 0 !important;
+          overflow: hidden !important;
+          border: 1px solid #e1e8f2 !important;
+          border-radius: 16px !important;
+          background: #ffffff !important;
+          box-shadow: none !important;
+        }
+
+        .hardware-module-root .hardware-detail-card h3 {
+          margin: 0 !important;
+          padding: 14px 16px 10px !important;
+          color: #0a2554 !important;
+          font-size: clamp(1.02rem, 1.5vw, 1.28rem) !important;
+          line-height: 1.1 !important;
+          font-weight: 950 !important;
+          letter-spacing: -0.035em !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.72) !important;
+        }
+
+        .hardware-module-root .hardware-detail-item {
+          min-height: 60px !important;
+          padding: 12px 16px !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: center !important;
+          gap: 5px !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.82) !important;
+          background: #ffffff !important;
+        }
+
+        .hardware-module-root .hardware-detail-item:last-child {
+          border-bottom: 0 !important;
+        }
+
+        .hardware-module-root .hardware-detail-item span {
+          color: #64748b !important;
+          font-size: 0.62rem !important;
+          font-weight: 950 !important;
+          letter-spacing: 0.08em !important;
+          line-height: 1.1 !important;
+          text-transform: uppercase !important;
+        }
+
+        .hardware-module-root .hardware-detail-item strong {
+          min-width: 0 !important;
+          color: #0a2554 !important;
+          font-size: 0.84rem !important;
+          font-weight: 950 !important;
+          line-height: 1.25 !important;
+          overflow-wrap: anywhere !important;
+        }
+
+        .hardware-module-root .hardware-storage-hero {
+          margin: 12px 16px !important;
+          padding: 12px !important;
+          min-height: 72px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 12px !important;
+          border: 1px solid #e1e8f2 !important;
+          border-radius: 14px !important;
+          background: #f8fbff !important;
+        }
+
+        .hardware-module-root .hardware-storage-hero span {
+          display: block !important;
+          color: #64748b !important;
+          font-size: 0.65rem !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.08em !important;
+        }
+
+        .hardware-module-root .hardware-storage-hero strong,
+        .hardware-module-root .hardware-storage-percent {
+          color: #0a2554 !important;
+          font-size: 1rem !important;
+          font-weight: 950 !important;
+        }
+
+        .hardware-module-root .hardware-storage-bar {
+          height: 10px !important;
+          margin: 0 16px 12px !important;
+          border-radius: 999px !important;
+          background: #e8eef8 !important;
+          overflow: hidden !important;
+        }
+
+        .hardware-module-root .hardware-storage-bar > div {
+          height: 100% !important;
+          border-radius: inherit !important;
+          background: linear-gradient(90deg, #2563eb, #22c55e) !important;
+        }
+
+        .hardware-module-root .hardware-detail-clean-timeline {
+          padding: 10px 14px 14px !important;
+          display: grid !important;
+          gap: 10px !important;
+        }
+
+        .hardware-module-root .hardware-detail-timeline {
+          display: grid !important;
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 14px !important;
+        }
+
+        .hardware-module-root .hardware-timeline-item {
+          min-height: 70px !important;
+          padding: 12px 12px !important;
+          display: grid !important;
+          grid-template-columns: 16px minmax(0, 1fr) !important;
+          gap: 10px !important;
+          border: 1px solid #e1e8f2 !important;
+          border-radius: 14px !important;
+          background: #f8fbff !important;
+        }
+
+        .hardware-module-root .hardware-timeline-item > span {
+          width: 10px !important;
+          height: 10px !important;
+          margin-top: 3px !important;
+          border-radius: 999px !important;
+          background: #cbd5e1 !important;
+          box-shadow: 0 0 0 4px #eef4ff !important;
+        }
+
+        .hardware-module-root .hardware-timeline-item.is-current > span {
+          background: #2563eb !important;
+        }
+
+        .hardware-module-root .hardware-timeline-item strong {
+          display: block !important;
+          color: #0a2554 !important;
+          font-size: 0.82rem !important;
+          font-weight: 950 !important;
+        }
+
+        .hardware-module-root .hardware-timeline-item p,
+        .hardware-module-root .hardware-timeline-item small {
+          margin: 4px 0 0 !important;
+          color: #334155 !important;
+          font-size: 0.78rem !important;
+          font-weight: 700 !important;
+        }
+
+        .hardware-module-root .hardware-timeline-item small {
+          color: #64748b !important;
+          font-size: 0.65rem !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.06em !important;
+        }
+
+        .hardware-module-root .hardware-detail-form-footer {
+          display: none !important;
+        }
+
+        @media (max-width: 1180px) {
+          .hardware-module-root .hardware-detail-form-overlay,
+          .hardware-module-root .hardware-detail-drawer-overlay {
+            padding-left: 18px !important;
+          }
+
+          .hardware-module-root .hardware-detail-form-modal,
+          .hardware-module-root .hardware-detail-drawer {
+            width: min(920px, calc(100vw - 36px)) !important;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .hardware-module-root .hardware-detail-form-overlay,
+          .hardware-module-root .hardware-detail-drawer-overlay {
+            align-items: stretch !important;
+            padding: 12px !important;
+          }
+
+          .hardware-module-root .hardware-detail-form-modal,
+          .hardware-module-root .hardware-detail-drawer {
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: calc(100vh - 24px) !important;
+          }
+
+          .hardware-module-root .hardware-detail-drawer-header,
+          .hardware-module-root .hardware-detail-summary-grid,
+          .hardware-module-root .hardware-detail-tabs,
+          .hardware-module-root .hardware-detail-body {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+
+          .hardware-module-root .hardware-detail-summary-grid,
+          .hardware-module-root .hardware-detail-section-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+
+
+        /* Hardware sidebar fix: wider panel + keep Branch/Statistics switcher compact. */
+        .hardware-module-root .settings-layout.hardware-settings-layout {
+          grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
+        }
+
+        .hardware-module-root .settings-menu.hardware-left-panel {
+          min-width: 300px !important;
+        }
+
+        .hardware-module-root .settings-menu > .ema-module-sidebar-switcher {
           flex: 0 0 auto !important;
           margin: 0 !important;
         }
 
-        .ema-module-root .settings-menu > .ema-sidebar-content {
+        .hardware-module-root .settings-menu > .ema-sidebar-content {
           flex: 1 1 auto !important;
           padding-top: 0.65rem !important;
         }
 
-        .ema-module-root .ema-sidebar-subpanel {
+        .hardware-module-root .ema-sidebar-subpanel {
           justify-content: flex-start !important;
         }
 
-        .ema-module-root .ema-sidebar-tree {
+        .hardware-module-root .ema-sidebar-tree {
           min-height: 0 !important;
         }
 
         /* Device registry table: force 7 fixed grid columns after adding Branch.
            This prevents Network/IP from wrapping into a second header/body line. */
-        .ema-module-root .ema-device-table {
+        .hardware-module-root .hardware-device-table {
           width: 100% !important;
           overflow-x: auto !important;
           overflow-y: visible !important;
         }
 
-        .ema-module-root .ema-device-table .ema-device-table-row {
+        .hardware-module-root .hardware-device-table .hardware-device-table-row {
           display: grid !important;
           grid-template-columns: 52px minmax(240px, 1.55fr) minmax(150px, 0.95fr) minmax(210px, 1.35fr) minmax(105px, 0.65fr) minmax(150px, 0.9fr) minmax(130px, 0.8fr) !important;
           align-items: center !important;
@@ -3718,34 +4443,34 @@ export default function HardwareInventory() {
           width: 100% !important;
         }
 
-        .ema-module-root .ema-device-table .user-cell {
+        .hardware-module-root .hardware-device-table .user-cell {
           min-width: 0 !important;
           overflow: hidden !important;
         }
 
-        .ema-module-root .ema-device-table .head .user-cell {
+        .hardware-module-root .hardware-device-table .head .user-cell {
           display: flex !important;
           align-items: center !important;
           min-height: 44px !important;
         }
 
-        .ema-module-root .ema-device-table .ema-sort-btn {
+        .hardware-module-root .hardware-device-table .hardware-sort-btn {
           max-width: 100% !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
           white-space: nowrap !important;
         }
 
-        .ema-module-root .ema-device-main-cell,
-        .ema-module-root .ema-user-name,
-        .ema-module-root .ema-user-name > div {
+        .hardware-module-root .hardware-device-main-cell,
+        .hardware-module-root .hardware-user-name,
+        .hardware-module-root .hardware-user-name > div {
           min-width: 0 !important;
         }
 
         /* Strong override for existing global Hardware table CSS.
            The global stylesheet still has the old 6-column grid with higher specificity,
            so these selectors pin every header/body cell into one 7-column row. */
-        .ema-module-root .ema-device-table.ema-standard-table {
+        .hardware-module-root .hardware-device-table.hardware-standard-table {
           display: block !important;
           width: calc(100% - 2.1rem) !important;
           max-width: calc(100% - 2.1rem) !important;
@@ -3753,9 +4478,9 @@ export default function HardwareInventory() {
           overflow-y: hidden !important;
         }
 
-        .ema-module-root .ema-device-table .user-row.advanced.clean-table-row.ema-standard-row.ema-device-table-row,
-        .ema-module-root .ema-device-table .ema-standard-row.ema-device-table-row,
-        .ema-module-root .ema-device-table .ema-device-table-row {
+        .hardware-module-root .hardware-device-table .user-row.advanced.clean-table-row.hardware-standard-row.hardware-device-table-row,
+        .hardware-module-root .hardware-device-table .hardware-standard-row.hardware-device-table-row,
+        .hardware-module-root .hardware-device-table .hardware-device-table-row {
           display: grid !important;
           grid-template-columns: 56px minmax(250px, 1.6fr) minmax(170px, 0.95fr) minmax(220px, 1.25fr) 112px 180px 160px !important;
           grid-auto-flow: row !important;
@@ -3767,29 +4492,29 @@ export default function HardwareInventory() {
           width: 100% !important;
         }
 
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell:nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; }
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell:nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; }
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell:nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; }
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell:nth-child(4) { grid-column: 4 !important; grid-row: 1 !important; }
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell:nth-child(5) { grid-column: 5 !important; grid-row: 1 !important; }
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell:nth-child(6) { grid-column: 6 !important; grid-row: 1 !important; }
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell:nth-child(7) { grid-column: 7 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(1) { grid-column: 1 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(2) { grid-column: 2 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(3) { grid-column: 3 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(4) { grid-column: 4 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(5) { grid-column: 5 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(6) { grid-column: 6 !important; grid-row: 1 !important; }
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell:nth-child(7) { grid-column: 7 !important; grid-row: 1 !important; }
 
-        .ema-module-root .ema-device-table .ema-device-table-row > .user-cell,
-        .ema-module-root .ema-device-table .ema-standard-row.ema-device-table-row > .user-cell {
+        .hardware-module-root .hardware-device-table .hardware-device-table-row > .user-cell,
+        .hardware-module-root .hardware-device-table .hardware-standard-row.hardware-device-table-row > .user-cell {
           min-width: 0 !important;
           max-width: 100% !important;
           overflow: hidden !important;
           box-sizing: border-box !important;
         }
 
-        .ema-module-root .ema-device-table .head.ema-device-table-row > .user-cell {
+        .hardware-module-root .hardware-device-table .head.hardware-device-table-row > .user-cell {
           min-height: 44px !important;
           white-space: nowrap !important;
         }
 
-        .ema-module-root .ema-location-cell,
-        .ema-module-root .ema-network-cell {
+        .hardware-module-root .hardware-location-cell,
+        .hardware-module-root .hardware-network-cell {
           min-width: 0 !important;
           max-width: 100% !important;
           overflow: hidden !important;
@@ -3798,31 +4523,31 @@ export default function HardwareInventory() {
           align-content: center !important;
         }
 
-        .ema-module-root .ema-location-cell strong,
-        .ema-module-root .ema-location-cell small,
-        .ema-module-root .ema-network-cell strong,
-        .ema-module-root .ema-network-cell small,
-        .ema-module-root .ema-model-text,
-        .ema-module-root .ema-date-cell {
+        .hardware-module-root .hardware-location-cell strong,
+        .hardware-module-root .hardware-location-cell small,
+        .hardware-module-root .hardware-network-cell strong,
+        .hardware-module-root .hardware-network-cell small,
+        .hardware-module-root .hardware-model-text,
+        .hardware-module-root .hardware-date-cell {
           max-width: 100% !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
           white-space: nowrap !important;
         }
 
-        .ema-module-root .ema-user-name strong,
-        .ema-module-root .ema-user-name small,
-        .ema-module-root .ema-user-name em,
-        .ema-module-root .ema-model-text,
-        .ema-module-root .ema-date-cell {
+        .hardware-module-root .hardware-user-name strong,
+        .hardware-module-root .hardware-user-name small,
+        .hardware-module-root .hardware-user-name em,
+        .hardware-module-root .hardware-model-text,
+        .hardware-module-root .hardware-date-cell {
           max-width: 100% !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
           white-space: nowrap !important;
         }
 
-        .ema-module-root .ema-location-cell,
-        .ema-module-root .ema-network-cell {
+        .hardware-module-root .hardware-location-cell,
+        .hardware-module-root .hardware-network-cell {
           display: flex !important;
           flex-direction: column !important;
           align-items: flex-start !important;
@@ -3831,8 +4556,8 @@ export default function HardwareInventory() {
           min-width: 0 !important;
         }
 
-        .ema-module-root .ema-location-cell strong,
-        .ema-module-root .ema-network-cell strong {
+        .hardware-module-root .hardware-location-cell strong,
+        .hardware-module-root .hardware-network-cell strong {
           display: block !important;
           max-width: 100% !important;
           overflow: hidden !important;
@@ -3844,7 +4569,7 @@ export default function HardwareInventory() {
           line-height: 1.1 !important;
         }
 
-        .ema-module-root .ema-location-cell small {
+        .hardware-module-root .hardware-location-cell small {
           display: block !important;
           max-width: 100% !important;
           overflow: hidden !important;
@@ -3855,15 +4580,28 @@ export default function HardwareInventory() {
           font-weight: 800 !important;
           line-height: 1.15 !important;
         }
-/* Hardware registry table vertical-scroll fix.
+
+        @media (max-width: 1100px) {
+          .hardware-module-root .settings-layout.hardware-settings-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .hardware-module-root .settings-menu.hardware-left-panel {
+            min-width: 0 !important;
+          }
+        }
+
+
+
+        /* Hardware registry table vertical-scroll fix.
            Keep toolbar + summary + pagination visible, and scroll only the device rows/table area. */
-        .ema-module-root .ema-settings-content,
-        .ema-module-root .ema-main-grid {
+        .hardware-module-root .hardware-settings-content,
+        .hardware-module-root .hardware-main-grid {
           min-height: 0 !important;
           overflow: hidden !important;
         }
 
-        .ema-module-root .ema-registry-card {
+        .hardware-module-root .hardware-registry-card {
           display: flex !important;
           flex-direction: column !important;
           min-height: 0 !important;
@@ -3871,13 +4609,13 @@ export default function HardwareInventory() {
           overflow: hidden !important;
         }
 
-        .ema-module-root .ema-registry-toolbar,
-        .ema-module-root .ema-registry-subhead,
-        .ema-module-root .ema-pagination {
+        .hardware-module-root .hardware-registry-toolbar,
+        .hardware-module-root .hardware-registry-subhead,
+        .hardware-module-root .hardware-pagination {
           flex: 0 0 auto !important;
         }
 
-        .ema-module-root .ema-device-table.ema-standard-table {
+        .hardware-module-root .hardware-device-table.hardware-standard-table {
           flex: 1 1 auto !important;
           min-height: 260px !important;
           max-height: min(54vh, 560px) !important;
@@ -3888,23 +4626,23 @@ export default function HardwareInventory() {
           -webkit-overflow-scrolling: touch !important;
         }
 
-        .ema-module-root .ema-device-table.ema-standard-table::-webkit-scrollbar {
+        .hardware-module-root .hardware-device-table.hardware-standard-table::-webkit-scrollbar {
           width: 8px !important;
           height: 8px !important;
         }
 
-        .ema-module-root .ema-device-table.ema-standard-table::-webkit-scrollbar-track {
+        .hardware-module-root .hardware-device-table.hardware-standard-table::-webkit-scrollbar-track {
           background: rgba(226, 232, 240, 0.58) !important;
           border-radius: 999px !important;
         }
 
-        .ema-module-root .ema-device-table.ema-standard-table::-webkit-scrollbar-thumb {
+        .hardware-module-root .hardware-device-table.hardware-standard-table::-webkit-scrollbar-thumb {
           background: rgba(100, 116, 139, 0.62) !important;
           border-radius: 999px !important;
           border: 2px solid rgba(248, 250, 252, 0.9) !important;
         }
 
-        .ema-module-root .ema-device-table .head.ema-device-table-row {
+        .hardware-module-root .hardware-device-table .head.hardware-device-table-row {
           position: sticky !important;
           top: 0 !important;
           z-index: 8 !important;
@@ -3912,23 +4650,23 @@ export default function HardwareInventory() {
           box-shadow: 0 1px 0 rgba(203, 213, 225, 0.85) !important;
         }
 
-        .ema-module-root .ema-device-table .ema-device-row {
+        .hardware-module-root .hardware-device-table .hardware-device-row {
           min-height: 58px !important;
         }
 
         @media (max-height: 760px) {
-          .ema-module-root .ema-registry-card {
+          .hardware-module-root .hardware-registry-card {
             max-height: calc(100dvh - 168px) !important;
           }
 
-          .ema-module-root .ema-device-table.ema-standard-table {
+          .hardware-module-root .hardware-device-table.hardware-standard-table {
             max-height: min(48vh, 440px) !important;
           }
         }
 
 
         /* Hardware toolbar layout fix: keep actions, search, refresh and filters aligned. */
-        .ema-module-root .ema-registry-toolbar.ema-registry-toolbar-stacked {
+        .hardware-module-root .hardware-registry-toolbar.hardware-registry-toolbar-stacked {
           display: grid !important;
           grid-template-columns: minmax(0, 1fr) !important;
           align-items: stretch !important;
@@ -3937,7 +4675,7 @@ export default function HardwareInventory() {
           min-width: 0 !important;
         }
 
-        .ema-module-root .ema-scan-command-row {
+        .hardware-module-root .hardware-scan-command-row {
           display: grid !important;
           grid-template-columns: max-content max-content max-content minmax(280px, 1fr) 42px max-content !important;
           align-items: center !important;
@@ -3947,7 +4685,7 @@ export default function HardwareInventory() {
           flex-wrap: nowrap !important;
         }
 
-        .ema-module-root .ema-command-btn {
+        .hardware-module-root .hardware-command-btn {
           height: 38px;
           min-width: 132px;
           display: inline-flex;
@@ -3967,13 +4705,13 @@ export default function HardwareInventory() {
           transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
         }
 
-        .ema-command-btn:hover:not(:disabled) {
+        .hardware-command-btn:hover:not(:disabled) {
           transform: translateY(-1px);
           border-color: #6f8fff;
           box-shadow: 0 14px 28px rgba(40, 85, 200, 0.14);
         }
 
-        .ema-command-btn:disabled {
+        .hardware-command-btn:disabled {
           color: #9eb0e8;
           background: #f8faff;
           border-color: #d4ddff;
@@ -3981,7 +4719,7 @@ export default function HardwareInventory() {
           cursor: not-allowed;
         }
 
-        .ema-command-btn-muted b {
+        .hardware-command-btn-muted b {
           padding: 3px 8px;
           border-radius: 999px;
           background: #e9efff;
@@ -3990,7 +4728,7 @@ export default function HardwareInventory() {
           line-height: 1;
         }
 
-        .ema-module-root .ema-toolbar-search {
+        .hardware-module-root .hardware-toolbar-search {
           flex: 1 1 auto !important;
           width: 100% !important;
           min-width: 0 !important;
@@ -3998,7 +4736,7 @@ export default function HardwareInventory() {
           height: 38px !important;
         }
 
-        .ema-module-root .ema-toolbar-refresh {
+        .hardware-module-root .hardware-toolbar-refresh {
           flex: 0 0 auto !important;
           width: 42px !important;
           height: 38px !important;
@@ -4006,7 +4744,7 @@ export default function HardwareInventory() {
           align-self: center !important;
         }
 
-        .ema-module-root .ema-toolbar-export {
+        .hardware-module-root .hardware-toolbar-export {
           flex: 0 0 auto !important;
           height: 38px !important;
           min-width: 92px !important;
@@ -4018,19 +4756,19 @@ export default function HardwareInventory() {
           box-shadow: 0 14px 28px rgba(11, 126, 215, 0.22) !important;
         }
 
-        .ema-module-root .ema-toolbar-export:hover:not(:disabled) {
+        .hardware-module-root .hardware-toolbar-export:hover:not(:disabled) {
           border-color: #075fa7 !important;
           box-shadow: 0 18px 34px rgba(11, 126, 215, 0.28) !important;
         }
 
-        .ema-module-root .ema-toolbar-export:disabled {
+        .hardware-module-root .hardware-toolbar-export:disabled {
           border-color: #cbd5e1 !important;
           background: #eff4fb !important;
           color: #94a3b8 !important;
           box-shadow: none !important;
         }
 
-        .ema-module-root .ema-registry-filter-row {
+        .hardware-module-root .hardware-registry-filter-row {
           display: grid !important;
           grid-template-columns: minmax(210px, 240px) minmax(210px, 240px) max-content !important;
           justify-content: end !important;
@@ -4040,22 +4778,22 @@ export default function HardwareInventory() {
           min-width: 0 !important;
         }
 
-        .ema-module-root .ema-filter-group,
-        .ema-module-root .ema-custom-select,
-        .ema-module-root .ema-custom-select-trigger {
+        .hardware-module-root .hardware-filter-group,
+        .hardware-module-root .hardware-custom-select,
+        .hardware-module-root .hardware-custom-select-trigger {
           min-width: 0 !important;
           width: 100% !important;
         }
 
-        .ema-module-root .ema-clear-filters-btn {
+        .hardware-module-root .hardware-clear-filters-btn {
           height: 38px !important;
           align-self: end !important;
           white-space: nowrap !important;
         }
 
         /* Hardware toast position fix: always top-right, not bottom-right. */
-        .ema-module-root .ema-toast,
-        body .ema-toast {
+        .hardware-module-root .hardware-toast,
+        body .hardware-toast {
           position: fixed !important;
           top: 86px !important;
           right: 24px !important;
@@ -4074,8 +4812,8 @@ export default function HardwareInventory() {
           box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16) !important;
         }
 
-        .ema-module-root .ema-toast-icon,
-        body .ema-toast .ema-toast-icon {
+        .hardware-module-root .hardware-toast-icon,
+        body .hardware-toast .hardware-toast-icon {
           width: 40px !important;
           height: 40px !important;
           flex: 0 0 40px !important;
@@ -4088,49 +4826,49 @@ export default function HardwareInventory() {
           border: 1px solid #bfdbfe !important;
         }
 
-        .ema-module-root .ema-toast-success,
-        body .ema-toast-success {
+        .hardware-module-root .hardware-toast-success,
+        body .hardware-toast-success {
           border-color: #bbf7d0 !important;
         }
 
-        .ema-module-root .ema-toast-success .ema-toast-icon,
-        body .ema-toast-success .ema-toast-icon {
+        .hardware-module-root .hardware-toast-success .hardware-toast-icon,
+        body .hardware-toast-success .hardware-toast-icon {
           color: #16a34a !important;
           background: #dcfce7 !important;
           border-color: #bbf7d0 !important;
         }
 
-        .ema-module-root .ema-toast-error,
-        .ema-module-root .ema-toast-delete,
-        body .ema-toast-error,
-        body .ema-toast-delete {
+        .hardware-module-root .hardware-toast-error,
+        .hardware-module-root .hardware-toast-delete,
+        body .hardware-toast-error,
+        body .hardware-toast-delete {
           border-color: #fecaca !important;
         }
 
-        .ema-module-root .ema-toast-error .ema-toast-icon,
-        .ema-module-root .ema-toast-delete .ema-toast-icon,
-        body .ema-toast-error .ema-toast-icon,
-        body .ema-toast-delete .ema-toast-icon {
+        .hardware-module-root .hardware-toast-error .hardware-toast-icon,
+        .hardware-module-root .hardware-toast-delete .hardware-toast-icon,
+        body .hardware-toast-error .hardware-toast-icon,
+        body .hardware-toast-delete .hardware-toast-icon {
           color: #dc2626 !important;
           background: #fee2e2 !important;
           border-color: #fecaca !important;
         }
 
-        .ema-module-root .ema-toast-info,
-        body .ema-toast-info {
+        .hardware-module-root .hardware-toast-info,
+        body .hardware-toast-info {
           border-color: #bfdbfe !important;
         }
 
-        .ema-module-root .ema-toast-info .ema-toast-icon,
-        body .ema-toast-info .ema-toast-icon {
+        .hardware-module-root .hardware-toast-info .hardware-toast-icon,
+        body .hardware-toast-info .hardware-toast-icon {
           color: #2563eb !important;
           background: #eff6ff !important;
           border-color: #bfdbfe !important;
         }
 
         @media (max-width: 720px) {
-          .ema-module-root .ema-toast,
-          body .ema-toast {
+          .hardware-module-root .hardware-toast,
+          body .hardware-toast {
             top: 18px !important;
             right: 16px !important;
             left: 16px !important;
@@ -4142,11 +4880,11 @@ export default function HardwareInventory() {
 
 
 
-        .ema-stat-summary-layout {
+        .hardware-stat-summary-layout {
           padding: 18px 18px 16px;
         }
 
-        .ema-stat-summary-total {
+        .hardware-stat-summary-total {
           margin-bottom: 18px;
           color: #1559ff;
           font-size: 15px;
@@ -4154,7 +4892,7 @@ export default function HardwareInventory() {
           letter-spacing: -0.01em;
         }
 
-        .ema-stat-summary-table {
+        .hardware-stat-summary-table {
           width: 100%;
           border-collapse: collapse;
           table-layout: fixed;
@@ -4162,11 +4900,11 @@ export default function HardwareInventory() {
           color: #0f2854;
         }
 
-        .ema-stat-summary-table thead tr {
+        .hardware-stat-summary-table thead tr {
           background: #2847a8;
         }
 
-        .ema-stat-summary-table thead th {
+        .hardware-stat-summary-table thead th {
           padding: 11px 14px;
           color: #ffffff !important;
           font-size: 10px;
@@ -4178,24 +4916,24 @@ export default function HardwareInventory() {
           border: 0;
         }
 
-        .ema-stat-summary-table tbody td {
+        .hardware-stat-summary-table tbody td {
           padding: 12px 14px;
           font-weight: 700;
           border-bottom: 1px solid rgba(226, 232, 240, 0.85);
           background: #ffffff;
         }
 
-        .ema-stat-summary-table tbody td:nth-child(2) {
+        .hardware-stat-summary-table tbody td:nth-child(2) {
           background: #e8f1ff;
           color: #0639b7;
         }
 
-        .ema-stat-summary-table tbody td:nth-child(3) {
+        .hardware-stat-summary-table tbody td:nth-child(3) {
           background: #eefcf4;
           color: #047857;
         }
 
-        .ema-stat-summary-reference {
+        .hardware-stat-summary-reference {
           margin-top: 16px;
           color: #8b9ab5;
           font-size: 10px;
@@ -4205,44 +4943,44 @@ export default function HardwareInventory() {
         }
 
         @media (max-width: 1250px) {
-          .ema-module-root .ema-scan-command-row {
+          .hardware-module-root .hardware-scan-command-row {
             grid-template-columns: repeat(3, minmax(132px, 1fr)) 42px max-content !important;
           }
 
-          .ema-module-root .ema-toolbar-search {
+          .hardware-module-root .hardware-toolbar-search {
             grid-column: 1 / -3 !important;
             grid-row: 2 !important;
           }
 
-          .ema-module-root .ema-toolbar-refresh {
+          .hardware-module-root .hardware-toolbar-refresh {
             grid-column: -3 / -2 !important;
             grid-row: 2 !important;
           }
 
-          .ema-module-root .ema-toolbar-export {
+          .hardware-module-root .hardware-toolbar-export {
             grid-column: -2 / -1 !important;
             grid-row: 2 !important;
           }
         }
 
         @media (max-width: 1100px) {
-          .ema-module-root .ema-registry-filter-row {
+          .hardware-module-root .hardware-registry-filter-row {
             grid-template-columns: 1fr !important;
             justify-content: stretch !important;
           }
-          .ema-module-root .ema-toolbar-search {
+          .hardware-module-root .hardware-toolbar-search {
             flex-basis: 100% !important;
           }
         }
 
         @media (max-width: 760px) {
-          .ema-module-root .ema-scan-command-row {
+          .hardware-module-root .hardware-scan-command-row {
             grid-template-columns: 1fr !important;
           }
 
-          .ema-module-root .ema-toolbar-search,
-          .ema-module-root .ema-toolbar-refresh,
-          .ema-module-root .ema-toolbar-export {
+          .hardware-module-root .hardware-toolbar-search,
+          .hardware-module-root .hardware-toolbar-refresh,
+          .hardware-module-root .hardware-toolbar-export {
             grid-column: auto !important;
             grid-row: auto !important;
             width: 100% !important;
@@ -4255,8 +4993,8 @@ export default function HardwareInventory() {
         <span id="themeLabel">Dark Mode</span>
       </button>
 
-      <div className="settings-layout ema-settings-layout d-grid gap-3">
-        <aside className="settings-menu ema-left-panel ema-panel-surface">
+      <div className="settings-layout hardware-settings-layout d-grid gap-3">
+        <aside className="settings-menu hardware-left-panel ema-panel-surface">
           <div className="panel-head">
             <span>HARDWARE</span>
             <strong>Hardware Inventory</strong>
@@ -4270,7 +5008,7 @@ export default function HardwareInventory() {
               onClick={() => setActiveTab("organization")}
             >
               <span className="setting-icon"><FolderOpen size={16} /></span>
-              <span><strong>Branch</strong></span>
+              <span><strong>Branch</strong><small>Branch device scope</small></span>
             </button>
             <button
               type="button"
@@ -4278,7 +5016,7 @@ export default function HardwareInventory() {
               onClick={() => setActiveTab("statistics")}
             >
               <span className="setting-icon"><Database size={16} /></span>
-              <span><strong>Statistics</strong></span>
+              <span><strong>Statistics</strong><small>Hardware operational views</small></span>
             </button>
           </nav>
 
@@ -4331,45 +5069,45 @@ export default function HardwareInventory() {
           </div>
         </aside>
 
-        <section className="settings-content ema-settings-content d-grid gap-3">
-          <div className="settings-hero ema-hero ema-panel-surface">
+        <section className="settings-content hardware-settings-content d-grid gap-3">
+          <div className="settings-hero hardware-hero ema-panel-surface">
             <div>
               <span className="eyebrow">ENDPOINT OPERATIONS</span>
               <h2>{activeTab === "statistics" ? "Hardware Statistics" : "Device Registry"}</h2>
               <p>Live hardware inventory with device actions, location view, remote support and security controls.</p>
             </div>
-            <div className="ema-hero-score">
+            <div className="hardware-hero-score">
               {kpiCards.map((card) => (
                 <button
                   key={card.key}
                   type="button"
-                  className={`ema-kpi-card ${card.color} ${activeKpiFilter === card.key ? "is-active" : ""} ${
+                  className={`hardware-kpi-card ${card.color} ${activeKpiFilter === card.key ? "is-active" : ""} ${
                     card.key === "stale" || card.key === "locked" ? "is-attention" : ""
                   }`}
                   onClick={() => handleKpiFilterClick(card.key)}
                   aria-pressed={activeKpiFilter === card.key}
                 >
-                  <div className="ema-kpi-content">
-                    <i className="ema-kpi-icon">{card.icon}</i>
-                    <span className="ema-kpi-label">{card.title}</span>
-                    <strong className="ema-kpi-value">{card.value}</strong>
-                    <small className="ema-kpi-note">{card.subtitle}</small>
+                  <div className="hardware-kpi-content">
+                    <i className="hardware-kpi-icon">{card.icon}</i>
+                    <span className="hardware-kpi-label">{card.title}</span>
+                    <strong className="hardware-kpi-value">{card.value}</strong>
+                    <small className="hardware-kpi-note">{card.subtitle}</small>
                   </div>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className={`ema-main-grid ${hasSelectedDevice && !showDeviceDetails ? "has-inspector" : ""}`}>
-        <section className="content-shell ema-card ema-registry-card ema-panel-surface">
+          <div className={`hardware-main-grid ${hasSelectedDevice && !showDeviceDetails ? "has-inspector" : ""}`}>
+        <section className="content-shell hardware-card hardware-registry-card ema-panel-surface">
         {activeTab === "statistics" ? renderStatisticsWorkbench() : (
           <>
 
-          <div className="ema-registry-toolbar ema-registry-toolbar-stacked">
-            <div className="ema-scan-command-row">
+          <div ref={hardwareRegistryToolbarRef} className="hardware-registry-toolbar hardware-registry-toolbar-stacked">
+            <div className="hardware-scan-command-row">
               {/* <button
                 type="button"
-                className="ema-command-btn ema-command-btn-muted"
+                className="hardware-command-btn hardware-command-btn-muted"
                 onClick={() => setActiveTab("statistics")}
                 title="Open hardware statistics and insights"
               >
@@ -4380,7 +5118,7 @@ export default function HardwareInventory() {
 
               <button
                 type="button"
-                className="ema-command-btn"
+                className="hardware-command-btn"
                 onClick={() => void handleScanHardware("device")}
                 disabled={hardwareScanLoading || !hasSelectedDevice || String(selectedDevice.objectAgent || "EM").toUpperCase() !== "EM"}
                 title={!hasSelectedDevice ? "Select a device first" : String(selectedDevice.objectAgent || "EM").toUpperCase() !== "EM" ? "Only supported Windows/EM devices can be scanned" : `Refresh hardware inventory for ${selectedDevice.name}`}
@@ -4391,7 +5129,7 @@ export default function HardwareInventory() {
 
               <button
                 type="button"
-                className="ema-command-btn"
+                className="hardware-command-btn"
                 onClick={() => void handleScanHardware("folder")}
                 disabled={hardwareScanLoading || getSelectedRelationID() === -1}
                 title={getSelectedRelationID() === -1 ? "Select a folder first, or use Scan All" : `Refresh hardware inventory for ${selectedFolderLabel}`}
@@ -4402,7 +5140,7 @@ export default function HardwareInventory() {
 
               <button
                 type="button"
-                className="ema-command-btn"
+                className="hardware-command-btn"
                 onClick={() => void handleScanHardware("all")}
                 disabled={hardwareScanLoading}
                 title="Refresh hardware inventory for all EM/Windows devices"
@@ -4411,7 +5149,7 @@ export default function HardwareInventory() {
                 {hardwareScanLoading ? "Scanning..." : "Scan All"}
               </button>
 
-              <div className="ema-search-box small ema-search-box-with-clear ema-toolbar-search">
+              <div className="hardware-search-box small hardware-search-box-with-clear hardware-toolbar-search">
                 <Search size={15} />
                 <input
                   type="text"
@@ -4426,7 +5164,7 @@ export default function HardwareInventory() {
                 {searchDevices && (
                   <button
                     type="button"
-                    className="ema-search-clear"
+                    className="hardware-search-clear"
                     onClick={() => {
                       setSearchDevices("");
                       setPage(1);
@@ -4439,13 +5177,13 @@ export default function HardwareInventory() {
                 )}
               </div>
 
-              <button type="button" className="ema-icon-btn ema-toolbar-refresh" onClick={handleRefresh} title="Refresh inventory">
+              <button type="button" className="hardware-icon-btn hardware-toolbar-refresh" onClick={handleRefresh} title="Refresh inventory">
                 <RefreshCw size={16} />
               </button>
 
               <button
                 type="button"
-                className="ema-command-btn ema-toolbar-export"
+                className="hardware-command-btn hardware-toolbar-export"
                 onClick={handleExportHardwareTable}
                 disabled={!filteredDevices.length}
                 title="Export current table data"
@@ -4455,8 +5193,8 @@ export default function HardwareInventory() {
               </button>
             </div>
 
-            <div className="ema-registry-filters ema-registry-filter-row">
-              <div className="ema-filter-group">
+            <div className="hardware-registry-filters hardware-registry-filter-row">
+              <div className="hardware-filter-group">
                 <label>Status</label>
                 <HardwareDropdown
                   label="Status filter"
@@ -4469,7 +5207,7 @@ export default function HardwareInventory() {
                 />
               </div>
 
-              <div className="ema-filter-group">
+              <div className="hardware-filter-group">
                 <label>Platform</label>
                 <HardwareDropdown
                   label="Platform filter"
@@ -4482,14 +5220,14 @@ export default function HardwareInventory() {
                 />
               </div>
 
-              <button type="button" className="ema-clear-filters-btn" onClick={clearTableFilters} disabled={!searchDevices && activeTableFilterCount === 0}>
+              <button type="button" className="hardware-clear-filters-btn" onClick={clearTableFilters} disabled={!searchDevices && activeTableFilterCount === 0}>
                 <X size={14} />
                 Reset
               </button>
             </div>
           </div>
 
-          <div className="ema-registry-subhead">
+          <div className="hardware-registry-subhead">
             <div>
               <span>
                 {selectedFolderLabel} scope
@@ -4502,36 +5240,36 @@ export default function HardwareInventory() {
             </div>
           </div>
 
-          <div className="user-access-table advanced clean-table ema-standard-table ema-device-table">
-            <div className="user-row head advanced clean-table-row ema-standard-row ema-device-table-row">
+          <div className="user-access-table advanced clean-table hardware-standard-table hardware-device-table">
+            <div className="user-row head advanced clean-table-row hardware-standard-row hardware-device-table-row">
               <div className="user-cell">No</div>
               <div className="user-cell">
-                <button type="button" className="ema-sort-btn" onClick={() => handleSort("name")}>
+                <button type="button" className="hardware-sort-btn" onClick={() => handleSort("name")}>
                   Device {renderSortIndicator("name")}
                 </button>
               </div>
               <div className="user-cell">
-                <button type="button" className="ema-sort-btn" onClick={() => handleSort("groupPath")}>
+                <button type="button" className="hardware-sort-btn" onClick={() => handleSort("groupPath")}>
                   Branch {renderSortIndicator("groupPath")}
                 </button>
               </div>
               <div className="user-cell">
-                <button type="button" className="ema-sort-btn" onClick={() => handleSort("platformModel")}>
+                <button type="button" className="hardware-sort-btn" onClick={() => handleSort("platformModel")}>
                   Platform / Model {renderSortIndicator("platformModel")}
                 </button>
               </div>
               <div className="user-cell">
-                <button type="button" className="ema-sort-btn" onClick={() => handleSort("status")}>
+                <button type="button" className="hardware-sort-btn" onClick={() => handleSort("status")}>
                   Status {renderSortIndicator("status")}
                 </button>
               </div>
               <div className="user-cell">
-                <button type="button" className="ema-sort-btn" onClick={() => handleSort("lastConnected")}>
+                <button type="button" className="hardware-sort-btn" onClick={() => handleSort("lastConnected")}>
                   Last Connected {renderSortIndicator("lastConnected")}
                 </button>
               </div>
               <div className="user-cell">
-                <button type="button" className="ema-sort-btn" onClick={() => handleSort("ip")}>
+                <button type="button" className="hardware-sort-btn" onClick={() => handleSort("ip")}>
                   Network {renderSortIndicator("ip")}
                 </button>
               </div>
@@ -4542,7 +5280,7 @@ export default function HardwareInventory() {
                 role="button"
                 tabIndex={0}
                 key={device.id}
-                className={`user-row advanced clean-table-row ema-standard-row ema-device-table-row ema-device-row ${hasSelectedDevice && selectedDevice.id === device.id ? "is-selected" : ""}`}
+                className={`user-row advanced clean-table-row hardware-standard-row hardware-device-table-row hardware-device-row ${hasSelectedDevice && selectedDevice.id === device.id ? "is-selected" : ""}`}
                 onClick={() => handleDeviceRowSelect(device)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") handleDeviceRowSelect(device);
@@ -4551,9 +5289,9 @@ export default function HardwareInventory() {
                 <div className="user-cell row-number">
                   <span className="row-index-pill">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span>
                 </div>
-                <div className="user-cell ema-device-main-cell">
-                  <div className="user-name ema-user-name">
-                    <i className={`ema-status-dot ${getStatusClass(device.status)}`} />
+                <div className="user-cell hardware-device-main-cell">
+                  <div className="user-name hardware-user-name">
+                    <i className={`hardware-status-dot ${getStatusClass(device.status)}`} />
                     <div>
                       <strong
                         role="button"
@@ -4573,34 +5311,34 @@ export default function HardwareInventory() {
                     </div>
                   </div>
                 </div>
-                <div className="user-cell ema-location-cell">
+                <div className="user-cell hardware-location-cell">
                   <strong>{device.department}</strong>
                   <small title={device.groupPath}>{device.groupPath}</small>
                 </div>
-                <div className="user-cell"><span className="ema-model-text">{device.platformModel}</span></div>
-                <div className="user-cell"><span className={`user-pill ema-status-pill ${getStatusClass(device.status)}`}>{device.status}</span></div>
-                <div className="user-cell"><span className="muted-cell ema-date-cell">{device.lastConnected}</span></div>
-                <div className="user-cell ema-network-cell">
+                <div className="user-cell"><span className="hardware-model-text">{device.platformModel}</span></div>
+                <div className="user-cell"><span className={`user-pill hardware-status-pill ${getStatusClass(device.status)}`}>{device.status}</span></div>
+                <div className="user-cell"><span className="muted-cell hardware-date-cell">{device.lastConnected}</span></div>
+                <div className="user-cell hardware-network-cell">
                   <strong>{device.ip}</strong>
                 </div>
               </div>
             ))}
 
             {pagedDevices.length === 0 && (
-              <div className="settings-empty-state ema-empty-state">{inventoryLoading ? "Loading hardware inventory..." : "No device found for current filter/search."}</div>
+              <div className="settings-empty-state hardware-empty-state">{inventoryLoading ? "Loading hardware inventory..." : "No device found for current filter/search."}</div>
             )}
           </div>
 
-          <div className="uam-pagination global-style ema-pagination">
-            <div className="uam-page-summary ema-page-summary">Page {page} of {pageCount}</div>
-            <div className="uam-pagination-controls global-style ema-pagination-actions" aria-label="Hardware inventory pagination">
+          <div className="uam-pagination global-style hardware-pagination">
+            <div className="uam-page-summary hardware-page-summary">Page {page} of {pageCount}</div>
+            <div className="uam-pagination-controls global-style hardware-pagination-actions" aria-label="Hardware inventory pagination">
               <button className="uam-page-icon" type="button" onClick={() => { setPage(1); setNote("Device panel remains open until you close it."); }} disabled={page === 1} aria-label="First page">
                 «
               </button>
               <button className="uam-page-icon" type="button" onClick={() => { setPage((current) => Math.max(1, current - 1)); setNote("Device panel remains open until you close it."); }} disabled={page === 1} aria-label="Previous page">
                 ‹
               </button>
-              <span className="uam-page-current ema-pagination-current">{page}</span>
+              <span className="uam-page-current hardware-pagination-current">{page}</span>
               <button className="uam-page-icon" type="button" onClick={() => { setPage((current) => Math.min(pageCount, current + 1)); setNote("Device panel remains open until you close it."); }} disabled={page === pageCount} aria-label="Next page">
                 ›
               </button>
@@ -4615,13 +5353,13 @@ export default function HardwareInventory() {
       </section>
 
       {hasSelectedDevice && !showDeviceDetails && (
-      <aside ref={hardwareQuickPanelRef} className="ema-card ema-right-panel ema-panel-surface">
-        <div className="ema-right-device">
-          <div className="ema-right-header">
-            <div className="ema-right-icon">
+      <aside ref={hardwareQuickPanelRef} className="hardware-card hardware-right-panel ema-panel-surface">
+        <div className="hardware-right-device">
+          <div className="hardware-right-header">
+            <div className="hardware-right-icon">
               <Monitor size={20} />
             </div>
-            <div className="ema-right-title">
+            <div className="hardware-right-title">
               <h3>{selectedDevice.name}</h3>
               <p>
                 {selectedDevice.os} • {selectedDevice.ip}
@@ -4629,7 +5367,7 @@ export default function HardwareInventory() {
             </div>
             <button
               type="button"
-              className="ema-right-close"
+              className="hardware-right-close"
               onClick={() => clearSelectedDevice("Device actions panel closed.")}
               aria-label="Close device actions panel"
               title="Close panel"
@@ -4638,9 +5376,9 @@ export default function HardwareInventory() {
             </button>
           </div>
 
-          <div className="ema-action-list">
-            <button type="button" className="ema-action-item is-action-message" onClick={() => setActiveModal("message")} disabled={messageLoading}>
-              <div className="ema-action-icon">
+          <div className="hardware-action-list">
+            <button type="button" className="hardware-action-item is-action-message" onClick={() => setActiveModal("message")} disabled={messageLoading}>
+              <div className="hardware-action-icon">
                 <Send size={16} />
               </div>
               <div>
@@ -4649,8 +5387,8 @@ export default function HardwareInventory() {
               </div>
             </button>
 
-            <button type="button" className="ema-action-item is-action-remote" onClick={() => setActiveModal("remote")}>
-              <div className="ema-action-icon">
+            <button type="button" className="hardware-action-item is-action-remote" onClick={() => setActiveModal("remote")}>
+              <div className="hardware-action-icon">
                 <Monitor size={16} />
               </div>
               <div>
@@ -4659,8 +5397,8 @@ export default function HardwareInventory() {
               </div>
             </button>
 
-            <button type="button" className="ema-action-item is-action-geo" onClick={openGeolocationModal} disabled={geoLoading}>
-              <div className="ema-action-icon">
+            <button type="button" className="hardware-action-item is-action-geo" onClick={openGeolocationModal} disabled={geoLoading}>
+              <div className="hardware-action-icon">
                 <MapPin size={16} />
               </div>
               <div>
@@ -4670,8 +5408,8 @@ export default function HardwareInventory() {
             </button>
 
             {selectedDevice.status === "Locked" ? (
-              <button type="button" className="ema-action-item is-action-unlock" onClick={() => void handleLockUnlockDevice("unlock")} disabled={lockActionLoading}>
-                <div className="ema-action-icon">
+              <button type="button" className="hardware-action-item is-action-unlock" onClick={() => void handleLockUnlockDevice("unlock")} disabled={lockActionLoading}>
+                <div className="hardware-action-icon">
                   <Unlock size={16} />
                 </div>
                 <div>
@@ -4680,8 +5418,8 @@ export default function HardwareInventory() {
                 </div>
               </button>
             ) : (
-              <button type="button" className="ema-action-item is-action-lock" onClick={() => setActiveModal("lock")} disabled={lockActionLoading}>
-                <div className="ema-action-icon">
+              <button type="button" className="hardware-action-item is-action-lock" onClick={() => setActiveModal("lock")} disabled={lockActionLoading}>
+                <div className="hardware-action-icon">
                   <Lock size={16} />
                 </div>
                 <div>
@@ -4692,8 +5430,8 @@ export default function HardwareInventory() {
             )}
 
 
-            <button type="button" className="ema-action-item is-action-move" onClick={openMoveDepartmentModal}>
-              <div className="ema-action-icon">
+            <button type="button" className="hardware-action-item is-action-move" onClick={openMoveDepartmentModal}>
+              <div className="hardware-action-icon">
                 <Database size={16} />
               </div>
               <div>
@@ -4712,8 +5450,8 @@ export default function HardwareInventory() {
       <DeviceDetailsDrawer device={detailDevice} isOpen={hasDetailDevice} onClose={closeDeviceDetails} />
 
       {toast && (
-        <div className={`ema-toast ema-toast-${toast.type}`} role="status">
-          <div className="ema-toast-icon">{toast.type === "success" ? <CheckCircle size={18} /> : toast.type === "delete" ? <Trash2 size={18} /> : <AlertCircle size={18} />}</div>
+        <div className={`hardware-toast hardware-toast-${toast.type}`} role="status">
+          <div className="hardware-toast-icon">{toast.type === "success" ? <CheckCircle size={18} /> : toast.type === "delete" ? <Trash2 size={18} /> : <AlertCircle size={18} />}</div>
           <div>
             <strong>{toast.title}</strong>
             <span>{toast.message}</span>
@@ -4725,41 +5463,41 @@ export default function HardwareInventory() {
       )}
 
       {activeModal === "addFolder" && (
-        <div className="ema-modal-overlay" onClick={closeModal}>
-          <div className="ema-modal ema-folder-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header blue">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={closeModal}>
+          <div className="hardware-modal hardware-folder-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header blue">
+              <div className="hardware-modal-title">
                 <FolderPlus size={20} />
                 <div>
                   <strong>{folderModalMode === "main" ? "CREATE MAIN FOLDER" : "CREATE SUBFOLDER"}</strong>
                   <span>{folderModalMode === "main" ? "Create a new top-level folder." : `Parent folder: ${folderModalParentLabel}`}</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal}>
                 <X size={18} />
               </button>
             </div>
             <form
-              className="ema-modal-body"
+              className="hardware-modal-body"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleCreateFolderSubmit();
               }}
             >
-              <div className="ema-form-group">
+              <div className="hardware-form-group">
                 <label>Folder Name</label>
                 <input autoFocus type="text" value={folderNameInput} disabled={folderCreateLoading} onChange={(event) => setFolderNameInput(event.target.value)} placeholder="Example: Johor, Kuala Lumpur, HQ" />
-                {folderNameError && <div className="ema-form-error">{folderNameError}</div>}
+                {folderNameError && <div className="hardware-form-error">{folderNameError}</div>}
               </div>
-              <div className="ema-preview-card">
+              <div className="hardware-preview-card">
                 <span>Preview</span>
                 <strong>{folderModalMode === "main" ? folderNameInput.trim() || "New Main Folder" : `${folderModalParentLabel} \\ ${folderNameInput.trim() || "New Subfolder"}`}</strong>
               </div>
-              <div className="ema-modal-footer embedded">
-                <button type="button" className="ema-btn link" onClick={closeModal} disabled={folderCreateLoading}>
+              <div className="hardware-modal-footer embedded">
+                <button type="button" className="hardware-btn link" onClick={closeModal} disabled={folderCreateLoading}>
                   Cancel
                 </button>
-                <button type="submit" className="ema-btn primary" disabled={folderCreateLoading || !folderNameInput.trim()}>
+                <button type="submit" className="hardware-btn primary" disabled={folderCreateLoading || !folderNameInput.trim()}>
                   {folderCreateLoading ? "Creating..." : "Create Folder"}
                 </button>
               </div>
@@ -4769,41 +5507,41 @@ export default function HardwareInventory() {
       )}
 
       {activeModal === "renameFolder" && folderActionNode && (
-        <div className="ema-modal-overlay" onClick={closeModal}>
-          <div className="ema-modal ema-folder-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header blue">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={closeModal}>
+          <div className="hardware-modal hardware-folder-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header blue">
+              <div className="hardware-modal-title">
                 <Pencil size={20} />
                 <div>
                   <strong>RENAME FOLDER</strong>
                   <span>Update department hierarchy label.</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal} disabled={folderActionLoading}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={folderActionLoading}>
                 <X size={18} />
               </button>
             </div>
             <form
-              className="ema-modal-body"
+              className="hardware-modal-body"
               onSubmit={(event) => {
                 event.preventDefault();
                 void handleRenameFolderSubmit();
               }}
             >
-              <div className="ema-preview-card">
+              <div className="hardware-preview-card">
                 <span>Current Folder</span>
                 <strong>{folderActionNode.label}</strong>
               </div>
-              <div className="ema-form-group">
+              <div className="hardware-form-group">
                 <label>New Folder Name</label>
                 <input autoFocus type="text" value={folderActionInput} disabled={folderActionLoading} onChange={(event) => setFolderActionInput(event.target.value)} />
-                {folderActionError && <div className="ema-form-error">{folderActionError}</div>}
+                {folderActionError && <div className="hardware-form-error">{folderActionError}</div>}
               </div>
-              <div className="ema-modal-footer embedded">
-                <button type="button" className="ema-btn link" onClick={closeModal} disabled={folderActionLoading}>
+              <div className="hardware-modal-footer embedded">
+                <button type="button" className="hardware-btn link" onClick={closeModal} disabled={folderActionLoading}>
                   Cancel
                 </button>
-                <button type="submit" className="ema-btn primary" disabled={folderActionLoading || !folderActionInput.trim()}>
+                <button type="submit" className="hardware-btn primary" disabled={folderActionLoading || !folderActionInput.trim()}>
                   {folderActionLoading ? "Renaming..." : "Rename Folder"}
                 </button>
               </div>
@@ -4813,34 +5551,34 @@ export default function HardwareInventory() {
       )}
 
       {activeModal === "deleteFolder" && folderActionNode && (
-        <div className="ema-modal-overlay" onClick={closeModal}>
-          <div className="ema-modal ema-folder-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header red">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={closeModal}>
+          <div className="hardware-modal hardware-folder-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header red">
+              <div className="hardware-modal-title">
                 <Trash2 size={20} />
                 <div>
                   <strong>DELETE FOLDER</strong>
                   <span>This will remove the folder from hierarchy.</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal} disabled={folderActionLoading}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={folderActionLoading}>
                 <X size={18} />
               </button>
             </div>
-            <div className="ema-modal-body">
-              <div className="ema-info-banner red">
+            <div className="hardware-modal-body">
+              <div className="hardware-info-banner red">
                 <AlertCircle size={16} />
                 <div>
                   <strong>{folderActionNode.label}</strong>
                   <span>Delete is only allowed when this folder has no child folders and no devices.</span>
                 </div>
               </div>
-              {folderActionError && <div className="ema-form-error">{folderActionError}</div>}
-              <div className="ema-modal-footer embedded">
-                <button type="button" className="ema-btn link" onClick={closeModal} disabled={folderActionLoading}>
+              {folderActionError && <div className="hardware-form-error">{folderActionError}</div>}
+              <div className="hardware-modal-footer embedded">
+                <button type="button" className="hardware-btn link" onClick={closeModal} disabled={folderActionLoading}>
                   Cancel
                 </button>
-                <button type="button" className="ema-btn danger" onClick={() => void handleDeleteFolderSubmit()} disabled={folderActionLoading}>
+                <button type="button" className="hardware-btn danger" onClick={() => void handleDeleteFolderSubmit()} disabled={folderActionLoading}>
                   {folderActionLoading ? "Deleting..." : "Delete Folder"}
                 </button>
               </div>
@@ -4850,29 +5588,29 @@ export default function HardwareInventory() {
       )}
 
       {hasSelectedDevice && activeModal === "move" && (
-        <div className="ema-modal-overlay" onClick={closeModal}>
-          <div className="ema-modal ema-modal-colored ema-move-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header blue">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={closeModal}>
+          <div className="hardware-modal hardware-modal-colored hardware-move-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header blue">
+              <div className="hardware-modal-title">
                 <Database size={20} />
                 <div>
                   <strong>MOVE DEPARTMENT</strong>
                   <span>Move selected device to another folder</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal} disabled={moveLoading}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={moveLoading}>
                 <X size={18} />
               </button>
             </div>
-            <div className="ema-modal-body ema-move-modal-body">
-              <div className="ema-info-banner blue ema-move-current-card">
+            <div className="hardware-modal-body hardware-move-modal-body">
+              <div className="hardware-info-banner blue hardware-move-current-card">
                 <AlertCircle size={16} />
                 <div>
                   <strong>{selectedDevice.name}</strong>
                   <span>Current location: {selectedDevice.groupPath || selectedDevice.department || "-"}</span>
                 </div>
               </div>
-              <div className="ema-form-group ema-move-select-group">
+              <div className="hardware-form-group hardware-move-select-group">
                 <label>Destination Folder</label>
                 <HardwareDropdown
                   label="Destination folder"
@@ -4886,14 +5624,14 @@ export default function HardwareInventory() {
                       : departmentOptions.map((department) => ({ value: department.key, label: department.groupPath }))
                   }
                 />
-                <p className="ema-move-helper">Choose the folder where this device should be placed.</p>
+                <p className="hardware-move-helper">Choose the folder where this device should be placed.</p>
               </div>
             </div>
-            <div className="ema-modal-footer">
-              <button type="button" className="ema-btn link" onClick={closeModal}>
+            <div className="hardware-modal-footer">
+              <button type="button" className="hardware-btn link" onClick={closeModal}>
                 Cancel
               </button>
-              <button type="button" className="ema-btn primary" onClick={handleMoveDepartmentSubmit} disabled={moveLoading || !moveTargetKey}>
+              <button type="button" className="hardware-btn primary" onClick={handleMoveDepartmentSubmit} disabled={moveLoading || !moveTargetKey}>
                 {moveLoading ? "Moving..." : "Move Device"}
               </button>
             </div>
@@ -4902,22 +5640,22 @@ export default function HardwareInventory() {
       )}
 
       {hasSelectedDevice && activeModal === "message" && (
-        <div className="ema-modal-overlay" onClick={messageLoading ? undefined : closeModal}>
-          <div className="ema-modal ema-modal-message" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header blue">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={messageLoading ? undefined : closeModal}>
+          <div className="hardware-modal hardware-modal-message" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header blue">
+              <div className="hardware-modal-title">
                 <MessageSquare size={20} />
                 <div>
                   <strong>SEND MESSAGE</strong>
                   <span>Target device: {selectedDevice.name}</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal} disabled={messageLoading}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={messageLoading}>
                 <X size={18} />
               </button>
             </div>
-            <div className="ema-modal-body">
-              <div className="ema-device-target-card">
+            <div className="hardware-modal-body">
+              <div className="hardware-device-target-card">
                 <Monitor size={18} />
                 <div>
                   <strong>{selectedDevice.name}</strong>
@@ -4926,12 +5664,12 @@ export default function HardwareInventory() {
                   </span>
                 </div>
               </div>
-              <label className="ema-check">
+              <label className="hardware-check">
                 <input type="checkbox" checked={broadcastMessage} onChange={(event) => setBroadcastMessage(event.target.checked)} disabled={messageLoading} />
                 <span>Broadcast Message</span>
               </label>
               {broadcastMessage && (
-                <div className="ema-info-banner yellow">
+                <div className="hardware-info-banner yellow">
                   <AlertCircle size={16} />
                   <div>
                     <strong>Platform broadcast</strong>
@@ -4939,25 +5677,25 @@ export default function HardwareInventory() {
                   </div>
                 </div>
               )}
-              <div className="ema-form-group">
+              <div className="hardware-form-group">
                 <label>Message Subject</label>
                 <input type="text" value={messageSubject} onChange={(event) => setMessageSubject(event.target.value)} placeholder="Message subject" disabled={messageLoading} />
               </div>
-              <div className="ema-form-group">
+              <div className="hardware-form-group">
                 <label>Message Body</label>
                 <textarea rows={6} value={messageBody} onChange={(event) => setMessageBody(event.target.value)} placeholder="Enter message for device user" disabled={messageLoading} />
               </div>
-              <label className="ema-check">
+              <label className="hardware-check">
                 <input type="checkbox" checked={forceRead} onChange={(event) => setForceRead(event.target.checked)} disabled={messageLoading} />
                 <span>Force Read</span>
               </label>
-              {messageError && <div className="ema-form-error">{messageError}</div>}
+              {messageError && <div className="hardware-form-error">{messageError}</div>}
             </div>
-            <div className="ema-modal-footer">
-              <button type="button" className="ema-btn link" onClick={closeModal} disabled={messageLoading}>
+            <div className="hardware-modal-footer">
+              <button type="button" className="hardware-btn link" onClick={closeModal} disabled={messageLoading}>
                 Close
               </button>
-              <button type="button" className="ema-btn primary" onClick={() => void handleSendMessage()} disabled={messageLoading}>
+              <button type="button" className="hardware-btn primary" onClick={() => void handleSendMessage()} disabled={messageLoading}>
                 {messageLoading ? "Sending..." : "Send Message"}
               </button>
             </div>
@@ -4966,22 +5704,22 @@ export default function HardwareInventory() {
       )}
 
       {hasSelectedDevice && activeModal === "remote" && (
-        <div className="ema-modal-overlay" onClick={remoteLoading ? undefined : closeModal}>
-          <div className="ema-modal ema-modal-colored" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header blue">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={remoteLoading ? undefined : closeModal}>
+          <div className="hardware-modal hardware-modal-colored" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header blue">
+              <div className="hardware-modal-title">
                 <Monitor size={20} />
                 <div>
                   <strong>ADVANCED REMOTE CONTROL</strong>
                   <span>{selectedDevice.name}</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal} disabled={remoteLoading}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={remoteLoading}>
                 <X size={18} />
               </button>
             </div>
-            <div className="ema-modal-body">
-              <div className="ema-info-banner blue">
+            <div className="hardware-modal-body">
+              <div className="hardware-info-banner blue">
                 <AlertCircle size={16} />
                 <div>
                   <strong>Remote assistance</strong>
@@ -4989,8 +5727,8 @@ export default function HardwareInventory() {
                 </div>
               </div>
 
-              <div className="ema-modal-section-title">Remote Support Mode</div>
-              <div className="ema-session-grid">
+              <div className="hardware-modal-section-title">Remote Support Mode</div>
+              <div className="hardware-session-grid">
                 <button type="button" className={sessionType === "full" ? "is-active" : ""} onClick={() => setSessionType("full")} disabled={remoteLoading}>
                   <Monitor size={18} />
                   <span>Normal Session</span>
@@ -5000,14 +5738,14 @@ export default function HardwareInventory() {
                   <span>Screen Only</span>
                 </button>
               </div>
-              <label className="ema-option-card">
+              <label className="hardware-option-card">
                 <input type="checkbox" checked={notifyUser} onChange={(event) => setNotifyUser(event.target.checked)} disabled={remoteLoading} />
                 <div>
                   <strong>Notify User</strong>
                   <span>Notify the user before the support session starts</span>
                 </div>
               </label>
-              <label className="ema-option-card">
+              <label className="hardware-option-card">
                 <input type="checkbox" checked={recordSession} onChange={(event) => setRecordSession(event.target.checked)} disabled={remoteLoading} />
                 <div>
                   <strong>Record Session</strong>
@@ -5015,11 +5753,11 @@ export default function HardwareInventory() {
                 </div>
               </label>
             </div>
-            <div className="ema-modal-footer">
-              <button type="button" className="ema-btn link" onClick={closeModal} disabled={remoteLoading}>
+            <div className="hardware-modal-footer">
+              <button type="button" className="hardware-btn link" onClick={closeModal} disabled={remoteLoading}>
                 Cancel
               </button>
-              <button type="button" className="ema-btn primary" onClick={() => void handleStartRemoteControl()} disabled={remoteLoading}>
+              <button type="button" className="hardware-btn primary" onClick={() => void handleStartRemoteControl()} disabled={remoteLoading}>
                 {remoteLoading ? "Starting..." : "Start Remote Control"}
               </button>
             </div>
@@ -5028,27 +5766,27 @@ export default function HardwareInventory() {
       )}
 
       {hasSelectedDevice && activeModal === "geo" && (
-        <div className="ema-modal-overlay" onClick={geoLoading ? undefined : closeModal}>
-          <div className="ema-modal ema-modal-geo ema-modal-geo-v2" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header green">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={geoLoading ? undefined : closeModal}>
+          <div className="hardware-modal hardware-modal-geo hardware-modal-geo-v2" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header green">
+              <div className="hardware-modal-title">
                 <MapPin size={20} />
                 <div>
                   <strong>DEVICE GEOLOCATION</strong>
                   <span>{selectedDevice.name} • Location history</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal} disabled={geoLoading}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={geoLoading}>
                 <X size={18} />
               </button>
             </div>
 
 
-            <div className="ema-modal-body ema-geo-redesign-body">
-              <section className="ema-geo-redesign-left">
-                <div className="ema-geo-current-card">
-                  <div className="ema-geo-current-head">
-                    <div className="ema-geo-current-icon">
+            <div className="hardware-modal-body hardware-geo-redesign-body">
+              <section className="hardware-geo-redesign-left">
+                <div className="hardware-geo-current-card">
+                  <div className="hardware-geo-current-head">
+                    <div className="hardware-geo-current-icon">
                       <MapPin size={18} />
                     </div>
                     <div>
@@ -5056,13 +5794,13 @@ export default function HardwareInventory() {
                       <strong>{selectedDevice.name}</strong>
                       <p>{geoLoading ? "Loading saved location automatically..." : geoStatus}</p>
                     </div>
-                    <div className={`ema-geo-current-state ${geoMeta.hasLocation ? "is-success" : geoLoading ? "is-loading" : "is-empty"}`}>
+                    <div className={`hardware-geo-current-state ${geoMeta.hasLocation ? "is-success" : geoLoading ? "is-loading" : "is-empty"}`}>
                       <span />
                       {geoMeta.hasLocation ? "Location found" : geoLoading ? "Loading" : "No coordinate"}
                     </div>
                   </div>
 
-                  <div className="ema-geo-current-grid">
+                  <div className="hardware-geo-current-grid">
                     <div className="is-wide">
                       <small>Location Name</small>
                       <strong>{geoLocationName}</strong>
@@ -5088,23 +5826,23 @@ export default function HardwareInventory() {
                   </div>
                 </div>
 
-                <div className="ema-geo-map-shell">
-                  <div className="ema-geo-map-shell-head">
+                <div className="hardware-geo-map-shell">
+                  <div className="hardware-geo-map-shell-head">
                     <div>
                       <span>Map View</span>
                       <strong>{geoMeta.hasLocation ? `${geoMeta.latitude.toFixed(6)}, ${geoMeta.longitude.toFixed(6)}` : "No map coordinate"}</strong>
                     </div>
                     {geoMeta.hasLocation && (
-                      <a className="ema-geo-map-mini-link" href={geoMeta.mapOpenUrl} target="_blank" rel="noreferrer">
+                      <a className="hardware-geo-map-mini-link" href={geoMeta.mapOpenUrl} target="_blank" rel="noreferrer">
                         Open Map
                       </a>
                     )}
                   </div>
-                  <div className="ema-geo-map-frame">
+                  <div className="hardware-geo-map-frame">
                     {geoMeta.hasLocation ? (
                       <>
                         <iframe title={`Map for ${selectedDevice.name}`} src={geoMeta.mapEmbedUrl} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
-                        <div className="ema-geo-floating-marker">
+                        <div className="hardware-geo-floating-marker">
                           <MapPin size={15} />
                           <div>
                             <strong>{selectedDevice.name}</strong>
@@ -5113,7 +5851,7 @@ export default function HardwareInventory() {
                         </div>
                       </>
                     ) : (
-                      <div className="ema-geo-empty ema-geo-empty-redesign">
+                      <div className="hardware-geo-empty hardware-geo-empty-redesign">
                         <MapPin size={28} />
                         <strong>No coordinate available</strong>
                         <span>{geoLoading ? "Loading current location..." : "No location has been recorded for this device yet."}</span>
@@ -5123,13 +5861,13 @@ export default function HardwareInventory() {
                 </div>
               </section>
 
-              <section className="ema-geo-history-modern">
-                <div className="ema-geo-history-modern-head">
+              <section className="hardware-geo-history-modern">
+                <div className="hardware-geo-history-modern-head">
                   <div>
                     <span>Location History</span>
                     <strong>Latest movement records</strong>
                   </div>
-                  <div className="ema-geo-history-count">
+                  <div className="hardware-geo-history-count">
                     <strong>{geoHistory.length}</strong>
                     <span>loaded</span>
                   </div>
@@ -5137,7 +5875,7 @@ export default function HardwareInventory() {
 
                 {geoHistory.length ? (
                   <>
-                    <div className="ema-geo-history-list-modern">
+                    <div className="hardware-geo-history-list-modern">
                       {geoHistoryPageRows.map((row, index) => {
                         const absoluteIndex = geoHistoryStartIndex + index + 1;
                         const rowTime = getGeoField(row, ["Time", "DateTime", "LastUpdate"]);
@@ -5147,15 +5885,15 @@ export default function HardwareInventory() {
                         const rowDateParts = getGeoDateParts(rowTime);
 
                         return (
-                          <article className="ema-geo-history-item-modern" key={`${getGeoField(row, ["DeviceID", "deviceID"])}-${rowTime}-${absoluteIndex}`}>
-                            <div className="ema-geo-history-index-modern">{absoluteIndex}</div>
-                            <div className="ema-geo-history-content-modern">
-                              <div className="ema-geo-history-date-modern">
+                          <article className="hardware-geo-history-item-modern" key={`${getGeoField(row, ["DeviceID", "deviceID"])}-${rowTime}-${absoluteIndex}`}>
+                            <div className="hardware-geo-history-index-modern">{absoluteIndex}</div>
+                            <div className="hardware-geo-history-content-modern">
+                              <div className="hardware-geo-history-date-modern">
                                 <strong>{rowDateParts.dayDate}</strong>
                                 <span>{rowDateParts.time}</span>
                               </div>
                               <p title={rowLocation}>{rowLocation}</p>
-                              <div className="ema-geo-history-meta-modern" aria-label={`Latitude ${rowLatitude}, longitude ${rowLongitude}`}>
+                              <div className="hardware-geo-history-meta-modern" aria-label={`Latitude ${rowLatitude}, longitude ${rowLongitude}`}>
                                 <span>{rowLatitude}</span>
                                 <span>{rowLongitude}</span>
                               </div>
@@ -5165,9 +5903,9 @@ export default function HardwareInventory() {
                       })}
                     </div>
 
-                    <div className="uam-pagination global-style ema-geo-pagination">
-                      <div className="uam-page-summary ema-geo-page-summary">Page {geoHistoryCurrentPage} of {geoHistoryTotalPages}</div>
-                      <div className="uam-pagination-controls global-style ema-geo-pagination-actions" aria-label="Device location history pagination">
+                    <div className="uam-pagination global-style hardware-geo-pagination">
+                      <div className="uam-page-summary hardware-geo-page-summary">Page {geoHistoryCurrentPage} of {geoHistoryTotalPages}</div>
+                      <div className="uam-pagination-controls global-style hardware-geo-pagination-actions" aria-label="Device location history pagination">
                         <button
                           className="uam-page-icon"
                           type="button"
@@ -5186,7 +5924,7 @@ export default function HardwareInventory() {
                         >
                           ‹
                         </button>
-                        <span className="uam-page-current ema-geo-pagination-current">{geoHistoryCurrentPage}</span>
+                        <span className="uam-page-current hardware-geo-pagination-current">{geoHistoryCurrentPage}</span>
                         <button
                           className="uam-page-icon"
                           type="button"
@@ -5209,7 +5947,7 @@ export default function HardwareInventory() {
                     </div>
                   </>
                 ) : (
-                  <div className="ema-geo-history-empty-modern">
+                  <div className="hardware-geo-history-empty-modern">
                     <MapPin size={24} />
                     <strong>{geoLoading ? "Loading location history..." : "No location history"}</strong>
                     <span>{geoLoading ? "The latest records will appear here automatically." : "No location history is available for this device yet."}</span>
@@ -5218,11 +5956,11 @@ export default function HardwareInventory() {
               </section>
             </div>
 
-            <div className="ema-modal-footer ema-geo-footer">
-              <button type="button" className="ema-btn link" onClick={closeModal} disabled={geoLoading}>
+            <div className="hardware-modal-footer hardware-geo-footer">
+              <button type="button" className="hardware-btn link" onClick={closeModal} disabled={geoLoading}>
                 Close
               </button>
-              <button type="button" className="ema-btn primary" onClick={() => void handleRefreshGeolocation(true)} disabled={geoLoading}>
+              <button type="button" className="hardware-btn primary" onClick={() => void handleRefreshGeolocation(true)} disabled={geoLoading}>
                 {geoLoading ? "Refreshing..." : "Refresh Live Location"}
               </button>
             </div>
@@ -5232,33 +5970,33 @@ export default function HardwareInventory() {
 
 
       {hasSelectedDevice && activeModal === "lock" && (
-        <div className="ema-modal-overlay" onClick={lockActionLoading ? undefined : closeModal}>
-          <div className="ema-modal ema-modal-colored" onClick={(event) => event.stopPropagation()}>
-            <div className="ema-modal-header red">
-              <div className="ema-modal-title">
+        <div className="hardware-modal-overlay" onClick={lockActionLoading ? undefined : closeModal}>
+          <div className="hardware-modal hardware-modal-colored" onClick={(event) => event.stopPropagation()}>
+            <div className="hardware-modal-header red">
+              <div className="hardware-modal-title">
                 <Lock size={20} />
                 <div>
                   <strong>LOCK DEVICE</strong>
                   <span>{selectedDevice.name}</span>
                 </div>
               </div>
-              <button type="button" className="ema-modal-close inverse" onClick={closeModal} disabled={lockActionLoading}>
+              <button type="button" className="hardware-modal-close inverse" onClick={closeModal} disabled={lockActionLoading}>
                 <X size={18} />
               </button>
             </div>
-            <div className="ema-modal-body">
-              <div className="ema-info-banner yellow">
+            <div className="hardware-modal-body">
+              <div className="hardware-info-banner yellow">
                 <AlertCircle size={16} />
                 <div>
                   <strong>Security Warning</strong>
                   <span>Locking this device will restrict access and user interaction.</span>
                 </div>
               </div>
-              <div className="ema-form-group">
+              <div className="hardware-form-group">
                 <label>Reason for Lock</label>
                 <textarea rows={4} placeholder="Enter reason for locking this device..." value={lockReason} onChange={(event) => setLockReason(event.target.value)} disabled={lockActionLoading} />
               </div>
-              <div className="ema-form-group">
+              <div className="hardware-form-group">
                 <label>Lock Duration</label>
                 <HardwareDropdown
                   label="Lock duration"
@@ -5272,11 +6010,11 @@ export default function HardwareInventory() {
                 />
               </div>
             </div>
-            <div className="ema-modal-footer">
-              <button type="button" className="ema-btn link" onClick={closeModal} disabled={lockActionLoading}>
+            <div className="hardware-modal-footer">
+              <button type="button" className="hardware-btn link" onClick={closeModal} disabled={lockActionLoading}>
                 Cancel
               </button>
-              <button type="button" className="ema-btn danger" onClick={handleLockSubmit} disabled={lockActionLoading}>
+              <button type="button" className="hardware-btn danger" onClick={handleLockSubmit} disabled={lockActionLoading}>
                 {lockActionLoading ? "Locking..." : "Lock Device"}
               </button>
             </div>
@@ -5286,4 +6024,3 @@ export default function HardwareInventory() {
     </main>
   );
 }
-
