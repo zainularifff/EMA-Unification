@@ -4,7 +4,7 @@ type EmaWindowWithFallback = Window & typeof globalThis & {
   [FALLBACK_MARKER]?: boolean;
 };
 
-function createFallbackResponse() {
+function createNetworkHierarchyFallbackResponse() {
   return new Response(
     JSON.stringify({
       success: true,
@@ -31,9 +31,32 @@ function createFallbackResponse() {
   );
 }
 
-function isHierarchyRequest(input: RequestInfo | URL) {
-  const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-  return url.includes("/api/network/hierarchy");
+function createDepartmentTreeFallbackResponse() {
+  return new Response(
+    JSON.stringify({
+      success: true,
+      message: "Fallback empty department tree",
+      data: [],
+    }),
+    {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+}
+
+function getRequestUrl(input: RequestInfo | URL) {
+  return typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+}
+
+function isNetworkHierarchyRequest(input: RequestInfo | URL) {
+  return getRequestUrl(input).includes("/api/network/hierarchy");
+}
+
+function isDepartmentTreeRequest(input: RequestInfo | URL) {
+  return getRequestUrl(input).includes("/api/departments/tree");
 }
 
 if (typeof window !== "undefined" && typeof window.fetch === "function") {
@@ -44,7 +67,11 @@ if (typeof window !== "undefined" && typeof window.fetch === "function") {
     const originalFetch = window.fetch.bind(window);
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (!isHierarchyRequest(input)) return originalFetch(input, init);
+      if (isDepartmentTreeRequest(input)) {
+        return createDepartmentTreeFallbackResponse();
+      }
+
+      if (!isNetworkHierarchyRequest(input)) return originalFetch(input, init);
 
       try {
         const response = await originalFetch(input, init);
@@ -53,15 +80,15 @@ if (typeof window !== "undefined" && typeof window.fetch === "function") {
         try {
           const payload = await clone.json();
           if (!response.ok || payload?.success === false || !payload?.data) {
-            return createFallbackResponse();
+            return createNetworkHierarchyFallbackResponse();
           }
         } catch {
-          if (!response.ok) return createFallbackResponse();
+          if (!response.ok) return createNetworkHierarchyFallbackResponse();
         }
 
         return response;
       } catch {
-        return createFallbackResponse();
+        return createNetworkHierarchyFallbackResponse();
       }
     };
   }
