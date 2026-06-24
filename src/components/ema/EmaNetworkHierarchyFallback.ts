@@ -31,12 +31,12 @@ function createNetworkHierarchyFallbackResponse() {
   );
 }
 
-function createDepartmentTreeFallbackResponse() {
+function createDepartmentTreeFallbackResponse(data: unknown[] = []) {
   return new Response(
     JSON.stringify({
       success: true,
-      message: "Fallback empty department tree",
-      data: [],
+      message: "Department tree loaded from department hierarchy",
+      data,
     }),
     {
       status: 200,
@@ -51,12 +51,46 @@ function getRequestUrl(input: RequestInfo | URL) {
   return typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 }
 
+function getDepartmentHierarchyUrl(input: RequestInfo | URL) {
+  const requestUrl = getRequestUrl(input);
+
+  if (requestUrl.includes("/api/departments/tree")) {
+    return requestUrl.replace("/api/departments/tree", "/api/departments");
+  }
+
+  return requestUrl;
+}
+
 function isNetworkHierarchyRequest(input: RequestInfo | URL) {
   return getRequestUrl(input).includes("/api/network/hierarchy");
 }
 
 function isDepartmentTreeRequest(input: RequestInfo | URL) {
   return getRequestUrl(input).includes("/api/departments/tree");
+}
+
+async function fetchDepartmentHierarchy(originalFetch: typeof window.fetch, input: RequestInfo | URL, init?: RequestInit) {
+  try {
+    const response = await originalFetch(getDepartmentHierarchyUrl(input), init);
+    const clone = response.clone();
+    const payload = await clone.json();
+
+    if (!response.ok || payload?.success === false) {
+      return createDepartmentTreeFallbackResponse();
+    }
+
+    if (Array.isArray(payload?.data)) {
+      return createDepartmentTreeFallbackResponse(payload.data);
+    }
+
+    if (Array.isArray(payload)) {
+      return createDepartmentTreeFallbackResponse(payload);
+    }
+
+    return createDepartmentTreeFallbackResponse();
+  } catch {
+    return createDepartmentTreeFallbackResponse();
+  }
 }
 
 if (typeof window !== "undefined" && typeof window.fetch === "function") {
@@ -68,7 +102,7 @@ if (typeof window !== "undefined" && typeof window.fetch === "function") {
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       if (isDepartmentTreeRequest(input)) {
-        return createDepartmentTreeFallbackResponse();
+        return fetchDepartmentHierarchy(originalFetch, input, init);
       }
 
       if (!isNetworkHierarchyRequest(input)) return originalFetch(input, init);
