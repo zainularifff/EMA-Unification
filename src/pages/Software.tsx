@@ -13,7 +13,6 @@ import {
   MonitorSmartphone,
   Package,
   RefreshCw,
-  Search,
   X,
 } from "lucide-react";
 import {
@@ -37,6 +36,7 @@ import {
 } from "../components/ema";
 
 type ApiSoftwareRecord = Record<string, unknown>;
+type StatRow = Record<string, unknown>;
 
 type DepartmentNode = {
   Object_Rel_Idn?: number;
@@ -47,14 +47,30 @@ type DepartmentNode = {
   [key: string]: unknown;
 };
 
+type ApiAsset = Record<string, unknown> & {
+  _Idn?: number | string;
+  MDM_Asset_Idn?: number | string;
+  Object_Root_Idn?: number | string;
+  Object_Agent?: string;
+  Object_DeviceID?: string;
+  ComputerName?: string;
+  DeviceName?: string;
+  AssetID?: string | number;
+  AssetTag?: string | number;
+  Object_Rel_Idn?: number | string;
+  Object_Full_Name?: string;
+};
+
 type TreeNode = {
   id: string;
   label: string;
   type: "org" | "branch" | "dept" | "device" | "category";
   children?: TreeNode[];
   relationId?: number;
+  relationIds?: number[];
   assetId?: string;
   objectDeviceId?: string;
+  deviceKeys?: string[];
   count?: number;
 };
 
@@ -79,7 +95,6 @@ type ActiveView = "all" | "unique" | "installed" | "categories" | "unclassified"
 type SortKey = "softwareName" | "category" | "publisher" | "version" | "deviceName" | "machineType" | "ip" | "lastUpdated";
 type SortDirection = "asc" | "desc";
 type StatView = "installed" | "license" | "exe" | "dll" | "ini";
-type StatRow = Record<string, unknown>;
 
 const PAGE_SIZE = 10;
 const EMPTY_VALUE = "-";
@@ -101,7 +116,7 @@ function safeString(value: unknown, fallback = EMPTY_VALUE) {
   return text || fallback;
 }
 
-function readRecordValue(record: ApiSoftwareRecord, keys: string[], fallback = EMPTY_VALUE) {
+function readRecordValue(record: Record<string, unknown>, keys: string[], fallback = EMPTY_VALUE) {
   for (const key of keys) {
     const direct = record[key];
     if (direct !== undefined && direct !== null && String(direct).trim()) return String(direct).trim();
@@ -154,7 +169,7 @@ function chooseSoftwareName(record: ApiSoftwareRecord, index: number) {
 }
 
 function normalizeSoftwareRecord(record: ApiSoftwareRecord, index: number): SoftwareRecord {
-  const assetTag = readRecordValue(record, ["AssetTag", "Object_DeviceID", "AssetID"], `asset-${index}`);
+  const assetTag = readRecordValue(record, ["AssetTag", "Object_DeviceID", "AssetID", "Object_Root_Idn", "MDM_Asset_Idn"], `asset-${index}`);
   const deviceName = readRecordValue(record, ["ComputerName", "DeviceName", "Object_DeviceID", "AssetTag", "AssetID"], EMPTY_VALUE);
   const publisher = readRecordValue(record, ["Publisher", "Manufacturer", "Vendor", "Description"]);
   const description = readRecordValue(record, ["Description", "SoftwareDescription"], "");
@@ -169,11 +184,266 @@ function normalizeSoftwareRecord(record: ApiSoftwareRecord, index: number): Soft
     deviceName,
     machineType: readRecordValue(record, ["MachineType", "DeviceType", "PlatformType", "OS"], "Unknown"),
     ip: readRecordValue(record, ["IP", "IPAddress", "IpAddress"]),
-    department: readRecordValue(record, ["Department", "Object_Rel_Name", "Branch"], "Unassigned"),
-    assetId: readRecordValue(record, ["AssetID", "AssetTag", "MDM_Asset_Idn"], assetTag),
-    objectDeviceId: readRecordValue(record, ["Object_DeviceID", "AssetTag", "AssetID"], assetTag),
-    lastUpdated: formatDateTime(readRecordValue(record, ["LastUpdated", "UpdatedAt", "ModifiedDate", "ScanTime"], "")),
+    department: readRecordValue(record, ["Department", "Object_Rel_Name", "Branch", "Object_Full_Name"], "Unassigned"),
+    assetId: readRecordValue(record, ["AssetID", "AssetTag", "MDM_Asset_Idn", "Object_Root_Idn"], assetTag),
+    objectDeviceId: readRecordValue(record, ["Object_DeviceID", "ComputerName", "DeviceName", "AssetTag", "AssetID"], assetTag),
+    lastUpdated: formatDateTime(readRecordValue(record, ["LastUpdated", "UpdatedAt", "ModifiedDate", "ScanTime", "ConnectionTime"], "")),
   };
+}
+
+function normalizeIdentity(value: unknown) {
+  const text = safeString(value, "");
+  if (!text || text === EMPTY_VALUE) return "";
+  return text.toLowerCase().trim();
+}
+
+function uniqueValues(values: Array<string | number | undefined | null>) {
+  return Array.from(new Set(values.map(normalizeIdentity).filter(Boolean)));
+}
+
+function softwareRecordKeys(record: SoftwareRecord) {
+  return uniqueValues([record.assetId, record.objectDeviceId, record.deviceName]);
+}
+
+function assetDeviceKeys(asset: ApiAsset) {
+  return uniqueValues([
+    asset._Idn,
+    asset.MDM_Asset_Idn,
+    asset.Object_Root_Idn,
+    asset.AssetID,
+    asset.AssetTag,
+    asset.Object_DeviceID,
+    asset.ComputerName,
+    asset.DeviceName,
+    readRecordValue(asset, ["DeviceID", "DeviceName", "Computer_Name", "Object_Client_Name"], ""),
+  ]);
+}
+
+function recordMatchesDeviceKeys(record: SoftwareRecord, deviceKeys: Iterable<string> | undefined) {
+  const keySet = new Set(Array.from(deviceKeys || []).map(normalizeIdentity).filter(Boolean));
+  if (!keySet.size) return false;
+  return softwareRecordKeys(record).some((key) => keySet.has(key));
+}
+
+function getAssetLabel(asset: ApiAsset, fallback: string) {
+  return readRecordValue(asset, ["ComputerName", "DeviceName", "Object_DeviceID", "DeviceID", "Object_Client_Name", "AssetTag", "AssetID"], fallback);
+}
+
+function getAssetId(asset: ApiAsset) {
+  return readRecordValue(asset, ["_Idn", "MDM_Asset_Idn", "Object_Root_Idn", "AssetID", "AssetTag"], "");
+}
+
+function getAssetObjectDeviceId(asset: ApiAsset) {
+  return readRecordValue(asset, ["Object_DeviceID", "DeviceID", "ComputerName", "DeviceName", "AssetTag", "AssetID"], "");
+}
+
+function unwrapRows(payload: unknown): Record<string, unknown>[] {
+  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
+  if (!payload || typeof payload !== "object") return [];
+  const record = payload as Record<string, unknown>;
+  const data = record.data;
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object") {
+    const nested = data as Record<string, unknown>;
+    if (Array.isArray(nested.data)) return nested.data as Record<string, unknown>[];
+    if (Array.isArray(nested.departments)) return nested.departments as Record<string, unknown>[];
+    if (Array.isArray(nested.assets)) return nested.assets as Record<string, unknown>[];
+    const firstArray = Object.values(nested).find(Array.isArray);
+    if (Array.isArray(firstArray)) return firstArray as Record<string, unknown>[];
+    return [nested];
+  }
+  const firstArray = Object.values(record).find(Array.isArray);
+  return Array.isArray(firstArray) ? (firstArray as Record<string, unknown>[]) : [];
+}
+
+function departmentName(department: DepartmentNode) {
+  return department.Object_Rel_Name || department.Object_Full_Name || `Branch ${department.Object_Rel_Idn ?? ""}`;
+}
+
+function departmentRelationId(department: DepartmentNode) {
+  const value = Number(department.Object_Rel_Idn ?? department.RelationID ?? department.relationID ?? -1);
+  return Number.isFinite(value) ? value : -1;
+}
+
+function departmentCount(department: DepartmentNode) {
+  const count = Number(department.TotalDevices ?? department.DeviceCount ?? department.AssetCount ?? department.TotalAssets ?? department.Count ?? department.count ?? 0);
+  return Number.isFinite(count) ? count : 0;
+}
+
+function collectDepartmentRelationIds(departments: DepartmentNode[]): number[] {
+  return departments.flatMap((department) => {
+    const relationId = departmentRelationId(department);
+    return [relationId, ...collectDepartmentRelationIds(department.children || [])].filter((id) => id > 0);
+  });
+}
+
+function getTreeCount(node: TreeNode): number {
+  if (typeof node.count === "number" && Number.isFinite(node.count) && node.count > 0) return node.count;
+  return (node.children || []).reduce((total, child) => total + getTreeCount(child), 0);
+}
+
+function buildDeviceNodesFromAssets(relationId: number, assets: ApiAsset[], records: SoftwareRecord[]): TreeNode[] {
+  const seen = new Set<string>();
+  return assets
+    .map((asset, index) => {
+      const keys = assetDeviceKeys(asset);
+      const mainKey = keys[0] || `${relationId}-${index}`;
+      if (seen.has(mainKey)) return null;
+      seen.add(mainKey);
+      const matchedRecords = records.filter((record) => recordMatchesDeviceKeys(record, keys));
+      return {
+        id: `device-${relationId}-${mainKey}`,
+        label: getAssetLabel(asset, `Device ${index + 1}`),
+        type: "device" as const,
+        relationId,
+        relationIds: [relationId],
+        assetId: getAssetId(asset),
+        objectDeviceId: getAssetObjectDeviceId(asset),
+        deviceKeys: keys,
+        count: matchedRecords.length,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a!.label.localeCompare(b!.label)) as TreeNode[];
+}
+
+function buildDeviceNodesFromRecords(branch: string, rows: SoftwareRecord[]): TreeNode[] {
+  const deviceMap = new Map<string, SoftwareRecord[]>();
+  rows.forEach((row) => {
+    const key = normalizeIdentity(row.objectDeviceId || row.assetId || row.deviceName) || row.deviceName;
+    const list = deviceMap.get(key) || [];
+    list.push(row);
+    deviceMap.set(key, list);
+  });
+
+  return Array.from(deviceMap.entries())
+    .sort(([, leftRows], [, rightRows]) => leftRows[0].deviceName.localeCompare(rightRows[0].deviceName))
+    .map(([key, deviceRows]) => ({
+      id: `device-${branch}-${key}`,
+      label: deviceRows[0].deviceName,
+      type: "device" as const,
+      objectDeviceId: deviceRows[0].objectDeviceId,
+      assetId: deviceRows[0].assetId,
+      deviceKeys: Array.from(new Set(deviceRows.flatMap(softwareRecordKeys))),
+      count: deviceRows.length,
+    }));
+}
+
+function mapDepartmentsToTree(departments: DepartmentNode[], assetsByRelation: Map<number, ApiAsset[]>, records: SoftwareRecord[], depth = 0): TreeNode[] {
+  return departments.map((department) => {
+    const relationId = departmentRelationId(department);
+    const folderChildren = mapDepartmentsToTree(department.children || [], assetsByRelation, records, depth + 1);
+    const deviceChildren = relationId > 0 ? buildDeviceNodesFromAssets(relationId, assetsByRelation.get(relationId) || [], records) : [];
+    const children = [...folderChildren, ...deviceChildren];
+    const relationIds = [relationId, ...children.flatMap((child) => child.relationIds || [])].filter((id) => id > 0);
+    const deviceKeys = Array.from(new Set(children.flatMap((child) => child.deviceKeys || [])));
+    const countFromDevices = records.filter((record) => recordMatchesDeviceKeys(record, deviceKeys)).length;
+    const fallbackLabel = departmentName(department).toLowerCase();
+    const fallbackCount = records.filter((record) => record.department.toLowerCase().includes(fallbackLabel)).length;
+    const count = countFromDevices || fallbackCount || departmentCount(department) || children.reduce((total, child) => total + getTreeCount(child), 0);
+
+    return {
+      id: `dept-${relationId > 0 ? relationId : departmentName(department)}`,
+      label: departmentName(department),
+      type: depth <= 0 ? "branch" : "dept",
+      relationId,
+      relationIds,
+      deviceKeys,
+      count,
+      children,
+    };
+  });
+}
+
+function buildTreeFromRecords(records: SoftwareRecord[]): TreeNode[] {
+  const branchMap = new Map<string, SoftwareRecord[]>();
+  records.forEach((record) => {
+    const list = branchMap.get(record.department) || [];
+    list.push(record);
+    branchMap.set(record.department, list);
+  });
+
+  const children = Array.from(branchMap.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([branch, rows]) => {
+      const deviceChildren = buildDeviceNodesFromRecords(branch, rows);
+      return {
+        id: `branch-${branch}`,
+        label: branch,
+        type: "branch" as const,
+        deviceKeys: Array.from(new Set(deviceChildren.flatMap((child) => child.deviceKeys || []))),
+        count: rows.length,
+        children: deviceChildren,
+      };
+    });
+
+  return [{ id: "all", label: "All Branches", type: "org", relationId: -1, children, count: records.length }];
+}
+
+function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
+  const term = query.trim().toLowerCase();
+  if (!term) return nodes;
+
+  return nodes
+    .map((node) => {
+      const children = filterTree(node.children || [], query);
+      if (node.label.toLowerCase().includes(term) || children.length) return { ...node, children };
+      return null;
+    })
+    .filter(Boolean) as TreeNode[];
+}
+
+function buildStatTree(summary: { totalRecords: number; uniqueSoftware: number; categories: number; unclassified: number }) {
+  return [
+    { id: "stat-installed", label: "Installed Software", type: "category" as const, count: summary.totalRecords },
+    { id: "stat-license", label: "License Status", type: "category" as const, count: summary.uniqueSoftware },
+    { id: "stat-exe", label: "EXE File Extension", type: "category" as const, count: summary.categories },
+    { id: "stat-dll", label: "DLL File Extension", type: "category" as const, count: summary.unclassified },
+    { id: "stat-ini", label: "INI File Extension", type: "category" as const, count: summary.totalRecords },
+  ];
+}
+
+function statEndpoint(stat: StatView) {
+  if (stat === "installed") return "/api/software/statistics/installed-software";
+  if (stat === "license") return "/api/software/statistics/license-status";
+  if (stat === "exe") return "/api/software/statistics/exe-files";
+  if (stat === "dll") return "/api/software/statistics/dll-files";
+  return "/api/software/statistics/ini-files";
+}
+
+function statTitle(stat: StatView | null) {
+  if (stat === "installed") return "Installed Software";
+  if (stat === "license") return "License Status";
+  if (stat === "exe") return "EXE File Extension";
+  if (stat === "dll") return "DLL File Extension";
+  if (stat === "ini") return "INI File Extension";
+  return "Software Registry";
+}
+
+function pickStatValue(row: StatRow, keys: string[]) {
+  for (const key of keys) {
+    const direct = row[key];
+    if (direct !== undefined && direct !== null && String(direct).trim()) return String(direct).trim();
+    const match = Object.keys(row).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
+    if (match) {
+      const value = row[match];
+      if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+    }
+  }
+  return EMPTY_VALUE;
+}
+
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
 }
 
 function getStoredToken() {
@@ -248,145 +518,6 @@ async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<
   return readJsonResponse<T>(response, url);
 }
 
-function unwrapRows(payload: unknown): Record<string, unknown>[] {
-  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
-  if (!payload || typeof payload !== "object") return [];
-  const record = payload as Record<string, unknown>;
-  const data = record.data;
-  if (Array.isArray(data)) return data as Record<string, unknown>[];
-  if (data && typeof data === "object") {
-    const firstArray = Object.values(data).find(Array.isArray);
-    if (Array.isArray(firstArray)) return firstArray as Record<string, unknown>[];
-    return [data as Record<string, unknown>];
-  }
-  const firstArray = Object.values(record).find(Array.isArray);
-  return Array.isArray(firstArray) ? (firstArray as Record<string, unknown>[]) : [];
-}
-
-function departmentName(department: DepartmentNode) {
-  return department.Object_Rel_Name || department.Object_Full_Name || `Branch ${department.Object_Rel_Idn ?? ""}`;
-}
-
-function departmentCount(department: DepartmentNode) {
-  const count = Number(department.TotalDevices ?? department.DeviceCount ?? department.AssetCount ?? department.TotalAssets ?? department.Count ?? department.count ?? 0);
-  return Number.isFinite(count) ? count : 0;
-}
-
-function getTreeCount(node: TreeNode): number {
-  if (typeof node.count === "number" && Number.isFinite(node.count) && node.count > 0) return node.count;
-  if (node.type === "device") return 1;
-  return (node.children || []).reduce((total, child) => total + getTreeCount(child), 0);
-}
-
-function mapDepartmentsToTree(departments: DepartmentNode[], depth = 0): TreeNode[] {
-  return departments.map((department) => {
-    const children = mapDepartmentsToTree(department.children || [], depth + 1);
-    const count = departmentCount(department) || children.reduce((total, child) => total + getTreeCount(child), 0);
-    return {
-      id: `dept-${department.Object_Rel_Idn ?? departmentName(department)}`,
-      label: departmentName(department),
-      type: depth <= 0 ? "branch" : "dept",
-      relationId: Number(department.Object_Rel_Idn ?? -1),
-      count,
-      children,
-    };
-  });
-}
-
-function buildTreeFromRecords(records: SoftwareRecord[]): TreeNode[] {
-  const branchMap = new Map<string, SoftwareRecord[]>();
-  records.forEach((record) => {
-    const list = branchMap.get(record.department) || [];
-    list.push(record);
-    branchMap.set(record.department, list);
-  });
-
-  const children = Array.from(branchMap.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([branch, rows]) => ({
-      id: `branch-${branch}`,
-      label: branch,
-      type: "branch" as const,
-      count: rows.length,
-      children: Array.from(new Set(rows.map((row) => row.deviceName))).map((device) => ({
-        id: `device-${branch}-${device}`,
-        label: device,
-        type: "device" as const,
-        objectDeviceId: rows.find((row) => row.deviceName === device)?.objectDeviceId,
-        assetId: rows.find((row) => row.deviceName === device)?.assetId,
-        count: rows.filter((row) => row.deviceName === device).length,
-      })),
-    }));
-
-  return [{ id: "all", label: "All Branches", type: "org", relationId: -1, children, count: records.length }];
-}
-
-function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
-  const term = query.trim().toLowerCase();
-  if (!term) return nodes;
-
-  return nodes
-    .map((node) => {
-      const children = filterTree(node.children || [], query);
-      if (node.label.toLowerCase().includes(term) || children.length) return { ...node, children };
-      return null;
-    })
-    .filter(Boolean) as TreeNode[];
-}
-
-function buildStatTree(summary: { totalRecords: number; uniqueSoftware: number; categories: number; unclassified: number }) {
-  return [
-    { id: "stat-installed", label: "Installed Software", type: "category" as const, count: summary.totalRecords },
-    { id: "stat-license", label: "License Status", type: "category" as const, count: summary.uniqueSoftware },
-    { id: "stat-exe", label: "EXE File Extension", type: "category" as const, count: summary.categories },
-    { id: "stat-dll", label: "DLL File Extension", type: "category" as const, count: summary.unclassified },
-    { id: "stat-ini", label: "INI File Extension", type: "category" as const, count: summary.totalRecords },
-  ];
-}
-
-function statEndpoint(stat: StatView) {
-  if (stat === "installed") return "/api/software/statistics/installed-software";
-  if (stat === "license") return "/api/software/statistics/license-status";
-  if (stat === "exe") return "/api/software/statistics/exe-files";
-  if (stat === "dll") return "/api/software/statistics/dll-files";
-  return "/api/software/statistics/ini-files";
-}
-
-function statTitle(stat: StatView | null) {
-  if (stat === "installed") return "Installed Software";
-  if (stat === "license") return "License Status";
-  if (stat === "exe") return "EXE File Extension";
-  if (stat === "dll") return "DLL File Extension";
-  if (stat === "ini") return "INI File Extension";
-  return "Software Registry";
-}
-
-function pickStatValue(row: StatRow, keys: string[]) {
-  for (const key of keys) {
-    const direct = row[key];
-    if (direct !== undefined && direct !== null && String(direct).trim()) return String(direct).trim();
-    const match = Object.keys(row).find((candidate) => candidate.toLowerCase() === key.toLowerCase());
-    if (match) {
-      const value = row[match];
-      if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
-    }
-  }
-  return EMPTY_VALUE;
-}
-
-function downloadCsv(filename: string, rows: string[][]) {
-  const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
-}
-
 function EmaSpinner({ label = "Loading data..." }: { label?: string }) {
   return (
     <div className="grid min-h-[12rem] place-items-center text-center">
@@ -448,10 +579,44 @@ function Software() {
     setTreeLoading(true);
     setTreeError("");
     try {
-      const payload = await apiGet<unknown>("/api/departments/tree");
+      const payload = await apiGet<unknown>("/api/departments");
       const departments = unwrapRows(payload) as DepartmentNode[];
-      const children = mapDepartmentsToTree(departments);
-      setDepartmentTree(children.length ? [{ id: "all", label: "All Branches", type: "org", relationId: -1, children, count: records.length }] : buildTreeFromRecords(records));
+
+      if (!departments.length) {
+        setDepartmentTree(buildTreeFromRecords(records));
+        return;
+      }
+
+      const relationIds = Array.from(new Set(collectDepartmentRelationIds(departments)));
+      const assetResults = await Promise.allSettled(
+        relationIds.map(async (relationId) => {
+          const assetPayload = await apiGet<unknown>(`/api/assets/${relationId}`);
+          return [relationId, unwrapRows(assetPayload) as ApiAsset[]] as const;
+        }),
+      );
+
+      const assetsByRelation = new Map<number, ApiAsset[]>();
+      assetResults.forEach((result) => {
+        if (result.status === "fulfilled") assetsByRelation.set(result.value[0], result.value[1]);
+      });
+
+      const children = mapDepartmentsToTree(departments, assetsByRelation, records);
+      const rootDeviceKeys = Array.from(new Set(children.flatMap((child) => child.deviceKeys || [])));
+      const rootCount = records.filter((record) => recordMatchesDeviceKeys(record, rootDeviceKeys)).length || records.length;
+
+      setDepartmentTree([
+        {
+          id: "all",
+          label: "All Branches",
+          type: "org",
+          relationId: -1,
+          relationIds: relationIds,
+          deviceKeys: rootDeviceKeys,
+          children,
+          count: rootCount,
+        },
+      ]);
+      setExpandedGroups((current) => new Set([...current, "all"]));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load branch tree.";
       setTreeError(message);
@@ -492,10 +657,16 @@ function Software() {
     const term = searchTerm.trim().toLowerCase();
 
     if (selectedNode.type === "device") {
-      next = next.filter((record) => record.assetId === selectedNode.assetId || record.objectDeviceId === selectedNode.objectDeviceId || record.deviceName === selectedNode.label);
-    } else if (selectedRelationId > 0 || selectedNode.type === "branch" || selectedNode.type === "dept") {
-      const label = selectedNode.label.toLowerCase();
-      next = next.filter((record) => record.department.toLowerCase().includes(label));
+      const keys = selectedNode.deviceKeys?.length ? selectedNode.deviceKeys : uniqueValues([selectedNode.assetId, selectedNode.objectDeviceId, selectedNode.label]);
+      next = next.filter((record) => recordMatchesDeviceKeys(record, keys));
+    } else if (selectedNode.id !== "all" && (selectedRelationId > 0 || selectedNode.type === "branch" || selectedNode.type === "dept")) {
+      const keys = selectedNode.deviceKeys || [];
+      if (keys.length) {
+        next = next.filter((record) => recordMatchesDeviceKeys(record, keys));
+      } else {
+        const label = selectedNode.label.toLowerCase();
+        next = next.filter((record) => record.department.toLowerCase().includes(label));
+      }
     }
 
     if (activeView === "unique") {
@@ -672,10 +843,14 @@ function Software() {
           : "";
         const isActive = mode === "statistics" ? node.id === activeStatId : selectedNode.id === node.id;
         const Icon = node.type === "device" ? MonitorSmartphone : node.type === "category" ? Database : hasChildren && isExpanded ? FolderOpen : Folder;
+        const handleRowClick = () => {
+          if (mode === "statistics" && hasChildren) toggleNode(node);
+          else handleNodeSelect(node);
+        };
 
         return (
           <div key={node.id}>
-            <EmaSidebarTreeRow active={isActive} depth={depth} onClick={() => (hasChildren ? toggleNode(node) : handleNodeSelect(node))}>
+            <EmaSidebarTreeRow active={isActive} depth={depth} onClick={handleRowClick}>
               <button
                 type="button"
                 onClick={(event) => {
@@ -698,22 +873,9 @@ function Software() {
   );
 
   const softwareColumns: EmaTableColumn<SoftwareRecord>[] = [
-    {
-      key: "no",
-      header: "No",
-      width: "4.5rem",
-      render: (_row, index) => String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0"),
-    },
-    {
-      key: "softwareName",
-      header: <button type="button" onClick={() => handleSort("softwareName")}>Software Name{renderSort("softwareName")}</button>,
-      render: (row) => <strong>{row.softwareName}</strong>,
-    },
-    {
-      key: "category",
-      header: <button type="button" onClick={() => handleSort("category")}>Category{renderSort("category")}</button>,
-      render: (row) => row.category,
-    },
+    { key: "no", header: "No", width: "4.5rem", render: (_row, index) => String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0") },
+    { key: "softwareName", header: <button type="button" onClick={() => handleSort("softwareName")}>Software Name{renderSort("softwareName")}</button>, render: (row) => <strong>{row.softwareName}</strong> },
+    { key: "category", header: <button type="button" onClick={() => handleSort("category")}>Category{renderSort("category")}</button>, render: (row) => row.category },
     {
       key: "publisher",
       header: <button type="button" onClick={() => handleSort("publisher")}>Publisher / Description{renderSort("publisher")}</button>,
@@ -725,11 +887,7 @@ function Software() {
         </span>
       ),
     },
-    {
-      key: "version",
-      header: <button type="button" onClick={() => handleSort("version")}>Version{renderSort("version")}</button>,
-      render: (row) => row.version,
-    },
+    { key: "version", header: <button type="button" onClick={() => handleSort("version")}>Version{renderSort("version")}</button>, render: (row) => row.version },
     {
       key: "deviceName",
       header: <button type="button" onClick={() => handleSort("deviceName")}>Device{renderSort("deviceName")}</button>,
@@ -741,21 +899,9 @@ function Software() {
         </span>
       ),
     },
-    {
-      key: "machineType",
-      header: <button type="button" onClick={() => handleSort("machineType")}>Type{renderSort("machineType")}</button>,
-      render: (row) => row.machineType,
-    },
-    {
-      key: "ip",
-      header: "IP Address",
-      render: (row) => row.ip,
-    },
-    {
-      key: "lastUpdated",
-      header: <button type="button" onClick={() => handleSort("lastUpdated")}>Last Updated{renderSort("lastUpdated")}</button>,
-      render: (row) => row.lastUpdated,
-    },
+    { key: "machineType", header: <button type="button" onClick={() => handleSort("machineType")}>Type{renderSort("machineType")}</button>, render: (row) => row.machineType },
+    { key: "ip", header: "IP Address", render: (row) => row.ip },
+    { key: "lastUpdated", header: <button type="button" onClick={() => handleSort("lastUpdated")}>Last Updated{renderSort("lastUpdated")}</button>, render: (row) => row.lastUpdated },
   ];
 
   const statColumns: EmaTableColumn<StatRow>[] = [
