@@ -252,7 +252,7 @@ async function deployPackagesViaApi(packages: PackageRecord[], targets: TargetDe
       Job_EndTime: '',
       Job_ScheduleTime: '',
       Job_Priority: 0,
-      Job_Description: `Software Distribution - ${packageItem.name}`,
+      Job_Description: `Software Distribution from EMA UI - ${packageItem.name}`,
       target,
     };
 
@@ -393,7 +393,7 @@ function NewPackageModal({ onClose, onCreate }: { onClose: () => void; onCreate:
         <Field label="Destination Directory" hint="Install path on target device.">
           <input className={inputClass} value={form.destinationDirectory} onChange={(event) => setForm((current) => ({ ...current, destinationDirectory: event.target.value }))} placeholder="C:\\PackageDestination" />
         </Field>
-        <Field label="Source Path">
+        <Field label="Source Path" hint="Applied to all files unless individually mapped.">
           <input className={inputClass} value={form.sourcePath} onChange={(event) => setForm((current) => ({ ...current, sourcePath: event.target.value }))} placeholder="C:\\PackageSource" />
         </Field>
         <Field label="Command Line">
@@ -441,34 +441,130 @@ function NewPackageModal({ onClose, onCreate }: { onClose: () => void; onCreate:
 }
 
 function DeployPackageModal({ packages, targetDevices, onClose, onDeploy }: { packages: PackageRecord[]; targetDevices: TargetDevice[]; onClose: () => void; onDeploy: (selectedTargets: TargetDevice[], method: DeliveryMethod, scheduleType: 'now' | 'schedule') => void }) {
-  const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
+  const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
+  const [excludedDevices, setExcludedDevices] = useState<Set<string>>(new Set());
+  const [selectedScopes, setSelectedScopes] = useState<Set<string>>(new Set());
+  const [targetView, setTargetView] = useState<'organization' | 'os'>('organization');
+  const [includeLowerDepartment, setIncludeLowerDepartment] = useState(true);
   const [targetSearch, setTargetSearch] = useState('');
   const [targetStatus, setTargetStatus] = useState<'All' | 'Online' | 'Offline'>('All');
   const [targetOs, setTargetOs] = useState('All');
   const [scheduleType, setScheduleType] = useState<'now' | 'schedule'>('now');
+  const [scheduleTime, setScheduleTime] = useState('');
   const [page, setPage] = useState(1);
   const method: DeliveryMethod = 'onprem';
   const pageSize = 10;
 
+  const scopeGroups = useMemo(() => {
+    const groupMap = new Map<string, TargetDevice[]>();
+    targetDevices.forEach((device) => {
+      const key = targetView === 'os' ? device.os : device.department;
+      const current = groupMap.get(key) || [];
+      current.push(device);
+      groupMap.set(key, current);
+    });
+
+    return Array.from(groupMap.entries()).map(([name, devices]) => ({
+      id: `${targetView}:${name}`,
+      name,
+      type: targetView === 'os' ? 'Operating System' : 'Department',
+      count: devices.length,
+      devices,
+    }));
+  }, [targetDevices, targetView]);
+
+  const selectedScopeDevices = useMemo(() => {
+    const scopeDeviceIds = new Set<string>();
+    const selectedScopeNames = scopeGroups.filter((scope) => selectedScopes.has(scope.id)).map((scope) => scope.name);
+    if (selectedScopeNames.length === 0) return scopeDeviceIds;
+
+    if (targetView === 'organization' && includeLowerDepartment) {
+      targetDevices.forEach((device) => {
+        const isInSelectedScope = selectedScopeNames.some((scopeName) =>
+          device.department === scopeName || device.department.startsWith(`${scopeName}\\`) || device.department.startsWith(`${scopeName}/`)
+        );
+        if (isInSelectedScope) scopeDeviceIds.add(device.id);
+      });
+      return scopeDeviceIds;
+    }
+
+    scopeGroups.forEach((scope) => {
+      if (selectedScopes.has(scope.id)) scope.devices.forEach((device) => scopeDeviceIds.add(device.id));
+    });
+    return scopeDeviceIds;
+  }, [scopeGroups, selectedScopes, targetDevices, targetView, includeLowerDepartment]);
+
+  const includedTargetIds = useMemo(() => {
+    const ids = new Set<string>();
+    selectedScopeDevices.forEach((id) => ids.add(id));
+    selectedDevices.forEach((id) => ids.add(id));
+    excludedDevices.forEach((id) => ids.delete(id));
+    return ids;
+  }, [selectedScopeDevices, selectedDevices, excludedDevices]);
+
+  const includedTargetList = useMemo(() => targetDevices.filter((device) => includedTargetIds.has(device.id)), [targetDevices, includedTargetIds]);
+  const excludedTargetList = useMemo(() => targetDevices.filter((device) => excludedDevices.has(device.id)), [targetDevices, excludedDevices]);
+
   const osOptions = useMemo(() => Array.from(new Set(targetDevices.map((device) => device.os).filter(Boolean))), [targetDevices]);
   const filteredTargets = useMemo(() => {
     const keyword = targetSearch.trim().toLowerCase();
+    const hasScopeFilter = selectedScopes.size > 0;
+
     return targetDevices.filter((device) => {
       const text = [device.name, device.department, device.ip, device.os, device.status].join(' ').toLowerCase();
+      const matchesScope = !hasScopeFilter || selectedScopeDevices.has(device.id);
       const matchesSearch = !keyword || text.includes(keyword);
       const matchesStatus = targetStatus === 'All' || device.status === targetStatus;
       const matchesOs = targetOs === 'All' || device.os === targetOs;
-      return matchesSearch && matchesStatus && matchesOs;
+      return matchesScope && matchesSearch && matchesStatus && matchesOs;
     });
-  }, [targetDevices, targetSearch, targetStatus, targetOs]);
+  }, [targetDevices, targetSearch, targetStatus, targetOs, selectedScopes, selectedScopeDevices]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTargets.length / pageSize));
   const pageRows = filteredTargets.slice((page - 1) * pageSize, page * pageSize);
-  const selectedTargets = targetDevices.filter((device) => selectedTargetIds.has(device.id));
-  const allPageSelected = pageRows.length > 0 && pageRows.every((device) => selectedTargetIds.has(device.id));
+  const allPageSelected = pageRows.length > 0 && pageRows.every((device) => selectedDevices.has(device.id));
 
-  function toggleTarget(id: string) {
-    setSelectedTargetIds((current) => {
+  const finalTargetCount = includedTargetIds.size;
+  const selectedScopeCount = selectedScopes.size;
+  const manualUserCount = selectedDevices.size;
+  const excludedUserCount = excludedDevices.size;
+
+  const packageStatusSummary = useMemo(() => packages.reduce((summary, item) => {
+    summary.total += 1;
+    if (item.status === 'Ready') summary.ready += 1;
+    if (item.status === 'Deployed') summary.deployed += 1;
+    if (item.status === 'Draft') summary.draft += 1;
+    if (item.status === 'Archived') summary.archived += 1;
+    return summary;
+  }, { total: 0, ready: 0, deployed: 0, draft: 0, archived: 0 }), [packages]);
+
+  function switchTargetView(view: 'organization' | 'os') {
+    setTargetView(view);
+    setSelectedScopes(new Set());
+    setPage(1);
+  }
+
+  function toggleScope(id: string) {
+    setSelectedScopes((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setPage(1);
+  }
+
+  function toggleManualUser(id: string) {
+    setSelectedDevices((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleExcludedUser(id: string) {
+    setExcludedDevices((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -477,7 +573,7 @@ function DeployPackageModal({ packages, targetDevices, onClose, onDeploy }: { pa
   }
 
   function togglePage() {
-    setSelectedTargetIds((current) => {
+    setSelectedDevices((current) => {
       const next = new Set(current);
       if (allPageSelected) pageRows.forEach((device) => next.delete(device.id));
       else pageRows.forEach((device) => next.add(device.id));
@@ -490,45 +586,77 @@ function DeployPackageModal({ packages, targetDevices, onClose, onDeploy }: { pa
       title="Deploy Package"
       description={`${packages.length} package(s) selected. Choose target devices before deployment.`}
       onClose={onClose}
-      maxWidth="max-w-[1200px]"
+      maxWidth="max-w-[1400px]"
       footer={
         <>
           <EmaButton onClick={onClose}>Cancel</EmaButton>
-          <EmaButton variant="primary" disabled={!selectedTargets.length} onClick={() => onDeploy(selectedTargets, method, scheduleType)}>
+          <EmaButton variant="primary" disabled={!includedTargetList.length} onClick={() => onDeploy(includedTargetList, method, scheduleType)}>
             <Send size={15} />
             Deploy Package
           </EmaButton>
         </>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="space-y-3">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
+        {/* Left Column */}
+        <div className="flex flex-col gap-4 min-h-0">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shrink-0">
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Selected Packages</p>
-            <div className="mt-3 space-y-2">
+            {packages.length > 1 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {packageStatusSummary.ready > 0 && <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">Ready {packageStatusSummary.ready}</span>}
+                {packageStatusSummary.deployed > 0 && <span className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700">Deployed {packageStatusSummary.deployed}</span>}
+                {packageStatusSummary.draft > 0 && <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700">Draft {packageStatusSummary.draft}</span>}
+              </div>
+            ) : null}
+            <div className="mt-3 space-y-2 max-h-[140px] overflow-y-auto pr-1">
               {packages.map((item) => (
                 <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-3">
-                  <strong className="block truncate text-sm font-black text-slate-900">{item.name}</strong>
+                  <strong className="block truncate text-sm font-black text-slate-900" title={item.name}>{item.name}</strong>
                   <span className="mt-1 block text-xs font-semibold text-slate-500">{item.version} • {item.status}</span>
                 </div>
               ))}
             </div>
+            {packages.some((item) => item.status === 'Deployed') && (
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-bold text-blue-700">
+                <ShieldCheck size={16} className="shrink-0" />
+                <span>Some selected packages are already deployed and will be redeployed.</span>
+              </div>
+            )}
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Deployment Option</p>
-            <div className="mt-3 grid gap-2">
-              <button type="button" onClick={() => setScheduleType('now')} className={cx('rounded-xl border px-3 py-2 text-sm font-black transition', scheduleType === 'now' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>Send Now</button>
-              <button type="button" onClick={() => setScheduleType('schedule')} className={cx('rounded-xl border px-3 py-2 text-sm font-black transition', scheduleType === 'schedule' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>Schedule</button>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 flex-1 flex flex-col min-h-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Scope Selection</p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => switchTargetView('organization')} className={cx('flex-1 rounded-lg border px-2 py-1.5 text-xs font-black transition', targetView === 'organization' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>Organization</button>
+              <button type="button" onClick={() => switchTargetView('os')} className={cx('flex-1 rounded-lg border px-2 py-1.5 text-xs font-black transition', targetView === 'os' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>OS</button>
             </div>
-            {scheduleType === 'schedule' ? <input type="datetime-local" className={cx(inputClass, 'mt-3')} /> : null}
-            <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-bold text-blue-700">
-              {selectedTargets.length} target(s) selected
+            {targetView === 'organization' && (
+              <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                <input type="checkbox" checked={includeLowerDepartment} onChange={(e) => { setIncludeLowerDepartment(e.target.checked); setPage(1); }} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                <span>Include Lower Dept</span>
+              </label>
+            )}
+            <div className="mt-3 flex-1 overflow-y-auto space-y-2 pr-1">
+              {scopeGroups.length > 0 ? scopeGroups.map((scope) => (
+                <label key={scope.id} className="flex items-center gap-2 rounded-xl border border-slate-100 p-2 hover:bg-slate-50 cursor-pointer">
+                  <input type="checkbox" checked={selectedScopes.has(scope.id)} onChange={() => toggleScope(scope.id)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                  <span className="flex-1 min-w-0 text-sm">
+                    <strong className="block truncate font-black text-slate-900" title={scope.name}>{scope.name}</strong>
+                    <span className="block text-[10px] uppercase font-bold text-slate-500">{scope.type}</span>
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-black text-slate-600">{scope.count}</span>
+                </label>
+              )) : (
+                <div className="text-center text-sm font-bold text-slate-500 py-4">No scope available</div>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 p-3">
+        {/* Middle Column */}
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white flex flex-col min-h-0">
+          <div className="border-b border-slate-200 p-3 shrink-0">
             <EmaToolbar
               search={<EmaSearchInput value={targetSearch} onChange={(value) => { setTargetSearch(value); setPage(1); }} placeholder="Search device, IP, branch..." />}
               filters={
@@ -550,30 +678,99 @@ function DeployPackageModal({ packages, targetDevices, onClose, onDeploy }: { pa
               }
             />
           </div>
-          <EmaTable
-            loading={false}
-            rows={pageRows}
-            getRowKey={(row) => row.id}
-            emptyText="No target device found."
-            columns={[
-              {
-                key: 'select',
-                header: <input type="checkbox" checked={allPageSelected} onChange={togglePage} />,
-                width: '48px',
-                render: (row) => <input type="checkbox" checked={selectedTargetIds.has(row.id)} onChange={() => toggleTarget(row.id)} />,
-              },
-              {
-                key: 'device',
-                header: 'Device',
-                render: (row) => <div><strong className="block font-black text-slate-900">{row.name}</strong><span className="block text-xs font-semibold text-slate-500">{row.id} • {row.objectAgent || '-'}</span></div>,
-              },
-              { key: 'branch', header: 'Branch', render: (row) => row.department },
-              { key: 'ip', header: 'IP Address', render: (row) => row.ip },
-              { key: 'os', header: 'OS', render: (row) => row.os },
-              { key: 'status', header: 'Status', render: (row) => <span className={cx('inline-flex rounded-full border px-3 py-1 text-xs font-black', deviceStatusClass(row.status))}>{row.status}</span> },
-            ]}
-          />
+          <div className="flex-1 min-h-0 overflow-auto">
+            <EmaTable
+              loading={false}
+              rows={pageRows}
+              getRowKey={(row) => row.id}
+              emptyText="No target device found."
+              columns={[
+                {
+                  key: 'select',
+                  header: <input type="checkbox" checked={allPageSelected} onChange={togglePage} className="rounded border-slate-300" />,
+                  width: '48px',
+                  render: (row) => <input type="checkbox" checked={selectedDevices.has(row.id)} onChange={() => toggleManualUser(row.id)} className="rounded border-slate-300" />,
+                },
+                {
+                  key: 'device',
+                  header: 'Device',
+                  render: (row) => <div><strong className="block font-black text-slate-900">{row.name}</strong><span className="block text-xs font-semibold text-slate-500">{row.id} • {row.objectAgent || '-'}</span></div>,
+                },
+                { key: 'branch', header: 'Branch', render: (row) => row.department },
+                { key: 'ip', header: 'IP Address', render: (row) => row.ip },
+                { key: 'os', header: 'OS', render: (row) => row.os },
+                { key: 'status', header: 'Status', render: (row) => <span className={cx('inline-flex rounded-full border px-3 py-1 text-xs font-black', deviceStatusClass(row.status))}>{row.status}</span> },
+                {
+                  key: 'exclude',
+                  header: 'Action',
+                  align: 'right',
+                  render: (row) => (
+                    <button type="button" onClick={() => toggleExcludedUser(row.id)} className={cx('rounded-lg border px-2.5 py-1 text-xs font-black transition', excludedDevices.has(row.id) ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>
+                      {excludedDevices.has(row.id) ? 'Excluded' : 'Exclude'}
+                    </button>
+                  ),
+                }
+              ]}
+            />
+          </div>
           <EmaPagination page={page} totalPages={totalPages} totalLabel={`${filteredTargets.length} target(s)`} onPageChange={setPage} />
+        </div>
+
+        {/* Right Column */}
+        <div className="flex flex-col gap-4 min-h-0">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shrink-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Deployment Option</p>
+            <div className="mt-3 grid gap-2">
+              <button type="button" onClick={() => setScheduleType('now')} className={cx('rounded-xl border px-3 py-2 text-sm font-black transition', scheduleType === 'now' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>Send Now</button>
+              <button type="button" onClick={() => setScheduleType('schedule')} className={cx('rounded-xl border px-3 py-2 text-sm font-black transition', scheduleType === 'schedule' ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50')}>Schedule</button>
+            </div>
+            {scheduleType === 'schedule' ? <input type="datetime-local" className={cx(inputClass, 'mt-3')} value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} /> : null}
+
+            <div className="mt-4 space-y-2">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer"><input type="checkbox" defaultChecked className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" /> <span>Force installation</span></label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer"><input type="checkbox" className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" /> <span>Reboot after installation</span></label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer"><input type="checkbox" defaultChecked className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" /> <span>Notify user</span></label>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 flex-1 flex flex-col min-h-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Target Summary</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 shrink-0">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-2 text-center">
+                <span className="text-[10px] font-black uppercase text-blue-600">Final</span>
+                <strong className="block text-lg font-black text-blue-900">{finalTargetCount}</strong>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+                <span className="text-[10px] font-black uppercase text-slate-500">Scopes</span>
+                <strong className="block text-lg font-black text-slate-900">{selectedScopeCount}</strong>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+                <span className="text-[10px] font-black uppercase text-slate-500">Manual</span>
+                <strong className="block text-lg font-black text-slate-900">{manualUserCount}</strong>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-2 text-center">
+                <span className="text-[10px] font-black uppercase text-slate-500">Excluded</span>
+                <strong className="block text-lg font-black text-slate-900">{excludedUserCount}</strong>
+              </div>
+            </div>
+
+            <div className="mt-3 flex-1 overflow-y-auto space-y-4 pr-1">
+               <div>
+                  <span className="text-[11px] font-black uppercase text-slate-500">Included Preview</span>
+                  <p className="text-sm font-semibold text-slate-700 mt-1 leading-snug">
+                    {includedTargetList.slice(0, 3).map((device) => device.name).join(', ') || 'No devices selected'}
+                    {includedTargetList.length > 3 ? ` +${includedTargetList.length - 3} more` : ''}
+                  </p>
+               </div>
+               <div>
+                  <span className="text-[11px] font-black uppercase text-slate-500">Excluded Preview</span>
+                  <p className="text-sm font-semibold text-slate-700 mt-1 leading-snug">
+                    {excludedTargetList.slice(0, 3).map((device) => device.name).join(', ') || 'No excluded devices'}
+                    {excludedTargetList.length > 3 ? ` +${excludedTargetList.length - 3} more` : ''}
+                  </p>
+               </div>
+            </div>
+          </div>
         </div>
       </div>
     </ModalShell>
@@ -802,7 +999,7 @@ export default function SoftwareDistribution() {
       if (selectedPackageId && packageIds.includes(selectedPackageId)) setSelectedPackageId(null);
       setSelectedIds(new Set());
       setModal(null);
-      addToast('delete', 'Package deleted', rowsToDelete.length > 1 ? 'Packages deleted successfully.' : 'Package deleted successfully.');
+      addToast('success', 'Package deleted', rowsToDelete.length > 1 ? 'Packages deleted successfully.' : 'Package deleted successfully.');
     } catch (error) {
       addToast('error', 'Delete failed', error instanceof Error ? error.message : 'Unable to delete package.');
     }
@@ -828,7 +1025,7 @@ export default function SoftwareDistribution() {
         return next;
       });
       setModal(null);
-      addToast('delete', 'Version deleted', 'Version deleted successfully.');
+      addToast('success', 'Version deleted', 'Version deleted successfully.');
     } catch (error) {
       addToast('error', 'Delete failed', error instanceof Error ? error.message : 'Unable to delete version.');
     }
@@ -850,10 +1047,10 @@ export default function SoftwareDistribution() {
   const packageColumns: EmaTableColumn<PackageRecord>[] = [
     {
       key: 'select',
-      header: <input type="checkbox" checked={allPageSelected} ref={(input) => { if (input) input.indeterminate = !allPageSelected && somePageSelected; }} onChange={toggleSelectPage} disabled={!deployablePageRows.length} />,
+      header: <input type="checkbox" checked={allPageSelected} ref={(input) => { if (input) input.indeterminate = !allPageSelected && somePageSelected; }} onChange={toggleSelectPage} disabled={!deployablePageRows.length} className="rounded border-slate-300" />,
       width: '48px',
       render: (item) => (
-        <input type="checkbox" checked={selectedIds.has(item.id)} disabled={!isDeployable(item)} title={isDeployable(item) ? 'Select package' : 'Archived packages cannot be selected'} onChange={() => toggleSelected(item.id)} onClick={(event) => event.stopPropagation()} />
+        <input type="checkbox" checked={selectedIds.has(item.id)} disabled={!isDeployable(item)} title={isDeployable(item) ? 'Select package' : 'Archived packages cannot be selected'} onChange={() => toggleSelected(item.id)} onClick={(event) => event.stopPropagation()} className="rounded border-slate-300" />
       ),
     },
     { key: 'no', header: '#', width: '56px', render: (_item, index) => (safePage - 1) * PAGE_SIZE + index + 1 },

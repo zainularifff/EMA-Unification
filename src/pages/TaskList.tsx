@@ -309,10 +309,10 @@ function getSortValue(task: TaskItem, key: SortKey) {
 function getTaskStateInsight(task: TaskItem | null) {
   if (!task) return "";
   if (task.effectiveStatusReason === "matched_later_stop_metering_job") {
-    return `State is synced from stop metering command${task.relatedStopJobId ? ` #${task.relatedStopJobId}` : ""}.`;
+    return `State is synced from stop metering command${task.relatedStopJobId ? ` #${task.relatedStopJobId}` : ""}. The original raw state can remain ${task.rawState || "Transferring"}, but Task List displays the final operational state.`;
   }
   if (task.rawState && task.rawState !== task.state) return `Displayed state is ${task.state}. Raw database state is ${task.rawState}.`;
-  if (task.isTerminal) return task.actionDisabledReason || "This task is already in a final state.";
+  if (task.isTerminal) return task.actionDisabledReason || "This task is already in a final state. Stop and cancel actions are locked.";
   return "Task is still actionable based on the latest state returned by the API.";
 }
 
@@ -383,6 +383,7 @@ export default function TaskList() {
   const [stateOptions, setStateOptions] = useState<SelectOption[]>(DEFAULT_TASK_STATES);
   const [isLoading, setIsLoading] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [isProgressLoading, setIsProgressLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -447,6 +448,7 @@ export default function TaskList() {
   const loadTaskDetail = useCallback(
     async (taskId: number) => {
       setIsDetailLoading(true);
+      setIsProgressLoading(true);
       setErrorMessage("");
       try {
         const response = await taskListService.getTaskDetail<TaskDetailPayload>(taskId);
@@ -470,6 +472,7 @@ export default function TaskList() {
         showToast({ tone: "error", title: "Detail API Error", message });
       } finally {
         setIsDetailLoading(false);
+        setIsProgressLoading(false);
       }
     },
     [showToast]
@@ -571,7 +574,7 @@ export default function TaskList() {
     try {
       const response = await taskListService.runTaskAction<Record<string, unknown>>(pendingAction.task.id, { action: pendingAction.action });
       showToast({
-        tone: pendingAction.action === "delete" ? "delete" : "success",
+        tone: pendingAction.action === "delete" ? "error" : "success",
         title: `Task ${pendingAction.action}`,
         message: response.message || `Task #${pendingAction.task.id} ${pendingAction.action} successful.`,
       });
@@ -801,6 +804,7 @@ export default function TaskList() {
           progressDetails={progressDetails}
           stateOptions={stateOptions}
           isLoading={isDetailLoading}
+          isProgressLoading={isProgressLoading}
           onClose={() => setIsDetailOpen(false)}
           onRefresh={() => selectedTaskId && loadTaskDetail(selectedTaskId)}
           onAction={requestTaskAction}
@@ -814,7 +818,7 @@ export default function TaskList() {
   );
 }
 
-function TaskDetailDrawer({ task, progress, targets, progressDetails, stateOptions, isLoading, onClose, onRefresh, onAction }: { task: TaskItem; progress: TaskProgress | null; targets: TargetItem[]; progressDetails: ProgressDetailItem[]; stateOptions: SelectOption[]; isLoading: boolean; onClose: () => void; onRefresh: () => void; onAction: (action: TaskAction, task: TaskItem) => void }) {
+function TaskDetailDrawer({ task, progress, targets, progressDetails, stateOptions, isLoading, isProgressLoading, onClose, onRefresh, onAction }: { task: TaskItem; progress: TaskProgress | null; targets: TargetItem[]; progressDetails: ProgressDetailItem[]; stateOptions: SelectOption[]; isLoading: boolean; isProgressLoading: boolean; onClose: () => void; onRefresh: () => void; onAction: (action: TaskAction, task: TaskItem) => void }) {
   return (
     <div className="fixed inset-0 z-[80] flex justify-end bg-slate-950/30 backdrop-blur-sm" role="dialog" aria-modal="true">
       <div className="flex h-full w-full max-w-6xl flex-col overflow-hidden bg-slate-100 shadow-2xl">
@@ -837,24 +841,45 @@ function TaskDetailDrawer({ task, progress, targets, progressDetails, stateOptio
         <div className="min-h-0 flex-1 overflow-auto p-4">
           <div className="grid gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]">
             <div className="space-y-4">
+              
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h4 className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 mb-3">Task Information</h4>
+                <div className="space-y-2 text-sm text-slate-700">
+                  <div className="flex justify-between items-center py-1"><span>State</span><strong className="font-black text-slate-900">{task.state}</strong></div>
+                  {task.rawState && task.rawState !== task.state ? <div className="flex justify-between items-center py-1"><span>Raw State</span><strong className="font-black text-slate-900">{task.rawState}</strong></div> : null}
+                  <div className="flex justify-between items-center py-1 border-t border-slate-100"><span>Task Type</span><strong className="font-black text-slate-900">{task.taskType}</strong></div>
+                  <div className="flex justify-between items-center py-1 border-t border-slate-100"><span>Ordered By</span><strong className="font-black text-slate-900">{task.orderedBy}</strong></div>
+                  <div className="flex justify-between items-center py-1 border-t border-slate-100"><span>Start</span><strong className="font-black text-slate-900">{task.startTime}</strong></div>
+                  <div className="flex justify-between items-center py-1 border-t border-slate-100"><span>End</span><strong className="font-black text-slate-900">{task.endTime}</strong></div>
+                  <div className="flex justify-between items-center py-1 border-t border-slate-100"><span>Targets</span><strong className="font-black text-slate-900">{task.totalObjects}</strong></div>
+                </div>
+
+                <div className={cx("mt-4 rounded-xl border p-3", task.isTerminal ? "border-amber-200 bg-amber-50" : "border-blue-200 bg-blue-50")}>
+                  <h5 className={cx("text-xs font-black uppercase tracking-wider", task.isTerminal ? "text-amber-800" : "text-blue-800")}>{task.isTerminal ? "Operational Lock" : "Operational Note"}</h5>
+                  <p className={cx("mt-1 text-sm font-semibold", task.isTerminal ? "text-amber-900" : "text-blue-900")}>{task.description}</p>
+                  <p className={cx("mt-2 text-xs font-medium italic", task.isTerminal ? "text-amber-700" : "text-blue-700")}>{getTaskStateInsight(task)}</p>
+                </div>
+              </div>
+
               <TaskProcedureStatus task={task} progress={progress} />
+
               <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Task Action</p>
                 <div className="mt-3 grid grid-cols-3 gap-2">
-                  <button type="button" disabled={!canRunTaskAction("stop", task)} onClick={() => onAction("stop", task)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-black text-amber-700 disabled:opacity-40">
+                  <button type="button" title={getTaskActionDisabledTitle("stop", task)} disabled={!canRunTaskAction("stop", task)} onClick={() => onAction("stop", task)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 text-sm font-black text-amber-700 disabled:opacity-40">
                     <Square size={14} /> Stop
                   </button>
-                  <button type="button" disabled={!canRunTaskAction("cancel", task)} onClick={() => onAction("cancel", task)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-700 disabled:opacity-40">
+                  <button type="button" title={getTaskActionDisabledTitle("cancel", task)} disabled={!canRunTaskAction("cancel", task)} onClick={() => onAction("cancel", task)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-700 disabled:opacity-40">
                     <X size={14} /> Cancel
                   </button>
-                  <button type="button" disabled={!canRunTaskAction("delete", task)} onClick={() => onAction("delete", task)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-700 disabled:opacity-40">
+                  <button type="button" title={getTaskActionDisabledTitle("delete", task)} disabled={!canRunTaskAction("delete", task)} onClick={() => onAction("delete", task)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-700 disabled:opacity-40">
                     <Trash2 size={14} /> Delete
                   </button>
                 </div>
               </section>
             </div>
 
-            <TaskTargetList task={task} targets={targets} progressDetails={progressDetails} stateOptions={stateOptions} isLoading={isLoading} />
+            <TaskTargetList task={task} targets={targets} progressDetails={progressDetails} stateOptions={stateOptions} isLoading={isProgressLoading} />
           </div>
         </div>
       </div>
@@ -877,13 +902,6 @@ function TaskProcedureStatus({ task, progress }: { task: TaskItem | null; progre
 
       {display ? (
         <div className="mt-4 space-y-3">
-          {task ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <span className={cx("inline-flex rounded-full border px-3 py-1 text-xs font-black", badgeClass(getStateTone(task.state)))}>{task.state}</span>
-              <p className="mt-2 text-sm font-semibold leading-snug text-slate-600">{getTaskStateInsight(task)}</p>
-            </div>
-          ) : null}
-
           <FieldValue label="Classification" value={display.classification} />
           <FieldValue label="Start Time" value={display.startTime} />
           <FieldValue label="Task Transfer Rate" value={<><span>{display.transferRate}%</span><div className="mt-2"><ProgressBar value={display.transferRate} /></div></>} />
@@ -979,17 +997,26 @@ function TaskTargetList({ task, targets, progressDetails, stateOptions, isLoadin
 
 function TaskActionModal({ pendingAction, isLoading, onCancel, onConfirm }: { pendingAction: NonNullable<PendingAction>; isLoading: boolean; onCancel: () => void; onConfirm: () => void }) {
   const tone = pendingAction.action === "delete" ? "rose" : pendingAction.action === "stop" ? "amber" : "slate";
+  const title = pendingAction.action === "delete" ? "Delete Task" : pendingAction.action === "cancel" ? "Cancel Task" : "Stop Task";
+  
+  const description = pendingAction.action === "delete"
+    ? "This will archive TS_JOB and TS_JOB_DEST into delete history tables, then remove the active rows. TS_JOB_HISTORY will remain untouched."
+    : pendingAction.action === "cancel"
+      ? "This will update the selected job status to Cancelled."
+      : "This will update the selected job status to Stop.";
 
   return (
     <div className="fixed inset-0 z-[90] grid place-items-center bg-slate-950/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="border-b border-slate-200 p-5">
           <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-500">Confirm Action</p>
-          <h3 className="mt-1 text-lg font-black capitalize text-slate-950">{pendingAction.action} Task #{pendingAction.task.id}</h3>
-          <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">This action will be sent to the Task List API. Confirm before continuing.</p>
+          <h3 className="mt-1 text-lg font-black capitalize text-slate-950">{title} #{pendingAction.task.id}</h3>
+          <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">{description}</p>
         </div>
         <div className="p-5">
-          <div className={cx("rounded-xl border p-4 text-sm font-bold", tone === "rose" && "border-rose-200 bg-rose-50 text-rose-700", tone === "amber" && "border-amber-200 bg-amber-50 text-amber-700", tone === "slate" && "border-slate-200 bg-slate-50 text-slate-700")}>{pendingAction.task.description || pendingAction.task.commandType || "Selected task"}</div>
+          <div className={cx("rounded-xl border p-4 text-sm font-bold", tone === "rose" && "border-rose-200 bg-rose-50 text-rose-700", tone === "amber" && "border-amber-200 bg-amber-50 text-amber-700", tone === "slate" && "border-slate-200 bg-slate-50 text-slate-700")}>
+            {pendingAction.task.description || pendingAction.task.commandType || "Selected task"}
+          </div>
         </div>
         <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 p-4">
           <EmaButton onClick={onCancel} disabled={isLoading} variant="secondary">Cancel</EmaButton>
