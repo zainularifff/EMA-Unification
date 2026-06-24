@@ -1,34 +1,44 @@
 // backend/queries/queries_EMA.js
 
+const fs = require("fs");
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
-
+const dotenv = require("dotenv");
 const sql = require("mssql");
 
-function readRequiredEnv(...names) {
+const envPaths = [
+  path.join(__dirname, "..", ".env"),
+  path.join(process.cwd(), ".env"),
+  path.join(process.cwd(), "backend", ".env"),
+];
+
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: false });
+  }
+}
+
+function readEnv(names, fallback = "") {
   for (const name of names) {
     const value = process.env[name];
     if (value && String(value).trim()) return String(value).trim();
   }
 
-  throw new Error(`Missing required environment variable: ${names.join(" or ")}`);
+  return fallback;
 }
 
 const dbConfig = {
-  user: process.env.DB_USER || process.env.SQL_USER,
-  password: process.env.DB_PASSWORD || process.env.SQL_PASSWORD,
-  server: readRequiredEnv("DB_SERVER", "SQL_SERVER"),
-  database:
-    process.env.EMA_DB_DATABASE ||
-    process.env.DB_NAME ||
-    process.env.DB_DATABASE ||
-    process.env.SQL_DATABASE ||
-    "TCO2",
-  port: Number(process.env.DB_PORT || process.env.SQL_PORT || 1433),
+  user: readEnv(["DB_USER", "SQL_USER"]),
+  password: readEnv(["DB_PASSWORD", "SQL_PASSWORD"]),
+  server: readEnv(["DB_SERVER", "SQL_SERVER"], "192.168.140.105"),
+  database: readEnv(
+    ["EMA_DB_DATABASE", "DB_NAME", "DB_DATABASE", "SQL_DATABASE"],
+    "TCO2"
+  ),
+  port: Number(readEnv(["DB_PORT", "SQL_PORT"], "1433")),
   options: {
-    encrypt: String(process.env.DB_ENCRYPT || "false") === "true",
+    encrypt: String(readEnv(["DB_ENCRYPT"], "false")) === "true",
     trustServerCertificate:
-      String(process.env.DB_TRUST_CERT || "true") === "true",
+      String(readEnv(["DB_TRUST_CERT"], "true")) === "true",
   },
 };
 
