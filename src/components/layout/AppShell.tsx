@@ -6,6 +6,13 @@ import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
 import "./app-shell-scroll-fix.css";
 
+declare global {
+  interface Window {
+    __emaSettingsRoleRefreshGuardInstalled?: boolean;
+    __emaSettingsRoleLastWriteAt?: number;
+  }
+}
+
 function getNestedVerticalScroller(target: HTMLElement | null, stopAt: HTMLElement) {
   let current = target;
 
@@ -25,8 +32,57 @@ function normalizeWheelDelta(event: WheelEvent<HTMLElement>) {
   return event.deltaY;
 }
 
+function getRequestUrl(input: RequestInfo | URL) {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+function getRequestMethod(input: RequestInfo | URL, init?: RequestInit) {
+  return String(init?.method || (input instanceof Request ? input.method : "GET") || "GET").toUpperCase();
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function installSettingsRoleRefreshGuard() {
+  if (typeof window === "undefined" || window.__emaSettingsRoleRefreshGuardInstalled) return;
+
+  window.__emaSettingsRoleRefreshGuardInstalled = true;
+  window.__emaSettingsRoleLastWriteAt = 0;
+
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = getRequestUrl(input);
+    const method = getRequestMethod(input, init);
+    const isRoleApi = url.includes("/api/settings/roles");
+
+    if (isRoleApi && method === "GET") {
+      const lastWriteAt = Number(window.__emaSettingsRoleLastWriteAt || 0);
+      const elapsed = Date.now() - lastWriteAt;
+
+      if (lastWriteAt > 0 && elapsed >= 0 && elapsed < 450) {
+        await delay(450 - elapsed);
+      }
+    }
+
+    const response = await originalFetch(input, init);
+
+    if (isRoleApi && ["POST", "PUT", "PATCH", "DELETE"].includes(method) && response.ok) {
+      window.__emaSettingsRoleLastWriteAt = Date.now();
+    }
+
+    return response;
+  };
+}
+
 export function AppShell() {
-  useEffect(() => installDisplayCopyStandardizer(), []);
+  useEffect(() => {
+    installDisplayCopyStandardizer();
+    installSettingsRoleRefreshGuard();
+  }, []);
 
   const handleMainWheel = (event: WheelEvent<HTMLElement>) => {
     const main = event.currentTarget;
