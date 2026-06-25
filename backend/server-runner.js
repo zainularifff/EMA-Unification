@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const jwt = require('jsonwebtoken');
 const sql = require('mssql');
 const registerNotificationSettingsRoutes = require('./notificationSettingsRoutes');
+const registerAiAssistRoutes = require('./aiAssistRoutes');
 
 const dbConfig = {
   user: process.env.DB_USER || process.env.SQL_USER,
@@ -52,6 +53,13 @@ function wrappedExpress(...args) {
       authenticateToken: notificationAuthenticateToken,
       dbConfig,
       sql
+    });
+  }
+
+  if (!app.__emaAiAssistRoutesRegistered) {
+    app.__emaAiAssistRoutesRegistered = true;
+    registerAiAssistRoutes(app, {
+      authenticateToken: notificationAuthenticateToken
     });
   }
 
