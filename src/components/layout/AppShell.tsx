@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type WheelEvent } from "react";
 import { Outlet } from "react-router-dom";
 
 import { installDisplayCopyStandardizer } from "../../utils/displayCopy";
@@ -6,8 +6,44 @@ import { Sidebar } from "./Sidebar";
 import { TopNavbar } from "./TopNavbar";
 import "./app-shell-scroll-fix.css";
 
+function getNestedVerticalScroller(target: HTMLElement | null, stopAt: HTMLElement) {
+  let current = target;
+
+  while (current && current !== stopAt) {
+    const style = window.getComputedStyle(current);
+    const canScrollY = /(auto|scroll)/i.test(style.overflowY) && current.scrollHeight > current.clientHeight + 1;
+    if (canScrollY) return current;
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+function normalizeWheelDelta(event: WheelEvent<HTMLElement>) {
+  if (event.deltaMode === 1) return event.deltaY * 16;
+  if (event.deltaMode === 2) return event.deltaY * event.currentTarget.clientHeight;
+  return event.deltaY;
+}
+
 export function AppShell() {
   useEffect(() => installDisplayCopyStandardizer(), []);
+
+  const handleMainWheel = (event: WheelEvent<HTMLElement>) => {
+    const main = event.currentTarget;
+    if (!main || Math.abs(event.deltaY) < 1) return;
+
+    const nestedScroller = getNestedVerticalScroller(event.target as HTMLElement | null, main);
+    if (nestedScroller) return;
+
+    const maxScrollTop = main.scrollHeight - main.clientHeight;
+    if (maxScrollTop <= 0) return;
+
+    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, main.scrollTop + normalizeWheelDelta(event)));
+    if (nextScrollTop === main.scrollTop) return;
+
+    main.scrollTop = nextScrollTop;
+    event.preventDefault();
+  };
 
   return (
     <div className="ema-app-shell-root flex h-screen overflow-hidden bg-slate-100 text-slate-900">
@@ -18,7 +54,7 @@ export function AppShell() {
       <div className="ema-app-shell-content flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
         <TopNavbar />
 
-        <main className="ema-app-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2">
+        <main className="ema-app-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2" onWheelCapture={handleMainWheel}>
           <Outlet />
         </main>
       </div>
