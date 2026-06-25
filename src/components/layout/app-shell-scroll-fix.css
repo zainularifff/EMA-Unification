@@ -1,0 +1,62 @@
+html,
+body,
+#root {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.ema-app-shell-root {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.ema-app-shell-sidebar {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.ema-app-shell-content {
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ema-app-shell-main {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Dashboard has its own injected style block that locks main/body scroll.
+   Keep the app shell locked, but force the routed main panel to be the scroll area. */
+html body.itops-dashboard-page-active #root main.ema-app-shell-main,
+html body.itops-dashboard-page-active #root .ema-app-shell-main {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0.5rem !important;
+  background: #f4f8fc !important;
+}
+
+html body.itops-dashboard-page-active #root main.ema-app-shell-main > .itops-pro-page.itops-pro-page,
+html body.itops-dashboard-page-active #root .ema-app-shell-main > .itops-pro-page.itops-pro-page {
+  min-height: 100% !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overflow-x: hidden !important;
+}
+
+html body.itops-dashboard-page-active #root .itops-pro-modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  overflow: auto !important;
+}
