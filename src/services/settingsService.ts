@@ -10,6 +10,12 @@ function idFrom(row: AnyRecord, ...keys: string[]) {
   return row?.id;
 }
 
+function stripRolesFromModuleAccessPayload(payload: any) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  const { roles: _roles, Roles: _Roles, ...rest } = payload;
+  return rest;
+}
+
 export const settingsUsers = {
   async getAll() { const payload = await api.get("/api/settings/users"); return unwrapArray<AnyRecord>(payload); },
   async getById(id: number | string) { const payload = await api.get(`/api/settings/users/${id}`); return unwrapData<AnyRecord>(payload, {}); },
@@ -33,7 +39,11 @@ export const settingsRoles = {
 };
 
 export const moduleAccess = {
-  async get() { const payload = await api.get("/api/settings/module-access"); return unwrapData(payload, payload); },
+  async get() {
+    const payload = await api.get("/api/settings/module-access", { forceRefresh: true });
+    const data = unwrapData<AnyRecord>(payload, payload as AnyRecord);
+    return stripRolesFromModuleAccessPayload(data);
+  },
   async save(payload: AnyRecord) { return unwrapData(await api.put("/api/settings/module-access", payload)); },
 };
 
