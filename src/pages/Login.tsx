@@ -14,6 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { getDefaultRouteForUser } from "../routes/accessControl";
 
 import authService, { type LoginResponse } from "../services/authService";
 import { useAuth } from "../context/AuthContext";
@@ -163,7 +164,7 @@ export default function Login() {
 
     storeAuthToken(accessToken, normalizedUser);
     login(accessToken, normalizedUser);
-    navigate("/dashboard", { replace: true });
+    navigate(getDefaultRouteForUser(normalizedUser), { replace: true });
   };
 
   useEffect(() => {

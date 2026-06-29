@@ -2,6 +2,15 @@ import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "../context/AuthContext";
+import {
+  canAccessRoute,
+  cleanPath,
+  extractUser,
+  getDefaultRouteForUser,
+  getStoredAccessUser,
+  PUBLIC_AUTH_PATHS,
+  saveAccessUser,
+} from "./accessControl";
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -24,6 +33,7 @@ function getStoredToken() {
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const location = useLocation();
   const auth = useAuth() as any;
+  const path = cleanPath(location.pathname);
 
   const token =
     auth?.token ||
@@ -31,8 +41,29 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     auth?.authToken ||
     getStoredToken();
 
-  if (!token) {
+  if (!token && !PUBLIC_AUTH_PATHS.includes(path)) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  const user = extractUser(auth) || getStoredAccessUser();
+
+  if (user) {
+    saveAccessUser(user);
+  }
+
+  if (token && path !== "/" && !PUBLIC_AUTH_PATHS.includes(path) && !canAccessRoute(user, path)) {
+    const landing = getDefaultRouteForUser(user);
+
+    if (!landing || landing === "/login") {
+      localStorage.removeItem("ema-access-token");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("ema-auth");
+
+      return <Navigate to="/login" replace />;
+    }
+
+    return <Navigate to={landing} replace />;
   }
 
   return <>{children}</>;
