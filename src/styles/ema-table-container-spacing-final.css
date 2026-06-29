@@ -1,0 +1,217 @@
+/* EMA TABLE CONTAINER SPACING FINAL
+   Every table inside a card/container must have breathing space left/right.
+*/
+
+:root {
+  --ema-table-container-gap-x: 14px;
+  --ema-table-container-gap-y: 10px;
+}
+
+/* =========================================================
+   TABLE BORDER MUST NOT TOUCH CONTAINER BORDER
+========================================================= */
+
+html body :is(
+  .hardware-device-table,
+  .software-device-table,
+  .user-access-table,
+  .advanced.clean-table,
+  .settings-standard-table,
+  .audit-standard-table,
+  .service-desk-table,
+  .ema-standard-table,
+  .uam-table,
+  .network-table,
+  .network-standard-table,
+  .app-table,
+  .app-standard-table,
+  .restriction-table,
+  .patch-table,
+  .task-table,
+  .report-table,
+  .inventory-table,
+  .data-table
+) {
+  width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+
+  margin-left: var(--ema-table-container-gap-x) !important;
+  margin-right: var(--ema-table-container-gap-x) !important;
+  margin-top: var(--ema-table-container-gap-y) !important;
+  margin-bottom: 0 !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Real HTML table inside cards */
+html body :is(
+  .registry-card,
+  .table-card,
+  .table-panel,
+  .data-card,
+  .ema-panel-surface,
+  .content-shell,
+  .package-registry,
+  .package-registry-card,
+  .package-table-card,
+  [class*="registry"],
+  [class*="table-card"],
+  [class*="table-panel"],
+  [class*="data-card"]
+) table {
+  width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+
+  margin-left: var(--ema-table-container-gap-x) !important;
+  margin-right: var(--ema-table-container-gap-x) !important;
+  margin-top: var(--ema-table-container-gap-y) !important;
+  margin-bottom: 0 !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Table wrappers must not clip the table margin */
+html body :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .scroll-table,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+/* If wrapper directly owns table, table still keeps inner spacing */
+html body :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .scroll-table,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+) > table {
+  width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  margin-left: var(--ema-table-container-gap-x) !important;
+  margin-right: var(--ema-table-container-gap-x) !important;
+}
+
+/* =========================================================
+   SPECIAL PAGES: SOFTWARE DISTRIBUTION / PATCH / INTERNET
+========================================================= */
+
+html body:is(
+  .ema-route-software-distribution,
+  .ema-route-patch-management,
+  .ema-route-internet-metering,
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/internet-metering"]
+) table {
+  width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+
+  margin-left: var(--ema-table-container-gap-x) !important;
+  margin-right: var(--ema-table-container-gap-x) !important;
+  margin-top: var(--ema-table-container-gap-y) !important;
+  margin-bottom: 0 !important;
+}
+
+/* For wide operational table, keep min-width but still add breathing space */
+html body:is(
+  .ema-route-patch-management,
+  .ema-route-internet-metering,
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/internet-metering"]
+) table {
+  min-width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+}
+
+/* Software Distribution package table specifically */
+html body:is(
+  .ema-route-software-distribution,
+  [data-ema-route="/software-distribution"]
+) :is(
+  .package-registry,
+  .package-registry-card,
+  .package-table,
+  .package-table-card,
+  [class*="package"],
+  [class*="registry"]
+) table {
+  width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  margin-left: var(--ema-table-container-gap-x) !important;
+  margin-right: var(--ema-table-container-gap-x) !important;
+}
+
+/* =========================================================
+   PAGINATION MUST ALIGN WITH TABLE SPACING
+========================================================= */
+
+html body :is(
+  .uam-pagination,
+  .global-style.uam-pagination,
+  .software-page-pagination,
+  .hardware-stat-pagination,
+  .ema-pagination,
+  .pagination-row
+) {
+  width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--ema-table-container-gap-x) * 2)) !important;
+
+  margin-left: var(--ema-table-container-gap-x) !important;
+  margin-right: var(--ema-table-container-gap-x) !important;
+  margin-top: 8px !important;
+}
+
+/* =========================================================
+   CARD INNER PADDING SAFETY
+========================================================= */
+
+html body :is(
+  .registry-card,
+  .table-card,
+  .table-panel,
+  .data-card,
+  .ema-panel-surface,
+  .package-registry-card,
+  .package-table-card,
+  [class*="table-card"],
+  [class*="table-panel"]
+) {
+  box-sizing: border-box !important;
+}
+
+/* Avoid double spacing in modal tables */
+html body :is(
+  .software-deploy-modal,
+  .user-modal,
+  .modal,
+  [class*="modal"]
+) table {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  :root {
+    --ema-table-container-gap-x: 10px;
+  }
+}

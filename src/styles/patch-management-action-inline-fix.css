@@ -1,0 +1,126 @@
+/* Patch Management action buttons inline fix */
+/* Force Install + Details to sit side-by-side, not stacked. */
+
+html body.ema-route-patch-management table :is(th, td):last-child,
+html body[data-ema-route="/patch-management"] table :is(th, td):last-child,
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table :is(th, td):last-child {
+  width: 176px !important;
+  min-width: 176px !important;
+  max-width: 176px !important;
+  text-align: center !important;
+}
+
+/* Action cell layout */
+html body.ema-route-patch-management table tbody td:last-child,
+html body[data-ema-route="/patch-management"] table tbody td:last-child,
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table tbody td:last-child {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  column-gap: 8px !important;
+
+  white-space: nowrap !important;
+  overflow: visible !important;
+
+  padding: 6px 8px !important;
+}
+
+/* If buttons are wrapped inside div/span, flatten/wrap them inline */
+html body.ema-route-patch-management table tbody td:last-child > :is(div, span, p),
+html body[data-ema-route="/patch-management"] table tbody td:last-child > :is(div, span, p),
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table tbody td:last-child > :is(div, span, p) {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  white-space: nowrap !important;
+}
+
+/* Install + Details buttons */
+html body.ema-route-patch-management table tbody td:last-child :is(button, a[role="button"]),
+html body[data-ema-route="/patch-management"] table tbody td:last-child :is(button, a[role="button"]),
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table tbody td:last-child :is(button, a[role="button"]) {
+  width: auto !important;
+  min-width: 68px !important;
+  max-width: none !important;
+
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+
+  padding: 0 10px !important;
+  margin: 0 !important;
+
+  border-radius: 10px !important;
+  border: 1px solid #cfe0f7 !important;
+  background: #f8fafc !important;
+  color: #10294f !important;
+  box-shadow: none !important;
+
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 10.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  text-indent: 0 !important;
+
+  white-space: nowrap !important;
+  flex: 0 0 auto !important;
+}
+
+/* Install button */
+html body.ema-route-patch-management table tbody td:last-child :is(button, a[role="button"]):first-child:not(:last-child),
+html body[data-ema-route="/patch-management"] table tbody td:last-child :is(button, a[role="button"]):first-child:not(:last-child),
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table tbody td:last-child :is(button, a[role="button"]):first-child:not(:last-child) {
+  background: #0f84d8 !important;
+  border-color: #0f84d8 !important;
+  color: #ffffff !important;
+}
+
+/* Details button */
+html body.ema-route-patch-management table tbody td:last-child :is(button, a[role="button"]):last-child,
+html body[data-ema-route="/patch-management"] table tbody td:last-child :is(button, a[role="button"]):last-child,
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table tbody td:last-child :is(button, a[role="button"]):last-child {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #10294f !important;
+}
+
+/* Show button text */
+html body.ema-route-patch-management table tbody td:last-child :is(button, a[role="button"]) span,
+html body[data-ema-route="/patch-management"] table tbody td:last-child :is(button, a[role="button"]) span,
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table tbody td:last-child :is(button, a[role="button"]) span {
+  display: inline !important;
+  font: inherit !important;
+  color: inherit !important;
+}
+
+/* Icons */
+html body.ema-route-patch-management table tbody td:last-child :is(button, a[role="button"]) svg,
+html body[data-ema-route="/patch-management"] table tbody td:last-child :is(button, a[role="button"]) svg,
+html body :is(.patch-management-page, .patch-management-module, .patch-module-root, [class*="patch-management"]) table tbody td:last-child :is(button, a[role="button"]) svg {
+  width: 12px !important;
+  height: 12px !important;
+  color: currentColor !important;
+  stroke: currentColor !important;
+}

@@ -1,0 +1,42 @@
+/* Software Distribution must not use branch sidepanel tree UI */
+
+body:has(.software-distribution-page),
+body:has(.software-distribution-root),
+body:has(.package-registry) {
+  --software-distribution-sidepanel-excluded: 1;
+}
+
+/* If old class remains during HMR, neutralize only Software Distribution package page */
+body.ema-sidepanel-v5-page:has(.package-registry) :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  [class*="sidepanel"],
+  [class*="side-panel"]
+)::before {
+  content: none !important;
+}
+
+body.ema-sidepanel-v5-page:has(.package-registry) :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  [class*="sidepanel"],
+  [class*="side-panel"]
+):has(:is(input[placeholder*="Search"], .ema-sidebar-tree, .hardware-location-tree-card, .software-tree-panel, #hardwareMenu)) {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  padding: initial !important;
+  border: initial !important;
+  border-radius: initial !important;
+  background: initial !important;
+  box-shadow: initial !important;
+}

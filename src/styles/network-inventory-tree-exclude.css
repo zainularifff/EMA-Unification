@@ -1,0 +1,41 @@
+/* Network Inventory must keep its own sidebar/tree UI */
+
+body:has(.network-inventory-page),
+body:has(.network-inventory-root),
+body:has(.network-page),
+body:has([data-page="network-inventory"]) {
+  --ema-network-tree-excluded: 1;
+}
+
+body.ema-clean-reference-tree:has(.network-inventory-page),
+body.ema-clean-reference-tree:has(.network-inventory-root),
+body.ema-clean-reference-tree:has(.network-page),
+body.ema-module-tree-size-lock:has(.network-inventory-page),
+body.ema-module-tree-size-lock:has(.network-inventory-root),
+body.ema-module-tree-size-lock:has(.network-page),
+body.ema-module-branch-tree-standard:has(.network-inventory-page),
+body.ema-module-branch-tree-standard:has(.network-inventory-root),
+body.ema-module-branch-tree-standard:has(.network-page) {
+  --tree-w: initial !important;
+  --tree-border: initial !important;
+}
+
+/* Remove forced panel styling only on Network Inventory */
+body.ema-clean-reference-tree:has(.network-inventory-page) [data-clean-tree-panel="true"],
+body.ema-clean-reference-tree:has(.network-inventory-root) [data-clean-tree-panel="true"],
+body.ema-clean-reference-tree:has(.network-page) [data-clean-tree-panel="true"],
+body.ema-module-tree-size-lock:has(.network-inventory-page) [data-ema-tree-size-panel="true"],
+body.ema-module-tree-size-lock:has(.network-inventory-root) [data-ema-tree-size-panel="true"],
+body.ema-module-tree-size-lock:has(.network-page) [data-ema-tree-size-panel="true"] {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding: initial !important;
+  border: initial !important;
+  border-radius: initial !important;
+  background: initial !important;
+  box-shadow: initial !important;
+}

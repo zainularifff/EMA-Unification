@@ -1,0 +1,181 @@
+/* EMA MODULE TREE SIZE LOCK
+   Force same sidebar tree size for all module pages.
+   Excludes Settings, ServiceDesk, Report, SoftwareDistribution by runtime.
+*/
+
+body.ema-module-tree-size-lock {
+  --ema-tree-lock-width: 330px;
+  --ema-tree-lock-height: calc(100vh - 112px);
+  --ema-tree-border: #dbe7f6;
+}
+
+/* Parent layout must stretch same height */
+body.ema-module-tree-size-lock :is(div, section, main):has(> [data-ema-tree-size-panel="true"]) {
+  display: grid !important;
+  grid-template-columns: 330px minmax(0, 1fr) !important;
+  gap: 14px !important;
+  column-gap: 14px !important;
+  align-items: stretch !important;
+
+  height: var(--ema-tree-lock-height) !important;
+  min-height: var(--ema-tree-lock-height) !important;
+  max-height: var(--ema-tree-lock-height) !important;
+}
+
+/* Sidepanel same width + same length */
+body.ema-module-tree-size-lock [data-ema-tree-size-panel="true"],
+body.ema-module-tree-size-lock [data-ema-branch-panel-standard="true"] {
+  width: var(--ema-tree-lock-width) !important;
+  min-width: var(--ema-tree-lock-width) !important;
+  max-width: var(--ema-tree-lock-width) !important;
+
+  height: var(--ema-tree-lock-height) !important;
+  min-height: var(--ema-tree-lock-height) !important;
+  max-height: var(--ema-tree-lock-height) !important;
+
+  align-self: stretch !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.035) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Main content takes same vertical size */
+body.ema-module-tree-size-lock :is(div, section, main):has(> [data-ema-tree-size-panel="true"]) > :not([data-ema-tree-size-panel="true"]) {
+  min-width: 0 !important;
+
+  height: var(--ema-tree-lock-height) !important;
+  min-height: var(--ema-tree-lock-height) !important;
+  max-height: var(--ema-tree-lock-height) !important;
+
+  overflow: auto !important;
+}
+
+/* Body inside panel must stretch */
+body.ema-module-tree-size-lock [data-ema-tree-size-body="true"],
+body.ema-module-tree-size-lock [data-ema-branch-body-standard="true"],
+body.ema-module-tree-size-lock :is(
+  .hardware-branch-body,
+  .hardware-branch-panel-body,
+  .ema-sidebar-content,
+  .ema-sidebar-subpanel,
+  .sidebar-body,
+  .tree-body,
+  .folder-body
+) {
+  display: flex !important;
+  flex-direction: column !important;
+
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+
+  width: 100% !important;
+  gap: 10px !important;
+
+  overflow: hidden !important;
+}
+
+/* Search same size */
+body.ema-module-tree-size-lock [data-ema-tree-size-search="true"],
+body.ema-module-tree-size-lock [data-ema-branch-search-standard="true"],
+body.ema-module-tree-size-lock :is(
+  .hardware-branch-search,
+  .ema-sidebar-field,
+  .section-search,
+  .sidebar-search,
+  .search-box,
+  .tree-search,
+  .branch-search,
+  .folder-search
+) {
+  flex: 0 0 38px !important;
+  width: 100% !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Add folder same size */
+body.ema-module-tree-size-lock [data-ema-tree-size-add="true"],
+body.ema-module-tree-size-lock [data-ema-branch-add-standard="true"],
+body.ema-module-tree-size-lock :is(
+  .hardware-add-folder-btn,
+  .add-folder-btn,
+  .create-folder-btn,
+  .new-folder-btn,
+  .folder-action-btn,
+  button[class*="add-folder"],
+  button[class*="new-folder"]
+) {
+  flex: 0 0 36px !important;
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Tree card fills remaining space same everywhere */
+body.ema-module-tree-size-lock [data-ema-tree-size-tree="true"],
+body.ema-module-tree-size-lock [data-ema-branch-tree-standard="true"],
+body.ema-module-tree-size-lock :is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* Force Internet Metering side panel too */
+body.ema-module-tree-size-lock :is(
+  .appmetering-sidebar,
+  .internet-metering-sidebar,
+  .metering-sidebar,
+  .target-sidebar,
+  .target-registry-sidebar,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar
+):has(:is(input[placeholder*="Search"], .ema-sidebar-tree, .tree-list, [aria-label*="tree"], [aria-label*="Tree"])) {
+  width: var(--ema-tree-lock-width) !important;
+  min-width: var(--ema-tree-lock-width) !important;
+  max-width: var(--ema-tree-lock-width) !important;
+
+  height: var(--ema-tree-lock-height) !important;
+  min-height: var(--ema-tree-lock-height) !important;
+  max-height: var(--ema-tree-lock-height) !important;
+}

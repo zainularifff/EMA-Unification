@@ -1,0 +1,195 @@
+/* Deploy Package - Endpoint Targets table fix */
+
+/* Give modal a bit more usable width */
+html body .software-deploy-modal {
+  width: min(1280px, calc(100vw - 48px)) !important;
+  max-width: min(1280px, calc(100vw - 48px)) !important;
+}
+
+/* Better 3-column balance: scope | endpoint table | review */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row {
+  display: grid !important;
+  grid-template-columns: 280px minmax(560px, 1fr) 250px !important;
+  gap: 12px !important;
+  align-items: stretch !important;
+}
+
+/* Endpoint target card */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) .resource-form-card {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Endpoint target table scroll area */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  max-height: 330px !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  border-radius: 14px !important;
+}
+
+/* Endpoint target table only */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table {
+  width: 100% !important;
+  min-width: 720px !important;
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  background: #ffffff !important;
+}
+
+/* Header */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3 !important;
+
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+
+  padding: 0 10px !important;
+  background: #f4f7fb !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+
+  color: #2563eb !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Body cells */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody td {
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: none !important;
+
+  padding: 7px 10px !important;
+  vertical-align: middle !important;
+
+  border-bottom: 1px solid #e7eef8 !important;
+  background: #ffffff !important;
+
+  color: #18345f !important;
+  font-size: 10px !important;
+  line-height: 1.18 !important;
+  font-weight: 780 !important;
+
+  overflow: hidden !important;
+}
+
+/* Column widths */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table :is(th, td):nth-child(1) {
+  width: 38px !important;
+  min-width: 38px !important;
+  max-width: 38px !important;
+  text-align: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table :is(th, td):nth-child(2) {
+  width: 230px !important;
+  min-width: 230px !important;
+  max-width: 230px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table :is(th, td):nth-child(3) {
+  width: 130px !important;
+  min-width: 130px !important;
+  max-width: 130px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table :is(th, td):nth-child(4) {
+  width: 105px !important;
+  min-width: 105px !important;
+  max-width: 105px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table :is(th, td):nth-child(5) {
+  width: 105px !important;
+  min-width: 105px !important;
+  max-width: 105px !important;
+}
+
+/* Stop ugly letter-by-letter wrapping */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody td,
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody td * {
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* User/device column can wrap cleanly by word, not by letter */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody td:nth-child(2),
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody td:nth-child(2) * {
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+  word-break: normal !important;
+  line-height: 1.15 !important;
+}
+
+/* Other columns single line */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody td:nth-child(n+3),
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody td:nth-child(n+3) * {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Checkbox */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table input[type="checkbox"] {
+  width: 13px !important;
+  height: 13px !important;
+  min-width: 13px !important;
+  margin: 0 !important;
+  accent-color: #2563eb !important;
+}
+
+/* Row hover */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) table tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+/* Smaller review panel text so it doesn't steal width */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(3) {
+  min-width: 250px !important;
+  max-width: 250px !important;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row {
+    grid-template-columns: 260px minmax(520px, 1fr) 230px !important;
+  }
+
+  html body .software-deploy-modal {
+    width: calc(100vw - 28px) !important;
+    max-width: calc(100vw - 28px) !important;
+  }
+}
+
+@media (max-width: 980px) {
+  html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row {
+    grid-template-columns: 1fr !important;
+  }
+}

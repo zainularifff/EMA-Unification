@@ -4,6 +4,8 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -657,7 +659,7 @@ function downloadCsv(label: string, rows: Array<Array<string | number>>) {
 }
 
 export default function Software() {
-  const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
+const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
   const [categoriesFromApi, setCategoriesFromApi] = useState<string[]>([]);
   const [tableRows, setTableRows] = useState<Record<Exclude<TableKey, "registry">, string[][]>>({
     installedSoftware: [],

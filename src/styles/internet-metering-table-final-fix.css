@@ -1,0 +1,355 @@
+/* Internet Metering table final fix */
+
+:root {
+  --internet-table-blue: #2563eb;
+  --internet-table-head-bg: #f4f7fb;
+  --internet-table-border: #dbe7f6;
+  --internet-table-row-border: #e7eef8;
+  --internet-table-text: #10294f;
+  --internet-table-body: #18345f;
+  --internet-table-muted: #64748b;
+  --internet-table-gap-x: 14px;
+}
+
+/* Scope */
+html body.ema-route-internet-metering,
+html body[data-ema-route="/internet-metering"] {
+  --ema-table-row-height: 42px;
+  --ema-table-head-height: 38px;
+}
+
+/* Card / wrapper */
+html body.ema-route-internet-metering :is(
+  .content-shell,
+  .ema-panel-surface,
+  .table-card,
+  .table-panel,
+  .data-card,
+  .registry-card,
+  [class*="internet"],
+  [class*="metering"],
+  [class*="table-card"],
+  [class*="table-panel"]
+),
+html body[data-ema-route="/internet-metering"] :is(
+  .content-shell,
+  .ema-panel-surface,
+  .table-card,
+  .table-panel,
+  .data-card,
+  .registry-card,
+  [class*="internet"],
+  [class*="metering"],
+  [class*="table-card"],
+  [class*="table-panel"]
+) {
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+
+html body.ema-route-internet-metering :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+),
+html body[data-ema-route="/internet-metering"] :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  box-sizing: border-box !important;
+}
+
+/* Force real table layout */
+html body.ema-route-internet-metering table,
+html body[data-ema-route="/internet-metering"] table,
+html body :is(.internet-metering-page, .internet-metering-module, .internet-metering-root, [class*="internet-metering"]) table {
+  display: table !important;
+
+  width: calc(100% - calc(var(--internet-table-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--internet-table-gap-x) * 2)) !important;
+  min-width: calc(100% - calc(var(--internet-table-gap-x) * 2)) !important;
+
+  margin: 10px var(--internet-table-gap-x) 0 !important;
+
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  border: 1px solid var(--internet-table-border) !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+/* Header */
+html body.ema-route-internet-metering table thead,
+html body[data-ema-route="/internet-metering"] table thead {
+  display: table-header-group !important;
+}
+
+html body.ema-route-internet-metering table thead tr,
+html body[data-ema-route="/internet-metering"] table thead tr {
+  display: table-row !important;
+  height: 38px !important;
+  background: var(--internet-table-head-bg) !important;
+}
+
+html body.ema-route-internet-metering table thead th,
+html body[data-ema-route="/internet-metering"] table thead th,
+html body :is(.internet-metering-page, .internet-metering-module, .internet-metering-root, [class*="internet-metering"]) table thead th {
+  display: table-cell !important;
+  vertical-align: middle !important;
+
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+
+  padding: 0 12px !important;
+
+  background: var(--internet-table-head-bg) !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+
+  color: var(--internet-table-blue) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Body */
+html body.ema-route-internet-metering table tbody,
+html body[data-ema-route="/internet-metering"] table tbody {
+  display: table-row-group !important;
+}
+
+html body.ema-route-internet-metering table tbody tr,
+html body[data-ema-route="/internet-metering"] table tbody tr,
+html body :is(.internet-metering-page, .internet-metering-module, .internet-metering-root, [class*="internet-metering"]) table tbody tr {
+  display: table-row !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  background: #ffffff !important;
+}
+
+html body.ema-route-internet-metering table tbody tr:hover td,
+html body[data-ema-route="/internet-metering"] table tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+html body.ema-route-internet-metering table tbody td,
+html body[data-ema-route="/internet-metering"] table tbody td,
+html body :is(.internet-metering-page, .internet-metering-module, .internet-metering-root, [class*="internet-metering"]) table tbody td {
+  display: table-cell !important;
+  vertical-align: middle !important;
+
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+
+  padding: 6px 12px !important;
+
+  border-bottom: 1px solid var(--internet-table-row-border) !important;
+  background: #ffffff !important;
+
+  color: var(--internet-table-body) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 10.5px !important;
+  line-height: 1.18 !important;
+  font-weight: 750 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* Column widths: NO | URL/DOMAIN | STATUS | RULE ID | ACTION */
+html body.ema-route-internet-metering table :is(th, td):nth-child(1),
+html body[data-ema-route="/internet-metering"] table :is(th, td):nth-child(1) {
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+  text-align: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+
+  color: var(--internet-table-muted) !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+html body.ema-route-internet-metering table :is(th, td):nth-child(2),
+html body[data-ema-route="/internet-metering"] table :is(th, td):nth-child(2) {
+  width: auto !important;
+  min-width: 280px !important;
+  text-align: left !important;
+}
+
+html body.ema-route-internet-metering table :is(th, td):nth-child(3),
+html body[data-ema-route="/internet-metering"] table :is(th, td):nth-child(3) {
+  width: 170px !important;
+  min-width: 170px !important;
+  max-width: 170px !important;
+}
+
+html body.ema-route-internet-metering table :is(th, td):nth-child(4),
+html body[data-ema-route="/internet-metering"] table :is(th, td):nth-child(4) {
+  width: 150px !important;
+  min-width: 150px !important;
+  max-width: 150px !important;
+}
+
+html body.ema-route-internet-metering table :is(th, td):nth-child(5),
+html body[data-ema-route="/internet-metering"] table :is(th, td):nth-child(5) {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+  text-align: center !important;
+}
+
+/* Plain content only */
+html body.ema-route-internet-metering table tbody td :is(span, div, p, strong, small),
+html body[data-ema-route="/internet-metering"] table tbody td :is(span, div, p, strong, small) {
+  display: inline !important;
+
+  color: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  font-weight: inherit !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Status text */
+html body.ema-route-internet-metering table tbody td:nth-child(3),
+html body[data-ema-route="/internet-metering"] table tbody td:nth-child(3) {
+  color: var(--internet-table-text) !important;
+  font-weight: 850 !important;
+}
+
+/* Action button: neutral/blue menu, not red delete */
+html body.ema-route-internet-metering table tbody td:last-child,
+html body[data-ema-route="/internet-metering"] table tbody td:last-child {
+  text-align: center !important;
+  overflow: visible !important;
+}
+
+html body.ema-route-internet-metering table tbody td:last-child :is(button, a[role="button"]),
+html body[data-ema-route="/internet-metering"] table tbody td:last-child :is(button, a[role="button"]),
+html body :is(.internet-metering-page, .internet-metering-module, .internet-metering-root, [class*="internet-metering"]) table tbody td:last-child :is(button, a[role="button"]) {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 auto !important;
+
+  border-radius: 10px !important;
+  border: 1px solid #bfdbfe !important;
+  background: #eff6ff !important;
+  color: var(--internet-table-blue) !important;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08) !important;
+
+  font-size: 0 !important;
+  line-height: 1 !important;
+  text-indent: 0 !important;
+}
+
+/* Override delete-red fallback for Internet Metering action */
+html body.ema-route-internet-metering table tbody td:last-child :is(button, a[role="button"]):last-child,
+html body[data-ema-route="/internet-metering"] table tbody td:last-child :is(button, a[role="button"]):last-child {
+  border-color: #bfdbfe !important;
+  background: #eff6ff !important;
+  color: var(--internet-table-blue) !important;
+}
+
+html body.ema-route-internet-metering table tbody td:last-child :is(button, a[role="button"]) svg,
+html body[data-ema-route="/internet-metering"] table tbody td:last-child :is(button, a[role="button"]) svg,
+html body :is(.internet-metering-page, .internet-metering-module, .internet-metering-root, [class*="internet-metering"]) table tbody td:last-child :is(button, a[role="button"]) svg {
+  width: 14px !important;
+  height: 14px !important;
+  color: var(--internet-table-blue) !important;
+  stroke: var(--internet-table-blue) !important;
+  fill: none !important;
+}
+
+html body.ema-route-internet-metering table tbody td:last-child :is(button, a[role="button"]):hover,
+html body[data-ema-route="/internet-metering"] table tbody td:last-child :is(button, a[role="button"]):hover {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+/* Pagination align with table */
+html body.ema-route-internet-metering :is(.uam-pagination, .ema-pagination, .pagination-row),
+html body[data-ema-route="/internet-metering"] :is(.uam-pagination, .ema-pagination, .pagination-row) {
+  width: calc(100% - calc(var(--internet-table-gap-x) * 2)) !important;
+  max-width: calc(100% - calc(var(--internet-table-gap-x) * 2)) !important;
+  margin-left: var(--internet-table-gap-x) !important;
+  margin-right: var(--internet-table-gap-x) !important;
+  margin-top: 8px !important;
+}
+
+/* Center middle pagination label */
+html body.ema-route-internet-metering :is(.uam-pagination, .ema-pagination, .pagination-row) > *:nth-child(2),
+html body[data-ema-route="/internet-metering"] :is(.uam-pagination, .ema-pagination, .pagination-row) > *:nth-child(2) {
+  text-align: center !important;
+  color: var(--internet-table-muted) !important;
+  font-size: 10.5px !important;
+  font-weight: 850 !important;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  :root {
+    --internet-table-gap-x: 10px;
+  }
+
+  html body.ema-route-internet-metering table,
+  html body[data-ema-route="/internet-metering"] table {
+    min-width: 760px !important;
+  }
+}

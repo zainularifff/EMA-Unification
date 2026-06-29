@@ -1,0 +1,269 @@
+/* EMA Sidepanel Tree V5 Row Fix
+   Fix text alignment + remove chevrons.
+   Excluded routes handled by runtime.
+*/
+
+body.ema-sidepanel-v5-page {
+  --ema-tree-w: 280px;
+}
+
+/* force every module sidepanel same width */
+body.ema-sidepanel-v5-page :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .folder-sidebar,
+  .branch-sidebar,
+  .inventory-sidebar,
+  .hardware-sidebar,
+  .software-sidebar,
+  .network-sidebar,
+  .tree-sidebar,
+  .ema-branch-sidepanel-v3,
+  [data-ema-branch-panel-v3="true"],
+  [class*="branch-sidebar"],
+  [class*="folder-sidebar"],
+  [class*="inventory-sidebar"],
+  [class*="tree-sidebar"],
+  [class*="sidepanel"],
+  [class*="side-panel"]
+):has(:is(
+  input[placeholder*="Search"],
+  .ema-sidebar-tree,
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .software-tree-panel,
+  [aria-label*="tree"],
+  [aria-label*="Tree"],
+  #hardwareMenu
+)) {
+  width: 280px !important;
+  min-width: 280px !important;
+  max-width: 280px !important;
+}
+
+/* tree area full width */
+body.ema-sidepanel-v5-page :is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* hide chevrons / arrows */
+body.ema-sidepanel-v5-page :is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) :is(
+  .lucide-chevron-right,
+  .lucide-chevron-down,
+  .lucide-chevron-left,
+  .lucide-chevron-up,
+  [class*="chevron"],
+  [class*="Chevron"],
+  [class*="expander"],
+  [class*="Expander"],
+  [class*="arrow"],
+  [class*="Arrow"],
+  [data-ema-v5-chevron="true"]
+) {
+  display: none !important;
+}
+
+/* if chevron is plain span/text */
+body.ema-sidepanel-v5-page [data-ema-v5-chevron="true"] {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* row layout: text starts from left */
+body.ema-sidepanel-v5-page :is(
+  .ema-sidebar-tree-main,
+  .ema-sidebar-tree-node,
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  gap: 7px !important;
+
+  text-align: left !important;
+
+  padding-left: 7px !important;
+  padding-right: 7px !important;
+
+  overflow: hidden !important;
+}
+
+/* every direct child in row should not center the label */
+body.ema-sidepanel-v5-page :is(
+  .ema-sidebar-tree-main,
+  .ema-sidebar-tree-node,
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+) > * {
+  flex: 0 0 auto !important;
+}
+
+/* folder icon stays at left */
+body.ema-sidepanel-v5-page :is(
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+) svg:not([data-ema-v5-chevron="true"]) {
+  flex: 0 0 13px !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* label: left aligned, no right shift */
+body.ema-sidepanel-v5-page :is(
+  .ema-sidebar-tree-main,
+  .ema-sidebar-tree-node,
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+) :is(
+  .tree-label,
+  .folder-label,
+  .branch-label,
+  .ema-sidebar-tree-label,
+  .node-label,
+  .item-label,
+  strong,
+  span
+):not(:is(
+  .count-badge,
+  .tree-badge,
+  .folder-count,
+  .branch-count,
+  .item-count,
+  .ema-sidebar-tree-count,
+  [class*="count"],
+  [class*="badge"],
+  [data-ema-v5-chevron="true"]
+)) {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+
+  text-align: left !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* count stays right */
+body.ema-sidepanel-v5-page :is(
+  .count-badge,
+  .tree-badge,
+  .folder-count,
+  .branch-count,
+  .item-count,
+  .ema-sidebar-tree-count,
+  [class*="count"],
+  [class*="badge"]
+) {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+}
+
+/* active row like reference */
+body.ema-sidepanel-v5-page :is(
+  .ema-sidebar-tree-node.is-active,
+  .ema-sidebar-tree-node.is-selected,
+  .hardware-location-tree-card button.active,
+  .hardware-location-tree-card button[aria-selected="true"],
+  .ema-sidebar-tree button.active,
+  .ema-sidebar-tree button[aria-selected="true"],
+  .software-tree-panel button.active,
+  .software-tree-panel button[aria-selected="true"],
+  .folder-tree button.active,
+  .branch-tree button.active,
+  .tree-list button.active,
+  [role="treeitem"][aria-selected="true"]
+) {
+  background: #f1f0ff !important;
+  border-color: #dedcff !important;
+  color: #635bff !important;
+  box-shadow: inset 3px 0 0 #635bff !important;
+}
+
+/* nested children follow reference */
+body.ema-sidepanel-v5-page :is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) ul ul,
+body.ema-sidepanel-v5-page .ema-sidebar-tree-children.is-nested {
+  margin-left: 17px !important;
+  padding-left: 11px !important;
+  border-left: 1px solid #dce6f7 !important;
+}

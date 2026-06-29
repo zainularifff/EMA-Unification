@@ -1,0 +1,484 @@
+/* EMA SPECIAL OPERATIONAL TABLE OVERRIDE
+   Exception table style for:
+   - Patch Management
+   - Software Distribution
+   - Internet Metering
+
+   These pages usually have wide operational/log tables.
+   So they should NOT use the forced normal module table wrapping style.
+*/
+
+:root {
+  --ema-special-table-border: #dbe7f6;
+  --ema-special-table-head-bg: #f4f7fb;
+  --ema-special-table-row-border: #e7eef8;
+  --ema-special-table-text: #10294f;
+  --ema-special-table-body: #18345f;
+  --ema-special-table-muted: #64748b;
+  --ema-special-table-blue: #2563eb;
+  --ema-special-table-radius: 16px;
+  --ema-special-table-row-height: 42px;
+  --ema-special-table-head-height: 38px;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) {
+  --ema-table-row-height: var(--ema-special-table-row-height);
+  --ema-table-head-height: var(--ema-special-table-head-height);
+}
+
+/* Main panels on these pages can scroll normally */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .content-shell,
+  .ema-panel-surface,
+  .hardware-registry-card,
+  .software-registry-card,
+  .registry-card,
+  .table-card,
+  .table-panel,
+  .data-card,
+  [class*="card"],
+  [class*="panel"]
+) {
+  overflow: visible !important;
+}
+
+/* Scroll container for wide operational tables */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .scroll-table,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Restore real HTML table behavior for these pages */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) table {
+  display: table !important;
+
+  width: max-content !important;
+  min-width: 100% !important;
+
+  margin: 0 !important;
+
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  table-layout: auto !important;
+
+  border: 1px solid var(--ema-special-table-border) !important;
+  border-radius: var(--ema-special-table-radius) !important;
+  background: #ffffff !important;
+
+  overflow: hidden !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) thead {
+  display: table-header-group !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) tbody {
+  display: table-row-group !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) tr {
+  display: table-row !important;
+  height: var(--ema-special-table-row-height) !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  background: #ffffff !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) thead tr {
+  height: var(--ema-special-table-head-height) !important;
+  background: var(--ema-special-table-head-bg) !important;
+}
+
+/* Header cells */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) thead th {
+  display: table-cell !important;
+  vertical-align: middle !important;
+
+  height: var(--ema-special-table-head-height) !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  padding: 0 12px !important;
+
+  background: var(--ema-special-table-head-bg) !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+
+  color: var(--ema-special-table-blue) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Body cells: operational tables stay compact single-line */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) tbody td {
+  display: table-cell !important;
+  vertical-align: middle !important;
+
+  height: var(--ema-special-table-row-height) !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  padding: 7px 12px !important;
+
+  border-bottom: 1px solid var(--ema-special-table-row-border) !important;
+  background: #ffffff !important;
+
+  color: var(--ema-special-table-body) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 10.5px !important;
+  line-height: 1.2 !important;
+  font-weight: 750 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+/* Text inside cell remains inline / one-line */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) tbody td :is(span, div, p, strong, small) {
+  display: inline !important;
+
+  color: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+
+  white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+  text-overflow: ellipsis !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* First column NO */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(th:first-child, td:first-child) {
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+
+  text-align: center !important;
+  vertical-align: middle !important;
+
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+
+  color: var(--ema-special-table-muted) !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Sort buttons remain header blue */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) thead :is(button, .sort-btn, .sort-button, [class*="sort"]) {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--ema-special-table-blue) !important;
+  font-size: 9.5px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+/* Div/grid table fallback on those pages */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .hardware-device-table-row,
+  .software-device-table-row,
+  .user-row,
+  .clean-table-row,
+  .settings-standard-row,
+  .audit-standard-row,
+  .service-desk-row,
+  .ema-standard-row,
+  .uam-table-row,
+  [class*="table-row"],
+  [class*="standard-row"]
+) {
+  height: var(--ema-special-table-row-height) !important;
+  min-height: var(--ema-special-table-row-height) !important;
+  max-height: var(--ema-special-table-row-height) !important;
+
+  align-items: center !important;
+  overflow: hidden !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .hardware-device-table-row,
+  .software-device-table-row,
+  .user-row,
+  .clean-table-row,
+  .settings-standard-row,
+  .audit-standard-row,
+  .service-desk-row,
+  .ema-standard-row,
+  .uam-table-row,
+  [class*="table-row"],
+  [class*="standard-row"]
+) > * {
+  height: var(--ema-special-table-row-height) !important;
+  min-height: var(--ema-special-table-row-height) !important;
+  max-height: var(--ema-special-table-row-height) !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  padding: 0 12px !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* Preserve global action icon buttons but give enough action width */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(td:last-child:has(button), th:last-child) {
+  min-width: 126px !important;
+  text-align: center !important;
+}
+
+/* Pagination remains global standard but aligned with wide table card */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .uam-pagination,
+  .global-style.uam-pagination,
+  .ema-pagination,
+  .pagination-row
+) {
+  width: calc(100% - 2rem) !important;
+  max-width: calc(100% - 2rem) !important;
+  margin: 8px 1rem 0 !important;
+}
+
+/* Nice horizontal scrollbar for wide operational table */
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .scroll-table,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+)::-webkit-scrollbar {
+  height: 9px !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .scroll-table,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+)::-webkit-scrollbar-thumb {
+  background: #bfd0ea !important;
+  border-radius: 999px !important;
+}
+
+html body:is(
+  [data-ema-route="/patch-management"],
+  [data-ema-route="/software-distribution"],
+  [data-ema-route="/internet-metering"],
+  .ema-route-patch-management,
+  .ema-route-software-distribution,
+  .ema-route-internet-metering
+) :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .scroll-table,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+)::-webkit-scrollbar-track {
+  background: #eef4fb !important;
+  border-radius: 999px !important;
+}

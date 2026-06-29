@@ -1,0 +1,462 @@
+/* Software Distribution Deploy Package modal clean final */
+
+html body .software-deploy-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 24px !important;
+
+  background: rgba(15, 23, 42, 0.52) !important;
+  backdrop-filter: blur(8px) !important;
+
+  overflow: hidden !important;
+}
+
+/* Override inline huge modal */
+html body .software-deploy-modal {
+  width: min(1180px, calc(100vw - 48px)) !important;
+  max-width: min(1180px, calc(100vw - 48px)) !important;
+
+  height: auto !important;
+  max-height: calc(100dvh - 48px) !important;
+  min-height: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  border: 1px solid #dbe7f6 !important;
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.34) !important;
+
+  overflow: hidden !important;
+}
+
+/* Header */
+html body .software-deploy-modal .user-modal-head {
+  flex: 0 0 auto !important;
+
+  min-height: 64px !important;
+  padding: 14px 18px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+
+  border-bottom: 1px solid #e4edf9 !important;
+  background: #ffffff !important;
+}
+
+html body .software-deploy-modal .user-modal-head h3 {
+  margin: 0 !important;
+
+  color: #10294f !important;
+  font-size: 17px !important;
+  line-height: 1.15 !important;
+  font-weight: 950 !important;
+}
+
+html body .software-deploy-modal .user-modal-head p {
+  margin: 4px 0 0 !important;
+
+  color: #64748b !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 800 !important;
+}
+
+html body .software-deploy-modal .modal-close {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+
+  display: grid !important;
+  place-items: center !important;
+
+  border-radius: 12px !important;
+  border: 1px solid #d8e4f3 !important;
+  background: #f8fafc !important;
+  color: #64748b !important;
+}
+
+/* Body */
+html body .software-deploy-modal .software-deploy-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: calc(100dvh - 178px) !important;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+
+  padding: 14px 18px !important;
+  gap: 12px !important;
+
+  background: #f8fbff !important;
+}
+
+/* General cards inside modal */
+html body .software-deploy-modal :is(.policy-card, .resource-form-card, .settings-helper-card) {
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Selected package area becomes slim */
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child {
+  padding: 12px 14px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child .policy-top {
+  margin-bottom: 8px !important;
+  padding: 0 !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child .policy-top strong {
+  color: #10294f !important;
+  font-size: 12px !important;
+  font-weight: 950 !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child .policy-top p {
+  margin: 2px 0 0 !important;
+  color: #64748b !important;
+  font-size: 10.5px !important;
+  font-weight: 750 !important;
+}
+
+/* Selected package list: single clean bar */
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child .policy-list {
+  gap: 6px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child .inline-check {
+  min-height: 34px !important;
+  padding: 7px 10px !important;
+
+  border-radius: 12px !important;
+  border: 1px solid #dbe7f6 !important;
+  background: #f8fbff !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child .inline-check strong {
+  color: #10294f !important;
+  font-size: 11.5px !important;
+  line-height: 1.1 !important;
+  font-weight: 950 !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:first-child .inline-check span {
+  color: #64748b !important;
+  font-size: 10px !important;
+}
+
+/* Target section */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) {
+  padding: 12px 14px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .policy-top {
+  margin-bottom: 10px !important;
+  padding: 0 !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .policy-top strong {
+  color: #10294f !important;
+  font-size: 12px !important;
+  font-weight: 950 !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .policy-top p {
+  margin: 2px 0 0 !important;
+  color: #64748b !important;
+  font-size: 10.5px !important;
+  font-weight: 750 !important;
+}
+
+/* Replace bootstrap row with cleaner 3-column modal grid */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row {
+  display: grid !important;
+  grid-template-columns: 270px minmax(0, 1fr) 250px !important;
+  gap: 12px !important;
+  align-items: stretch !important;
+
+  margin: 0 !important;
+}
+
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"] {
+  width: auto !important;
+  max-width: none !important;
+  flex: none !important;
+  padding: 0 !important;
+}
+
+/* Cards inside 3 columns */
+html body .software-deploy-modal .resource-form-card,
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) .policy-card {
+  height: 100% !important;
+  padding: 14px !important;
+  overflow: hidden !important;
+}
+
+/* Column headings */
+html body .software-deploy-modal :is(.resource-card-head, .policy-top) h4,
+html body .software-deploy-modal :is(.resource-card-head, .policy-top) strong {
+  color: #10294f !important;
+  font-size: 14px !important;
+  line-height: 1.15 !important;
+  font-weight: 950 !important;
+}
+
+html body .software-deploy-modal :is(.resource-card-head, .policy-top) p,
+html body .software-deploy-modal :is(.resource-card-head, .policy-top) span {
+  color: #64748b !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 750 !important;
+}
+
+/* Scope buttons */
+html body .software-deploy-modal .content-actions {
+  gap: 8px !important;
+  margin: 0 0 10px !important;
+}
+
+html body .software-deploy-modal .content-actions .soft-btn {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 12px !important;
+
+  border-radius: 11px !important;
+  font-size: 10.5px !important;
+  font-weight: 900 !important;
+}
+
+html body .software-deploy-modal .content-actions .soft-btn.active {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+/* Scope list */
+html body .software-deploy-modal .policy-list {
+  gap: 8px !important;
+}
+
+html body .software-deploy-modal .inline-check {
+  min-height: 34px !important;
+  padding: 8px 10px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 12px !important;
+  background: #f8fbff !important;
+
+  color: #10294f !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+
+html body .software-deploy-modal .inline-check input[type="checkbox"] {
+  width: 13px !important;
+  height: 13px !important;
+  min-width: 13px !important;
+  accent-color: #2563eb !important;
+}
+
+/* Endpoint target column */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) .resource-form-card {
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 0 !important;
+}
+
+/* Search/filter row */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(2) :is(.setting-input, input, select) {
+  min-height: 34px !important;
+  height: 34px !important;
+  border-radius: 12px !important;
+  font-size: 10.5px !important;
+}
+
+/* Endpoint table wrapper */
+html body .software-deploy-modal :is(.table-wrapper, .table-container, .table-scroll, .overflow-x-auto, [class*="table"]) {
+  min-height: 0 !important;
+}
+
+/* Endpoint table */
+html body .software-deploy-modal table {
+  width: 100% !important;
+  min-width: 620px !important;
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
+
+html body .software-deploy-modal table thead th {
+  height: 34px !important;
+  padding: 0 8px !important;
+
+  background: #f4f7fb !important;
+  color: #2563eb !important;
+
+  font-size: 9px !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.07em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+}
+
+html body .software-deploy-modal table tbody td {
+  height: 36px !important;
+  padding: 5px 8px !important;
+
+  color: #18345f !important;
+  font-size: 10px !important;
+  font-weight: 750 !important;
+
+  border-bottom: 1px solid #e7eef8 !important;
+  background: #ffffff !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+html body .software-deploy-modal table tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+/* Deployment review column */
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(3) .resource-form-card,
+html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row > [class*="col-"]:nth-child(3) .policy-card {
+  background: #fbfdff !important;
+}
+
+html body .software-deploy-modal .score-box,
+html body .software-deploy-modal .settings-helper-card {
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  border: 1px solid #dbe7f6 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html body .software-deploy-modal .score-box span,
+html body .software-deploy-modal .settings-helper-card span {
+  color: #64748b !important;
+  font-size: 9.5px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+}
+
+html body .software-deploy-modal .score-box strong,
+html body .software-deploy-modal .settings-helper-card strong {
+  color: #10294f !important;
+  font-size: 15px !important;
+  line-height: 1.1 !important;
+  font-weight: 950 !important;
+}
+
+html body .software-deploy-modal .score-box small,
+html body .software-deploy-modal .settings-helper-card p {
+  color: #64748b !important;
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+  font-weight: 750 !important;
+}
+
+/* Pills */
+html body .software-deploy-modal .user-pill {
+  min-height: 22px !important;
+  height: 22px !important;
+  padding: 0 9px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+
+  border-radius: 999px !important;
+  border: 1px solid #bfdbfe !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+
+  font-size: 9.5px !important;
+  font-weight: 950 !important;
+}
+
+/* Footer */
+html body .software-deploy-modal .user-modal-foot {
+  flex: 0 0 auto !important;
+
+  min-height: 58px !important;
+  padding: 12px 18px !important;
+
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 10px !important;
+
+  border-top: 1px solid #e4edf9 !important;
+  background: #ffffff !important;
+}
+
+html body .software-deploy-modal .user-modal-foot .soft-btn,
+html body .software-deploy-modal .user-modal-foot .primary-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 16px !important;
+  border-radius: 12px !important;
+
+  font-size: 11px !important;
+  font-weight: 950 !important;
+}
+
+html body .software-deploy-modal .user-modal-foot .primary-btn {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
+
+/* Scrollbar */
+html body .software-deploy-modal .software-deploy-body::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body::-webkit-scrollbar-thumb {
+  background: #bfd0ea !important;
+  border-radius: 999px !important;
+}
+
+html body .software-deploy-modal .software-deploy-body::-webkit-scrollbar-track {
+  background: #eef4fb !important;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  html body .software-deploy-modal {
+    width: calc(100vw - 28px) !important;
+    max-width: calc(100vw - 28px) !important;
+  }
+
+  html body .software-deploy-modal .software-deploy-body > .policy-card:nth-child(2) > .row {
+    grid-template-columns: 1fr !important;
+  }
+
+  html body .software-deploy-modal .software-deploy-body {
+    max-height: calc(100dvh - 172px) !important;
+  }
+}

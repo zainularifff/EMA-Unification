@@ -1,0 +1,325 @@
+/* EMA TREE FINAL CLEAN ONLY */
+
+body.ema-tree-final-clean {
+  --tree-w: 340px;
+  --tree-border: #dbe7f6;
+  --tree-line: #dce6f7;
+  --tree-text: #0f2746;
+  --tree-muted: #64748b;
+  --tree-blue: #2563eb;
+  --tree-purple: #635bff;
+  --tree-badge: #eef2ff;
+}
+
+/* outer panel */
+body.ema-tree-final-clean [data-tree-panel-final="true"] {
+  width: var(--tree-w) !important;
+  min-width: var(--tree-w) !important;
+  max-width: var(--tree-w) !important;
+
+  height: calc(100vh - 112px) !important;
+  min-height: calc(100vh - 112px) !important;
+  max-height: calc(100vh - 112px) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--tree-border) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-tree-final-clean [data-tree-panel-final="true"]::before {
+  content: "All Branches";
+  display: block;
+  margin: 0 0 12px !important;
+  color: var(--tree-text) !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+/* buang header lama + tab lama */
+body.ema-tree-final-clean [data-tree-old-final="true"],
+body.ema-tree-final-clean [data-tree-tabs-final="true"] {
+  display: none !important;
+}
+
+/* body */
+body.ema-tree-final-clean [data-tree-body-final="true"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+
+  width: 100% !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+/* search */
+body.ema-tree-final-clean [data-tree-search-final="true"] {
+  order: 1 !important;
+  flex: 0 0 36px !important;
+
+  width: 100% !important;
+  height: 36px !important;
+
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border: 1px solid var(--tree-border) !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-tree-final-clean [data-tree-search-final="true"] input {
+  width: 100% !important;
+  height: 34px !important;
+
+  padding: 0 !important;
+
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--tree-text) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* tree list */
+body.ema-tree-final-clean [data-tree-list-final="true"] {
+  order: 2 !important;
+
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* all inner elements no card */
+body.ema-tree-final-clean [data-tree-list-final="true"] :is(
+  ul,
+  li,
+  div,
+  span,
+  button,
+  [role="treeitem"]
+) {
+  box-shadow: none !important;
+}
+
+/* nested line only */
+body.ema-tree-final-clean [data-tree-list-final="true"] ul ul,
+body.ema-tree-final-clean [data-tree-list-final="true"] .hardware-tree-node .hardware-tree-node,
+body.ema-tree-final-clean [data-tree-list-final="true"] .ema-sidebar-tree-children.is-nested {
+  margin-left: 10px !important;
+  padding-left: 9px !important;
+
+  border-left: 1px solid var(--tree-line) !important;
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* row */
+body.ema-tree-final-clean [data-tree-row-final="true"] {
+  min-height: 28px !important;
+  height: auto !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+
+  padding: 5px 6px !important;
+  margin: 1px 0 !important;
+
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--tree-text) !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 800 !important;
+  text-align: left !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+body.ema-tree-final-clean [data-tree-row-final="true"]:hover {
+  background: #f8fbff !important;
+}
+
+body.ema-tree-final-clean [data-tree-row-final="true"]:is(.active, .selected, .is-active, .is-selected, [aria-selected="true"]),
+body.ema-tree-final-clean .hardware-tree-node.is-selected .hardware-tree-select {
+  background: linear-gradient(90deg, rgba(99, 91, 255, 0.12), rgba(99, 91, 255, 0.04)) !important;
+  color: var(--tree-blue) !important;
+  box-shadow: inset 3px 0 0 var(--tree-purple) !important;
+}
+
+/* chevron */
+body.ema-tree-final-clean [data-tree-chevron-final="true"] {
+  flex: 0 0 12px !important;
+  width: 12px !important;
+  min-width: 12px !important;
+  max-width: 12px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  color: var(--tree-muted) !important;
+}
+
+/* folder */
+body.ema-tree-final-clean [data-tree-icon-final="true"] {
+  flex: 0 0 15px !important;
+  width: 15px !important;
+  min-width: 15px !important;
+  max-width: 15px !important;
+  height: 15px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  color: var(--tree-blue) !important;
+  stroke: var(--tree-blue) !important;
+}
+
+/* label - IMPORTANT: jangan pecah huruf */
+body.ema-tree-final-clean [data-tree-label-final="true"] {
+  flex: 1 1 auto !important;
+  min-width: 110px !important;
+  width: auto !important;
+  max-width: none !important;
+
+  display: block !important;
+
+  color: var(--tree-text) !important;
+
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* count */
+body.ema-tree-final-clean [data-tree-count-final="true"] {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+
+  min-width: 22px !important;
+  max-width: 42px !important;
+  height: 19px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 7px !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--tree-badge) !important;
+  color: var(--tree-muted) !important;
+
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+/* hide action dots, reference tak ada dots */
+body.ema-tree-final-clean [data-tree-action-final="true"] {
+  display: none !important;
+}
+
+/* add folder */
+body.ema-tree-final-clean [data-tree-add-final="true"] {
+  order: 3 !important;
+  flex: 0 0 36px !important;
+
+  width: 100% !important;
+  height: 36px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border: 1px solid var(--tree-border) !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  color: var(--tree-text) !important;
+  box-shadow: none !important;
+
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+/* scrollbar */
+body.ema-tree-final-clean [data-tree-list-final="true"]::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+body.ema-tree-final-clean [data-tree-list-final="true"]::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}

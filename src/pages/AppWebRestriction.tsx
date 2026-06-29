@@ -6,6 +6,8 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
 import {
   ArrowLeft,
   ArrowRight,
@@ -643,7 +645,7 @@ const createFormFromPolicy = (
 };
 
 export default function AppWebRestriction() {
-  const [activeModule, setActiveModule] = useState<RestrictionModule>('appBlacklist');
+const [activeModule, setActiveModule] = useState<RestrictionModule>('appBlacklist');
   const [activeTab, setActiveTab] = useState<SubTab>('status');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [treeNodes, setTreeNodes] = useState<RestrictionTreeNode[]>([]);
@@ -1678,7 +1680,7 @@ export default function AppWebRestriction() {
         </div>
       )}
       <div className="settings-layout appweb-settings-layout d-grid gap-3">
-        <aside className="settings-menu appweb-left-panel ema-panel-surface">
+        <aside className="settings-menu appweb-left-panel ema-panel-surface" data-ema-branch-panel-v3="true">
           <div className="panel-head">
             <span>APP RESTRICTION</span>
             <strong>Restriction Control</strong>

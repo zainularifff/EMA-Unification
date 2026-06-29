@@ -1,0 +1,387 @@
+/* EMA Module Branch Tree Standard Final
+   Keep Hardware design, apply same sizing/style to module pages.
+   Exclude by runtime: Settings, ServiceDesk, Report, SoftwareDistribution.
+*/
+
+body.ema-module-branch-tree-standard {
+  --ema-tree-panel-width: 320px;
+  --ema-tree-border: #dbe7f6;
+  --ema-tree-line: #dce6f7;
+  --ema-tree-text: #0f2746;
+  --ema-tree-muted: #64748b;
+  --ema-tree-blue: #2563eb;
+  --ema-tree-purple: #635bff;
+  --ema-tree-active: #f1f0ff;
+  --ema-tree-hover: #f7f9ff;
+  --ema-tree-badge: #eef2ff;
+}
+
+/* =========================
+   PANEL WIDTH + SHELL
+========================= */
+
+body.ema-module-branch-tree-standard [data-ema-branch-panel-standard="true"] {
+  width: var(--ema-tree-panel-width) !important;
+  min-width: var(--ema-tree-panel-width) !important;
+  max-width: var(--ema-tree-panel-width) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.035) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Reduce gap between sidepanel and content */
+body.ema-module-branch-tree-standard :is(div, section, main):has(> [data-ema-branch-panel-standard="true"]) {
+  gap: 14px !important;
+  column-gap: 14px !important;
+}
+
+/* =========================
+   HARDWARE-LIKE HEADER
+========================= */
+
+body.ema-module-branch-tree-standard [data-ema-branch-panel-standard="true"] :is(
+  .panel-head,
+  .sidebar-head,
+  .sidebar-header,
+  .module-sidebar-head,
+  .ema-sidebar-panel-head,
+  .ema-sidebar-header,
+  .hardware-sidebar-head,
+  .software-sidebar-head,
+  .inventory-sidebar-head,
+  .tree-sidebar-head
+) {
+  display: block !important;
+}
+
+/* =========================
+   BRANCH / STATISTICS CARDS
+========================= */
+
+body.ema-module-branch-tree-standard [data-ema-branch-panel-standard="true"] :is(
+  #hardwareMenu,
+  nav[role="tablist"],
+  .ema-module-sidebar-switcher,
+  .settings-menu-list,
+  .sidebar-tabs,
+  .sidebar-modes,
+  .view-switch,
+  .panel-switch
+) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+
+  margin: 12px 0 !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.ema-module-branch-tree-standard [data-ema-branch-panel-standard="true"] :is(
+  #hardwareMenu,
+  nav[role="tablist"],
+  .ema-module-sidebar-switcher,
+  .settings-menu-list,
+  .sidebar-tabs,
+  .sidebar-modes,
+  .view-switch,
+  .panel-switch
+) > button {
+  min-height: 74px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 4px !important;
+
+  padding: 12px !important;
+
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  color: var(--ema-tree-text) !important;
+
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  text-align: left !important;
+}
+
+body.ema-module-branch-tree-standard [data-ema-branch-panel-standard="true"] :is(
+  #hardwareMenu,
+  nav[role="tablist"],
+  .ema-module-sidebar-switcher,
+  .settings-menu-list,
+  .sidebar-tabs,
+  .sidebar-modes,
+  .view-switch,
+  .panel-switch
+) > button:is(.active, [aria-selected="true"], [data-active="true"]) {
+  background: linear-gradient(135deg, #4f7cff 0%, #0ea5e9 100%) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.22) !important;
+}
+
+/* =========================
+   BODY ORDER: search -> add -> tree
+========================= */
+
+body.ema-module-branch-tree-standard [data-ema-branch-body-standard="true"] {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  gap: 10px !important;
+}
+
+/* Search */
+body.ema-module-branch-tree-standard [data-ema-branch-search-standard="true"] {
+  order: 1 !important;
+
+  width: 100% !important;
+  height: 38px !important;
+
+  display: grid !important;
+  grid-template-columns: 22px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 12px !important;
+
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-module-branch-tree-standard [data-ema-branch-search-standard="true"] input,
+body.ema-module-branch-tree-standard [data-ema-branch-search-input-standard="true"] {
+  width: 100% !important;
+  height: 36px !important;
+
+  padding: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  color: var(--ema-tree-text) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+}
+
+/* Add Folder stays like current Hardware: above tree */
+body.ema-module-branch-tree-standard [data-ema-branch-add-standard="true"] {
+  order: 2 !important;
+
+  width: 100% !important;
+  height: 36px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border-radius: 12px !important;
+  border: 1px solid var(--ema-tree-border) !important;
+  background: #ffffff !important;
+  color: var(--ema-tree-text) !important;
+  box-shadow: none !important;
+
+  font-size: 10.5px !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+}
+
+/* Tree card */
+body.ema-module-branch-tree-standard [data-ema-branch-tree-standard="true"] {
+  order: 3 !important;
+
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+
+  margin: 0 !important;
+  padding: 10px !important;
+
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* nested structure */
+body.ema-module-branch-tree-standard [data-ema-branch-tree-standard="true"] :is(ul, li, li > div, li > span) {
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.ema-module-branch-tree-standard [data-ema-branch-tree-standard="true"] ul ul,
+body.ema-module-branch-tree-standard [data-ema-branch-tree-standard="true"] .ema-sidebar-tree-children.is-nested,
+body.ema-module-branch-tree-standard [data-ema-branch-tree-standard="true"] .hardware-tree-node .hardware-tree-node {
+  margin-left: 17px !important;
+  padding-left: 11px !important;
+  border-left: 1px solid var(--ema-tree-line) !important;
+}
+
+/* =========================
+   TREE ROWS: CHEVRON VISIBLE SAME EVERYWHERE
+========================= */
+
+body.ema-module-branch-tree-standard [data-ema-branch-row-standard="true"] {
+  width: 100% !important;
+  min-height: 30px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  gap: 7px !important;
+
+  padding: 6px 8px !important;
+  margin: 2px 0 !important;
+
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--ema-tree-text) !important;
+
+  font-size: 10.5px !important;
+  line-height: 1.15 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+body.ema-module-branch-tree-standard [data-ema-branch-row-standard="true"]:hover {
+  background: var(--ema-tree-hover) !important;
+  border-color: #e1e8fb !important;
+}
+
+body.ema-module-branch-tree-standard [data-ema-branch-row-standard="true"]:is(.active, .selected, .is-active, .is-selected, [aria-selected="true"]),
+body.ema-module-branch-tree-standard .hardware-tree-node.is-selected .hardware-tree-select {
+  background: var(--ema-tree-active) !important;
+  border-color: #dedcff !important;
+  color: var(--ema-tree-purple) !important;
+  box-shadow: inset 3px 0 0 var(--ema-tree-purple) !important;
+}
+
+/* Chevron visible */
+body.ema-module-branch-tree-standard [data-ema-branch-chevron-standard="true"] {
+  flex: 0 0 12px !important;
+  width: 12px !important;
+  min-width: 12px !important;
+  height: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ema-tree-text) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Folder icon */
+body.ema-module-branch-tree-standard [data-ema-branch-icon-standard="true"] {
+  flex: 0 0 15px !important;
+  width: 15px !important;
+  min-width: 15px !important;
+  height: 15px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  color: var(--ema-tree-blue) !important;
+  stroke: var(--ema-tree-blue) !important;
+}
+
+/* Label */
+body.ema-module-branch-tree-standard [data-ema-branch-label-standard="true"] {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  color: var(--ema-tree-text) !important;
+
+  font-size: 10.5px !important;
+  line-height: 1.15 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Count badge only numeric */
+body.ema-module-branch-tree-standard [data-ema-branch-count-standard="true"] {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+
+  min-width: 22px !important;
+  height: 19px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 7px !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--ema-tree-badge) !important;
+  color: var(--ema-tree-muted) !important;
+
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+/* neutralize old class* count bug */
+body.ema-module-branch-tree-standard [data-ema-branch-row-standard="true"] :is([class*="count"], [class*="badge"]):not([data-ema-branch-count-standard="true"]) {
+  margin-left: 0 !important;
+  min-width: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  font-size: inherit !important;
+}

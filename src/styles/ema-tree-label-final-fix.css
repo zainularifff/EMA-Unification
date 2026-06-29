@@ -1,0 +1,210 @@
+/* EMA TREE LABEL FINAL FIX
+   Fix broken vertical label / one-letter-per-line issue.
+   Import this last.
+*/
+
+:root {
+  --ema-tree-w: 340px;
+}
+
+/* widen panel enough for name + count + action */
+body.ema-unified-branch-tree [data-unified-tree-panel="true"],
+body :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar,
+  .hardware-sidebar,
+  .software-sidebar,
+  .network-sidebar
+):has(:is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .network-tree,
+  .tree-list,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+)) {
+  width: 340px !important;
+  min-width: 340px !important;
+  max-width: 340px !important;
+}
+
+/* tree list must have full available width */
+body.ema-unified-branch-tree [data-unified-tree-list="true"],
+body :is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .network-tree,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  padding-right: 4px !important;
+}
+
+/* row: stable left-to-right layout */
+body.ema-unified-branch-tree [data-unified-tree-row="true"],
+body :is(
+  .hardware-tree-select,
+  .ema-sidebar-tree-node,
+  .ema-sidebar-tree-main,
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .network-tree button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  gap: 7px !important;
+
+  padding: 5px 6px !important;
+  margin: 1px 0 !important;
+
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* direct children must not squeeze label into 1-letter column */
+body.ema-unified-branch-tree [data-unified-tree-row="true"] > * {
+  min-width: 0 !important;
+}
+
+/* chevron fixed size */
+body.ema-unified-branch-tree [data-unified-tree-chevron="true"],
+body .hardware-tree-caret {
+  flex: 0 0 12px !important;
+  width: 12px !important;
+  min-width: 12px !important;
+  max-width: 12px !important;
+}
+
+/* folder fixed size */
+body.ema-unified-branch-tree [data-unified-tree-icon="true"],
+body .hardware-tree-icon {
+  flex: 0 0 15px !important;
+  width: 15px !important;
+  min-width: 15px !important;
+  max-width: 15px !important;
+}
+
+/* label: DO NOT break into vertical letters */
+body.ema-unified-branch-tree [data-unified-tree-label="true"],
+body .hardware-tree-label,
+body .ema-sidebar-tree-label,
+body .tree-label,
+body .folder-label,
+body .branch-label,
+body .node-label {
+  flex: 1 1 auto !important;
+
+  min-width: 0 !important;
+  width: auto !important;
+  max-width: 100% !important;
+
+  display: block !important;
+
+  color: #0f2746 !important;
+
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* count right side */
+body.ema-unified-branch-tree [data-unified-tree-count="true"],
+body .hardware-tree-count {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+
+  min-width: 22px !important;
+  max-width: 42px !important;
+  height: 19px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 7px !important;
+}
+
+/* action dots right side */
+body .hardware-tree-actions,
+body .hardware-tree-more,
+body .tree-actions,
+body .node-actions,
+body .folder-actions {
+  flex: 0 0 18px !important;
+  width: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+
+  margin-left: 4px !important;
+  padding: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* nested indentation must not eat too much label space */
+body.ema-unified-branch-tree [data-unified-tree-list="true"] ul ul,
+body.ema-unified-branch-tree .hardware-tree-node .hardware-tree-node,
+body.ema-unified-branch-tree .ema-sidebar-tree-children.is-nested {
+  margin-left: 10px !important;
+  padding-left: 9px !important;
+  border-left: 1px solid #dce6f7 !important;
+}
+
+/* active row still simple */
+body.ema-unified-branch-tree [data-unified-tree-row="true"]:is(.active, .selected, .is-active, .is-selected, [aria-selected="true"]),
+body.ema-unified-branch-tree .hardware-tree-node.is-selected .hardware-tree-select {
+  background: linear-gradient(90deg, rgba(99, 91, 255, 0.12), rgba(99, 91, 255, 0.04)) !important;
+  color: #2563eb !important;
+  box-shadow: inset 3px 0 0 #635bff !important;
+}

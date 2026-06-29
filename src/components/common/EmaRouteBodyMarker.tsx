@@ -1,0 +1,36 @@
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import "../../styles/ema-table-container-spacing-final.css";
+
+function toRouteClass(pathname: string) {
+  return "ema-route-" + String(pathname || "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+}
+
+export default function EmaRouteBodyMarker() {
+  const location = useLocation();
+
+  useEffect(() => {
+    const routeClass = toRouteClass(location.pathname);
+    const previous = document.body.getAttribute("data-ema-route-class");
+
+    if (previous) document.body.classList.remove(previous);
+
+    document.body.setAttribute("data-ema-route", location.pathname);
+    document.body.setAttribute("data-ema-route-class", routeClass);
+    document.body.classList.add(routeClass);
+
+    return () => {
+      document.body.classList.remove(routeClass);
+      if (document.body.getAttribute("data-ema-route-class") === routeClass) {
+        document.body.removeAttribute("data-ema-route-class");
+      }
+    };
+  }, [location.pathname]);
+
+  return null;
+}

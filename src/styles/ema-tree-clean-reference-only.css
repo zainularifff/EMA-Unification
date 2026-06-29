@@ -1,0 +1,335 @@
+/* EMA CLEAN REFERENCE TREE ONLY
+   One sidebar panel only.
+   No card inside card.
+   No box for child rows.
+   Applies to module branch tree only.
+*/
+
+body.ema-clean-reference-tree {
+  --tree-w: 320px;
+  --tree-border: #dbe7f6;
+  --tree-line: #dce6f7;
+  --tree-text: #0f2746;
+  --tree-muted: #64748b;
+  --tree-blue: #2563eb;
+  --tree-purple: #635bff;
+  --tree-badge: #eef2ff;
+}
+
+/* ONE OUTER PANEL */
+body.ema-clean-reference-tree [data-clean-tree-panel="true"] {
+  width: var(--tree-w) !important;
+  min-width: var(--tree-w) !important;
+  max-width: var(--tree-w) !important;
+
+  height: calc(100vh - 112px) !important;
+  min-height: calc(100vh - 112px) !important;
+  max-height: calc(100vh - 112px) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--tree-border) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-clean-reference-tree [data-clean-tree-panel="true"]::before {
+  content: "All Branches";
+  flex: 0 0 auto;
+  display: block;
+  margin: 0 0 12px !important;
+  color: var(--tree-text) !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+/* HIDE MODULE HEADER + BRANCH/STATS CARDS INSIDE TREE PANEL */
+body.ema-clean-reference-tree [data-clean-tree-old-header="true"],
+body.ema-clean-reference-tree [data-clean-tree-tabs="true"] {
+  display: none !important;
+}
+
+/* BODY */
+body.ema-clean-reference-tree [data-clean-tree-body="true"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+
+  width: 100% !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+/* SEARCH */
+body.ema-clean-reference-tree [data-clean-tree-search="true"] {
+  order: 1 !important;
+  flex: 0 0 36px !important;
+
+  width: 100% !important;
+  height: 36px !important;
+
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border: 1px solid var(--tree-border) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-clean-reference-tree [data-clean-tree-search="true"] input {
+  width: 100% !important;
+  height: 34px !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--tree-text) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* TREE AREA: NO INNER CARD */
+body.ema-clean-reference-tree [data-clean-tree-list="true"] {
+  order: 2 !important;
+
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* remove every nested container look */
+body.ema-clean-reference-tree [data-clean-tree-list="true"] :is(
+  ul,
+  li,
+  div,
+  span,
+  button,
+  [role="treeitem"],
+  .hardware-tree-node,
+  .hardware-tree-row,
+  .hardware-tree-select,
+  .ema-sidebar-tree-node,
+  .ema-sidebar-tree-main
+) {
+  box-shadow: none !important;
+}
+
+/* nested line only */
+body.ema-clean-reference-tree [data-clean-tree-list="true"] ul ul,
+body.ema-clean-reference-tree [data-clean-tree-list="true"] .ema-sidebar-tree-children.is-nested,
+body.ema-clean-reference-tree [data-clean-tree-list="true"] .hardware-tree-node .hardware-tree-node {
+  margin-left: 13px !important;
+  padding-left: 11px !important;
+
+  border-left: 1px solid var(--tree-line) !important;
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+  border-radius: 0 !important;
+
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ROW: no box */
+body.ema-clean-reference-tree [data-clean-tree-row="true"] {
+  min-height: 28px !important;
+  height: auto !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+
+  padding: 5px 6px !important;
+  margin: 1px 0 !important;
+
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--tree-text) !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 800 !important;
+  text-align: left !important;
+
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+body.ema-clean-reference-tree [data-clean-tree-row="true"]:hover {
+  background: #f8fbff !important;
+}
+
+/* selected: reference style, not card */
+body.ema-clean-reference-tree [data-clean-tree-row="true"]:is(.active, .selected, .is-active, .is-selected, [aria-selected="true"]),
+body.ema-clean-reference-tree .hardware-tree-node.is-selected .hardware-tree-select {
+  background: linear-gradient(90deg, rgba(99, 91, 255, 0.12), rgba(99, 91, 255, 0.04)) !important;
+  color: var(--tree-blue) !important;
+  box-shadow: inset 3px 0 0 var(--tree-purple) !important;
+}
+
+/* chevron visible */
+body.ema-clean-reference-tree [data-clean-tree-chevron="true"] {
+  flex: 0 0 12px !important;
+  width: 12px !important;
+  min-width: 12px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  color: var(--tree-muted) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* folder */
+body.ema-clean-reference-tree [data-clean-tree-icon="true"] {
+  flex: 0 0 15px !important;
+  width: 15px !important;
+  min-width: 15px !important;
+  height: 15px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  color: var(--tree-blue) !important;
+  stroke: var(--tree-blue) !important;
+}
+
+/* label: readable */
+body.ema-clean-reference-tree [data-clean-tree-label="true"] {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  display: block !important;
+
+  color: var(--tree-text) !important;
+
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+/* count */
+body.ema-clean-reference-tree [data-clean-tree-count="true"] {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+
+  min-width: 22px !important;
+  height: 19px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 7px !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--tree-badge) !important;
+  color: var(--tree-muted) !important;
+
+  font-size: 9px !important;
+  font-weight: 900 !important;
+}
+
+/* action dots */
+body.ema-clean-reference-tree [data-clean-tree-action="true"] {
+  flex: 0 0 auto !important;
+  margin-left: 4px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ADD NEW FOLDER */
+body.ema-clean-reference-tree [data-clean-tree-add="true"] {
+  order: 3 !important;
+  flex: 0 0 36px !important;
+
+  width: 100% !important;
+  height: 36px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border: 1px solid var(--tree-border) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  color: var(--tree-text) !important;
+  box-shadow: none !important;
+
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+/* SCROLLBAR */
+body.ema-clean-reference-tree [data-clean-tree-list="true"]::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+body.ema-clean-reference-tree [data-clean-tree-list="true"]::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}
+
+body.ema-clean-reference-tree [data-clean-tree-list="true"]::-webkit-scrollbar-track {
+  background: transparent !important;
+}

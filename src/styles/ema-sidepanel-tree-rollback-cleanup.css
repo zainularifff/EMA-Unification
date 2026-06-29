@@ -1,0 +1,4 @@
+/* temporary rollback cleanup */
+html body [data-ema-tree-forced="true"] {
+  all: revert-layer;
+}

@@ -19,6 +19,8 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
 
 type AppButtonVariant =
   | "primary"
@@ -60,7 +62,7 @@ function AppButton({
   type = "button",
   ...props
 }: AppButtonProps) {
-  return (
+return (
     <button
       type={type}
       className={`${getGlobalButtonClass(variant)} ${className}`.trim()}
@@ -683,7 +685,7 @@ function getTaskStateInsight(task: TaskItem | null) {
 }
 
 const TaskList = () => {
-  const [classification, setClassification] = useState("All");
+const [classification, setClassification] = useState("All");
   const [state, setState] = useState("All");
   const [fromDate, setFromDate] = useState("");
   const [searchTerm, setSearchTerm] = useState("");

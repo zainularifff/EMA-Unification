@@ -5,6 +5,12 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-special-operational-table-override.css";
+import "../styles/patch-management-table-final-fix.css";
+import { useEffect as usePatchManagementTableRouteEffect } from "react";
+import "../styles/patch-management-action-inline-fix.css";
+import "../styles/ema-table-container-spacing-final.css";
 import {
   Boxes,
   ChevronDown,
@@ -230,6 +236,19 @@ const extractPatchRows = (response: any): OnlinePatchRow[] => {
 
 
 function PatchManagement() {
+usePatchManagementTableRouteEffect(() => {
+    document.body.classList.add("ema-route-patch-management");
+    document.body.setAttribute("data-ema-route", "/patch-management");
+
+    return () => {
+      document.body.classList.remove("ema-route-patch-management");
+      if (document.body.getAttribute("data-ema-route") === "/patch-management") {
+        document.body.removeAttribute("data-ema-route");
+      }
+    };
+  }, []);
+
+
   const [mode, setMode] = useState<PatchMode>('online');
   const [activeTab, setActiveTab] = useState<PatchTab>('status');
   const [sidebarMode, setSidebarMode] = useState<PatchSidebarMode>('organization');
@@ -632,7 +651,7 @@ function PatchManagement() {
       {toast && <PatchToast toast={toast} onClose={() => setToast(null)} />}
 
       <div className="settings-layout patch-settings-layout d-grid gap-3">
-        <aside className="settings-menu patch-left-panel ema-panel-surface">
+        <aside className="settings-menu patch-left-panel ema-panel-surface" data-ema-branch-panel-v3="true">
           <div className="panel-head">
             <span>PATCH MANAGEMENT</span>
             <strong>Patch Management</strong>
@@ -680,7 +699,7 @@ function PatchManagement() {
                     onClick={() => showToast({ type: 'info', message: 'Branch path creation is managed from the organization settings.' })}
                   >
                     <FolderPlus size={13} />
-                    New Branch Path
+                    Add New Folder
                   </button>
 
                   <div className="ema-sidebar-tree" aria-label="Patch scope tree">

@@ -1,0 +1,404 @@
+/* EMA Unified Branch Tree Final
+   One standard branch tree UI for Hardware, Software, Network, App/Internet Metering,
+   Restriction, Patch, TaskList.
+   Excludes Settings, Service Desk, Report, Software Distribution.
+*/
+
+:root {
+  --ema-tree-w: 320px;
+  --ema-tree-border: #dbe7f6;
+  --ema-tree-line: #dce6f7;
+  --ema-tree-text: #0f2746;
+  --ema-tree-muted: #64748b;
+  --ema-tree-blue: #2563eb;
+  --ema-tree-purple: #635bff;
+  --ema-tree-badge: #eef2ff;
+}
+
+/* Immediate hide old UI before runtime mark */
+body:not(:has(.package-registry)):not(:has(.service-desk-page)):not(:has(.settings-page)):not(:has(.report-page)) :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar,
+  .hardware-sidebar,
+  .software-sidebar,
+  .network-sidebar,
+  [class*="sidepanel"],
+  [class*="side-panel"]
+):has(:is(
+  input[placeholder*="Search branch"],
+  input[placeholder*="Search branches"],
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .network-tree,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+)) {
+  width: var(--ema-tree-w) !important;
+  min-width: var(--ema-tree-w) !important;
+  max-width: var(--ema-tree-w) !important;
+
+  height: calc(100vh - 112px) !important;
+  min-height: calc(100vh - 112px) !important;
+  max-height: calc(100vh - 112px) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Title */
+body:not(:has(.package-registry)):not(:has(.service-desk-page)):not(:has(.settings-page)):not(:has(.report-page)) :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar,
+  .hardware-sidebar,
+  .software-sidebar,
+  .network-sidebar,
+  [class*="sidepanel"],
+  [class*="side-panel"]
+):has(:is(.hardware-location-tree-card, .ema-sidebar-tree, .software-tree-panel, .network-tree, .tree-list, [aria-label*="tree"]))::before {
+  content: "All Branches";
+  display: block;
+  flex: 0 0 auto;
+  margin: 0 0 12px !important;
+  color: var(--ema-tree-text) !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+/* Remove old page-specific header/card on first render */
+body:not(:has(.package-registry)):not(:has(.service-desk-page)):not(:has(.settings-page)):not(:has(.report-page)) :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar,
+  .hardware-sidebar,
+  .software-sidebar,
+  .network-sidebar
+):has(:is(.hardware-location-tree-card, .ema-sidebar-tree, .software-tree-panel, .network-tree, .tree-list)) :is(
+  .panel-head,
+  .sidebar-head,
+  .sidebar-header,
+  .module-sidebar-head,
+  .ema-sidebar-panel-head,
+  .ema-sidebar-header,
+  .hardware-sidebar-head,
+  .software-sidebar-head,
+  .network-sidebar-head,
+  .inventory-sidebar-head,
+  .tree-sidebar-head,
+  #hardwareMenu,
+  nav[role="tablist"],
+  .ema-module-sidebar-switcher,
+  .settings-menu-list,
+  .sidebar-tabs,
+  .sidebar-modes,
+  .view-switch,
+  .panel-switch
+) {
+  display: none !important;
+}
+
+/* Runtime marks */
+body.ema-unified-branch-tree [data-unified-tree-panel="true"] {
+  width: var(--ema-tree-w) !important;
+  min-width: var(--ema-tree-w) !important;
+  max-width: var(--ema-tree-w) !important;
+  height: calc(100vh - 112px) !important;
+  min-height: calc(100vh - 112px) !important;
+  max-height: calc(100vh - 112px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 16px !important;
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-unified-branch-tree [data-unified-tree-panel="true"]::before {
+  content: "All Branches";
+  display: block;
+  margin: 0 0 12px !important;
+  color: var(--ema-tree-text) !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+
+body.ema-unified-branch-tree [data-unified-tree-old="true"],
+body.ema-unified-branch-tree [data-unified-tree-tabs="true"] {
+  display: none !important;
+}
+
+body.ema-unified-branch-tree [data-unified-tree-body="true"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Search */
+body.ema-unified-branch-tree [data-unified-tree-search="true"],
+body:not(:has(.package-registry)) :is(
+  .hardware-branch-search,
+  .ema-sidebar-field,
+  .section-search,
+  .sidebar-search,
+  .search-box,
+  .tree-search,
+  .branch-search,
+  .folder-search
+):has(input[placeholder*="Search"]) {
+  order: 1 !important;
+  flex: 0 0 36px !important;
+  width: 100% !important;
+  height: 36px !important;
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-unified-branch-tree [data-unified-tree-search="true"] input,
+body:not(:has(.package-registry)) :is(.hardware-branch-search, .ema-sidebar-field, .section-search, .sidebar-search, .search-box, .tree-search, .branch-search, .folder-search) input {
+  width: 100% !important;
+  height: 34px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ema-tree-text) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* Tree plain list */
+body.ema-unified-branch-tree [data-unified-tree-list="true"],
+body:not(:has(.package-registry)) :is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .network-tree,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) {
+  order: 2 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-unified-branch-tree [data-unified-tree-list="true"] :is(ul, li, div, span, button, [role="treeitem"]),
+body:not(:has(.package-registry)) :is(.hardware-location-tree-card, .hardware-location-tree-scroll, .ema-sidebar-tree, .software-tree-panel, .network-tree, .folder-tree, .branch-tree, .tree-list, .tree-scroll, [aria-label*="tree"], [aria-label*="Tree"]) :is(ul, li, div, span, button, [role="treeitem"]) {
+  box-shadow: none !important;
+}
+
+/* Only vertical line for children */
+body.ema-unified-branch-tree [data-unified-tree-list="true"] ul ul,
+body.ema-unified-branch-tree .hardware-tree-node .hardware-tree-node,
+body.ema-unified-branch-tree .ema-sidebar-tree-children.is-nested,
+body:not(:has(.package-registry)) :is(.hardware-location-tree-card, .hardware-location-tree-scroll, .ema-sidebar-tree, .software-tree-panel, .network-tree, .tree-list, [aria-label*="tree"], [aria-label*="Tree"]) ul ul {
+  margin-left: 13px !important;
+  padding-left: 11px !important;
+  border-left: 1px solid var(--ema-tree-line) !important;
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Row */
+body.ema-unified-branch-tree [data-unified-tree-row="true"],
+body:not(:has(.package-registry)) :is(
+  .hardware-tree-select,
+  .ema-sidebar-tree-node,
+  .ema-sidebar-tree-main,
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .network-tree button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+) {
+  min-height: 28px !important;
+  height: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  padding: 5px 6px !important;
+  margin: 1px 0 !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ema-tree-text) !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 800 !important;
+  text-align: left !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-unified-branch-tree [data-unified-tree-row="true"]:hover {
+  background: #f8fbff !important;
+}
+
+body.ema-unified-branch-tree [data-unified-tree-row="true"]:is(.active, .selected, .is-active, .is-selected, [aria-selected="true"]),
+body.ema-unified-branch-tree .hardware-tree-node.is-selected .hardware-tree-select {
+  background: linear-gradient(90deg, rgba(99, 91, 255, 0.12), rgba(99, 91, 255, 0.04)) !important;
+  color: var(--ema-tree-blue) !important;
+  box-shadow: inset 3px 0 0 var(--ema-tree-purple) !important;
+}
+
+/* Chevron */
+body.ema-unified-branch-tree [data-unified-tree-chevron="true"] {
+  flex: 0 0 12px !important;
+  width: 12px !important;
+  min-width: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ema-tree-muted) !important;
+}
+
+/* Folder */
+body.ema-unified-branch-tree [data-unified-tree-icon="true"],
+body.ema-unified-branch-tree .hardware-tree-icon {
+  flex: 0 0 15px !important;
+  width: 15px !important;
+  min-width: 15px !important;
+  height: 15px !important;
+  color: var(--ema-tree-blue) !important;
+  stroke: var(--ema-tree-blue) !important;
+}
+
+/* Label */
+body.ema-unified-branch-tree [data-unified-tree-label="true"],
+body.ema-unified-branch-tree .hardware-tree-label {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  color: var(--ema-tree-text) !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+  text-align: left !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+/* Count */
+body.ema-unified-branch-tree [data-unified-tree-count="true"],
+body.ema-unified-branch-tree .hardware-tree-count {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+  min-width: 22px !important;
+  height: 19px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 7px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--ema-tree-badge) !important;
+  color: var(--ema-tree-muted) !important;
+  font-size: 9px !important;
+  font-weight: 900 !important;
+}
+
+/* Add button bottom */
+body.ema-unified-branch-tree [data-unified-tree-add="true"],
+body:not(:has(.package-registry)) :is(.hardware-add-folder-btn, .add-folder-btn, .create-folder-btn, .new-folder-btn, .folder-action-btn, button[class*="add-folder"], button[class*="new-folder"]) {
+  order: 3 !important;
+  flex: 0 0 36px !important;
+  width: 100% !important;
+  height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  border: 1px solid var(--ema-tree-border) !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  color: var(--ema-tree-text) !important;
+  box-shadow: none !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}

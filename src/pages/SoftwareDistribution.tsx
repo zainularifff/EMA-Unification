@@ -30,6 +30,14 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-special-operational-table-override.css";
+import "../styles/software-distribution-table-final-fix.css";
+import { useEffect as useSoftwareDistributionTableRouteEffect } from "react";
+import "../styles/software-deploy-modal-clean-final.css";
+import "../styles/software-deploy-endpoint-table-fix.css";
+import "../styles/ema-table-container-spacing-final.css";
+import "../styles/software-distribution-sidepanel-exclude.css";
 
 type PackageStatus = "Ready" | "Draft" | "Deployed" | "Archived";
 type DeliveryMethod = "onprem" | "cloud" | "network";
@@ -294,7 +302,7 @@ function CompactPagination({
   ariaLabel = "Pagination",
   onPageChange,
 }: CompactPaginationProps) {
-  const safeTotalPages = Math.max(1, totalPages || 1);
+const safeTotalPages = Math.max(1, totalPages || 1);
   const safeCurrentPage = Math.min(Math.max(1, currentPage || 1), safeTotalPages);
 
   function goToPage(nextPage: number) {
@@ -825,12 +833,12 @@ function DeployPackageModal({
 
   const deployModalNode = (
     <div
-      className="user-modal-backdrop open"
+      className="user-modal-backdrop open software-deploy-backdrop"
       style={{ position: "fixed", inset: 0, zIndex: 2147483647 }}
       onMouseDown={onClose}
     >
       <div
-        className="user-modal advanced"
+        className="user-modal advanced software-deploy-modal"
         style={{
           width: "min(1840px, calc(100vw - 24px))",
           maxWidth: "calc(100vw - 24px)",
@@ -856,7 +864,7 @@ function DeployPackageModal({
         </div>
 
         <div
-          className="user-modal-body content-body gap-3"
+          className="user-modal-body content-body gap-3 software-deploy-body"
           style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}
         >
           <section className="policy-card wide p-4">
@@ -1324,6 +1332,19 @@ function DeletePackageModal({
 }
 
 export default function SoftwareDistribution() {
+useSoftwareDistributionTableRouteEffect(() => {
+    document.body.classList.add("ema-route-software-distribution");
+    document.body.setAttribute("data-ema-route", "/software-distribution");
+
+    return () => {
+      document.body.classList.remove("ema-route-software-distribution");
+      if (document.body.getAttribute("data-ema-route") === "/software-distribution") {
+        document.body.removeAttribute("data-ema-route");
+      }
+    };
+  }, []);
+
+
   const [packages, setPackages] = useState<PackageRecord[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);

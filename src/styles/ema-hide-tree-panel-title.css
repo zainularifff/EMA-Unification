@@ -1,0 +1,21 @@
+/* Hide old module title inside LEFT tree panel only */
+
+body.ema-hide-tree-panel-title [data-hide-tree-panel-title-block="true"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* remove gap left by hidden header */
+body.ema-hide-tree-panel-title [data-hide-tree-panel-title-panel="true"] {
+  gap: 10px !important;
+}
+
+body.ema-hide-tree-panel-title [data-hide-tree-panel-title-panel="true"]::before {
+  content: "All Branches" !important;
+}

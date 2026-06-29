@@ -1,0 +1,591 @@
+/* EMA TREE REFERENCE FINAL
+   Match reference design:
+   - one clean sidebar
+   - no nested cards/boxes
+   - search + filter row
+   - plain tree rows
+   - chevron visible
+   - count badge right
+   - add folder bottom
+*/
+
+body {
+  --ema-tree-ref-w: 300px;
+  --ema-tree-ref-border: #dbe7f6;
+  --ema-tree-ref-line: #dce6f7;
+  --ema-tree-ref-text: #0f2746;
+  --ema-tree-ref-muted: #64748b;
+  --ema-tree-ref-blue: #2563eb;
+  --ema-tree-ref-purple: #635bff;
+  --ema-tree-ref-active: #f1f0ff;
+  --ema-tree-ref-hover: #f8fbff;
+  --ema-tree-ref-badge: #eef2ff;
+}
+
+/* OUTER SIDEBAR ONLY */
+body :is(
+  [data-ema-tree-size-panel="true"],
+  [data-ema-branch-panel-standard="true"],
+  aside:has(.hardware-branch-body),
+  aside:has(.hardware-branch-panel-body),
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar
+):has(:is(
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  [aria-label*="tree"],
+  [aria-label*="Tree"],
+  input[placeholder*="Search branch"]
+)) {
+  width: var(--ema-tree-ref-w) !important;
+  min-width: var(--ema-tree-ref-w) !important;
+  max-width: var(--ema-tree-ref-w) !important;
+
+  height: calc(100vh - 112px) !important;
+  min-height: calc(100vh - 112px) !important;
+  max-height: calc(100vh - 112px) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--ema-tree-ref-border) !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* TITLE */
+body :is(
+  [data-ema-tree-size-panel="true"],
+  [data-ema-branch-panel-standard="true"],
+  aside:has(.hardware-branch-body),
+  aside:has(.hardware-branch-panel-body),
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar
+):has(:is(.hardware-location-tree-card, .ema-sidebar-tree, .software-tree-panel, .tree-list, [aria-label*="tree"]))::before {
+  content: "All Branches";
+  display: block;
+  margin: 0 0 12px !important;
+  color: var(--ema-tree-ref-text) !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+/* HIDE BIG MODULE HEADER INSIDE TREE PANEL */
+body :is(
+  [data-ema-tree-size-panel="true"],
+  [data-ema-branch-panel-standard="true"],
+  aside:has(.hardware-branch-body),
+  aside:has(.hardware-branch-panel-body),
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .branch-sidebar,
+  .folder-sidebar,
+  .inventory-sidebar,
+  .tree-sidebar
+) :is(
+  .panel-head,
+  .sidebar-head,
+  .sidebar-header,
+  .module-sidebar-head,
+  .ema-sidebar-panel-head,
+  .ema-sidebar-header,
+  .hardware-sidebar-head,
+  .software-sidebar-head,
+  .inventory-sidebar-head,
+  .tree-sidebar-head
+) {
+  display: none !important;
+}
+
+/* HIDE BRANCH/STATISTICS CARDS IF THEY MAKE PANEL BUSY */
+body :is(
+  [data-ema-tree-size-panel="true"],
+  [data-ema-branch-panel-standard="true"],
+  aside:has(.hardware-branch-body),
+  aside:has(.hardware-branch-panel-body),
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel
+) :is(
+  #hardwareMenu,
+  nav[role="tablist"],
+  .ema-module-sidebar-switcher,
+  .settings-menu-list,
+  .sidebar-tabs,
+  .sidebar-modes,
+  .view-switch,
+  .panel-switch
+) {
+  display: none !important;
+}
+
+/* BODY LAYOUT */
+body :is(
+  [data-ema-tree-size-body="true"],
+  [data-ema-branch-body-standard="true"],
+  .hardware-branch-body,
+  .hardware-branch-panel-body,
+  .ema-sidebar-content,
+  .ema-sidebar-subpanel,
+  .sidebar-body,
+  .tree-body,
+  .folder-body
+) {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  gap: 10px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* SEARCH ROW */
+body :is(
+  .hardware-branch-search,
+  [data-ema-tree-size-search="true"],
+  [data-ema-branch-search-standard="true"],
+  .ema-sidebar-field,
+  .section-search,
+  .sidebar-search,
+  .search-box,
+  .tree-search,
+  .branch-search,
+  .folder-search
+) {
+  order: 1 !important;
+  flex: 0 0 36px !important;
+
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) 34px !important;
+  align-items: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border: 1px solid var(--ema-tree-ref-border) !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+body :is(
+  .hardware-branch-search,
+  [data-ema-tree-size-search="true"],
+  [data-ema-branch-search-standard="true"],
+  .ema-sidebar-field,
+  .section-search,
+  .sidebar-search,
+  .search-box,
+  .tree-search,
+  .branch-search,
+  .folder-search
+) input {
+  width: 100% !important;
+  height: 34px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--ema-tree-ref-text) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* FILTER BUTTON STYLE IF EXISTS */
+body :is(
+  .hardware-branch-search,
+  [data-ema-tree-size-search="true"],
+  [data-ema-branch-search-standard="true"],
+  .ema-sidebar-field,
+  .section-search,
+  .sidebar-search,
+  .search-box,
+  .tree-search,
+  .branch-search,
+  .folder-search
+) button {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  border: 1px solid var(--ema-tree-ref-border) !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* ADD NEW FOLDER BOTTOM */
+body :is(
+  .hardware-add-folder-btn,
+  [data-ema-tree-size-add="true"],
+  [data-ema-branch-add-standard="true"],
+  .add-folder-btn,
+  .create-folder-btn,
+  .new-folder-btn,
+  .folder-action-btn,
+  button[class*="add-folder"],
+  button[class*="new-folder"]
+) {
+  order: 3 !important;
+  flex: 0 0 36px !important;
+
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border: 1px solid var(--ema-tree-ref-border) !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  color: var(--ema-tree-ref-text) !important;
+  box-shadow: none !important;
+
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+/* TREE AREA: PLAIN, NO INNER CARD */
+body :is(
+  [data-ema-tree-size-tree="true"],
+  [data-ema-branch-tree-standard="true"],
+  [data-ema-v8-tree="true"],
+  [data-ema-v7-tree="true"],
+  [data-ema-v6-tree="true"],
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) {
+  order: 2 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* REMOVE CONTAINER BOXES INSIDE TREE */
+body :is(
+  [data-ema-tree-size-tree="true"],
+  [data-ema-branch-tree-standard="true"],
+  [data-ema-v8-tree="true"],
+  [data-ema-v7-tree="true"],
+  [data-ema-v6-tree="true"],
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) :is(ul, li, div, span, button, [role="treeitem"]) {
+  box-shadow: none !important;
+}
+
+/* NESTED LINE */
+body .hardware-tree-node .hardware-tree-node,
+body .ema-sidebar-tree-children.is-nested,
+body :is(
+  [data-ema-tree-size-tree="true"],
+  [data-ema-branch-tree-standard="true"],
+  [data-ema-v8-tree="true"],
+  [data-ema-v7-tree="true"],
+  [data-ema-v6-tree="true"],
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+) ul ul {
+  margin-left: 13px !important;
+  padding-left: 11px !important;
+  border-left: 1px solid var(--ema-tree-ref-line) !important;
+  border-top: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+}
+
+/* ROW PLAIN */
+body :is(
+  [data-ema-branch-row-standard="true"],
+  [data-ema-v8-row="true"],
+  [data-ema-v7-row="true"],
+  [data-ema-v6-row="true"],
+  .hardware-tree-select,
+  .ema-sidebar-tree-node,
+  .ema-sidebar-tree-main,
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+) {
+  min-height: 28px !important;
+  height: auto !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+
+  padding: 5px 6px !important;
+  margin: 1px 0 !important;
+
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--ema-tree-ref-text) !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 800 !important;
+  text-align: left !important;
+
+  box-sizing: border-box !important;
+}
+
+/* ACTIVE ROW LIKE REFERENCE */
+body :is(
+  [data-ema-branch-row-standard="true"],
+  [data-ema-v8-row="true"],
+  [data-ema-v7-row="true"],
+  [data-ema-v6-row="true"],
+  .hardware-tree-select,
+  .ema-sidebar-tree-node,
+  .ema-sidebar-tree-main,
+  .hardware-location-tree-card button,
+  .hardware-location-tree-scroll button,
+  .ema-sidebar-tree button,
+  .software-tree-panel button,
+  .folder-tree button,
+  .branch-tree button,
+  .tree-list button,
+  [role="treeitem"]
+):is(.active, .selected, .is-active, .is-selected, [aria-selected="true"]),
+body .hardware-tree-node.is-selected .hardware-tree-select {
+  background: linear-gradient(90deg, rgba(99, 91, 255, 0.12), rgba(99, 91, 255, 0.04)) !important;
+  color: var(--ema-tree-ref-blue) !important;
+  box-shadow: inset 3px 0 0 var(--ema-tree-ref-purple) !important;
+}
+
+/* CHEVRON */
+body :is(
+  [data-ema-branch-chevron-standard="true"],
+  [data-ema-v8-chevron="true"],
+  [data-ema-v7-chevron="true"],
+  [data-ema-v6-chevron="true"],
+  .hardware-tree-caret
+) {
+  flex: 0 0 12px !important;
+  width: 12px !important;
+  min-width: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--ema-tree-ref-muted) !important;
+}
+
+/* FOLDER ICON */
+body :is(
+  [data-ema-branch-icon-standard="true"],
+  [data-ema-v8-icon="true"],
+  [data-ema-v7-icon="true"],
+  [data-ema-v6-icon="true"],
+  .hardware-tree-icon
+) {
+  flex: 0 0 15px !important;
+  width: 15px !important;
+  min-width: 15px !important;
+  height: 15px !important;
+  color: var(--ema-tree-ref-blue) !important;
+  stroke: var(--ema-tree-ref-blue) !important;
+}
+
+/* LABEL */
+body :is(
+  [data-ema-branch-label-standard="true"],
+  [data-ema-v8-label="true"],
+  [data-ema-v7-label="true"],
+  [data-ema-v6-label="true"],
+  .hardware-tree-label,
+  .ema-sidebar-tree-label,
+  .tree-label,
+  .folder-label,
+  .branch-label,
+  .node-label
+) {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  color: var(--ema-tree-ref-text) !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+/* COUNT */
+body :is(
+  [data-ema-branch-count-standard="true"],
+  [data-ema-v8-count="true"],
+  [data-ema-v7-count="true"],
+  [data-ema-v6-count="true"],
+  .hardware-tree-count
+) {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+
+  min-width: 22px !important;
+  height: 19px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 7px !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--ema-tree-ref-badge) !important;
+  color: var(--ema-tree-ref-muted) !important;
+
+  font-size: 9px !important;
+  font-weight: 900 !important;
+}
+
+/* ACTION DOTS CLEAN */
+body :is(.hardware-tree-actions, .hardware-tree-more, .tree-actions, .node-actions, .folder-actions) {
+  flex: 0 0 auto !important;
+  margin-left: 4px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* SCROLLBAR */
+body :is(
+  [data-ema-tree-size-tree="true"],
+  [data-ema-branch-tree-standard="true"],
+  [data-ema-v8-tree="true"],
+  [data-ema-v7-tree="true"],
+  [data-ema-v6-tree="true"],
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+)::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+body :is(
+  [data-ema-tree-size-tree="true"],
+  [data-ema-branch-tree-standard="true"],
+  [data-ema-v8-tree="true"],
+  [data-ema-v7-tree="true"],
+  [data-ema-v6-tree="true"],
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .ema-sidebar-tree,
+  .software-tree-panel,
+  .folder-tree,
+  .branch-tree,
+  .tree-list,
+  .tree-scroll,
+  [aria-label*="tree"],
+  [aria-label*="Tree"]
+)::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}

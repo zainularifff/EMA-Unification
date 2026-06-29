@@ -1,0 +1,294 @@
+/* EMA SIDEPANEL TREE ALL MODULES FINAL
+   Applies to every module with branch sidepanel.
+   Excludes Settings, ServiceDesk, Report through runtime route check.
+*/
+
+:root {
+  --ema-branch-panel-w: 248px;
+  --ema-branch-bg: #ffffff;
+  --ema-branch-border: #dbe7f6;
+  --ema-branch-line: #dce6f7;
+  --ema-branch-text: #0f2746;
+  --ema-branch-muted: #64748b;
+  --ema-branch-purple: #635bff;
+  --ema-branch-hover: #f7f9ff;
+  --ema-branch-active: #f1f0ff;
+  --ema-branch-badge: #eef2ff;
+}
+
+html body [data-ema-branch-sidepanel="true"] {
+  width: var(--ema-branch-panel-w) !important;
+  min-width: var(--ema-branch-panel-w) !important;
+  max-width: var(--ema-branch-panel-w) !important;
+
+  min-height: calc(100vh - 130px) !important;
+  align-self: stretch !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--ema-branch-border) !important;
+  border-radius: 10px !important;
+  background: var(--ema-branch-bg) !important;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.035) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Old module header inside sidepanel */
+html body [data-ema-branch-old-header="true"] {
+  display: none !important;
+}
+
+/* Add visual title without DOM injection */
+html body [data-ema-branch-sidepanel="true"]::before {
+  content: "All Branches";
+  display: block;
+
+  margin: 0 0 12px !important;
+
+  color: var(--ema-branch-text) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+}
+
+/* Branch / Statistics */
+html body [data-ema-branch-mode="true"] {
+  width: 100% !important;
+
+  display: flex !important;
+  gap: 6px !important;
+
+  margin: 0 0 12px !important;
+  padding: 3px !important;
+
+  border: 1px solid var(--ema-branch-border) !important;
+  border-radius: 12px !important;
+  background: #f8fbff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+html body [data-ema-branch-mode="true"] > * {
+  flex: 1 1 0 !important;
+
+  height: 28px !important;
+  min-height: 28px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 8px !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--ema-branch-muted) !important;
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+}
+
+html body [data-ema-branch-mode="true"] > *.active,
+html body [data-ema-branch-mode="true"] > *[aria-selected="true"],
+html body [data-ema-branch-mode="true"] > *[data-active="true"] {
+  background: #ffffff !important;
+  color: var(--ema-branch-purple) !important;
+  box-shadow: 0 4px 10px rgba(99, 91, 255, 0.12) !important;
+}
+
+/* Search row */
+html body [data-ema-branch-search-row="true"] {
+  width: 100% !important;
+
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+
+  margin: 0 0 12px !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+html body [data-ema-branch-search-input="true"] {
+  width: 100% !important;
+  height: 34px !important;
+
+  border-radius: 6px !important;
+  border: 1px solid var(--ema-branch-border) !important;
+  background: #ffffff !important;
+
+  color: var(--ema-branch-text) !important;
+
+  padding: 0 10px 0 30px !important;
+
+  font-size: 10px !important;
+  font-weight: 700 !important;
+
+  outline: none !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+/* Add folder / new branch */
+html body [data-ema-branch-add-folder="true"] {
+  width: 100% !important;
+  height: 35px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  margin: 0 0 12px !important;
+  padding: 0 10px !important;
+
+  border-radius: 5px !important;
+  border: 1px solid var(--ema-branch-purple) !important;
+  background: #ffffff !important;
+  color: var(--ema-branch-purple) !important;
+  box-shadow: none !important;
+
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+}
+
+/* Tree list */
+html body [data-ema-branch-tree-list="true"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* Stop nested box damage */
+html body [data-ema-branch-tree-list="true"] :is(ul, li, li > div, li > span) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+
+  overflow: visible !important;
+}
+
+html body [data-ema-branch-tree-list="true"] ul ul {
+  margin-left: 17px !important;
+  padding-left: 11px !important;
+  border-left: 1px solid var(--ema-branch-line) !important;
+}
+
+/* Tree rows */
+html body [data-ema-branch-tree-list="true"] :is(button, [role="button"], [role="treeitem"]) {
+  width: 100% !important;
+  min-height: 27px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+
+  padding: 5px 7px !important;
+  margin: 2px 0 !important;
+
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--ema-branch-text) !important;
+
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  font-weight: 800 !important;
+
+  text-align: left !important;
+  box-sizing: border-box !important;
+}
+
+html body [data-ema-branch-tree-list="true"] :is(button, [role="button"], [role="treeitem"]):hover {
+  background: var(--ema-branch-hover) !important;
+  border-color: #e1e8fb !important;
+}
+
+html body [data-ema-branch-tree-list="true"] :is(button.active, button.selected, button[aria-selected="true"], [role="treeitem"][aria-selected="true"]) {
+  background: var(--ema-branch-active) !important;
+  border-color: #dedcff !important;
+  color: var(--ema-branch-purple) !important;
+  box-shadow: inset 3px 0 0 var(--ema-branch-purple) !important;
+}
+
+html body [data-ema-branch-tree-list="true"] svg {
+  width: 13px !important;
+  height: 13px !important;
+  min-width: 13px !important;
+
+  color: var(--ema-branch-purple) !important;
+  stroke: var(--ema-branch-purple) !important;
+}
+
+/* Counts */
+html body [data-ema-branch-tree-list="true"] :is(.count-badge, .tree-badge, .folder-count, .branch-count, .item-count, [class*="count"], [class*="badge"]) {
+  margin-left: auto !important;
+
+  min-width: 20px !important;
+  height: 18px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 6px !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--ema-branch-badge) !important;
+  color: var(--ema-branch-muted) !important;
+
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+/* Scrollbar */
+html body [data-ema-branch-tree-list="true"]::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+html body [data-ema-branch-tree-list="true"]::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}
+
+html body [data-ema-branch-tree-list="true"]::-webkit-scrollbar-track {
+  background: transparent !important;
+}

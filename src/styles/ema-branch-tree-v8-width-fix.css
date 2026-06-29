@@ -1,0 +1,131 @@
+/* EMA Branch Tree V8 Width Fix
+   Widen branch sidepanel and reduce empty space before main content.
+*/
+
+body.ema-branch-tree-v7-page,
+body.ema-sidepanel-v5-page,
+body.ema-sidepanel-v6-page {
+  --ema-tree-v7-w: 340px !important;
+  --ema-tree-v6-w: 340px !important;
+  --ema-tree-w: 340px !important;
+}
+
+/* Force detected branch panel wider */
+body.ema-branch-tree-v7-page [data-ema-v7-panel="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-panel="true"],
+body.ema-sidepanel-v5-page :is(
+  aside,
+  .ema-page-sidebar,
+  .ema-sidebar-panel,
+  .module-sidepanel,
+  .module-tree-panel,
+  .sidebar-tree-panel,
+  .folder-sidebar,
+  .branch-sidebar,
+  .inventory-sidebar,
+  .hardware-sidebar,
+  .software-sidebar,
+  .network-sidebar,
+  .tree-sidebar,
+  .ema-branch-sidepanel-v3,
+  [data-ema-branch-panel-v3="true"],
+  [class*="branch-sidebar"],
+  [class*="folder-sidebar"],
+  [class*="inventory-sidebar"],
+  [class*="tree-sidebar"],
+  [class*="sidepanel"],
+  [class*="side-panel"]
+):has(:is(
+  input[placeholder*="Search"],
+  .ema-sidebar-tree,
+  .hardware-location-tree-card,
+  .hardware-location-tree-scroll,
+  .software-tree-panel,
+  [aria-label*="tree"],
+  [aria-label*="Tree"],
+  #hardwareMenu
+)) {
+  width: 340px !important;
+  min-width: 340px !important;
+  max-width: 340px !important;
+}
+
+/* Reduce gap between sidebar tree and main content */
+body.ema-branch-tree-v7-page :is(
+  .hardware-layout,
+  .software-layout,
+  .network-layout,
+  .appmetering-layout,
+  .internet-metering-layout,
+  .restriction-layout,
+  .module-layout,
+  .module-page-layout,
+  .inventory-layout,
+  .page-layout,
+  .content-layout,
+  .dashboard-layout,
+  .ema-page-layout,
+  .ema-module-layout,
+  .main-content-layout,
+  .app-page-body,
+  .page-body
+):has([data-ema-v7-panel="true"]),
+body.ema-sidepanel-v5-page :is(
+  .hardware-layout,
+  .software-layout,
+  .network-layout,
+  .appmetering-layout,
+  .internet-metering-layout,
+  .restriction-layout,
+  .module-layout,
+  .module-page-layout,
+  .inventory-layout,
+  .page-layout,
+  .content-layout,
+  .dashboard-layout,
+  .ema-page-layout,
+  .ema-module-layout,
+  .main-content-layout,
+  .app-page-body,
+  .page-body
+) {
+  gap: 14px !important;
+  column-gap: 14px !important;
+}
+
+/* For common direct parent flex/grid containers */
+body.ema-branch-tree-v7-page :is(div, section, main):has(> [data-ema-v7-panel="true"]) {
+  gap: 14px !important;
+  column-gap: 14px !important;
+}
+
+/* If parent is CSS grid, lock first column to widened panel */
+body.ema-branch-tree-v7-page :is(div, section, main):has(> [data-ema-v7-panel="true"]) {
+  grid-template-columns: 340px minmax(0, 1fr) !important;
+}
+
+/* Main content should use remaining width */
+body.ema-branch-tree-v7-page :is(div, section, main):has(> [data-ema-v7-panel="true"]) > :not([data-ema-v7-panel="true"]) {
+  min-width: 0 !important;
+  max-width: none !important;
+}
+
+/* Tree row now has enough space; no truncation */
+body.ema-branch-tree-v7-page [data-ema-v7-row="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-label="true"] {
+  max-width: 100% !important;
+}
+
+body.ema-branch-tree-v7-page [data-ema-v7-label="true"] {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Search width follows widened panel */
+body.ema-branch-tree-v7-page [data-ema-v7-search-row="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-tree="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-add-folder="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+}

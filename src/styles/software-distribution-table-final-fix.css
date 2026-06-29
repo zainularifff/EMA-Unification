@@ -1,0 +1,395 @@
+/* Software Distribution table final fix */
+
+:root {
+  --sw-dist-blue: #2563eb;
+  --sw-dist-info: #0f84d8;
+  --sw-dist-head-bg: #f4f7fb;
+  --sw-dist-border: #dbe7f6;
+  --sw-dist-row-border: #e7eef8;
+  --sw-dist-text: #10294f;
+  --sw-dist-body: #18345f;
+  --sw-dist-muted: #64748b;
+}
+
+/* Scope marker */
+html body.ema-route-software-distribution,
+html body[data-ema-route="/software-distribution"] {
+  --ema-table-row-height: 42px;
+  --ema-table-head-height: 38px;
+}
+
+/* Main registry card: remove huge empty area */
+html body.ema-route-software-distribution :is(
+  .software-distribution-page,
+  .software-distribution-module,
+  .software-distribution-root,
+  [class*="software-distribution"],
+  [class*="distribution"]
+) :is(
+  .registry-card,
+  .table-card,
+  .table-panel,
+  .data-card,
+  .ema-panel-surface,
+  [class*="registry"],
+  [class*="table-card"],
+  [class*="table-panel"]
+),
+html body[data-ema-route="/software-distribution"] :is(
+  .registry-card,
+  .table-card,
+  .table-panel,
+  .data-card,
+  .ema-panel-surface,
+  [class*="registry"],
+  [class*="table-card"],
+  [class*="table-panel"]
+) {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Table wrapper */
+html body.ema-route-software-distribution :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+),
+html body[data-ema-route="/software-distribution"] :is(
+  .table-wrapper,
+  .table-container,
+  .table-scroll,
+  .data-table-wrapper,
+  .data-table-container,
+  .overflow-x-auto,
+  [class*="table-wrapper"],
+  [class*="table-container"],
+  [class*="table-scroll"]
+) {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+/* Real table layout */
+html body.ema-route-software-distribution table,
+html body[data-ema-route="/software-distribution"] table,
+html body :is(.software-distribution-page, .software-distribution-module, .software-distribution-root, [class*="software-distribution"]) table {
+  display: table !important;
+
+  width: 100% !important;
+  min-width: 980px !important;
+  max-width: 100% !important;
+
+  margin: 0 !important;
+
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  border: 1px solid var(--sw-dist-border) !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+/* Header */
+html body.ema-route-software-distribution table thead,
+html body[data-ema-route="/software-distribution"] table thead {
+  display: table-header-group !important;
+}
+
+html body.ema-route-software-distribution table thead tr,
+html body[data-ema-route="/software-distribution"] table thead tr {
+  display: table-row !important;
+  height: 38px !important;
+  background: var(--sw-dist-head-bg) !important;
+}
+
+html body.ema-route-software-distribution table thead th,
+html body[data-ema-route="/software-distribution"] table thead th,
+html body :is(.software-distribution-page, .software-distribution-module, .software-distribution-root, [class*="software-distribution"]) table thead th {
+  display: table-cell !important;
+  vertical-align: middle !important;
+
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+
+  padding: 0 12px !important;
+
+  background: var(--sw-dist-head-bg) !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+
+  color: var(--sw-dist-blue) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Body */
+html body.ema-route-software-distribution table tbody,
+html body[data-ema-route="/software-distribution"] table tbody {
+  display: table-row-group !important;
+}
+
+html body.ema-route-software-distribution table tbody tr,
+html body[data-ema-route="/software-distribution"] table tbody tr,
+html body :is(.software-distribution-page, .software-distribution-module, .software-distribution-root, [class*="software-distribution"]) table tbody tr {
+  display: table-row !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  background: #ffffff !important;
+}
+
+html body.ema-route-software-distribution table tbody tr:hover td,
+html body[data-ema-route="/software-distribution"] table tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+html body.ema-route-software-distribution table tbody td,
+html body[data-ema-route="/software-distribution"] table tbody td,
+html body :is(.software-distribution-page, .software-distribution-module, .software-distribution-root, [class*="software-distribution"]) table tbody td {
+  display: table-cell !important;
+  vertical-align: middle !important;
+
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+
+  padding: 6px 12px !important;
+
+  border-bottom: 1px solid var(--sw-dist-row-border) !important;
+  background: #ffffff !important;
+
+  color: var(--sw-dist-body) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 10.5px !important;
+  line-height: 1.18 !important;
+  font-weight: 750 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Column widths */
+html body.ema-route-software-distribution table :is(th, td):nth-child(1),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(1) {
+  width: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  text-align: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+html body.ema-route-software-distribution table :is(th, td):nth-child(2),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(2) {
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+  text-align: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  color: var(--sw-dist-muted) !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+}
+
+html body.ema-route-software-distribution table :is(th, td):nth-child(3),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(3) {
+  width: auto !important;
+  min-width: 360px !important;
+  max-width: none !important;
+  text-align: left !important;
+}
+
+html body.ema-route-software-distribution table :is(th, td):nth-child(4),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(4) {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+}
+
+html body.ema-route-software-distribution table :is(th, td):nth-child(5),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(5) {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+}
+
+html body.ema-route-software-distribution table :is(th, td):nth-child(6),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(6) {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+}
+
+html body.ema-route-software-distribution table :is(th, td):nth-child(7),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(7) {
+  width: 160px !important;
+  min-width: 160px !important;
+  max-width: 160px !important;
+}
+
+html body.ema-route-software-distribution table :is(th, td):nth-child(8),
+html body[data-ema-route="/software-distribution"] table :is(th, td):nth-child(8) {
+  width: 110px !important;
+  min-width: 110px !important;
+  max-width: 110px !important;
+  text-align: center !important;
+}
+
+/* Plain cell content: no boxes, no weird wrapping */
+html body.ema-route-software-distribution table tbody td :is(span, div, p, strong, small),
+html body[data-ema-route="/software-distribution"] table tbody td :is(span, div, p, strong, small) {
+  color: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  font-weight: inherit !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Package name can use icon + text cleanly */
+html body.ema-route-software-distribution table tbody td:nth-child(3) :is(span, div, p, strong, small),
+html body[data-ema-route="/software-distribution"] table tbody td:nth-child(3) :is(span, div, p, strong, small) {
+  display: inline !important;
+}
+
+/* Checkbox */
+html body.ema-route-software-distribution table input[type="checkbox"],
+html body[data-ema-route="/software-distribution"] table input[type="checkbox"] {
+  width: 13px !important;
+  height: 13px !important;
+  min-width: 13px !important;
+  margin: 0 !important;
+  accent-color: var(--sw-dist-blue) !important;
+}
+
+/* Action: deploy/send icon must be blue, not red delete */
+html body.ema-route-software-distribution table tbody td:last-child,
+html body[data-ema-route="/software-distribution"] table tbody td:last-child {
+  text-align: center !important;
+  overflow: visible !important;
+}
+
+html body.ema-route-software-distribution table tbody td:last-child :is(button, a[role="button"]),
+html body[data-ema-route="/software-distribution"] table tbody td:last-child :is(button, a[role="button"]),
+html body :is(.software-distribution-page, .software-distribution-module, .software-distribution-root, [class*="software-distribution"]) table tbody td:last-child :is(button, a[role="button"]) {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 auto !important;
+
+  border: 1px solid #bfdbfe !important;
+  border-radius: 10px !important;
+  background: #eff6ff !important;
+  color: var(--sw-dist-blue) !important;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08) !important;
+
+  font-size: 0 !important;
+  line-height: 1 !important;
+  text-indent: 0 !important;
+}
+
+html body.ema-route-software-distribution table tbody td:last-child :is(button, a[role="button"]) svg,
+html body[data-ema-route="/software-distribution"] table tbody td:last-child :is(button, a[role="button"]) svg,
+html body :is(.software-distribution-page, .software-distribution-module, .software-distribution-root, [class*="software-distribution"]) table tbody td:last-child :is(button, a[role="button"]) svg {
+  width: 14px !important;
+  height: 14px !important;
+  color: var(--sw-dist-blue) !important;
+  stroke: var(--sw-dist-blue) !important;
+  fill: none !important;
+}
+
+html body.ema-route-software-distribution table tbody td:last-child :is(button, a[role="button"]):hover,
+html body[data-ema-route="/software-distribution"] table tbody td:last-child :is(button, a[role="button"]):hover {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+/* Never let software distribution action inherit delete-red fallback */
+html body.ema-route-software-distribution table tbody td:last-child :is(button, a[role="button"]):last-child,
+html body[data-ema-route="/software-distribution"] table tbody td:last-child :is(button, a[role="button"]):last-child {
+  color: var(--sw-dist-blue) !important;
+  border-color: #bfdbfe !important;
+  background: #eff6ff !important;
+}
+
+html body.ema-route-software-distribution table tbody td:last-child :is(button, a[role="button"]):last-child svg,
+html body[data-ema-route="/software-distribution"] table tbody td:last-child :is(button, a[role="button"]):last-child svg {
+  color: var(--sw-dist-blue) !important;
+  stroke: var(--sw-dist-blue) !important;
+}
+
+/* Pagination closer to table and no giant blank spacing */
+html body.ema-route-software-distribution :is(.uam-pagination, .ema-pagination, .pagination-row),
+html body[data-ema-route="/software-distribution"] :is(.uam-pagination, .ema-pagination, .pagination-row) {
+  width: calc(100% - 2rem) !important;
+  max-width: calc(100% - 2rem) !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 8px 1rem 0 !important;
+}
+
+/* Reduce blank area under table if card had fixed/min height */
+html body.ema-route-software-distribution :is(
+  .package-registry,
+  .package-registry-card,
+  .registry-panel,
+  .package-table,
+  .package-table-card,
+  [class*="package"],
+  [class*="registry"]
+),
+html body[data-ema-route="/software-distribution"] :is(
+  .package-registry,
+  .package-registry-card,
+  .registry-panel,
+  .package-table,
+  .package-table-card,
+  [class*="package"],
+  [class*="registry"]
+) {
+  min-height: 0 !important;
+}

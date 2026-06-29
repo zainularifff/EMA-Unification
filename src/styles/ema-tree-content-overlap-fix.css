@@ -1,0 +1,139 @@
+/* EMA TREE CONTENT OVERLAP FIX
+   Reserve proper sidebar column so right content never enters tree panel area.
+*/
+
+body.ema-tree-final-clean,
+body.ema-unified-branch-tree {
+  --tree-w: 340px;
+  --tree-gap: 18px;
+}
+
+/* Parent that contains tree panel + main content */
+body.ema-tree-final-clean :is(div, section, main):has(> [data-tree-panel-final="true"]),
+body.ema-unified-branch-tree :is(div, section, main):has(> [data-unified-tree-panel="true"]),
+body.ema-tree-final-clean :is(div, section, main):has(> [data-clean-tree-panel="true"]),
+body.ema-tree-final-clean :is(div, section, main):has(> [data-ema-branch-panel-standard="true"]) {
+  display: grid !important;
+  grid-template-columns: var(--tree-w) minmax(0, 1fr) !important;
+  column-gap: var(--tree-gap) !important;
+  gap: var(--tree-gap) !important;
+  align-items: stretch !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Tree panel must stay in left column only */
+body.ema-tree-final-clean [data-tree-panel-final="true"],
+body.ema-unified-branch-tree [data-unified-tree-panel="true"],
+body.ema-tree-final-clean [data-clean-tree-panel="true"],
+body.ema-tree-final-clean [data-ema-branch-panel-standard="true"] {
+  grid-column: 1 !important;
+
+  width: var(--tree-w) !important;
+  min-width: var(--tree-w) !important;
+  max-width: var(--tree-w) !important;
+
+  margin: 0 !important;
+  position: relative !important;
+  z-index: 2 !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Right content must start after sidebar gap */
+body.ema-tree-final-clean :is(div, section, main):has(> [data-tree-panel-final="true"]) > :not([data-tree-panel-final="true"]),
+body.ema-unified-branch-tree :is(div, section, main):has(> [data-unified-tree-panel="true"]) > :not([data-unified-tree-panel="true"]),
+body.ema-tree-final-clean :is(div, section, main):has(> [data-clean-tree-panel="true"]) > :not([data-clean-tree-panel="true"]),
+body.ema-tree-final-clean :is(div, section, main):has(> [data-ema-branch-panel-standard="true"]) > :not([data-ema-branch-panel-standard="true"]) {
+  grid-column: 2 !important;
+
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+
+  margin-left: 0 !important;
+  transform: none !important;
+  position: relative !important;
+  z-index: 1 !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+/* Prevent page cards from sliding left over panel */
+body.ema-tree-final-clean :is(
+  .hardware-main,
+  .software-main,
+  .network-main,
+  .module-main,
+  .inventory-main,
+  .page-main,
+  .content-main,
+  .main-panel,
+  .content-panel,
+  .module-content,
+  .inventory-content
+),
+body.ema-unified-branch-tree :is(
+  .hardware-main,
+  .software-main,
+  .network-main,
+  .module-main,
+  .inventory-main,
+  .page-main,
+  .content-main,
+  .main-panel,
+  .content-panel,
+  .module-content,
+  .inventory-content
+) {
+  margin-left: 0 !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Cards inside right content cannot overflow left */
+body.ema-tree-final-clean :is(
+  .hardware-main,
+  .software-main,
+  .network-main,
+  .module-main,
+  .inventory-main,
+  .page-main,
+  .content-main,
+  .main-panel,
+  .content-panel,
+  .module-content,
+  .inventory-content
+) > *,
+body.ema-unified-branch-tree :is(
+  .hardware-main,
+  .software-main,
+  .network-main,
+  .module-main,
+  .inventory-main,
+  .page-main,
+  .content-main,
+  .main-panel,
+  .content-panel,
+  .module-content,
+  .inventory-content
+) > * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Safety: if parent still flex, enforce spacing */
+body.ema-tree-final-clean :is(div, section, main):has(> [data-tree-panel-final="true"]) {
+  flex-direction: row !important;
+}
+
+/* Software Distribution remains untouched */
+body:has(.package-registry) {
+  --tree-w: initial;
+}

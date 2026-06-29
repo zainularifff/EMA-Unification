@@ -4,6 +4,8 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
 import {
   Activity,
   ArrowLeft,
@@ -4109,7 +4111,7 @@ export default function ITOperationsDashboard() {
             </section>
           </div>
 
-          <div className="itops-pro-filter-row">
+          <div className="itops-pro-filter-row" data-ema-branch-panel-v3="true">
             <label><Search size={14} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search branch" /></label>
             <select value={selectedDepartment} onChange={(event) => setSelectedDepartment(event.target.value)}>
               {departments.map((department) => <option key={department}>{department}</option>)}

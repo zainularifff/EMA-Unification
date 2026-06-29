@@ -1742,3 +1742,154 @@ html body :is(
 }
 
 /* EMA TABLE INPUT DATA PLAIN LOCK END */
+
+
+/* EMA NO COLUMN TITLE ALIGNMENT LOCK START */
+/* Body NO column must align with first/title line of other columns, not vertical center. */
+
+:root {
+  --ema-table-no-top-offset: 9px;
+}
+
+/* Div/grid table body first column */
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :first-child {
+  width: var(--ema-table-no-width, 52px) !important;
+  min-width: var(--ema-table-no-width, 52px) !important;
+  max-width: var(--ema-table-no-width, 52px) !important;
+
+  height: auto !important;
+  min-height: var(--ema-table-row-height, 42px) !important;
+  max-height: none !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  padding-top: var(--ema-table-no-top-offset) !important;
+  padding-bottom: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+
+  text-align: center !important;
+  color: var(--ema-table-no-color, #64748b) !important;
+  font-family: var(--ema-table-font, Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif) !important;
+  font-size: var(--ema-table-no-font-size, 10px) !important;
+  line-height: 1 !important;
+  font-weight: var(--ema-table-no-font-weight, 900) !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Actual number span/pill inside first column */
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :first-child :is(
+  .row-index-pill,
+  .software-row-no,
+  .hardware-row-no,
+  .uam-row-index,
+  .settings-row-index,
+  .audit-row-index,
+  .table-row-index,
+  .ema-row-index,
+  .ema-row-number,
+  .row-number-pill,
+  .row-number,
+  .index-pill,
+  .no-pill,
+  span,
+  div
+) {
+  display: inline-block !important;
+
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: inherit !important;
+  font: inherit !important;
+  line-height: 1 !important;
+  text-align: center !important;
+}
+
+/* Real HTML table body first column */
+html body table tbody td:first-child {
+  width: var(--ema-table-no-width, 52px) !important;
+  min-width: var(--ema-table-no-width, 52px) !important;
+  max-width: var(--ema-table-no-width, 52px) !important;
+
+  padding-top: var(--ema-table-no-top-offset) !important;
+  padding-bottom: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+
+  vertical-align: top !important;
+  text-align: center !important;
+
+  color: var(--ema-table-no-color, #64748b) !important;
+  font-size: var(--ema-table-no-font-size, 10px) !important;
+  line-height: 1 !important;
+  font-weight: var(--ema-table-no-font-weight, 900) !important;
+}
+
+/* Header first column remains centered */
+html body :is(
+  .hardware-device-table-row.head,
+  .software-device-table-row.head,
+  .user-row.head,
+  .clean-table-row.head,
+  .settings-standard-row.head,
+  .audit-standard-row.head,
+  .service-desk-row.head,
+  .ema-standard-row.head,
+  .uam-table-row.head,
+  [class*="table-row"].head,
+  [class*="standard-row"].head
+) > :first-child,
+html body table thead th:first-child {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  vertical-align: middle !important;
+  text-align: center !important;
+}
+
+/* EMA NO COLUMN TITLE ALIGNMENT LOCK END */

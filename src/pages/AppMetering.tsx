@@ -28,6 +28,12 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
+import { useEffect as useAppMeteringTableRouteEffect } from "react";
+import "../styles/app-metering-table-final-fix.css";
+import "../styles/app-metering-target-table-hard-final.css";
+import "../styles/app-metering-target-table-direct-final.css";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -902,6 +908,19 @@ function AppMeteringTree({
 
 
 export default function AppMetering() {
+useAppMeteringTableRouteEffect(() => {
+    document.body.classList.add("ema-route-app-metering");
+    document.body.setAttribute("data-ema-route", "/appmetering");
+
+    return () => {
+      document.body.classList.remove("ema-route-app-metering");
+      if (document.body.getAttribute("data-ema-route") === "/appmetering") {
+        document.body.removeAttribute("data-ema-route");
+      }
+    };
+  }, []);
+
+
   const [viewMode, setViewMode] = useState<ViewMode>("device");
   const [departmentTree, setDepartmentTree] = useState<TreeNode[]>([emptyNode]);
   const [packages, setPackages] = useState<PackageRow[]>([]);
@@ -1687,7 +1706,7 @@ export default function AppMetering() {
 
           <div className="content-shell ema-panel-surface">
             <div className="content-head">
-              <div>
+              <div className="appm-target-table-wrap">
                 <span className="section-tag">{showDeviceRegistry ? "TARGET REGISTRY" : "USAGE REGISTRY"}</span>
                 <h3>{showDeviceRegistry ? "Target Device Registry" : "Application Usage Registry"}</h3>
                 <p>{showDeviceRegistry ? `${selectedNode.label} scope · ${filteredDeviceRows.length} device${filteredDeviceRows.length === 1 ? "" : "s"}` : `${selectedNode.label} · ${startDate} to ${endDate}`}</p>
@@ -1766,7 +1785,8 @@ export default function AppMetering() {
 
               <div className="table-responsive pricing-table-card appmetering-table-card">
                 {showDeviceRegistry ? (
-                  <table className="table table-hover align-middle mb-0">
+                  <div className="appm-target-table-wrap">
+<table data-appm-target-device-table="true" className="table table-hover align-middle mb-0 appm-target-device-table">
                     <thead>
                       <tr>
                         <th>No</th>
@@ -1802,8 +1822,9 @@ export default function AppMetering() {
                       })}
                     </tbody>
                   </table>
+</div>
                 ) : (
-                  <table className="table table-hover align-middle mb-0">
+                  <table className="table table-hover align-middle mb-0 appm-usage-table">
                     <thead>
                       <tr>
                         <th>Application</th>

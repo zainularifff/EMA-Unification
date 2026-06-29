@@ -1,0 +1,265 @@
+/* EMA BRANCH TREE V8 LAYOUT FIX
+   Final layout override:
+   - width 300px
+   - search above tree
+   - add folder always bottom
+   - tree full width
+*/
+
+body.ema-branch-tree-v8-page,
+body.ema-branch-tree-v7-page,
+body.ema-sidepanel-v6-page,
+body.ema-sidepanel-v5-page {
+  --ema-tree-v8-w: 300px !important;
+  --ema-tree-v7-w: 300px !important;
+  --ema-tree-v6-w: 300px !important;
+  --ema-tree-w: 300px !important;
+}
+
+/* PANEL */
+body.ema-branch-tree-v8-page [data-ema-v8-panel="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-panel="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-panel="true"] {
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
+
+  position: relative !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px 16px 64px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.035) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Reduce gap to main content */
+body.ema-branch-tree-v8-page :is(div, section, main):has(> [data-ema-v8-panel="true"]),
+body.ema-branch-tree-v7-page :is(div, section, main):has(> [data-ema-v7-panel="true"]) {
+  gap: 12px !important;
+  column-gap: 12px !important;
+  grid-template-columns: 300px minmax(0, 1fr) !important;
+}
+
+/* SEARCH MUST BE ABOVE TREE */
+body.ema-branch-tree-v8-page [data-ema-v8-search-row="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-search-row="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-search-row="true"] {
+  order: 10 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  height: 34px !important;
+
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 4px !important;
+
+  margin: 0 0 12px !important;
+  padding: 0 8px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-branch-tree-v8-page [data-ema-v8-search-input="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-search-input="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-search-input="true"] {
+  width: 100% !important;
+  height: 32px !important;
+
+  padding: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  color: #0f2746 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* TREE AREA */
+body.ema-branch-tree-v8-page [data-ema-v8-tree="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-tree="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"] {
+  order: 20 !important;
+
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* Remove nested weird boxes */
+body.ema-branch-tree-v8-page [data-ema-v8-tree="true"] :is(ul, li, li > div, li > span),
+body.ema-branch-tree-v7-page [data-ema-v7-tree="true"] :is(ul, li, li > div, li > span) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ADD FOLDER ALWAYS BOTTOM */
+body.ema-branch-tree-v8-page [data-ema-v8-add-folder="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-add-folder="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-add-folder="true"] {
+  position: absolute !important;
+  left: 16px !important;
+  right: 16px !important;
+  bottom: 16px !important;
+
+  width: auto !important;
+  max-width: none !important;
+  height: 35px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border-radius: 5px !important;
+  border: 1px solid #635bff !important;
+  background: #ffffff !important;
+  color: #635bff !important;
+  box-shadow: none !important;
+
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+
+  z-index: 5 !important;
+}
+
+/* ROW SHOULD START FROM LEFT */
+body.ema-branch-tree-v8-page [data-ema-v8-row="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-row="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-row="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+
+  min-height: 27px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+
+  padding: 5px 7px !important;
+  margin: 2px 0 !important;
+
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: #0f2746 !important;
+
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  font-weight: 800 !important;
+
+  text-align: left !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+/* CHEVRON HIDDEN */
+body.ema-branch-tree-v8-page [data-ema-v8-chevron="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-chevron="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-chevron="true"] {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* ICON + LABEL */
+body.ema-branch-tree-v8-page [data-ema-v8-icon="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-icon="true"] {
+  flex: 0 0 13px !important;
+  width: 13px !important;
+  min-width: 13px !important;
+  max-width: 13px !important;
+  height: 13px !important;
+  color: #635bff !important;
+  stroke: #635bff !important;
+}
+
+body.ema-branch-tree-v8-page [data-ema-v8-label="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-label="true"] {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  color: #0f2746 !important;
+
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body.ema-branch-tree-v8-page [data-ema-v8-count="true"],
+body.ema-branch-tree-v7-page [data-ema-v7-count="true"] {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+
+  min-width: 20px !important;
+  height: 18px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 6px !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #eef2ff !important;
+  color: #64748b !important;
+
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}

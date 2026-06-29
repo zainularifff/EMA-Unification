@@ -1,0 +1,173 @@
+const INCLUDE = [
+  "/hardware",
+  "/software",
+  "/appmetering",
+  "/app-metering",
+  "/internet-metering",
+  "/app-restriction",
+  "/web-restriction",
+  "/app-web-restriction",
+  "/patch-management",
+  "/tasklist",
+  "/task-list"
+];
+
+const EXCLUDE = [
+  "/settings",
+  "/service-desk",
+  "/report",
+  "/reports",
+  "/software-distribution"
+];
+
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  if (EXCLUDE.some((x) => p.includes(x))) return false;
+  return INCLUDE.some((x) => p.includes(x));
+}
+
+function text(el: Element | null) {
+  return String(el?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function visible(el: Element) {
+  const node = el as HTMLElement;
+  const r = node.getBoundingClientRect();
+  const s = window.getComputedStyle(node);
+  return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+}
+
+function clearMarks() {
+  document.querySelectorAll("[data-ema-tree-size-panel],[data-ema-tree-size-body],[data-ema-tree-size-search],[data-ema-tree-size-add],[data-ema-tree-size-tree]").forEach((el) => {
+    const node = el as HTMLElement;
+    delete node.dataset.emaTreeSizePanel;
+    delete node.dataset.emaTreeSizeBody;
+    delete node.dataset.emaTreeSizeSearch;
+    delete node.dataset.emaTreeSizeAdd;
+    delete node.dataset.emaTreeSizeTree;
+  });
+}
+
+function panelScore(el: HTMLElement) {
+  if (!visible(el)) return -9999;
+
+  const r = el.getBoundingClientRect();
+  const t = text(el).toLowerCase();
+
+  if (t.includes("ema system") || t.includes("main category") || t.includes("logout")) return -9999;
+  if (t.includes("package registry")) return -9999;
+
+  if (r.left < 100 || r.left > 650) return -9999;
+  if (r.width < 190 || r.width > 460) return -9999;
+  if (r.height < 200) return -9999;
+
+  let score = 0;
+
+  if (t.includes("all branches")) score += 120;
+  if (t.includes("search branches")) score += 110;
+  if (t.includes("search branch")) score += 110;
+  if (t.includes("branch")) score += 70;
+  if (t.includes("statistics")) score += 25;
+  if (t.includes("add new folder")) score += 80;
+  if (t.includes("new branch path")) score += 70;
+  if (t.includes("target registry")) score += 30;
+  if (t.includes("organization scope")) score += 30;
+
+  if (el.querySelector("input[placeholder*='Search']")) score += 50;
+  if (el.querySelector(".hardware-location-tree-card, .ema-sidebar-tree, .software-tree-panel, .tree-list, [aria-label*='tree'], [aria-label*='Tree']")) score += 60;
+
+  return score;
+}
+
+function findPanel() {
+  const candidates = Array.from(document.querySelectorAll(
+    "aside, .ema-page-sidebar, .ema-sidebar-panel, .module-sidepanel, .module-tree-panel, .sidebar-tree-panel, .branch-sidebar, .folder-sidebar, .inventory-sidebar, .tree-sidebar, .metering-sidebar, .internet-metering-sidebar, .appmetering-sidebar, .target-sidebar, .target-registry-sidebar, [class*='sidepanel'], [class*='side-panel'], [class*='sidebar']"
+  )).filter((el) => el instanceof HTMLElement) as HTMLElement[];
+
+  return candidates
+    .map((el) => ({ el, score: panelScore(el) }))
+    .filter((x) => x.score > 80)
+    .sort((a, b) => b.score - a.score)[0]?.el || null;
+}
+
+function markBody(panel: HTMLElement) {
+  const body =
+    panel.querySelector(".hardware-branch-body, .hardware-branch-panel-body, .ema-sidebar-content, .ema-sidebar-subpanel, .sidebar-body, .tree-body, .folder-body") ||
+    panel;
+
+  (body as HTMLElement).setAttribute("data-ema-tree-size-body", "true");
+}
+
+function markSearch(panel: HTMLElement) {
+  const input = Array.from(panel.querySelectorAll("input")).find((el) => {
+    const ph = String((el as HTMLInputElement).placeholder || "").toLowerCase();
+    return ph.includes("search");
+  }) as HTMLInputElement | undefined;
+
+  if (!input) return;
+
+  let row = input.closest(".hardware-branch-search, .ema-sidebar-field, .section-search, .sidebar-search, .search-box, .tree-search, .branch-search, .folder-search") as HTMLElement | null;
+  if (!row) row = input.parentElement as HTMLElement | null;
+
+  if (row) row.setAttribute("data-ema-tree-size-search", "true");
+}
+
+function markAdd(panel: HTMLElement) {
+  const btn = Array.from(panel.querySelectorAll("button, [role='button']")).find((el) => {
+    const t = text(el).toLowerCase();
+    return t.includes("add new folder") || t.includes("new branch path") || t.includes("add folder");
+  }) as HTMLElement | undefined;
+
+  if (btn) btn.setAttribute("data-ema-tree-size-add", "true");
+}
+
+function markTree(panel: HTMLElement) {
+  const tree = panel.querySelector(".hardware-location-tree-card, .hardware-location-tree-scroll, .ema-sidebar-tree, .software-tree-panel, .folder-tree, .branch-tree, .tree-list, .tree-scroll, [aria-label*='tree'], [aria-label*='Tree']") as HTMLElement | null;
+  if (tree) tree.setAttribute("data-ema-tree-size-tree", "true");
+}
+
+function apply() {
+  clearMarks();
+
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-module-tree-size-lock");
+    return;
+  }
+
+  const panel = findPanel();
+
+  if (!panel) {
+    document.body.classList.remove("ema-module-tree-size-lock");
+    return;
+  }
+
+  document.body.classList.add("ema-module-tree-size-lock");
+
+  panel.setAttribute("data-ema-tree-size-panel", "true");
+
+  markBody(panel);
+  markSearch(panel);
+  markAdd(panel);
+  markTree(panel);
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 250);
+    setTimeout(apply, 800);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

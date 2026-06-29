@@ -6,6 +6,8 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
 import {
   ArrowLeft,
   ArrowRight,
@@ -174,7 +176,7 @@ function CompactPagination({
   pageSize = APPWEB_SETTING_LIST_PAGE_SIZE,
   onPageChange,
 }: CompactPaginationProps) {
-  if (totalPages <= 1) return null;
+if (totalPages <= 1) return null;
 
   const safePage = Math.min(Math.max(page, 1), totalPages);
   const start = (safePage - 1) * pageSize + 1;
@@ -636,7 +638,7 @@ const createFormFromPolicy = (
 };
 
 export default function WebRestriction() {
-  const [activeModule, setActiveModule] = useState<RestrictionModule>('webRestriction');
+const [activeModule, setActiveModule] = useState<RestrictionModule>('webRestriction');
   const [activeTab, setActiveTab] = useState<SubTab>('settings');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [treeNodes, setTreeNodes] = useState<RestrictionTreeNode[]>([]);
@@ -2897,7 +2899,7 @@ export default function WebRestriction() {
         </div>
       )}
       <div className="settings-layout hardware-settings-layout d-grid gap-3">
-        <aside className="settings-menu hardware-left-panel ema-panel-surface">
+        <aside className="settings-menu hardware-left-panel ema-panel-surface" data-ema-branch-panel-v3="true">
           <div className="panel-head">
             <span>WEB RESTRICTION</span>
             <strong>Web Control</strong>

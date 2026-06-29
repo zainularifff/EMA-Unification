@@ -16,12 +16,13 @@ import {
   settingsUsers,
 } from "../services/settingsService";
 import "../styles/settings-module-control-scroll-fix.css";
-import "../styles/ema-toast-standard.css";
 import "../styles/ema-table-system-lock-final.css";
 import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
 
 type SectionKey = "roles" | "users" | "modules" | "access" | "incident" | "notification" | "softwarePolicy" | "audit" | "pricing" | "aging" | "policy" | "risk" | "resources";
 type RoleStatus = "Active" | "Review" | "Locked" | "Inactive";

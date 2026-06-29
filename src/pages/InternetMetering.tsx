@@ -31,6 +31,11 @@ import "../styles/ema-table-data-no-box-hard.css";
 import "../styles/ema-action-icon-button-force.css";
 import "../styles/ema-action-icon-button-spacing-final.css";
 import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-special-operational-table-override.css";
+import "../styles/ema-table-container-spacing-final.css";
+import "../styles/internet-metering-table-final-fix.css";
+import { useEffect as useInternetMeteringTableRouteEffect } from "react";
 
 type NodeKind = 'all' | 'folder' | 'device' | 'url-folder' | 'url';
 
@@ -695,7 +700,7 @@ type CompactPaginationProps = {
 };
 
 function CompactPagination({ currentPage, totalPages, onPageChange, label, className }: CompactPaginationProps) {
-  const safeTotalPages = Math.max(1, totalPages || 1);
+const safeTotalPages = Math.max(1, totalPages || 1);
   const safeCurrentPage = Math.min(Math.max(1, currentPage || 1), safeTotalPages);
 
   const goToPage = (nextPage: number) => {
@@ -1021,6 +1026,19 @@ function DetailModal({ row, onClose }: { row: InternetUsageRow; onClose: () => v
 }
 
 export default function InternetMetering() {
+useInternetMeteringTableRouteEffect(() => {
+    document.body.classList.add("ema-route-internet-metering");
+    document.body.setAttribute("data-ema-route", "/internet-metering");
+
+    return () => {
+      document.body.classList.remove("ema-route-internet-metering");
+      if (document.body.getAttribute("data-ema-route") === "/internet-metering") {
+        document.body.removeAttribute("data-ema-route");
+      }
+    };
+  }, []);
+
+
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 

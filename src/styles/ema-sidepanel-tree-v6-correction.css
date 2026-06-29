@@ -1,0 +1,394 @@
+/* EMA SIDEPANEL TREE V6 CORRECTION
+   Fixes:
+   - old [class*="count"] accidentally styling "content" containers
+   - tree label pushed right / hidden
+   - hardware chevron still visible
+   - tree row layout not matching reference
+*/
+
+body.ema-sidepanel-v6-page {
+  --ema-tree-v6-w: 280px;
+  --ema-tree-v6-border: #dbe7f6;
+  --ema-tree-v6-line: #dce6f7;
+  --ema-tree-v6-text: #0f2746;
+  --ema-tree-v6-muted: #64748b;
+  --ema-tree-v6-purple: #635bff;
+  --ema-tree-v6-active: #f1f0ff;
+  --ema-tree-v6-hover: #f7f9ff;
+  --ema-tree-v6-badge: #eef2ff;
+}
+
+/* panel width same everywhere */
+body.ema-sidepanel-v6-page [data-ema-v6-panel="true"] {
+  width: var(--ema-tree-v6-w) !important;
+  min-width: var(--ema-tree-v6-w) !important;
+  max-width: var(--ema-tree-v6-w) !important;
+
+  min-height: calc(100vh - 130px) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  padding: 16px !important;
+
+  border: 1px solid var(--ema-tree-v6-border) !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.035) !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* title */
+body.ema-sidepanel-v6-page [data-ema-v6-panel="true"]::before {
+  content: "All Branches";
+  display: block;
+
+  margin: 0 0 12px !important;
+
+  color: var(--ema-tree-v6-text) !important;
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+}
+
+/* hide old module header */
+body.ema-sidepanel-v6-page [data-ema-v6-panel="true"] :is(
+  .panel-head,
+  .sidebar-head,
+  .sidebar-header,
+  .module-sidebar-head,
+  .ema-sidebar-panel-head,
+  .ema-sidebar-header,
+  .hardware-sidebar-head,
+  .software-sidebar-head,
+  .inventory-sidebar-head,
+  .tree-sidebar-head
+) {
+  display: none !important;
+}
+
+/* tree container */
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"] {
+  order: 20 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* reset nested boxes */
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"] :is(ul, li, li > div, li > span) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+
+  overflow: visible !important;
+}
+
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"] ul ul,
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"] .ema-sidebar-tree-children.is-nested {
+  margin-left: 17px !important;
+  padding-left: 11px !important;
+  border-left: 1px solid var(--ema-tree-v6-line) !important;
+}
+
+/* tree rows */
+body.ema-sidepanel-v6-page [data-ema-v6-row="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+
+  min-height: 27px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  gap: 7px !important;
+
+  padding: 5px 7px !important;
+  margin: 2px 0 !important;
+
+  border: 1px solid transparent !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--ema-tree-v6-text) !important;
+
+  font-family: Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif !important;
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  font-weight: 800 !important;
+
+  text-align: left !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+body.ema-sidepanel-v6-page [data-ema-v6-row="true"]:hover {
+  background: var(--ema-tree-v6-hover) !important;
+  border-color: #e1e8fb !important;
+}
+
+body.ema-sidepanel-v6-page [data-ema-v6-row="true"]:is(.active, .selected, .is-active, .is-selected, [aria-selected="true"]) {
+  background: var(--ema-tree-v6-active) !important;
+  border-color: #dedcff !important;
+  color: var(--ema-tree-v6-purple) !important;
+  box-shadow: inset 3px 0 0 var(--ema-tree-v6-purple) !important;
+}
+
+/* critical: undo old bad selector that hit classes like "content" */
+body.ema-sidepanel-v6-page [data-ema-v6-row="true"] :is(
+  [class*="content"],
+  [class*="Content"],
+  [class*="main"],
+  [class*="Main"],
+  [class*="label"],
+  [class*="Label"]
+) {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+
+  min-width: 0 !important;
+  width: auto !important;
+  height: auto !important;
+
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: inherit !important;
+
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit !important;
+}
+
+/* hide chevron / anak panah completely */
+body.ema-sidepanel-v6-page [data-ema-v6-chevron="true"],
+body.ema-sidepanel-v6-page [data-ema-v6-panel="true"] :is(
+  .lucide-chevron-right,
+  .lucide-chevron-down,
+  .lucide-chevron-left,
+  .lucide-chevron-up,
+  [class*="chevron"],
+  [class*="Chevron"],
+  [class*="expander"],
+  [class*="Expander"],
+  [class*="arrow"],
+  [class*="Arrow"]
+) {
+  display: none !important;
+
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* row icon: folder starts at left */
+body.ema-sidepanel-v6-page [data-ema-v6-icon="true"] {
+  flex: 0 0 13px !important;
+
+  width: 13px !important;
+  min-width: 13px !important;
+  max-width: 13px !important;
+
+  height: 13px !important;
+  min-height: 13px !important;
+  max-height: 13px !important;
+
+  display: inline-block !important;
+
+  margin: 0 !important;
+
+  color: var(--ema-tree-v6-purple) !important;
+  stroke: var(--ema-tree-v6-purple) !important;
+
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* label: must start after icon, not pushed right */
+body.ema-sidepanel-v6-page [data-ema-v6-label="true"] {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+
+  padding: 0 !important;
+
+  color: var(--ema-tree-v6-text) !important;
+
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* count only when runtime confirms numeric count */
+body.ema-sidepanel-v6-page [data-ema-v6-count="true"] {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+
+  min-width: 20px !important;
+  height: 18px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 6px !important;
+
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--ema-tree-v6-badge) !important;
+  color: var(--ema-tree-v6-muted) !important;
+
+  font-size: 9px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+/* if previous CSS styled every [class*="count"], neutralize non-numeric ones */
+body.ema-sidepanel-v6-page [data-ema-v6-row="true"] :is([class*="count"], [class*="badge"]):not([data-ema-v6-count="true"]) {
+  margin-left: 0 !important;
+
+  min-width: 0 !important;
+  width: auto !important;
+  height: auto !important;
+
+  padding: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: inherit !important;
+
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit !important;
+}
+
+/* search */
+body.ema-sidepanel-v6-page [data-ema-v6-search-row="true"] {
+  width: 100% !important;
+  height: 34px !important;
+
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 4px !important;
+
+  margin: 0 0 12px !important;
+  padding: 0 8px !important;
+
+  border: 1px solid var(--ema-tree-v6-border) !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-sidepanel-v6-page [data-ema-v6-search-input="true"] {
+  width: 100% !important;
+  height: 32px !important;
+
+  padding: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  color: var(--ema-tree-v6-text) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* Add New Folder bottom */
+body.ema-sidepanel-v6-page [data-ema-v6-add-folder="true"] {
+  order: 50 !important;
+
+  width: 100% !important;
+  height: 35px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  margin: 14px 0 0 !important;
+  padding: 0 10px !important;
+
+  border-radius: 5px !important;
+  border: 1px solid var(--ema-tree-v6-purple) !important;
+  background: #ffffff !important;
+  color: var(--ema-tree-v6-purple) !important;
+  box-shadow: none !important;
+
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+}
+
+/* scrollbar */
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"]::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"]::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}
+
+body.ema-sidepanel-v6-page [data-ema-v6-tree="true"]::-webkit-scrollbar-track {
+  background: transparent !important;
+}
