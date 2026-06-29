@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import EmaToast from '../components/common/EmaToast';
 import type { ButtonHTMLAttributes, CSSProperties, FormEvent, ReactNode } from 'react';
 
 import {
@@ -1539,7 +1540,7 @@ export default function ServiceDesk() {
   const [currentUser] = useState<AppUser>(() => getStoredUser());
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [formMode, setFormMode] = useState<FormMode>('create');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingLookups, setIsLoadingLookups] = useState(false);
@@ -1729,7 +1730,7 @@ export default function ServiceDesk() {
   }, [clientAssets, assetSearchTerm]);
 
   useEffect(() => {
-    void loadData();
+    void loadData(true);
     void ensureKnowledgeBaseLoaded(true);
   }, []);
 
@@ -4304,16 +4305,6 @@ export default function ServiceDesk() {
     '52px minmax(112px, .86fr) 106px minmax(132px, 1fr) minmax(96px, .72fr) minmax(220px, 1.55fr) 102px minmax(118px, .92fr) 104px 108px 104px';
   const ticketTableMinWidth = '100%';
 
-  if (isLoading) {
-    return (
-      <div className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4 d-grid place-items-center text-center">
-        <Loader2 className="ema-spin" size={28} />
-        <strong>Loading Service Desk</strong>
-        <span>Loading incident queue...</span>
-      </div>
-    );
-  }
-
   // Service Desk uses the existing Settings layout/classes.
   return (
     <main className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section="service-desk">
@@ -5455,28 +5446,7 @@ export default function ServiceDesk() {
 
 `}</style>
 
-      {toast && (
-        <div className={cn('ema-notice-card', `is-${toast.type}`)} role="status" aria-live="polite">
-          <i className="ema-notice-icon">
-            {toast.type === 'success' ? <CheckCircle2 size={16} /> : toast.type === 'error' ? <ShieldAlert size={16} /> : <Clock size={16} />}
-          </i>
-          <div className="ema-notice-body">
-            <strong className="ema-notice-title">
-              {toast.type === 'success'
-                ? 'Success'
-                : toast.type === 'error'
-                  ? 'Action failed'
-                  : toast.type === 'warning'
-                    ? 'Attention'
-                    : 'Information'}
-            </strong>
-            <span className="ema-notice-message">{toast.message}</span>
-          </div>
-          <button className="ema-notice-close" type="button" onClick={() => setToast(null)} aria-label="Dismiss notification">
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      {toast && <EmaToast toast={toast} onClose={() => setToast(null)} />}
 
       {confirmDialog && typeof document !== 'undefined' && createPortal(
         <main

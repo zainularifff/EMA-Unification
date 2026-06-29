@@ -28,6 +28,8 @@ import "./styles/module-ui-fixes.css";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import "./styles/ema-toast-standard.css";
+import "./styles/ema-global-numbering-fix.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

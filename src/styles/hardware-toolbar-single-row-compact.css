@@ -1,0 +1,207 @@
+/* Hardware toolbar single-row + compact top UI fix */
+
+/* ===== Compact top hero ===== */
+.hardware-module-root .hardware-hero-card {
+  padding: 14px 16px !important;
+  gap: 12px !important;
+  min-height: auto !important;
+  align-items: start !important;
+}
+
+.hardware-module-root .hardware-hero-copy {
+  gap: 4px !important;
+}
+
+.hardware-module-root .hardware-hero-copy .eyebrow {
+  font-size: 11px !important;
+  letter-spacing: 0.12em !important;
+}
+
+.hardware-module-root .hardware-hero-copy h2 {
+  font-size: 26px !important;
+  line-height: 1.05 !important;
+  margin: 0 !important;
+}
+
+.hardware-module-root .hardware-hero-copy p {
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+  margin: 0 !important;
+}
+
+.hardware-module-root .hardware-hero-score {
+  gap: 10px !important;
+  align-items: stretch !important;
+}
+
+.hardware-module-root .hardware-kpi-card {
+  min-height: 64px !important;
+  padding: 8px 10px !important;
+  border-radius: 16px !important;
+}
+
+.hardware-module-root .hardware-kpi-content {
+  gap: 3px !important;
+}
+
+.hardware-module-root .hardware-kpi-icon {
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 14px !important;
+}
+
+.hardware-module-root .hardware-kpi-label {
+  font-size: 9px !important;
+  line-height: 1.1 !important;
+}
+
+.hardware-module-root .hardware-kpi-value {
+  font-size: 16px !important;
+  line-height: 1.1 !important;
+}
+
+.hardware-module-root .hardware-kpi-note {
+  font-size: 9px !important;
+  line-height: 1.1 !important;
+}
+
+/* ===== Toolbar in ONE ROW ===== */
+.hardware-module-root .hardware-registry-toolbar.hardware-registry-toolbar-stacked {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+.hardware-module-root .hardware-scan-command-row {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  display: grid !important;
+  grid-template-columns:
+    auto
+    auto
+    auto
+    minmax(260px, 1fr)
+    42px
+    auto !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+.hardware-module-root .hardware-registry-filters.hardware-registry-filter-row {
+  flex: 0 0 auto !important;
+
+  display: grid !important;
+  grid-template-columns: 216px 216px auto !important;
+  gap: 10px !important;
+  align-items: end !important;
+  margin: 0 !important;
+}
+
+/* ===== Compact buttons / search / dropdown ===== */
+.hardware-module-root .hardware-command-btn,
+.hardware-module-root .hardware-icon-btn,
+.hardware-module-root .hardware-clear-filters-btn {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+  gap: 7px !important;
+}
+
+.hardware-module-root .hardware-icon-btn {
+  width: 42px !important;
+  min-width: 42px !important;
+  padding: 0 !important;
+}
+
+.hardware-module-root .hardware-search-box.small.hardware-toolbar-search {
+  height: 38px !important;
+  min-height: 38px !important;
+  border-radius: 14px !important;
+  padding: 0 12px !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.hardware-module-root .hardware-search-box.small.hardware-toolbar-search input {
+  font-size: 12px !important;
+}
+
+.hardware-module-root .hardware-filter-group {
+  gap: 4px !important;
+  min-width: 0 !important;
+}
+
+.hardware-module-root .hardware-filter-group label {
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+  margin: 0 0 2px !important;
+}
+
+.hardware-module-root .hardware-dropdown-trigger,
+.hardware-module-root .hardware-filter-group button,
+.hardware-module-root .hardware-filter-group [role="button"] {
+  min-height: 38px !important;
+  height: 38px !important;
+  border-radius: 14px !important;
+  font-size: 12px !important;
+}
+
+/* ===== Registry card / top spacing smaller ===== */
+.hardware-module-root .hardware-registry-card {
+  gap: 12px !important;
+}
+
+.hardware-module-root .hardware-registry-subhead {
+  padding: 0 14px 4px !important;
+}
+
+.hardware-module-root .hardware-registry-subhead span {
+  font-size: 11px !important;
+}
+
+/* ===== Scrollbar nice if one-row overflows ===== */
+.hardware-module-root .hardware-registry-toolbar.hardware-registry-toolbar-stacked::-webkit-scrollbar {
+  height: 8px !important;
+}
+
+.hardware-module-root .hardware-registry-toolbar.hardware-registry-toolbar-stacked::-webkit-scrollbar-thumb {
+  background: #c8d6ea !important;
+  border-radius: 999px !important;
+}
+
+.hardware-module-root .hardware-registry-toolbar.hardware-registry-toolbar-stacked::-webkit-scrollbar-track {
+  background: #eef4fb !important;
+  border-radius: 999px !important;
+}
+
+/* ===== Fallback for smaller width ===== */
+@media (max-width: 1500px) {
+  .hardware-module-root .hardware-scan-command-row {
+    grid-template-columns:
+      auto
+      auto
+      auto
+      minmax(220px, 1fr)
+      42px
+      auto !important;
+  }
+
+  .hardware-module-root .hardware-registry-filters.hardware-registry-filter-row {
+    grid-template-columns: 190px 190px auto !important;
+  }
+}
+
+@media (max-width: 1280px) {
+  .hardware-module-root .hardware-registry-toolbar.hardware-registry-toolbar-stacked {
+    align-items: stretch !important;
+  }
+}

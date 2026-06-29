@@ -16,6 +16,7 @@ import {
   settingsUsers,
 } from "../services/settingsService";
 import "../styles/settings-module-control-scroll-fix.css";
+import "../styles/ema-toast-standard.css";
 
 type SectionKey = "roles" | "users" | "modules" | "access" | "incident" | "notification" | "softwarePolicy" | "audit" | "pricing" | "aging" | "policy" | "risk" | "resources";
 type RoleStatus = "Active" | "Review" | "Locked" | "Inactive";

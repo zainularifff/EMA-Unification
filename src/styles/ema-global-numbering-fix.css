@@ -1,0 +1,145 @@
+/* EMA global table numbering fix */
+/* Standardize NO column across Hardware, Software, Network, ServiceDesk, Settings, TaskList, Restrictions, Patch, etc. */
+
+:root {
+  --ema-no-col-width: 54px;
+}
+
+/* Header NO column */
+.ema-standard-table [data-column="no"],
+.ema-standard-table .no-column,
+.ema-standard-table .col-no,
+.ema-standard-table .table-no,
+.ema-standard-table th:first-child,
+.ema-table th:first-child,
+.uam-table th:first-child,
+.settings-standard-table th:first-child,
+.audit-standard-table th:first-child,
+.service-desk-table th:first-child,
+.hardware-table th:first-child,
+.software-table th:first-child,
+.network-table th:first-child {
+  width: var(--ema-no-col-width) !important;
+  min-width: var(--ema-no-col-width) !important;
+  max-width: var(--ema-no-col-width) !important;
+  text-align: center !important;
+}
+
+/* Body NO column */
+.ema-standard-table td:first-child,
+.ema-table td:first-child,
+.uam-table td:first-child,
+.settings-standard-table td:first-child,
+.audit-standard-table td:first-child,
+.service-desk-table td:first-child,
+.hardware-table td:first-child,
+.software-table td:first-child,
+.network-table td:first-child {
+  width: var(--ema-no-col-width) !important;
+  min-width: var(--ema-no-col-width) !important;
+  max-width: var(--ema-no-col-width) !important;
+  text-align: center !important;
+}
+
+/* Main fix: remove oval/bubble look from numbering */
+.row-index-pill,
+.uam-row-index,
+.settings-row-index,
+.audit-row-index,
+.table-row-index,
+.table-index-pill,
+.ema-row-index,
+.ema-row-number,
+.row-number-pill,
+.row-number,
+.no-pill,
+.index-pill {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+
+  display: inline-block !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+  letter-spacing: 0.01em !important;
+  text-align: center !important;
+}
+
+/* Kill pseudo bubble decorations */
+.row-index-pill::before,
+.row-index-pill::after,
+.uam-row-index::before,
+.uam-row-index::after,
+.settings-row-index::before,
+.settings-row-index::after,
+.audit-row-index::before,
+.audit-row-index::after,
+.table-row-index::before,
+.table-row-index::after,
+.ema-row-index::before,
+.ema-row-index::after,
+.ema-row-number::before,
+.ema-row-number::after,
+.row-number-pill::before,
+.row-number-pill::after,
+.index-pill::before,
+.index-pill::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Div/grid table rows: first cell consistent */
+[class*="row"] > .row-index-pill:first-child,
+[class*="row"] > .uam-row-index:first-child,
+[class*="row"] > .settings-row-index:first-child,
+[class*="row"] > .audit-row-index:first-child,
+[class*="row"] > .table-row-index:first-child,
+[class*="row"] > .ema-row-index:first-child,
+[class*="row"] > .ema-row-number:first-child {
+  align-self: center !important;
+  justify-self: center !important;
+}
+
+/* Grid rows commonly used by Settings/ServiceDesk */
+.uam-table-row,
+.settings-standard-row,
+.audit-standard-row,
+.service-desk-row,
+.hardware-row,
+.software-row,
+.network-row {
+  --ema-row-index-width: var(--ema-no-col-width);
+}
+
+/* Prevent old CSS from drawing blue outline around row number */
+html body .row-index-pill,
+html body .uam-row-index,
+html body .settings-row-index,
+html body .audit-row-index,
+html body .table-row-index,
+html body .ema-row-index,
+html body .ema-row-number {
+  outline: none !important;
+}
+
+/* Keep KPI badges/status pills unaffected */
+.status-pill,
+.badge,
+.ema-status-pill,
+.itops-pro-pill,
+.uam-status-pill,
+.settings-status-pill {
+  width: auto;
+}

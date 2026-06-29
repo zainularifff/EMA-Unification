@@ -653,9 +653,49 @@ function formatPercent(value: unknown, digits = 1) {
 
 function formatDateLabel(value: unknown) {
   if (!value) return '-';
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString('en-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toLocaleString('en-MY', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  const text = String(value).trim();
+  if (!text || text === '-') return '-';
+
+  // Dashboard DB datetime is already local DB time.
+  // Do not let browser convert it again to Malaysia time.
+  const sqlMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/);
+
+  if (sqlMatch) {
+    const year = sqlMatch[1];
+    const month = sqlMatch[2];
+    const day = sqlMatch[3];
+    const hourText = sqlMatch[4];
+    const minuteText = sqlMatch[5];
+
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const hour24 = Number(hourText);
+    const hour12 = hour24 % 12 || 12;
+    const period = hour24 >= 12 ? 'pm' : 'am';
+
+    return `${day} ${months[Math.max(0, Math.min(11, Number(month) - 1))]} ${year}, ${String(hour12).padStart(2, '0')}:${minuteText} ${period}`;
+  }
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+
+  return date.toLocaleString('en-MY', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 
@@ -684,6 +724,82 @@ function readArrayFromRecord(record: Record<string, unknown> | undefined, keys: 
   return [] as unknown[];
 }
 
+function looksLikeTechnicalDeviceId(value: unknown) {
+  const text = String(value || '').trim();
+
+  if (!text) return false;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return true;
+  if (/^[a-z0-9_-]{24,}$/i.test(text) && !/\s/.test(text)) return true;
+
+  return false;
+}
+
+function pickGeoDeviceDisplayName(record: Record<string, unknown>) {
+  const name = firstTextValue(record, [
+    'deviceName',
+    'DeviceName',
+    'realDeviceName',
+    'RealDeviceName',
+    'objectDeviceName',
+    'ObjectDeviceName',
+    'Object_DeviceName',
+    'computerName',
+    'ComputerName',
+    'hostname',
+    'Hostname',
+    'HostName',
+    'displayName',
+    'DisplayName',
+    'name',
+    'Name',
+  ]);
+
+  const id = firstTextValue(record, [
+    'deviceId',
+    'DeviceID',
+    'Object_DeviceID',
+    'assetId',
+    'AssetID',
+    'serialNumber',
+    'SerialNumber',
+    'id',
+    'ID',
+  ], '-');
+
+  if (name && !looksLikeTechnicalDeviceId(name)) return name;
+  if (name && id && name !== id) return name;
+
+  return id || name || '-';
+}
+
+function normalizeSoftwareInventoryRows(rows: unknown): SoftwareInventoryRow[] {
+  if (!Array.isArray(rows)) return [];
+
+  return rows.map((row) => {
+    const record = (row || {}) as Record<string, unknown>;
+    const lastScanRaw = firstRawValue(record, ['lastScan', 'LastScan', 'searchDate', 'SearchDate', 'updatedAt', 'UpdatedAt']);
+
+    return {
+      softwareName: firstTextValue(record, ['softwareName', 'SoftwareName', 'name', 'Name', 'SW_Name', 'SWUNI_Name'], '-'),
+      category: firstTextValue(record, ['category', 'Category', 'categoryName', 'CategoryName', 'productGroup', 'ProductGroup'], 'Unclassified'),
+      classification: firstTextValue(record, ['classification', 'Classification', 'complianceStatus', 'ComplianceStatus'], ''),
+      productGroup: firstTextValue(record, ['productGroup', 'ProductGroup', 'category', 'Category', 'categoryName', 'CategoryName'], ''),
+      deviceId: firstTextValue(record, ['deviceId', 'DeviceID', 'Object_DeviceID', 'assetId', 'AssetID']),
+      deviceName: firstTextValue(record, ['deviceName', 'DeviceName', 'computerName', 'ComputerName', 'hostname', 'HostName'], firstTextValue(record, ['deviceId', 'DeviceID'], '')),
+      branch: firstTextValue(record, ['branch', 'Branch', 'department', 'Department', 'objectFullName', 'Object_Full_Name'], ''),
+      version: firstTextValue(record, ['version', 'Version', 'displayVersion', 'DisplayVersion']),
+      publisher: firstTextValue(record, ['publisher', 'Publisher', 'companyName', 'CompanyName']),
+      lastScan: lastScanRaw ? formatDateLabel(lastScanRaw) : '',
+      lifecycleStatus: firstTextValue(record, ['lifecycleStatus', 'LifecycleStatus', 'supportStatus', 'SupportStatus']),
+      supportStatus: firstTextValue(record, ['supportStatus', 'SupportStatus']),
+      eolDate: firstTextValue(record, ['eolDate', 'EolDate', 'EOLDate']),
+      eosDate: firstTextValue(record, ['eosDate', 'EosDate', 'EOSDate']),
+      riskLevel: firstTextValue(record, ['riskLevel', 'RiskLevel', 'risk', 'Risk']),
+      recommendation: firstTextValue(record, ['recommendation', 'Recommendation', 'action', 'Action']),
+    };
+  }).filter((row) => row.softwareName && row.softwareName !== '-');
+}
+
 function normalizeGeoDeviceRows(rows: unknown, defaultSignal = ''): GeoDeviceRow[] {
   if (!Array.isArray(rows)) return [];
 
@@ -694,7 +810,7 @@ function normalizeGeoDeviceRows(rows: unknown, defaultSignal = ''): GeoDeviceRow
     const lastSeenRaw = firstRawValue(record, ['lastSeen', 'LastSeen', 'locationTime', 'LocationTime', 'time', 'Time', 'updatedAt', 'UpdatedAt', 'DeviceTimeStamp']);
 
     return {
-      deviceName: firstTextValue(record, ['deviceName', 'DeviceName', 'computerName', 'ComputerName', 'hostname', 'HostName', 'name', 'Name'], firstTextValue(record, ['deviceId', 'DeviceID', 'Object_DeviceID', 'serialNumber', 'SerialNumber'], '-')),
+      deviceName: pickGeoDeviceDisplayName(record),
       deviceId: firstTextValue(record, ['deviceId', 'DeviceID', 'Object_DeviceID', 'assetId', 'AssetID', 'id', 'ID']),
       platform: firstTextValue(record, ['platform', 'Platform', 'platformType', 'PlatformType', 'osName', 'OSName']),
       department: firstTextValue(record, ['department', 'Department', 'objectFullName', 'Object_Full_Name', 'Object_Rel_Name', 'group', 'Group']),
@@ -901,11 +1017,20 @@ function normalizeDashboardData(raw: Partial<ItOpsDashboardData> | null | undefi
     patchDepartments: Array.isArray(data.patchDepartments) ? data.patchDepartments : [],
     activeAlerts: Array.isArray(data.activeAlerts) ? data.activeAlerts.map((row) => ({ ...row, severity: normalizeSeverity(row.severity) })) : [],
     problematicSystems: Array.isArray(data.problematicSystems) ? data.problematicSystems : [],
-    serviceDesk: {
-      ...EMPTY_SERVICE_DESK,
-      ...(data.serviceDesk || {}),
-      priorityBreakdown: Array.isArray(data.serviceDesk?.priorityBreakdown) ? data.serviceDesk.priorityBreakdown : EMPTY_SERVICE_DESK.priorityBreakdown,
-    },
+    serviceDesk: (() => {
+      const raw = data.serviceDesk || {};
+      const pendingTickets = Math.max(0, numberOrFallback(raw.pendingTickets ?? (raw as any).openIncidents ?? (raw as any).openTickets, 0));
+      const rawOverdue = Math.max(0, numberOrFallback(raw.overdueTickets, 0));
+      const overdueTickets = pendingTickets > 0 ? Math.min(rawOverdue, pendingTickets) : 0;
+
+      return {
+        ...EMPTY_SERVICE_DESK,
+        ...raw,
+        pendingTickets,
+        overdueTickets,
+        priorityBreakdown: Array.isArray(raw.priorityBreakdown) ? raw.priorityBreakdown : EMPTY_SERVICE_DESK.priorityBreakdown,
+      };
+    })(),
     security: { ...EMPTY_SECURITY, ...(data.security || {}) },
     departmentRows: Array.isArray(data.departmentRows) ? data.departmentRows : [],
     hardware: (() => {
@@ -920,14 +1045,28 @@ function normalizeDashboardData(raw: Partial<ItOpsDashboardData> | null | undefi
         endpointRows,
       };
     })(),
-    software: {
-      ...EMPTY_SOFTWARE_SUMMARY,
-      ...(data.software || {}),
-      topCategories: Array.isArray(data.software?.topCategories) ? data.software.topCategories : [],
-      classificationBreakdown: Array.isArray(data.software?.classificationBreakdown) ? data.software.classificationBreakdown : [],
-      lifecycleWatch: Array.isArray(data.software?.lifecycleWatch) ? data.software.lifecycleWatch : [],
-      softwareRows: Array.isArray(data.software?.softwareRows) ? data.software.softwareRows : [],
-    },
+    software: (() => {
+      const softwareRecord = (data.software || {}) as Partial<SoftwareSummary> & Record<string, unknown>;
+      const softwareRows = normalizeSoftwareInventoryRows(readArrayFromRecord(softwareRecord, [
+        'softwareRows',
+        'inventoryRows',
+        'detailRows',
+        'details',
+        'records',
+        'rows',
+        'installedSoftwareRows',
+        'softwareInventoryRows',
+      ]));
+
+      return {
+        ...EMPTY_SOFTWARE_SUMMARY,
+        ...softwareRecord,
+        topCategories: Array.isArray(softwareRecord.topCategories) ? softwareRecord.topCategories : [],
+        classificationBreakdown: Array.isArray(softwareRecord.classificationBreakdown) ? softwareRecord.classificationBreakdown : [],
+        lifecycleWatch: Array.isArray(softwareRecord.lifecycleWatch) ? softwareRecord.lifecycleWatch : [],
+        softwareRows,
+      };
+    })(),
     network: {
       ...EMPTY_NETWORK_SUMMARY,
       ...(data.network || {}),
@@ -2569,9 +2708,34 @@ export default function ITOperationsDashboard() {
     const selected = String(item || '').trim().toLowerCase();
     const rows = Array.isArray(software.softwareRows) ? software.softwareRows : [];
 
-    if (!selected || selected.includes('install') || selected.includes('unique software')) return rows;
+    const fallbackSummaryRows = rows.length > 0 ? rows : [
+      ...(software.topCategories || []).map((row) => ({
+        softwareName: row.name,
+        category: row.name,
+        classification: 'Category summary',
+        productGroup: row.name,
+        deviceName: `${formatNumber(row.value)} install(s)`,
+        branch: 'All Branches',
+        lifecycleStatus: 'Inventory',
+        riskLevel: 'Review',
+        recommendation: 'Backend returned category count without detailed software rows.',
+      })),
+      ...(software.classificationBreakdown || []).map((row) => ({
+        softwareName: row.name,
+        category: 'Classification',
+        classification: row.name,
+        productGroup: row.name,
+        deviceName: `${formatNumber(row.value)} record(s)`,
+        branch: 'All Branches',
+        lifecycleStatus: 'Inventory',
+        riskLevel: 'Review',
+        recommendation: 'Backend returned classification count without detailed software rows.',
+      })),
+    ] as SoftwareInventoryRow[];
 
-    return rows.filter((row) => {
+    if (!selected || selected.includes('install') || selected.includes('unique software')) return fallbackSummaryRows;
+
+    return fallbackSummaryRows.filter((row) => {
       const values = [
         row.softwareName,
         row.category,

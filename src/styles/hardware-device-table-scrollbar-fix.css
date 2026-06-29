@@ -1,0 +1,102 @@
+/* Hardware Device Registry - remove ugly per-row/cell scrollbar */
+
+/* Table itself should not show internal vertical scrollbar */
+.hardware-module-root .hardware-device-table {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  scrollbar-width: none !important;
+}
+
+.hardware-module-root .hardware-device-table::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Row must not scroll */
+.hardware-module-root .hardware-device-table-row {
+  overflow: visible !important;
+  scrollbar-width: none !important;
+}
+
+.hardware-module-root .hardware-device-table-row::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Cell must never create own scrollbar */
+.hardware-module-root .hardware-device-table-row .user-cell {
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+  max-height: none !important;
+}
+
+.hardware-module-root .hardware-device-table-row .user-cell::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Anything inside cell should be clipped cleanly, not scrollable */
+.hardware-module-root .hardware-device-table-row .user-cell *,
+.hardware-module-root .hardware-device-table-row .user-cell span,
+.hardware-module-root .hardware-device-table-row .user-cell small,
+.hardware-module-root .hardware-device-table-row .user-cell strong,
+.hardware-module-root .hardware-device-table-row .user-cell div {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+}
+
+.hardware-module-root .hardware-device-table-row .user-cell *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* One-line clean text in normal columns */
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(3),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(4),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(5),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(6),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(7) {
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Network/IP column */
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(7) {
+  align-items: flex-start !important;
+  justify-content: center !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  line-height: 1.1 !important;
+}
+
+/* Keep row height clean */
+.hardware-module-root .hardware-device-table-row:not(.head) {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+}
+
+.hardware-module-root .hardware-device-table-row:not(.head) .user-cell {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+}
+
+/* Device column can show name + branch only */
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(2) small:nth-of-type(n+2) {
+  display: none !important;
+}
+
+/* Allow page/main content to scroll normally, not cells */
+.hardware-module-root,
+.hardware-module-root .hardware-main-grid,
+.hardware-module-root .hardware-registry-card {
+  scrollbar-width: auto !important;
+}

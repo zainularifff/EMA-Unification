@@ -1,5 +1,6 @@
 ﻿// Rechecked v4: removed geolocation, latitude, longitude, and location fields from Access Context.
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   CheckCircle,
@@ -28,6 +29,15 @@ import {
   X,
 } from "lucide-react";
 
+import "../styles/hardware-toast-ema-fix.css";
+import "../styles/hardware-statistics-table-fix.css";
+import "../styles/hardware-statistics-pagination-fix.css";
+import "../styles/hardware-toolbar-single-row-compact.css";
+import "../styles/hardware-device-table-compact-fix.css";
+import "../styles/hardware-device-table-clean-final.css";
+import "../styles/hardware-device-table-scrollbar-fix.css";
+import "../styles/hardware-detail-modal-center-fix.css";
+import "../styles/hardware-detail-modal-portal-final.css";
 
 type StatusType = "Online" | "Locked" | "Stale Sync" | "Offline";
 type KpiFilter = "all" | "recent" | "stale" | "locked" | "running";
@@ -2174,8 +2184,8 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
     { key: "timeline", label: "Timeline" },
   ];
 
-  return (
-    <div className="hardware-detail-drawer-overlay hardware-detail-form-overlay">
+  const detailModal = (
+    <div className="hardware-detail-drawer-overlay hardware-detail-form-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <aside className="hardware-detail-drawer hardware-detail-form-modal" onClick={(event) => event.stopPropagation()}>
         <div className="hardware-detail-drawer-header">
           <div className="hardware-detail-title-wrap">
@@ -2417,6 +2427,8 @@ function DeviceDetailsDrawer({ device, isOpen, onClose }: { device: Device; isOp
       </aside>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(detailModal, document.body) : detailModal;
 }
 
 function FolderTree({
@@ -2594,6 +2606,7 @@ export default function HardwareInventory() {
   const [statisticDetail, setStatisticDetail] = useState<StatisticDetailState | null>(null);
   const [statisticDetailLoading, setStatisticDetailLoading] = useState(false);
   const [statisticDetailError, setStatisticDetailError] = useState("");
+  const [statisticPage, setStatisticPage] = useState(1);
   const [hardwareScanLoading, setHardwareScanLoading] = useState(false);
 
   const showToast = useCallback((type: ToastType, title: string, message: string) => {
@@ -3867,6 +3880,50 @@ export default function HardwareInventory() {
     const rows = statisticApiData?.rows || [];
     const selectedTitle = statisticApiData?.title || STATISTIC_TITLE_MAP[selectedStatistic] || "Hardware Statistics";
     const selectedCode = selectedStatistic ? selectedStatistic.toUpperCase() : "SELECT A CATEGORY";
+    const statisticPageSize = 10;
+
+    const getStatisticSafePage = (totalItems: number) => {
+      const totalPages = Math.max(1, Math.ceil(totalItems / statisticPageSize));
+      return Math.min(Math.max(1, statisticPage), totalPages);
+    };
+
+    const paginateStatisticRows = <T,>(sourceRows: T[]) => {
+      const safePage = getStatisticSafePage(sourceRows.length);
+      const startIndex = (safePage - 1) * statisticPageSize;
+      return sourceRows.slice(startIndex, startIndex + statisticPageSize);
+    };
+
+    const renderStatisticPagination = (totalItems: number) => {
+      const totalPages = Math.max(1, Math.ceil(totalItems / statisticPageSize));
+      if (totalItems <= statisticPageSize) return null;
+
+      const safePage = getStatisticSafePage(totalItems);
+      const startItem = totalItems === 0 ? 0 : (safePage - 1) * statisticPageSize + 1;
+      const endItem = Math.min(totalItems, safePage * statisticPageSize);
+
+      return (
+        <div className="hardware-stat-pagination uam-pagination global-style">
+          <div className="uam-page-summary">Page {safePage} / {totalPages}</div>
+          <div className="uam-pagination-info">Showing {startItem}-{endItem} of {totalItems} records</div>
+          <div className="uam-pagination-controls global-style" aria-label="Hardware statistics pagination">
+            <button className="uam-page-icon" type="button" onClick={() => setStatisticPage(1)} disabled={safePage <= 1} aria-label="First page">
+              <ChevronsLeft size={13} />
+            </button>
+            <button className="uam-page-icon" type="button" onClick={() => setStatisticPage((current) => Math.max(1, current - 1))} disabled={safePage <= 1} aria-label="Previous page">
+              <ChevronLeft size={13} />
+            </button>
+            <span className="uam-page-current">{safePage}</span>
+            <button className="uam-page-icon" type="button" onClick={() => setStatisticPage((current) => Math.min(totalPages, current + 1))} disabled={safePage >= totalPages} aria-label="Next page">
+              <ChevronRight size={13} />
+            </button>
+            <button className="uam-page-icon" type="button" onClick={() => setStatisticPage(totalPages)} disabled={safePage >= totalPages} aria-label="Last page">
+              <ChevronsRight size={13} />
+            </button>
+          </div>
+        </div>
+      );
+    };
+
 
     const emptyState = (title: string, message: string) => (
       <div className="flex items-center justify-center h-64 text-slate-400">
@@ -3953,7 +4010,7 @@ export default function HardwareInventory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {rows.map((row, index) => (
+                {paginateStatisticRows(rows).map((row, index) => (
                   <tr key={`conn-list-${index}`} className="hover:bg-blue-50/30 transition-colors">
                     {connectionListColumns.map((column) => (
                       <td key={`${index}-${column.label}`} className={`px-3 py-2 text-[10px] whitespace-nowrap ${column.label.includes("IP") || column.label.includes("MAC") ? "text-slate-500 font-mono" : "text-slate-600"} ${column.label === "Username" ? "font-medium text-slate-900" : ""}`}>
@@ -3978,7 +4035,7 @@ export default function HardwareInventory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map((row, index) => {
+              {paginateStatisticRows(rows).map((row, index) => {
                 const version = readHardwareText(row, ["Client Version", "ClientVersion", "clientVersion", "Version", "TCAVersion", "Items", "Item", "column1"]);
                 const count = readHardwareNumber(row, ["CCount", "Count", "Cnt", "Total", "", "column2", "column3"], getStatisticCount(row));
                 return (
@@ -4015,7 +4072,7 @@ export default function HardwareInventory() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {rows.map((row, index) => {
+                  {paginateStatisticRows(rows).map((row, index) => {
                     const fieldName = getChangedItemFieldName(row);
                     const count = getChangedItemFieldCount(row);
                     return (
@@ -4037,7 +4094,7 @@ export default function HardwareInventory() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {rows.map((row, index) => (
+                  {paginateStatisticRows(rows).map((row, index) => (
                     <tr key={`changed-${index}`} className="hover:bg-blue-50/30 transition-colors">
                       {fixedChangedItemColumns.map((col) => (
                         <td key={`${index}-${col}`} className={`px-3 py-2 text-[10px] ${col.includes("IP") ? "font-mono" : ""}`}>
@@ -4120,7 +4177,7 @@ export default function HardwareInventory() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {distributionRows.map(({ row, index, item, rawValue, count }) => {
+                {paginateStatisticRows(distributionRows).map(({ row, index, item, rawValue, count }) => {
                   const rawPercentage = getStatisticPercentage(row, count, totalCount);
                   const percentage = Number.isFinite(rawPercentage) ? rawPercentage.toFixed(1) : "0.0";
                   const barWidth = `${Math.max(0, Math.min(100, Number(percentage) || 0))}%`;
@@ -4223,7 +4280,7 @@ export default function HardwareInventory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map((row, index) => (
+              {paginateStatisticRows(rows).map((row, index) => (
                 <tr key={`report-inventory-${index}`} className="hover:bg-blue-50/30 transition-colors">
                   {reportInventoryColumns.map((column) => (
                     <td key={`${index}-${column.label}`} className={`px-3 py-2 text-[10px] ${column.label.includes("IP") ? "text-slate-500 font-mono" : column.label === "Username" ? "font-medium text-slate-900" : "text-slate-600"}`}>
@@ -4256,7 +4313,7 @@ export default function HardwareInventory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {reportRows.map(({ index, item, workgroup }) => (
+              {paginateStatisticRows(reportRows).map(({ index, item, workgroup }) => (
                 <tr key={`report-${index}`} className="hover:bg-blue-50/30 transition-colors">
                   <td className="px-3 py-2 text-[10px] font-medium text-slate-900">{item}</td>
                   <td className="px-3 py-2 text-slate-600 text-[10px]">{workgroup}</td>
@@ -4287,6 +4344,7 @@ export default function HardwareInventory() {
           <div className="hardware-stat-table-scroll hardware-stat-table-scroll-inventory-layout">
             {renderStatisticTable()}
           </div>
+          {selectedStatistic && !statisticLoading && !statisticError && rows.length > statisticPageSize && renderStatisticPagination(rows.length)}
         </div>
       </div>
     );
@@ -6152,18 +6210,39 @@ export default function HardwareInventory() {
       </div>
 
       <DeviceDetailsDrawer device={detailDevice} isOpen={hasDetailDevice} onClose={closeDeviceDetails} />
+      {toast && typeof document !== "undefined" && createPortal(
+        (() => {
+          const toastTone = toast.type === "delete" ? "error" : toast.type;
+          const ToastIcon =
+            toast.type === "success"
+              ? CheckCircle
+              : toast.type === "delete"
+                ? Trash2
+                : AlertCircle;
 
-      {toast && (
-        <div className={`hardware-toast hardware-toast-${toast.type}`} role="status">
-          <div className="hardware-toast-icon">{toast.type === "success" ? <CheckCircle size={18} /> : toast.type === "delete" ? <Trash2 size={18} /> : <AlertCircle size={18} />}</div>
-          <div>
-            <strong>{toast.title}</strong>
-            <span>{toast.message}</span>
-          </div>
-          <button type="button" onClick={() => setToast(null)} aria-label="Close notification">
-            <X size={15} />
-          </button>
-        </div>
+          return (
+            <div className={"ema-notice-card is-" + toastTone} role="status" aria-live="polite">
+              <div className="ema-notice-icon" aria-hidden="true">
+                <ToastIcon size={15} />
+              </div>
+
+              <div className="ema-notice-body">
+                <strong className="ema-notice-title">{toast.title}</strong>
+                <span className="ema-notice-message">{toast.message}</span>
+              </div>
+
+              <button
+                type="button"
+                className="ema-notice-close"
+                onClick={() => setToast(null)}
+                aria-label="Close notification"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          );
+        })(),
+        document.body
       )}
 
       {activeModal === "addFolder" && (

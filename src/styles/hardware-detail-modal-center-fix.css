@@ -1,0 +1,104 @@
+/* Hardware Device Details modal center fix */
+
+/* Force Device Details overlay to use full viewport, not content/sidebar width */
+html body .hardware-detail-drawer-overlay.hardware-detail-form-overlay,
+html body .hardware-module-root .hardware-detail-drawer-overlay.hardware-detail-form-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+
+  width: 100vw !important;
+  height: 100dvh !important;
+  min-width: 100vw !important;
+  min-height: 100dvh !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 18px !important;
+  margin: 0 !important;
+
+  background: rgba(15, 23, 42, 0.44) !important;
+  backdrop-filter: blur(7px) !important;
+  z-index: 2147483000 !important;
+
+  overflow: hidden !important;
+  transform: none !important;
+}
+
+/* Center the modal itself */
+html body .hardware-detail-drawer.hardware-detail-form-modal,
+html body .hardware-module-root .hardware-detail-drawer.hardware-detail-form-modal {
+  position: relative !important;
+  inset: auto !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+
+  width: min(920px, calc(100vw - 36px)) !important;
+  max-width: min(920px, calc(100vw - 36px)) !important;
+
+  height: auto !important;
+  max-height: calc(100dvh - 36px) !important;
+  min-height: 0 !important;
+
+  margin: 0 auto !important;
+  border-radius: 24px !important;
+  overflow: hidden !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Body scroll inside modal only */
+html body .hardware-detail-drawer .hardware-detail-body,
+html body .hardware-detail-form-modal .hardware-detail-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-height: calc(100dvh - 310px) !important;
+}
+
+/* Prevent old responsive rule padding-left from moving modal */
+@media (max-width: 1180px) {
+  html body .hardware-detail-drawer-overlay.hardware-detail-form-overlay,
+  html body .hardware-module-root .hardware-detail-drawer-overlay.hardware-detail-form-overlay {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  html body .hardware-detail-drawer.hardware-detail-form-modal,
+  html body .hardware-module-root .hardware-detail-drawer.hardware-detail-form-modal {
+    width: min(920px, calc(100vw - 36px)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html body .hardware-detail-drawer-overlay.hardware-detail-form-overlay,
+  html body .hardware-module-root .hardware-detail-drawer-overlay.hardware-detail-form-overlay {
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 12px !important;
+  }
+
+  html body .hardware-detail-drawer.hardware-detail-form-modal,
+  html body .hardware-module-root .hardware-detail-drawer.hardware-detail-form-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px) !important;
+  }
+
+  html body .hardware-detail-drawer .hardware-detail-body,
+  html body .hardware-detail-form-modal .hardware-detail-body {
+    max-height: calc(100dvh - 300px) !important;
+  }
+}

@@ -1,0 +1,186 @@
+/* Hardware Device Registry table compact final fix */
+
+/* Main table wrapper */
+.hardware-module-root .hardware-device-table {
+  width: 100% !important;
+  border-radius: 16px !important;
+  overflow: auto !important;
+  max-height: calc(100vh - 286px) !important;
+  background: #ffffff !important;
+  border: 1px solid #dbe7f6 !important;
+}
+
+/* Grid column sizing */
+.hardware-module-root .hardware-device-table-row {
+  display: grid !important;
+  grid-template-columns:
+    58px
+    minmax(250px, 1.35fr)
+    minmax(170px, 0.8fr)
+    minmax(250px, 1.15fr)
+    minmax(110px, 0.55fr)
+    minmax(160px, 0.7fr)
+    minmax(140px, 0.7fr) !important;
+  align-items: center !important;
+  column-gap: 14px !important;
+  min-height: 52px !important;
+}
+
+/* Header */
+.hardware-module-root .hardware-device-table-row.head {
+  min-height: 46px !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 8 !important;
+  background: #f5f8fc !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+}
+
+.hardware-module-root .hardware-device-table-row.head .user-cell {
+  padding: 0 10px !important;
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  color: #64748b !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+/* Body rows */
+.hardware-module-root .hardware-device-table-row:not(.head) {
+  min-height: 54px !important;
+  border-bottom: 1px solid #e7eef8 !important;
+  background: #ffffff !important;
+}
+
+.hardware-module-root .hardware-device-table-row:not(.head):hover {
+  background: #f8fbff !important;
+}
+
+.hardware-module-root .hardware-device-table-row .user-cell {
+  min-width: 0 !important;
+  padding: 7px 10px !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  color: #18345f !important;
+  overflow: hidden !important;
+}
+
+/* No column */
+.hardware-module-root .hardware-device-table-row .user-cell:first-child {
+  text-align: center !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  color: #64748b !important;
+}
+
+/* Device column */
+.hardware-module-root .hardware-device-table .hardware-device-name,
+.hardware-module-root .hardware-device-table .device-name,
+.hardware-module-root .hardware-device-table strong {
+  font-size: 12px !important;
+  line-height: 1.15 !important;
+  font-weight: 900 !important;
+  color: #10294f !important;
+}
+
+.hardware-module-root .hardware-device-table small,
+.hardware-module-root .hardware-device-table .device-meta,
+.hardware-module-root .hardware-device-table .hardware-device-meta {
+  display: block !important;
+  margin-top: 2px !important;
+  font-size: 10px !important;
+  line-height: 1.15 !important;
+  font-weight: 750 !important;
+  color: #64748b !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Status badge / last connected badge */
+.hardware-module-root .hardware-device-table .status-pill,
+.hardware-module-root .hardware-device-table .hardware-status-pill,
+.hardware-module-root .hardware-device-table .hardware-date-pill {
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 10px !important;
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  line-height: 24px !important;
+  font-weight: 900 !important;
+}
+
+/* Generic pill inside table */
+.hardware-module-root .hardware-device-table span[class*="pill"] {
+  font-size: 10px !important;
+  font-weight: 900 !important;
+}
+
+/* Prevent text from making rows too tall */
+.hardware-module-root .hardware-device-table-row .user-cell,
+.hardware-module-root .hardware-device-table-row .user-cell * {
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* Ellipsis selected columns */
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(2),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(3),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(4),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(6),
+.hardware-module-root .hardware-device-table-row .user-cell:nth-child(7) {
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Better scrollbar */
+.hardware-module-root .hardware-device-table::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.hardware-module-root .hardware-device-table::-webkit-scrollbar-thumb {
+  background: #b9c9de !important;
+  border-radius: 999px !important;
+}
+
+.hardware-module-root .hardware-device-table::-webkit-scrollbar-track {
+  background: #eef4fb !important;
+  border-radius: 999px !important;
+}
+
+/* Pagination closer and compact */
+.hardware-module-root .hardware-registry-card .uam-pagination,
+.hardware-module-root .hardware-registry-card .global-style.uam-pagination {
+  margin-top: 8px !important;
+  padding: 0 4px !important;
+  min-height: 34px !important;
+}
+
+.hardware-module-root .hardware-registry-card .uam-page-summary {
+  height: 30px !important;
+  padding: 0 12px !important;
+  font-size: 11px !important;
+  line-height: 30px !important;
+  border-radius: 999px !important;
+}
+
+.hardware-module-root .hardware-registry-card .uam-page-icon,
+.hardware-module-root .hardware-registry-card .uam-page-current {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
+}
+
+/* Keep main panel tighter */
+.hardware-module-root .hardware-registry-card {
+  padding-bottom: 12px !important;
+}
+
+.hardware-module-root .hardware-main-grid {
+  gap: 12px !important;
+}

@@ -1,0 +1,135 @@
+/* Hardware Statistics table fix */
+/* Prevent many-column hardware statistic/report tables from squeezing and breaking words. */
+
+.hardware-module-root .hardware-stat-table-card,
+.hardware-module-root .hardware-stat-table-card-inventory-layout {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+.hardware-module-root .hardware-stat-table-scroll,
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout,
+.hardware-module-root .hardware-stat-table-card .overflow-x-auto {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Main wide table behavior */
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout table,
+.hardware-module-root .hardware-stat-table-card-inventory-layout table,
+.hardware-module-root .hardware-stat-table-card .overflow-x-auto table {
+  width: max-content !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+/* Do not break header words letter-by-letter */
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout th,
+.hardware-module-root .hardware-stat-table-card-inventory-layout th,
+.hardware-module-root .hardware-stat-table-card .overflow-x-auto th {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  hyphens: none !important;
+
+  min-width: 112px !important;
+  max-width: 220px !important;
+
+  padding: 10px 12px !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  color: #526783 !important;
+  vertical-align: middle !important;
+  background: #f5f8fc !important;
+}
+
+/* Do not break values like computer name, workgroup, IP, MAC */
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout td,
+.hardware-module-root .hardware-stat-table-card-inventory-layout td,
+.hardware-module-root .hardware-stat-table-card .overflow-x-auto td {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  hyphens: none !important;
+
+  min-width: 112px !important;
+  max-width: 260px !important;
+
+  padding: 10px 12px !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  color: #18345f !important;
+  vertical-align: top !important;
+}
+
+/* Long text can be clipped nicely instead of forcing columns to shrink */
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout td,
+.hardware-module-root .hardware-stat-table-card-inventory-layout td {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Keep important identity columns readable */
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout th:first-child,
+.hardware-module-root .hardware-stat-table-card-inventory-layout th:first-child,
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout td:first-child,
+.hardware-module-root .hardware-stat-table-card-inventory-layout td:first-child {
+  min-width: 150px !important;
+  max-width: 190px !important;
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 3 !important;
+  background: #ffffff !important;
+  box-shadow: 8px 0 14px rgba(15, 23, 42, 0.05) !important;
+}
+
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout thead th:first-child,
+.hardware-module-root .hardware-stat-table-card-inventory-layout thead th:first-child {
+  background: #f5f8fc !important;
+  z-index: 4 !important;
+}
+
+/* Specific report/detail table inside statistic drilldown */
+.hardware-module-root .hardware-stat-table-card .border.rounded-lg {
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+/* Better scroll bar */
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout::-webkit-scrollbar,
+.hardware-module-root .hardware-stat-table-card .overflow-x-auto::-webkit-scrollbar {
+  height: 10px !important;
+  width: 10px !important;
+}
+
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout::-webkit-scrollbar-thumb,
+.hardware-module-root .hardware-stat-table-card .overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #bfd0ea !important;
+  border-radius: 999px !important;
+}
+
+.hardware-module-root .hardware-stat-table-scroll-inventory-layout::-webkit-scrollbar-track,
+.hardware-module-root .hardware-stat-table-card .overflow-x-auto::-webkit-scrollbar-track {
+  background: #eef4fb !important;
+  border-radius: 999px !important;
+}
+
+/* Small summary/distribution tables should still look compact */
+.hardware-module-root .hardware-stat-summary-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+}
+
+.hardware-module-root .hardware-stat-summary-table th,
+.hardware-module-root .hardware-stat-summary-table td {
+  white-space: normal !important;
+  min-width: 0 !important;
+  max-width: none !important;
+}
