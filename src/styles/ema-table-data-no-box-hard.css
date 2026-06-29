@@ -1,0 +1,241 @@
+/* EMA TABLE DATA NO BOX HARD OVERRIDE
+   Final hard override: data inside table body must be plain text.
+   No border, no background, no input-looking box.
+*/
+
+/* =========================================================
+   1) Global table body: remove box from all non-action elements
+========================================================= */
+html body table tbody td :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  span,
+  div,
+  p,
+  strong,
+  small
+):not(button):not(a):not([role="button"]):not([class*="btn"]):not([class*="button"]):not([class*="icon"]) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  min-height: 0 !important;
+  max-height: none !important;
+
+  color: var(--ema-table-body, #18345f) !important;
+  font-family: var(--ema-table-font, Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif) !important;
+  font-size: var(--ema-table-body-font-size, 10.5px) !important;
+  line-height: 1.22 !important;
+  font-weight: 750 !important;
+
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  text-overflow: clip !important;
+}
+
+/* =========================================================
+   2) Div/grid table body: remove box from all non-action elements
+========================================================= */
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > * :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  span,
+  div,
+  p,
+  strong,
+  small
+):not(button):not(a):not([role="button"]):not([class*="btn"]):not([class*="button"]):not([class*="icon"]) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  min-height: 0 !important;
+  max-height: none !important;
+
+  color: var(--ema-table-body, #18345f) !important;
+  font-family: var(--ema-table-font, Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif) !important;
+  font-size: var(--ema-table-body-font-size, 10.5px) !important;
+  line-height: 1.22 !important;
+  font-weight: 750 !important;
+
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  text-overflow: clip !important;
+}
+
+/* =========================================================
+   3) Task List hard target: ordered by / requester / assigned fields
+========================================================= */
+html body :is(
+  .task-list-module,
+  .tasklist-module,
+  .task-module,
+  .task-list-page,
+  .tasklist-page,
+  [class*="task-list"],
+  [class*="tasklist"],
+  [class*="TaskList"],
+  [class*="task"]
+) :is(
+  table tbody td,
+  .hardware-device-table-row:not(.head) > *,
+  .software-device-table-row:not(.head) > *,
+  .user-row:not(.head) > *,
+  .clean-table-row:not(.head) > *,
+  .settings-standard-row:not(.head) > *,
+  .audit-standard-row:not(.head) > *,
+  .service-desk-row:not(.head) > *,
+  .ema-standard-row:not(.head) > *,
+  .uam-table-row:not(.head) > *,
+  [class*="table-row"]:not(.head) > *,
+  [class*="standard-row"]:not(.head) > *
+) :is(
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  span,
+  div,
+  p,
+  strong,
+  small,
+  label
+):not(button):not(a):not([role="button"]):not([class*="btn"]):not([class*="button"]):not([class*="icon"]) {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  display: inline !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  appearance: none !important;
+
+  color: var(--ema-table-body, #18345f) !important;
+  -webkit-text-fill-color: var(--ema-table-body, #18345f) !important;
+
+  font-family: var(--ema-table-font, Inter, ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif) !important;
+  font-size: var(--ema-table-body-font-size, 10.5px) !important;
+  line-height: 1.22 !important;
+  font-weight: 750 !important;
+
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  text-overflow: clip !important;
+}
+
+/* =========================================================
+   4) Catch Tailwind/utility boxes inside table body
+========================================================= */
+html body :is(
+  table tbody td,
+  .hardware-device-table-row:not(.head) > *,
+  .software-device-table-row:not(.head) > *,
+  .user-row:not(.head) > *,
+  .clean-table-row:not(.head) > *,
+  .settings-standard-row:not(.head) > *,
+  .audit-standard-row:not(.head) > *,
+  .service-desk-row:not(.head) > *,
+  .ema-standard-row:not(.head) > *,
+  .uam-table-row:not(.head) > *,
+  [class*="table-row"]:not(.head) > *,
+  [class*="standard-row"]:not(.head) > *
+) :is(
+  [class*="border"],
+  [class*="rounded"],
+  [class*="bg-"],
+  [class*="shadow"],
+  [class*="field"],
+  [class*="value"],
+  [class*="input"],
+  [class*="select"],
+  [class*="readonly"],
+  [class*="disabled"]
+):not(button):not(a):not([role="button"]):not([type="checkbox"]):not([type="radio"]):not([class*="btn"]):not([class*="button"]):not([class*="icon"]) {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* =========================================================
+   5) Do not touch header / pagination / buttons / checkbox
+========================================================= */
+html body :is(
+  .hardware-device-table-row.head,
+  .software-device-table-row.head,
+  .user-row.head,
+  .clean-table-row.head,
+  .settings-standard-row.head,
+  .audit-standard-row.head,
+  .service-desk-row.head,
+  .ema-standard-row.head,
+  .uam-table-row.head,
+  [class*="table-row"].head,
+  [class*="standard-row"].head,
+  .uam-pagination,
+  .software-page-pagination,
+  .hardware-stat-pagination,
+  .ema-pagination,
+  .pagination-row
+) :is(span, div, p, strong, small) {
+  background: inherit;
+}
+
+/* Actual buttons remain buttons */
+html body :is(
+  table tbody td,
+  [class*="table-row"]:not(.head) > *,
+  [class*="standard-row"]:not(.head) > *
+) button,
+html body :is(
+  table tbody td,
+  [class*="table-row"]:not(.head) > *,
+  [class*="standard-row"]:not(.head) > *
+) a[role="button"] {
+  display: inline-flex !important;
+}

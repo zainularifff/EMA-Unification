@@ -25,6 +25,11 @@ import {
   X,
 } from "lucide-react";
 import softwareDistributionService from "../services/softwareDistributionService";
+import "../styles/ema-table-system-lock-final.css";
+import "../styles/ema-table-data-no-box-hard.css";
+import "../styles/ema-action-icon-button-force.css";
+import "../styles/ema-action-icon-button-spacing-final.css";
+import "../styles/ema-delete-action-red-final.css";
 
 type PackageStatus = "Ready" | "Draft" | "Deployed" | "Archived";
 type DeliveryMethod = "onprem" | "cloud" | "network";
@@ -2108,7 +2113,7 @@ export default function SoftwareDistribution() {
                         disabled={!deployablePageRows.length}
                       />
                     </th>
-                    <th>#</th>
+                    <th>No</th>
                     <th><SortButton label="Package Name" columnKey="name" /></th>
                     <th><SortButton label="Version" columnKey="version" /></th>
                     <th><SortButton label="Status" columnKey="status" /></th>

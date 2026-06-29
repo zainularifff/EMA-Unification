@@ -1,0 +1,489 @@
+/* Software Inventory - MASTER final table style to match Hardware */
+
+/* ===== Stop old inline Software CSS from creating scrollbars / blue header ===== */
+html body.software-inventory-page-active .software-inventory-module .software-device-table.software-standard-table,
+html body .software-inventory-module .software-device-table.software-standard-table,
+html body .software-inventory-module .software-device-table {
+  flex: 0 0 auto !important;
+
+  width: calc(100% - 2rem) !important;
+  max-width: calc(100% - 2rem) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  margin: 0 1rem 0.45rem !important;
+
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  scrollbar-width: none !important;
+  scrollbar-gutter: auto !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table::-webkit-scrollbar,
+html body .software-inventory-module .software-device-table::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* ===== Registry grid columns - same balance as Hardware ===== */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.software-registry-row,
+html body .software-inventory-module .software-device-table-row.software-registry-row {
+  display: grid !important;
+  grid-template-columns:
+    52px
+    minmax(330px, 1.5fr)
+    minmax(145px, 0.7fr)
+    minmax(260px, 1.05fr)
+    100px
+    140px
+    165px !important;
+
+  align-items: center !important;
+  column-gap: 12px !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Dynamic/statistic table */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.software-dynamic-row,
+html body .software-inventory-module .software-device-table-row.software-dynamic-row {
+  align-items: center !important;
+  column-gap: 12px !important;
+  min-width: 1000px !important;
+}
+
+/* ===== Header same grey as Hardware ===== */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head,
+html body .software-inventory-module .software-device-table-row.head {
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+
+  background: #f4f7fb !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head::-webkit-scrollbar,
+html body .software-inventory-module .software-device-table-row.head::-webkit-scrollbar {
+  display: none !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .user-cell,
+html body .software-inventory-module .software-device-table-row.head .user-cell {
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+
+  display: flex !important;
+  align-items: center !important;
+
+  padding: 0 8px !important;
+
+  background: #f4f7fb !important;
+  color: #64748b !important;
+
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Header sort button: kill blue */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .software-sort-btn,
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .resource-sort-button,
+html body .software-inventory-module .software-device-table-row.head .software-sort-btn,
+html body .software-inventory-module .software-device-table-row.head .resource-sort-button {
+  height: auto !important;
+  min-height: 0 !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: #64748b !important;
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head svg,
+html body.software-inventory-page-active .software-inventory-module .software-sort-icon,
+html body.software-inventory-page-active .software-inventory-module .software-sort-icon.is-active,
+html body .software-inventory-module .software-device-table-row.head svg,
+html body .software-inventory-module .software-sort-icon,
+html body .software-inventory-module .software-sort-icon.is-active {
+  color: #94a3b8 !important;
+  stroke: #94a3b8 !important;
+}
+
+/* ===== Body rows same compact Hardware row ===== */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row:not(.head),
+html body .software-inventory-module .software-device-table-row:not(.head) {
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+
+  background: #ffffff !important;
+  border-bottom: 1px solid #e7eef8 !important;
+
+  overflow: hidden !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row:not(.head):hover,
+html body .software-inventory-module .software-device-table-row:not(.head):hover {
+  background: #f8fbff !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row .user-cell,
+html body .software-inventory-module .software-device-table-row .user-cell {
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+
+  min-width: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+
+  padding: 4px 8px !important;
+
+  color: #18345f !important;
+  font-size: 10.5px !important;
+  line-height: 1.15 !important;
+
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row .user-cell::-webkit-scrollbar,
+html body .software-inventory-module .software-device-table-row .user-cell::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* No column: clean text, no bubble */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row .user-cell:first-child,
+html body .software-inventory-module .software-device-table-row .user-cell:first-child {
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-row-no,
+html body.software-inventory-page-active .software-inventory-module .row-index-pill.software-row-no,
+html body .software-inventory-module .software-row-no,
+html body .software-inventory-module .row-index-pill.software-row-no {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: #64748b !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+}
+
+/* ===== Software name cell: fix dot overlap ===== */
+html body.software-inventory-page-active .software-inventory-module .software-device-main-cell,
+html body .software-inventory-module .software-device-main-cell {
+  padding-left: 8px !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-user-name,
+html body .software-inventory-module .software-user-name {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: grid !important;
+  grid-template-columns: 12px minmax(0, 1fr) !important;
+  align-items: center !important;
+  column-gap: 8px !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-user-name > div,
+html body .software-inventory-module .software-user-name > div {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-status-dot,
+html body .software-inventory-module .software-status-dot {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+
+  width: 9px !important;
+  height: 9px !important;
+  min-width: 9px !important;
+
+  display: block !important;
+
+  margin: 0 !important;
+  border-radius: 999px !important;
+  background: #64748b !important;
+  box-shadow: 0 0 0 4px #e2e8f0 !important;
+}
+
+/* Main text */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row strong,
+html body .software-inventory-module .software-device-table-row strong {
+  display: block !important;
+  max-width: 100% !important;
+
+  color: #10294f !important;
+  font-size: 11.2px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Secondary text */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row small,
+html body .software-inventory-module .software-device-table-row small {
+  display: block !important;
+  max-width: 100% !important;
+
+  margin-top: 2px !important;
+
+  color: #64748b !important;
+  font-size: 9.2px !important;
+  line-height: 1.05 !important;
+  font-weight: 750 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Normal columns */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row .user-cell:nth-child(n+2),
+html body .software-inventory-module .software-device-table-row .user-cell:nth-child(n+2) {
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Last updated pill same as Hardware */
+html body.software-inventory-page-active .software-inventory-module .software-date-cell,
+html body.software-inventory-page-active .software-inventory-module .muted-cell.software-date-cell,
+html body .software-inventory-module .software-date-cell,
+html body .software-inventory-module .muted-cell.software-date-cell {
+  width: fit-content !important;
+  max-width: 100% !important;
+  height: 22px !important;
+  min-height: 22px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 9px !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 999px !important;
+  background: #f8fafc !important;
+  color: #10294f !important;
+
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+
+  white-space: nowrap !important;
+}
+
+/* Type / text */
+html body.software-inventory-page-active .software-inventory-module .software-model-text,
+html body.software-inventory-page-active .software-inventory-module .software-text-cell,
+html body .software-inventory-module .software-model-text,
+html body .software-inventory-module .software-text-cell {
+  color: #10294f !important;
+  font-size: 10.5px !important;
+  font-weight: 850 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* ===== Registry card/pagination match Hardware ===== */
+html body.software-inventory-page-active .software-inventory-module .software-registry-card.software-registry-card--full,
+html body .software-inventory-module .software-registry-card.software-registry-card--full {
+  max-height: none !important;
+  overflow: hidden !important;
+  padding-bottom: 10px !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-page-pagination,
+html body .software-inventory-module .software-page-pagination {
+  width: calc(100% - 2rem) !important;
+  max-width: calc(100% - 2rem) !important;
+  height: 32px !important;
+  min-height: 32px !important;
+
+  margin: 8px 1rem 0 !important;
+  padding: 0 2px !important;
+
+  display: grid !important;
+  grid-template-columns: auto 1fr auto !important;
+  align-items: center !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-summary,
+html body .software-inventory-module .software-page-pagination .uam-page-summary {
+  height: 30px !important;
+  min-height: 30px !important;
+
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+
+  border: 1px solid #d8e4f3 !important;
+  background: #ffffff !important;
+  color: #10294f !important;
+
+  font-size: 10.5px !important;
+  line-height: 30px !important;
+  font-weight: 850 !important;
+
+  white-space: nowrap !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-pagination-controls,
+html body .software-inventory-module .software-page-pagination .uam-pagination-controls {
+  height: 34px !important;
+  min-height: 34px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-icon,
+html body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-current,
+html body .software-inventory-module .software-page-pagination .uam-page-icon,
+html body .software-inventory-module .software-page-pagination .uam-page-current {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+
+  font-size: 11px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-icon,
+html body .software-inventory-module .software-page-pagination .uam-page-icon {
+  border: 1px solid #d8e4f3 !important;
+  background: #ffffff !important;
+  color: #1d4ed8 !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-current,
+html body .software-inventory-module .software-page-pagination .uam-page-current {
+  border: 1px solid #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 9px 20px rgba(37, 99, 235, 0.26) !important;
+}
+
+/* Toolbar compact but do not fight layout */
+html body.software-inventory-page-active .software-inventory-module .software-registry-head.software-registry-head--standard,
+html body .software-inventory-module .software-registry-head.software-registry-head--standard {
+  padding: 12px 14px 10px !important;
+  gap: 10px !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Small screen: allow horizontal scroll only at table level */
+@media (max-width: 1280px) {
+  html body.software-inventory-page-active .software-inventory-module .software-device-table.software-standard-table,
+  html body .software-inventory-module .software-device-table.software-standard-table {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scrollbar-width: thin !important;
+  }
+
+  html body.software-inventory-page-active .software-inventory-module .software-device-table.software-standard-table::-webkit-scrollbar,
+  html body .software-inventory-module .software-device-table.software-standard-table::-webkit-scrollbar {
+    height: 8px !important;
+    width: 0 !important;
+    display: block !important;
+  }
+
+  html body.software-inventory-page-active .software-inventory-module .software-device-table-row.software-registry-row,
+  html body .software-inventory-module .software-device-table-row.software-registry-row {
+    min-width: 1120px !important;
+  }
+}

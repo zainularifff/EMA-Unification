@@ -1,6 +1,11 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
+import "../styles/ema-table-system-lock-final.css";
+import "../styles/ema-table-data-no-box-hard.css";
+import "../styles/ema-action-icon-button-force.css";
+import "../styles/ema-action-icon-button-spacing-final.css";
+import "../styles/ema-delete-action-red-final.css";
 import {
   Activity,
   AlertCircle,
@@ -1810,7 +1815,7 @@ function StatusDetailTable({
         <table className="table table-hover align-middle mb-0">
           <thead>
             <tr>
-              <th>#</th>
+              <th>No</th>
               <th>Computer / User</th>
               <th>IP Address</th>
               <th>Department</th>
@@ -1930,7 +1935,7 @@ function DeviceRegistryTable({
       <table className="table table-hover align-middle mb-0">
         <thead>
           <tr>
-            <th>#</th>
+            <th>No</th>
             <th>Device Name</th>
             <th>Device Brand</th>
             <th>Status</th>

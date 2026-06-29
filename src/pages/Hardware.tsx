@@ -33,11 +33,13 @@ import "../styles/hardware-toast-ema-fix.css";
 import "../styles/hardware-statistics-table-fix.css";
 import "../styles/hardware-statistics-pagination-fix.css";
 import "../styles/hardware-toolbar-single-row-compact.css";
-import "../styles/hardware-device-table-compact-fix.css";
-import "../styles/hardware-device-table-clean-final.css";
-import "../styles/hardware-device-table-scrollbar-fix.css";
 import "../styles/hardware-detail-modal-center-fix.css";
 import "../styles/hardware-detail-modal-portal-final.css";
+import "../styles/ema-table-system-lock-final.css";
+import "../styles/ema-table-data-no-box-hard.css";
+import "../styles/ema-action-icon-button-force.css";
+import "../styles/ema-action-icon-button-spacing-final.css";
+import "../styles/ema-delete-action-red-final.css";
 
 type StatusType = "Online" | "Locked" | "Stale Sync" | "Offline";
 type KpiFilter = "all" | "recent" | "stale" | "locked" | "running";

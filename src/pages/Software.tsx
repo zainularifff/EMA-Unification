@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import "../styles/ema-table-system-lock-final.css";
+import "../styles/ema-table-data-no-box-hard.css";
+import "../styles/ema-action-icon-button-force.css";
+import "../styles/ema-action-icon-button-spacing-final.css";
+import "../styles/ema-delete-action-red-final.css";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -1785,23 +1790,7 @@ export default function Software() {
             box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.18) !important;
             margin-top: 0.2rem !important;
           }
-
-          .software-inventory-module .row-index-pill.software-row-no {
-            min-width: 34px !important;
-            height: 30px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 0 0.55rem !important;
-            border-radius: 12px !important;
-            border: 1px solid rgba(91, 123, 255, 0.42) !important;
-            background: rgba(241, 245, 255, 0.98) !important;
-            color: #5b6b87 !important;
-            font-size: 0.82rem !important;
-            font-weight: 900 !important;
-          }
-
-          .software-inventory-module .software-empty-state {
+.software-inventory-module .software-empty-state {
             min-height: 220px !important;
             display: flex !important;
             flex-direction: column !important;
@@ -2282,7 +2271,7 @@ export default function Software() {
               {selected.tableKey === "registry" ? (
                 <>
                   <div className="user-row head advanced clean-table-row software-standard-row software-device-table-row software-registry-row" role="row">
-                    <div className="user-cell">#</div>
+                    <div className="user-cell">No</div>
                     <div className="user-cell"><SortButton label="Software Name" columnKey="softwareName" /></div>
                     <div className="user-cell"><SortButton label="Category" columnKey="category" /></div>
                     <div className="user-cell"><SortButton label="Device" columnKey="deviceName" /></div>
@@ -2292,7 +2281,7 @@ export default function Software() {
                   </div>
                   {!isDataLoading && pageRegistryRecords.map((record, index) => (
                     <div className="user-row advanced clean-table-row software-standard-row software-device-table-row software-registry-row" role="row" key={record.id}>
-                      <div className="user-cell row-number"><span className="row-index-pill software-row-no">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></div>
+                      <div className="user-cell ema-table-no-cell">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
                       <div className="user-cell software-device-main-cell"><div className="user-name software-user-name"><span className="software-status-dot" /><div><strong title={record.softwareName}>{record.softwareName}</strong><small>{record.publisher || record.assetTag || "-"}</small></div></div></div>
                       <div className="user-cell"><div className="software-category-cell"><strong>{record.category}</strong><small>{record.publisher || "Software category"}</small></div></div>
                       <div className="user-cell software-location-cell"><div className="software-device-cell"><strong title={record.deviceName}>{record.deviceName}</strong><small>{record.ip || record.assetTag || "-"}</small></div></div>
@@ -2305,13 +2294,13 @@ export default function Software() {
                 </>
               ) : (
                 <>
-                  <div className="user-row head advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" style={{ gridTemplateColumns: `4.2rem repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))` }}>
-                    <div className="user-cell">#</div>
+                  <div className="user-row head advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" style={{ gridTemplateColumns: `52px repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))` }}>
+                    <div className="user-cell">No</div>
                     {tableColumns[selected.tableKey].map((column, index) => <div className="user-cell" key={column}><TableSortButton label={column} index={index} /></div>)}
                   </div>
                   {!isDataLoading && pageTableRows.map((row, rowIndex) => (
-                    <div className="user-row advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" key={`${selected.tableKey}-${rowIndex}`} style={{ gridTemplateColumns: `4.2rem repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))` }}>
-                      <div className="user-cell row-number"><span className="row-index-pill software-row-no">{String((page - 1) * PAGE_SIZE + rowIndex + 1).padStart(2, "0")}</span></div>
+                    <div className="user-row advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" key={`${selected.tableKey}-${rowIndex}`} style={{ gridTemplateColumns: `52px repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))` }}>
+                      <div className="user-cell ema-table-no-cell">{String((page - 1) * PAGE_SIZE + rowIndex + 1).padStart(2, "0")}</div>
                       {row.map((cell, cellIndex) => <div className="user-cell software-text-cell" key={cellIndex}>{cell}</div>)}
                     </div>
                   ))}

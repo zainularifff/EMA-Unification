@@ -1,0 +1,76 @@
+import { createPortal } from "react-dom";
+
+type AnyToast = {
+  type?: string;
+  tone?: string;
+  title?: string;
+  message?: string;
+} | null;
+
+function normalizeTone(toast: AnyToast) {
+  const raw = String(toast?.tone || toast?.type || "info").toLowerCase();
+
+  if (raw === "delete" || raw === "danger") return "error";
+  if (raw === "success") return "success";
+  if (raw === "warning") return "warning";
+  if (raw === "error") return "error";
+
+  return "info";
+}
+
+function getToastTitle(toast: AnyToast) {
+  if (toast?.title) return toast.title;
+
+  const tone = normalizeTone(toast);
+
+  if (tone === "success") return "Success";
+  if (tone === "error") return "Action failed";
+  if (tone === "warning") return "Attention";
+
+  return "Information";
+}
+
+function getToastIcon(toast: AnyToast) {
+  const tone = normalizeTone(toast);
+
+  if (tone === "success") return "OK";
+  if (tone === "info") return "i";
+
+  return "!";
+}
+
+export default function EmaToast({
+  toast,
+  onClose,
+}: {
+  toast: AnyToast;
+  onClose: () => void;
+}) {
+  if (!toast) return null;
+
+  const tone = normalizeTone(toast);
+
+  const node = (
+    <div className={"ema-notice-card is-" + tone} role="status" aria-live="polite">
+      <div className="ema-notice-icon" aria-hidden="true">
+        {getToastIcon(toast)}
+      </div>
+
+      <div className="ema-notice-body">
+        <strong className="ema-notice-title">{getToastTitle(toast)}</strong>
+        <span className="ema-notice-message">{toast.message || ""}</span>
+      </div>
+
+      <button
+        type="button"
+        className="ema-notice-close"
+        onClick={onClose}
+        aria-label="Close notification"
+      >
+        x
+      </button>
+    </div>
+  );
+
+  return typeof document !== "undefined" ? createPortal(node, document.body) : node;
+}

@@ -1,0 +1,400 @@
+/* EMA ACTION ICON BUTTON FORCE
+   Force all table action buttons to one icon-button standard.
+   Does not affect toolbar buttons, pagination, scan/export buttons.
+*/
+
+:root {
+  --ema-action-btn-size: 30px;
+  --ema-action-btn-gap: 8px;
+  --ema-action-btn-radius: 10px;
+  --ema-action-btn-border: #cfe0f7;
+  --ema-action-btn-bg: #ffffff;
+  --ema-action-btn-bg-hover: #eff6ff;
+  --ema-action-btn-color: #2563eb;
+  --ema-action-btn-danger: #ef4444;
+  --ema-action-btn-success: #16a34a;
+}
+
+/* =========================================================
+   ACTION CELL LAYOUT
+========================================================= */
+
+/* Cells explicitly named action */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: var(--ema-action-btn-gap) !important;
+  flex-wrap: nowrap !important;
+}
+
+/* Last column with buttons inside table rows = action column */
+html body table tbody td:last-child:has(button),
+html body table tbody td:last-child:has(a[role="button"]),
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(button),
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(a[role="button"]) {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: var(--ema-action-btn-gap) !important;
+  flex-wrap: nowrap !important;
+}
+
+/* Any table body cell that contains multiple action buttons */
+html body table tbody td:has(button + button),
+html body table tbody td:has(a[role="button"] + a[role="button"]),
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > *:has(button + button) {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: var(--ema-action-btn-gap) !important;
+  flex-wrap: nowrap !important;
+}
+
+/* =========================================================
+   ACTION BUTTON SHAPE
+========================================================= */
+
+/* Explicit action button classes */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]),
+html body table tbody td:last-child:has(button) > button,
+html body table tbody td:last-child:has(a[role="button"]) > a[role="button"],
+html body table tbody td:has(button + button) > button,
+html body table tbody td:has(a[role="button"] + a[role="button"]) > a[role="button"],
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(button) > button,
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(a[role="button"]) > a[role="button"],
+html body :is(
+  button[aria-label*="edit" i],
+  button[aria-label*="view" i],
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[aria-label*="update" i],
+  button[aria-label*="approve" i],
+  button[aria-label*="reject" i],
+  button[title*="edit" i],
+  button[title*="view" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  button[title*="update" i],
+  button[title*="approve" i],
+  button[title*="reject" i]
+) {
+  width: var(--ema-action-btn-size) !important;
+  min-width: var(--ema-action-btn-size) !important;
+  max-width: var(--ema-action-btn-size) !important;
+
+  height: var(--ema-action-btn-size) !important;
+  min-height: var(--ema-action-btn-size) !important;
+  max-height: var(--ema-action-btn-size) !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 1px solid var(--ema-action-btn-border) !important;
+  border-radius: var(--ema-action-btn-radius) !important;
+  background: var(--ema-action-btn-bg) !important;
+  color: var(--ema-action-btn-color) !important;
+
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08) !important;
+
+  font-size: 0 !important;
+  line-height: 1 !important;
+  text-indent: 0 !important;
+
+  cursor: pointer !important;
+  appearance: none !important;
+  vertical-align: middle !important;
+  flex: 0 0 var(--ema-action-btn-size) !important;
+}
+
+/* =========================================================
+   ICON STANDARD
+========================================================= */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]) svg,
+html body table tbody td:last-child:has(button) > button svg,
+html body table tbody td:last-child:has(a[role="button"]) > a[role="button"] svg,
+html body table tbody td:has(button + button) > button svg,
+html body table tbody td:has(a[role="button"] + a[role="button"]) > a[role="button"] svg,
+html body :is(
+  button[aria-label*="edit" i],
+  button[aria-label*="view" i],
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[aria-label*="update" i],
+  button[aria-label*="approve" i],
+  button[aria-label*="reject" i],
+  button[title*="edit" i],
+  button[title*="view" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  button[title*="update" i],
+  button[title*="approve" i],
+  button[title*="reject" i]
+) svg {
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
+
+  display: block !important;
+
+  color: currentColor !important;
+  stroke: currentColor !important;
+
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* Hide button text only for table action buttons */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]) span:not(.sr-only),
+html body table tbody td:last-child:has(button) > button span:not(.sr-only),
+html body table tbody td:last-child:has(a[role="button"]) > a[role="button"] span:not(.sr-only),
+html body table tbody td:has(button + button) > button span:not(.sr-only) {
+  display: none !important;
+}
+
+/* Hover */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]):hover,
+html body table tbody td:last-child:has(button) > button:hover,
+html body table tbody td:last-child:has(a[role="button"]) > a[role="button"]:hover,
+html body table tbody td:has(button + button) > button:hover {
+  background: var(--ema-action-btn-bg-hover) !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Danger action */
+html body :is(
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  .delete-btn,
+  .danger-btn,
+  .btn-delete,
+  .btn-danger
+) {
+  color: var(--ema-action-btn-danger) !important;
+}
+
+html body :is(
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  .delete-btn,
+  .danger-btn,
+  .btn-delete,
+  .btn-danger
+):hover {
+  background: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #dc2626 !important;
+}
+
+/* Success action */
+html body :is(
+  button[aria-label*="approve" i],
+  button[title*="approve" i],
+  .approve-btn,
+  .success-btn,
+  .btn-success
+) {
+  color: var(--ema-action-btn-success) !important;
+}
+
+html body :is(
+  button[aria-label*="approve" i],
+  button[title*="approve" i],
+  .approve-btn,
+  .success-btn,
+  .btn-success
+):hover {
+  background: #ecfdf5 !important;
+  border-color: #bbf7d0 !important;
+  color: #15803d !important;
+}
+
+/* Disabled */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions
+) :is(button, a[role="button"]):disabled,
+html body table tbody td:last-child:has(button) > button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* =========================================================
+   DO NOT AFFECT TOOLBAR / PAGINATION / FILTERS
+========================================================= */
+html body :is(
+  .hardware-registry-toolbar,
+  .software-registry-head,
+  .software-registry-tools,
+  .toolbar,
+  .page-toolbar,
+  .filter-toolbar,
+  .uam-pagination,
+  .software-page-pagination,
+  .hardware-stat-pagination,
+  .ema-pagination,
+  .pagination-row
+) button {
+  font-size: inherit;
+  text-indent: 0;
+}
+
+/* Pagination buttons keep pagination style */
+html body :is(
+  .uam-page-icon,
+  .uam-page-current,
+  .pagination-button,
+  .pagination-current
+) {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  font-size: 11px !important;
+}

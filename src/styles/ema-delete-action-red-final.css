@@ -1,0 +1,258 @@
+/* EMA DELETE ACTION RED FINAL
+   Force delete/remove/trash action icon to red across all table action columns.
+*/
+
+:root {
+  --ema-delete-red: #ef4444;
+  --ema-delete-red-hover: #dc2626;
+  --ema-delete-border: #fecdd3;
+  --ema-delete-bg: #ffffff;
+  --ema-delete-bg-hover: #fff1f2;
+}
+
+/* Explicit delete/remove/trash buttons */
+html body :is(
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[aria-label*="trash" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  button[title*="trash" i],
+  button[data-action*="delete" i],
+  button[data-action*="remove" i],
+  button[data-action*="trash" i],
+  a[role="button"][aria-label*="delete" i],
+  a[role="button"][aria-label*="remove" i],
+  a[role="button"][aria-label*="trash" i],
+  a[role="button"][title*="delete" i],
+  a[role="button"][title*="remove" i],
+  a[role="button"][title*="trash" i],
+  .delete-btn,
+  .danger-btn,
+  .trash-btn,
+  .remove-btn,
+  .btn-delete,
+  .btn-danger,
+  .btn-trash,
+  [class*="delete"],
+  [class*="danger"],
+  [class*="trash"],
+  [class*="remove"]
+) {
+  color: var(--ema-delete-red) !important;
+  border-color: var(--ema-delete-border) !important;
+  background: var(--ema-delete-bg) !important;
+}
+
+/* Explicit delete/remove/trash SVG */
+html body :is(
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[aria-label*="trash" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  button[title*="trash" i],
+  button[data-action*="delete" i],
+  button[data-action*="remove" i],
+  button[data-action*="trash" i],
+  a[role="button"][aria-label*="delete" i],
+  a[role="button"][aria-label*="remove" i],
+  a[role="button"][aria-label*="trash" i],
+  a[role="button"][title*="delete" i],
+  a[role="button"][title*="remove" i],
+  a[role="button"][title*="trash" i],
+  .delete-btn,
+  .danger-btn,
+  .trash-btn,
+  .remove-btn,
+  .btn-delete,
+  .btn-danger,
+  .btn-trash,
+  [class*="delete"],
+  [class*="danger"],
+  [class*="trash"],
+  [class*="remove"]
+) svg {
+  color: var(--ema-delete-red) !important;
+  stroke: var(--ema-delete-red) !important;
+  fill: none !important;
+}
+
+/* Fallback: most action columns use View/Edit/Delete, so last icon is Delete */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]):last-child,
+html body table tbody td:last-child:has(button) > button:last-child,
+html body table tbody td:has(button + button) > button:last-child,
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(button) > button:last-child {
+  color: var(--ema-delete-red) !important;
+  border-color: var(--ema-delete-border) !important;
+  background: var(--ema-delete-bg) !important;
+}
+
+/* Fallback last icon SVG */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]):last-child svg,
+html body table tbody td:last-child:has(button) > button:last-child svg,
+html body table tbody td:has(button + button) > button:last-child svg,
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(button) > button:last-child svg {
+  color: var(--ema-delete-red) !important;
+  stroke: var(--ema-delete-red) !important;
+  fill: none !important;
+}
+
+/* Hover state */
+html body :is(
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[aria-label*="trash" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  button[title*="trash" i],
+  button[data-action*="delete" i],
+  button[data-action*="remove" i],
+  button[data-action*="trash" i],
+  .delete-btn,
+  .danger-btn,
+  .trash-btn,
+  .remove-btn,
+  .btn-delete,
+  .btn-danger,
+  .btn-trash
+):hover,
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]):last-child:hover,
+html body table tbody td:last-child:has(button) > button:last-child:hover,
+html body table tbody td:has(button + button) > button:last-child:hover {
+  color: var(--ema-delete-red-hover) !important;
+  border-color: var(--ema-delete-border) !important;
+  background: var(--ema-delete-bg-hover) !important;
+}
+
+html body :is(
+  button[aria-label*="delete" i],
+  button[aria-label*="remove" i],
+  button[aria-label*="trash" i],
+  button[title*="delete" i],
+  button[title*="remove" i],
+  button[title*="trash" i],
+  button[data-action*="delete" i],
+  button[data-action*="remove" i],
+  button[data-action*="trash" i],
+  .delete-btn,
+  .danger-btn,
+  .trash-btn,
+  .remove-btn,
+  .btn-delete,
+  .btn-danger,
+  .btn-trash
+):hover svg,
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]):last-child:hover svg,
+html body table tbody td:last-child:has(button) > button:last-child:hover svg,
+html body table tbody td:has(button + button) > button:last-child:hover svg {
+  color: var(--ema-delete-red-hover) !important;
+  stroke: var(--ema-delete-red-hover) !important;
+}
+
+/* Do not color pagination / toolbar last button red */
+html body :is(
+  .hardware-registry-toolbar,
+  .software-registry-head,
+  .software-registry-tools,
+  .toolbar,
+  .page-toolbar,
+  .filter-toolbar,
+  .uam-pagination,
+  .software-page-pagination,
+  .hardware-stat-pagination,
+  .ema-pagination,
+  .pagination-row
+) button:last-child,
+html body :is(
+  .hardware-registry-toolbar,
+  .software-registry-head,
+  .software-registry-tools,
+  .toolbar,
+  .page-toolbar,
+  .filter-toolbar,
+  .uam-pagination,
+  .software-page-pagination,
+  .hardware-stat-pagination,
+  .ema-pagination,
+  .pagination-row
+) button:last-child svg {
+  color: inherit;
+  stroke: currentColor;
+}

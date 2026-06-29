@@ -1,0 +1,174 @@
+/* Software table header final: match Hardware grey and remove ugly scrollbar */
+
+/* Remove scrollbar/gutter from Software table wrapper */
+html body.software-inventory-page-active .software-inventory-module .software-device-table.software-standard-table,
+html body .software-inventory-module .software-device-table.software-standard-table,
+html body .software-inventory-module .software-device-table {
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  scrollbar-width: none !important;
+  scrollbar-gutter: auto !important;
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 16px !important;
+  background: #ffffff !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table.software-standard-table::-webkit-scrollbar,
+html body .software-inventory-module .software-device-table.software-standard-table::-webkit-scrollbar,
+html body .software-inventory-module .software-device-table::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Header must be same grey as Hardware */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head,
+html body .software-inventory-module .software-device-table-row.head {
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+
+  background: #f4f7fb !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+  color: #64748b !important;
+
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head::-webkit-scrollbar,
+html body .software-inventory-module .software-device-table-row.head::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Header cells */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .user-cell,
+html body .software-inventory-module .software-device-table-row.head .user-cell {
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+
+  padding: 0 8px !important;
+
+  display: flex !important;
+  align-items: center !important;
+
+  background: #f4f7fb !important;
+  color: #64748b !important;
+
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  scrollbar-width: none !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .user-cell::-webkit-scrollbar,
+html body .software-inventory-module .software-device-table-row.head .user-cell::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Sort buttons jangan biru, ikut Hardware grey */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .software-sort-btn,
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .resource-sort-button,
+html body .software-inventory-module .software-device-table-row.head .software-sort-btn,
+html body .software-inventory-module .software-device-table-row.head .resource-sort-button {
+  color: #64748b !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+
+  font-size: 9.5px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  white-space: nowrap !important;
+}
+
+/* Icon sort pun grey */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head .software-sort-icon,
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row.head svg,
+html body .software-inventory-module .software-device-table-row.head .software-sort-icon,
+html body .software-inventory-module .software-device-table-row.head svg {
+  color: #94a3b8 !important;
+  stroke: #94a3b8 !important;
+}
+
+/* Override active sort yang jadi biru */
+html body.software-inventory-page-active .software-inventory-module .software-sort-icon.is-active,
+html body .software-inventory-module .software-sort-icon.is-active {
+  color: #64748b !important;
+  stroke: #64748b !important;
+}
+
+/* Body rows remain Hardware-like */
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row:not(.head),
+html body .software-inventory-module .software-device-table-row:not(.head) {
+  height: 46px !important;
+  min-height: 46px !important;
+  max-height: 46px !important;
+  background: #ffffff !important;
+  border-bottom: 1px solid #e7eef8 !important;
+  overflow: hidden !important;
+}
+
+html body.software-inventory-page-active .software-inventory-module .software-device-table-row:not(.head):hover,
+html body .software-inventory-module .software-device-table-row:not(.head):hover {
+  background: #f8fbff !important;
+}
+
+/* No column: remove bubble */
+html body.software-inventory-page-active .software-inventory-module .software-row-no,
+html body .software-inventory-module .software-row-no {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+}
+
+/* If screen smaller, only horizontal scroll table, not header vertical mini scrollbar */
+@media (max-width: 1280px) {
+  html body.software-inventory-page-active .software-inventory-module .software-device-table.software-standard-table,
+  html body .software-inventory-module .software-device-table.software-standard-table {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scrollbar-width: thin !important;
+  }
+
+  html body.software-inventory-page-active .software-inventory-module .software-device-table.software-standard-table::-webkit-scrollbar,
+  html body .software-inventory-module .software-device-table.software-standard-table::-webkit-scrollbar {
+    height: 8px !important;
+    width: 0 !important;
+    display: block !important;
+  }
+}

@@ -1,0 +1,700 @@
+/* EMA TABLE SYSTEM STANDARD
+   FORCE ONE TABLE UI FOR ALL MODULES.
+   Target: Hardware, Software, Network, ServiceDesk, Settings, TaskList,
+   App Metering, Internet Metering, Restrictions, Patch, Distribution, Report.
+*/
+
+:root {
+  --ema-tbl-bg: #ffffff;
+  --ema-tbl-head: #f4f7fb;
+  --ema-tbl-border: #dbe7f6;
+  --ema-tbl-row-border: #e7eef8;
+  --ema-tbl-text: #10294f;
+  --ema-tbl-body: #18345f;
+  --ema-tbl-muted: #64748b;
+  --ema-tbl-muted-2: #94a3b8;
+  --ema-tbl-hover: #f8fbff;
+  --ema-tbl-blue: #2563eb;
+  --ema-tbl-radius: 16px;
+  --ema-tbl-head-height: 38px;
+  --ema-tbl-row-height: 42px;
+}
+
+/* =========================================================
+   TABLE CONTAINER - ALL MODULES
+========================================================= */
+html body .hardware-device-table,
+html body .software-device-table,
+html body .user-access-table,
+html body .advanced.clean-table,
+html body .settings-standard-table,
+html body .audit-standard-table,
+html body .service-desk-table,
+html body .ema-standard-table,
+html body .uam-table,
+html body .network-table,
+html body .network-standard-table,
+html body .app-table,
+html body .app-standard-table,
+html body .restriction-table,
+html body .patch-table,
+html body .task-table,
+html body .report-table,
+html body .inventory-table,
+html body .data-table,
+html body table.ema-table,
+html body table.clean-table,
+html body table.standard-table {
+  width: calc(100% - 2rem) !important;
+  max-width: calc(100% - 2rem) !important;
+  margin: 0 1rem 0.45rem !important;
+
+  border: 1px solid var(--ema-tbl-border) !important;
+  border-radius: var(--ema-tbl-radius) !important;
+  background: var(--ema-tbl-bg) !important;
+  box-shadow: none !important;
+
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  scrollbar-width: none !important;
+  scrollbar-gutter: auto !important;
+}
+
+html body .hardware-device-table::-webkit-scrollbar,
+html body .software-device-table::-webkit-scrollbar,
+html body .user-access-table::-webkit-scrollbar,
+html body .advanced.clean-table::-webkit-scrollbar,
+html body .settings-standard-table::-webkit-scrollbar,
+html body .audit-standard-table::-webkit-scrollbar,
+html body .service-desk-table::-webkit-scrollbar,
+html body .ema-standard-table::-webkit-scrollbar,
+html body .uam-table::-webkit-scrollbar,
+html body .network-table::-webkit-scrollbar,
+html body .app-table::-webkit-scrollbar,
+html body .restriction-table::-webkit-scrollbar,
+html body .patch-table::-webkit-scrollbar,
+html body .task-table::-webkit-scrollbar,
+html body .report-table::-webkit-scrollbar,
+html body .inventory-table::-webkit-scrollbar,
+html body .data-table::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* =========================================================
+   HEADER ROW - GRID/DIV TABLES
+========================================================= */
+html body .hardware-device-table-row.head,
+html body .software-device-table-row.head,
+html body .user-row.head,
+html body .clean-table-row.head,
+html body .settings-standard-row.head,
+html body .audit-standard-row.head,
+html body .service-desk-row.head,
+html body .ema-standard-row.head,
+html body .uam-table-row.head,
+html body [class*="table-row"].head,
+html body [class*="standard-row"].head {
+  height: var(--ema-tbl-head-height) !important;
+  min-height: var(--ema-tbl-head-height) !important;
+  max-height: var(--ema-tbl-head-height) !important;
+
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+
+  background: var(--ema-tbl-head) !important;
+  border-bottom: 1px solid #d8e4f3 !important;
+
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+}
+
+html body .hardware-device-table-row.head .user-cell,
+html body .software-device-table-row.head .user-cell,
+html body .user-row.head .user-cell,
+html body .clean-table-row.head .user-cell,
+html body .settings-standard-row.head > *,
+html body .audit-standard-row.head > *,
+html body .service-desk-row.head > *,
+html body .ema-standard-row.head > *,
+html body .uam-table-row.head > *,
+html body [class*="table-row"].head > *,
+html body [class*="standard-row"].head > * {
+  height: var(--ema-tbl-head-height) !important;
+  min-height: var(--ema-tbl-head-height) !important;
+  max-height: var(--ema-tbl-head-height) !important;
+
+  display: flex !important;
+  align-items: center !important;
+
+  padding: 0 8px !important;
+
+  background: var(--ema-tbl-head) !important;
+  color: var(--ema-tbl-muted) !important;
+
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* =========================================================
+   HEADER ROW - REAL HTML TABLES
+========================================================= */
+html body table thead tr {
+  height: var(--ema-tbl-head-height) !important;
+  min-height: var(--ema-tbl-head-height) !important;
+  max-height: var(--ema-tbl-head-height) !important;
+  background: var(--ema-tbl-head) !important;
+}
+
+html body table thead th {
+  height: var(--ema-tbl-head-height) !important;
+  min-height: var(--ema-tbl-head-height) !important;
+  max-height: var(--ema-tbl-head-height) !important;
+
+  padding: 0 8px !important;
+
+  background: var(--ema-tbl-head) !important;
+  color: var(--ema-tbl-muted) !important;
+
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+
+  border-bottom: 1px solid #d8e4f3 !important;
+}
+
+/* =========================================================
+   SORT BUTTON STANDARD - REMOVE BLUE
+========================================================= */
+html body .hardware-sort-btn,
+html body .software-sort-btn,
+html body .resource-sort-button,
+html body .table-sort-btn,
+html body .sort-btn,
+html body .sort-button,
+html body button[class*="sort"] {
+  height: auto !important;
+  min-height: 0 !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+
+  color: var(--ema-tbl-muted) !important;
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+html body .hardware-sort-btn svg,
+html body .software-sort-btn svg,
+html body .resource-sort-button svg,
+html body .table-sort-btn svg,
+html body .sort-btn svg,
+html body .sort-button svg,
+html body button[class*="sort"] svg,
+html body .software-sort-icon,
+html body .software-sort-icon.is-active {
+  color: var(--ema-tbl-muted-2) !important;
+  stroke: var(--ema-tbl-muted-2) !important;
+}
+
+/* =========================================================
+   BODY ROW - GRID/DIV TABLES
+========================================================= */
+html body .hardware-device-table-row:not(.head),
+html body .software-device-table-row:not(.head),
+html body .user-row:not(.head),
+html body .clean-table-row:not(.head),
+html body .settings-standard-row:not(.head),
+html body .audit-standard-row:not(.head),
+html body .service-desk-row:not(.head),
+html body .ema-standard-row:not(.head),
+html body .uam-table-row:not(.head),
+html body [class*="table-row"]:not(.head),
+html body [class*="standard-row"]:not(.head) {
+  height: var(--ema-tbl-row-height) !important;
+  min-height: var(--ema-tbl-row-height) !important;
+  max-height: var(--ema-tbl-row-height) !important;
+
+  background: var(--ema-tbl-bg) !important;
+  border-bottom: 1px solid var(--ema-tbl-row-border) !important;
+
+  overflow: hidden !important;
+}
+
+html body .hardware-device-table-row:not(.head):hover,
+html body .software-device-table-row:not(.head):hover,
+html body .user-row:not(.head):hover,
+html body .clean-table-row:not(.head):hover,
+html body .settings-standard-row:not(.head):hover,
+html body .audit-standard-row:not(.head):hover,
+html body .service-desk-row:not(.head):hover,
+html body .ema-standard-row:not(.head):hover,
+html body .uam-table-row:not(.head):hover,
+html body [class*="table-row"]:not(.head):hover,
+html body [class*="standard-row"]:not(.head):hover {
+  background: var(--ema-tbl-hover) !important;
+}
+
+html body .hardware-device-table-row .user-cell,
+html body .software-device-table-row .user-cell,
+html body .user-row .user-cell,
+html body .clean-table-row .user-cell,
+html body .settings-standard-row > *,
+html body .audit-standard-row > *,
+html body .service-desk-row > *,
+html body .ema-standard-row > *,
+html body .uam-table-row > *,
+html body [class*="table-row"] > *,
+html body [class*="standard-row"] > * {
+  min-width: 0 !important;
+
+  height: var(--ema-tbl-row-height) !important;
+  min-height: var(--ema-tbl-row-height) !important;
+  max-height: var(--ema-tbl-row-height) !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+
+  padding: 4px 8px !important;
+
+  color: var(--ema-tbl-body) !important;
+  font-size: 10.5px !important;
+  line-height: 1.15 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  scrollbar-width: none !important;
+}
+
+/* =========================================================
+   BODY ROW - REAL HTML TABLES
+========================================================= */
+html body table tbody tr {
+  height: var(--ema-tbl-row-height) !important;
+  min-height: var(--ema-tbl-row-height) !important;
+  max-height: var(--ema-tbl-row-height) !important;
+
+  background: var(--ema-tbl-bg) !important;
+  border-bottom: 1px solid var(--ema-tbl-row-border) !important;
+}
+
+html body table tbody tr:hover {
+  background: var(--ema-tbl-hover) !important;
+}
+
+html body table tbody td {
+  height: var(--ema-tbl-row-height) !important;
+  min-height: var(--ema-tbl-row-height) !important;
+  max-height: var(--ema-tbl-row-height) !important;
+
+  padding: 4px 8px !important;
+
+  color: var(--ema-tbl-body) !important;
+  font-size: 10.5px !important;
+  line-height: 1.15 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+
+  border-bottom: 1px solid var(--ema-tbl-row-border) !important;
+}
+
+/* =========================================================
+   TEXT STANDARD
+========================================================= */
+html body .hardware-device-table-row strong,
+html body .software-device-table-row strong,
+html body .user-row strong,
+html body .clean-table-row strong,
+html body .settings-standard-row strong,
+html body .audit-standard-row strong,
+html body .service-desk-row strong,
+html body .ema-standard-row strong,
+html body .uam-table-row strong,
+html body [class*="table-row"] strong,
+html body [class*="standard-row"] strong,
+html body table tbody td strong {
+  display: block !important;
+  max-width: 100% !important;
+
+  color: var(--ema-tbl-text) !important;
+  font-size: 11.2px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+html body .hardware-device-table-row small,
+html body .software-device-table-row small,
+html body .user-row small,
+html body .clean-table-row small,
+html body .settings-standard-row small,
+html body .audit-standard-row small,
+html body .service-desk-row small,
+html body .ema-standard-row small,
+html body .uam-table-row small,
+html body [class*="table-row"] small,
+html body [class*="standard-row"] small,
+html body table tbody td small {
+  display: block !important;
+  max-width: 100% !important;
+
+  margin-top: 2px !important;
+
+  color: var(--ema-tbl-muted) !important;
+  font-size: 9.2px !important;
+  line-height: 1.05 !important;
+  font-weight: 750 !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* =========================================================
+   NUMBERING STANDARD
+========================================================= */
+html body .hardware-device-table-row .user-cell:first-child,
+html body .software-device-table-row .user-cell:first-child,
+html body .user-row .user-cell:first-child,
+html body .clean-table-row .user-cell:first-child,
+html body [class*="table-row"] > *:first-child,
+html body [class*="standard-row"] > *:first-child,
+html body table th:first-child,
+html body table td:first-child {
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+
+  color: var(--ema-tbl-muted) !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+}
+
+html body .row-index-pill,
+html body .software-row-no,
+html body .hardware-row-no,
+html body .uam-row-index,
+html body .settings-row-index,
+html body .audit-row-index,
+html body .table-row-index,
+html body .ema-row-index,
+html body .ema-row-number,
+html body .row-number-pill,
+html body .row-number,
+html body .index-pill,
+html body .no-pill {
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  max-height: none !important;
+
+  display: inline-block !important;
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+
+  color: var(--ema-tbl-muted) !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+}
+
+html body .row-index-pill::before,
+html body .row-index-pill::after,
+html body .software-row-no::before,
+html body .software-row-no::after,
+html body .hardware-row-no::before,
+html body .hardware-row-no::after,
+html body .uam-row-index::before,
+html body .uam-row-index::after,
+html body .settings-row-index::before,
+html body .settings-row-index::after,
+html body .audit-row-index::before,
+html body .audit-row-index::after,
+html body .ema-row-number::before,
+html body .ema-row-number::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* =========================================================
+   DOT / PILL STANDARD
+========================================================= */
+html body .software-user-name {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: grid !important;
+  grid-template-columns: 12px minmax(0, 1fr) !important;
+  align-items: center !important;
+  column-gap: 8px !important;
+}
+
+html body .software-user-name > div {
+  min-width: 0 !important;
+  overflow: hidden !important;
+}
+
+html body .software-status-dot,
+html body .hardware-status-dot,
+html body .device-status-dot {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+
+  width: 9px !important;
+  height: 9px !important;
+  min-width: 9px !important;
+
+  display: inline-block !important;
+
+  margin: 0 !important;
+  border-radius: 999px !important;
+  background: var(--ema-tbl-muted) !important;
+  box-shadow: 0 0 0 4px #e2e8f0 !important;
+}
+
+html body .hardware-device-table-row span[class*="pill"],
+html body .software-device-table-row span[class*="pill"],
+html body .user-row span[class*="pill"],
+html body .clean-table-row span[class*="pill"],
+html body .settings-standard-row span[class*="pill"],
+html body .audit-standard-row span[class*="pill"],
+html body .ema-standard-row span[class*="pill"],
+html body [class*="table-row"] span[class*="pill"],
+html body .software-date-cell,
+html body .hardware-date-pill,
+html body .status-pill,
+html body .ema-status-pill {
+  width: fit-content !important;
+  max-width: 100% !important;
+  height: 22px !important;
+  min-height: 22px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 9px !important;
+
+  border-radius: 999px !important;
+
+  font-size: 9.5px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+
+  white-space: nowrap !important;
+}
+
+html body .software-date-cell,
+html body .hardware-date-pill,
+html body .muted-cell.software-date-cell {
+  border: 1px solid #cbd5e1 !important;
+  background: #f8fafc !important;
+  color: var(--ema-tbl-text) !important;
+}
+
+/* =========================================================
+   PAGINATION STANDARD
+========================================================= */
+html body .uam-pagination,
+html body .global-style.uam-pagination,
+html body .software-page-pagination,
+html body .hardware-stat-pagination,
+html body .ema-pagination,
+html body .pagination-row {
+  width: calc(100% - 2rem) !important;
+  max-width: calc(100% - 2rem) !important;
+
+  height: 32px !important;
+  min-height: 32px !important;
+
+  margin: 8px 1rem 0 !important;
+  padding: 0 2px !important;
+
+  display: grid !important;
+  grid-template-columns: auto 1fr auto !important;
+  align-items: center !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+html body .uam-page-summary,
+html body .pagination-summary {
+  height: 30px !important;
+  min-height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+
+  border: 1px solid #d8e4f3 !important;
+  background: #ffffff !important;
+  color: var(--ema-tbl-text) !important;
+
+  font-size: 10.5px !important;
+  line-height: 30px !important;
+  font-weight: 850 !important;
+
+  white-space: nowrap !important;
+}
+
+html body .uam-pagination-controls,
+html body .pagination-controls {
+  height: 34px !important;
+  min-height: 34px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html body .uam-page-icon,
+html body .uam-page-current,
+html body .pagination-button,
+html body .pagination-current {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+
+  font-size: 11px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+}
+
+html body .uam-page-icon,
+html body .pagination-button {
+  border: 1px solid #d8e4f3 !important;
+  background: #ffffff !important;
+  color: #1d4ed8 !important;
+}
+
+html body .uam-page-current,
+html body .pagination-current {
+  border: 1px solid var(--ema-tbl-blue) !important;
+  background: var(--ema-tbl-blue) !important;
+  color: #ffffff !important;
+  box-shadow: 0 9px 20px rgba(37, 99, 235, 0.26) !important;
+}
+
+/* =========================================================
+   CARD WRAPPER CLEANUP
+========================================================= */
+html body .hardware-registry-card,
+html body .software-registry-card,
+html body .content-shell,
+html body .ema-panel-surface {
+  overflow: hidden !important;
+}
+
+html body .software-inventory-module .software-registry-card.software-registry-card--full {
+  max-height: none !important;
+  overflow: hidden !important;
+  padding-bottom: 10px !important;
+}
+
+html body .software-inventory-module .software-registry-head.software-registry-head--standard {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+@media (max-width: 1280px) {
+  html body .hardware-device-table,
+  html body .software-device-table,
+  html body .user-access-table,
+  html body .advanced.clean-table,
+  html body .settings-standard-table,
+  html body .audit-standard-table,
+  html body .service-desk-table,
+  html body .ema-standard-table,
+  html body .uam-table,
+  html body .network-table,
+  html body .app-table,
+  html body .restriction-table,
+  html body .patch-table,
+  html body .task-table,
+  html body .report-table,
+  html body .inventory-table,
+  html body .data-table {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scrollbar-width: thin !important;
+  }
+
+  html body .hardware-device-table-row,
+  html body .software-device-table-row.software-registry-row {
+    min-width: 1120px !important;
+  }
+}

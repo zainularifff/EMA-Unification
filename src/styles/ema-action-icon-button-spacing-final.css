@@ -1,0 +1,244 @@
+/* EMA ACTION ICON BUTTON SPACING FINAL
+   Force proper spacing between action icon buttons across all tables.
+*/
+
+:root {
+  --ema-action-btn-size: 30px;
+  --ema-action-btn-gap-final: 10px;
+}
+
+/* Action parent/cell must have visible spacing */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+),
+html body table tbody td:last-child:has(button),
+html body table tbody td:last-child:has(a[role="button"]),
+html body table tbody td:has(button + button),
+html body table tbody td:has(a[role="button"] + a[role="button"]),
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(button),
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(a[role="button"]) {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: var(--ema-action-btn-gap-final) !important;
+  column-gap: var(--ema-action-btn-gap-final) !important;
+  row-gap: 0 !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+}
+
+/* Give action column enough width for 3 icon buttons */
+html body table tbody td:last-child:has(button),
+html body table thead th:last-child,
+html body :is(
+  .hardware-device-table-row,
+  .software-device-table-row,
+  .user-row,
+  .clean-table-row,
+  .settings-standard-row,
+  .audit-standard-row,
+  .service-desk-row,
+  .ema-standard-row,
+  .uam-table-row,
+  [class*="table-row"],
+  [class*="standard-row"]
+) > :last-child:has(button),
+html body :is(
+  .hardware-device-table-row,
+  .software-device-table-row,
+  .user-row,
+  .clean-table-row,
+  .settings-standard-row,
+  .audit-standard-row,
+  .service-desk-row,
+  .ema-standard-row,
+  .uam-table-row,
+  [class*="table-row"],
+  [class*="standard-row"]
+) > :last-child:has(a[role="button"]) {
+  min-width: 126px !important;
+}
+
+/* Force icon button shape */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]),
+html body table tbody td:last-child:has(button) > button,
+html body table tbody td:last-child:has(a[role="button"]) > a[role="button"],
+html body table tbody td:has(button + button) > button,
+html body table tbody td:has(a[role="button"] + a[role="button"]) > a[role="button"],
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(button) > button,
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(a[role="button"]) > a[role="button"] {
+  width: var(--ema-action-btn-size) !important;
+  min-width: var(--ema-action-btn-size) !important;
+  max-width: var(--ema-action-btn-size) !important;
+
+  height: var(--ema-action-btn-size) !important;
+  min-height: var(--ema-action-btn-size) !important;
+  max-height: var(--ema-action-btn-size) !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  flex: 0 0 var(--ema-action-btn-size) !important;
+  vertical-align: middle !important;
+}
+
+/* If gap does not apply, margin-left will still force spacing */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]) + :is(button, a[role="button"]),
+html body table tbody td:last-child:has(button) > button + button,
+html body table tbody td:last-child:has(a[role="button"]) > a[role="button"] + a[role="button"],
+html body table tbody td:has(button + button) > button + button,
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(button) > button + button,
+html body :is(
+  .hardware-device-table-row:not(.head),
+  .software-device-table-row:not(.head),
+  .user-row:not(.head),
+  .clean-table-row:not(.head),
+  .settings-standard-row:not(.head),
+  .audit-standard-row:not(.head),
+  .service-desk-row:not(.head),
+  .ema-standard-row:not(.head),
+  .uam-table-row:not(.head),
+  [class*="table-row"]:not(.head),
+  [class*="standard-row"]:not(.head)
+) > :last-child:has(a[role="button"]) > a[role="button"] + a[role="button"] {
+  margin-left: var(--ema-action-btn-gap-final) !important;
+}
+
+/* Prevent old negative margins / overlap */
+html body :is(
+  .action-cell,
+  .actions-cell,
+  .table-action-cell,
+  .table-actions,
+  .row-actions,
+  .cell-actions,
+  .action-buttons,
+  .actions,
+  [class*="action-cell"],
+  [class*="actions-cell"],
+  [class*="row-actions"],
+  [class*="table-actions"]
+) :is(button, a[role="button"]):first-child,
+html body table tbody td:last-child:has(button) > button:first-child,
+html body table tbody td:has(button + button) > button:first-child {
+  margin-left: 0 !important;
+}
+
+/* Toolbar and pagination excluded */
+html body :is(
+  .hardware-registry-toolbar,
+  .software-registry-head,
+  .software-registry-tools,
+  .toolbar,
+  .page-toolbar,
+  .filter-toolbar,
+  .uam-pagination,
+  .software-page-pagination,
+  .hardware-stat-pagination,
+  .ema-pagination,
+  .pagination-row
+) button + button {
+  margin-left: 0 !important;
+}

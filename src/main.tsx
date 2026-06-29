@@ -29,7 +29,11 @@ import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import "./styles/ema-toast-standard.css";
-import "./styles/ema-global-numbering-fix.css";
+import "./styles/ema-table-system-lock-final.css";
+import "./styles/ema-table-data-no-box-hard.css";
+import "./styles/ema-action-icon-button-force.css";
+import "./styles/ema-action-icon-button-spacing-final.css";
+import "./styles/ema-delete-action-red-final.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

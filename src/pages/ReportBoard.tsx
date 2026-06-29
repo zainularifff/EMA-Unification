@@ -2,6 +2,11 @@ import { useEffect } from "react";
 import "../styles/report-builder-canvas-center.css";
 import { installReportDateRangeEnhancer } from "../utils/reportDateRangeEnhancer";
 import ReportBuilderRulesLive from "./ReportBuilderRulesLive";
+import "../styles/ema-table-system-lock-final.css";
+import "../styles/ema-table-data-no-box-hard.css";
+import "../styles/ema-action-icon-button-force.css";
+import "../styles/ema-action-icon-button-spacing-final.css";
+import "../styles/ema-delete-action-red-final.css";
 
 export default function ReportBoard() {
   useEffect(() => {
