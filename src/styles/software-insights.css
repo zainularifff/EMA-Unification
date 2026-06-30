@@ -1,0 +1,313 @@
+.software-insights-modal-overlay,
+.user-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 24px;
+  overflow-y: auto;
+}
+
+.user-modal.advanced,
+.software-insights-modal {
+  width: 100%;
+  max-width: 880px;
+  margin: auto;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  background: var(--ema-card-bg);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.software-insights-modal-hero {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 18px 18px 0 0;
+  background: linear-gradient(135deg, var(--ema-blue-600), var(--ema-blue-700));
+  color: #fff;
+}
+
+.software-insights-modal-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.software-insights-modal-title > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.software-insights-modal-title span {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+
+.software-insights-modal-title h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.software-insights-modal-title p {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  opacity: 0.85;
+}
+
+.software-insights-modal-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.software-insights-modal-close {
+  border: none;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+}
+
+.software-insights-modal-close:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.software-insights-modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.software-insights-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.software-insights-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  border: 1px solid var(--ema-border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: var(--ema-card-bg);
+  cursor: pointer;
+}
+
+.software-insights-metric-card:hover {
+  background: var(--ema-slate-100);
+}
+
+.software-insights-metric-card span {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ema-slate-500);
+}
+
+.software-insights-metric-card strong {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--ema-slate-900);
+}
+
+.software-insights-metric-card small {
+  font-size: 0.72rem;
+  color: var(--ema-slate-400);
+}
+
+.software-insights-metric-card.is-blue strong {
+  color: var(--ema-blue-600);
+}
+
+.software-insights-metric-card.is-green strong {
+  color: var(--ema-green-600);
+}
+
+.software-insights-metric-card.is-red strong {
+  color: var(--ema-red-600);
+}
+
+.software-insight-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ema-slate-100);
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.software-insight-progress i {
+  display: block;
+  height: 100%;
+  background: var(--ema-green-600);
+  border-radius: 999px;
+}
+
+.software-insights-modal-content-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.software-insights-modal-panel {
+  border: 1px solid var(--ema-border);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.software-insights-modal-panel.is-featured {
+  background: var(--ema-blue-50);
+  border-color: var(--ema-blue-100);
+}
+
+.software-insights-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--ema-blue-600);
+}
+
+.software-insights-section-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.software-insights-section-head strong {
+  font-size: 0.84rem;
+  color: var(--ema-slate-900);
+}
+
+.software-insights-section-head small {
+  font-size: 0.72rem;
+  color: var(--ema-slate-500);
+}
+
+.software-insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.software-insights-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: none;
+  background: var(--ema-card-bg);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  color: var(--ema-slate-700);
+  cursor: pointer;
+  text-align: left;
+}
+
+.software-insights-list-row:hover {
+  background: var(--ema-slate-100);
+}
+
+.software-insights-list-row strong {
+  color: var(--ema-blue-600);
+  font-size: 0.8rem;
+}
+
+.software-insight-empty {
+  padding: 10px;
+  font-size: 0.76rem;
+  color: var(--ema-slate-400);
+  text-align: center;
+}
+
+.software-insights-modal-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--ema-border);
+}
+
+.software-stat-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 1.05rem 0.65rem;
+}
+
+.software-stat-summary-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--ema-border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 140px;
+}
+
+.software-stat-summary-row > div > span {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ema-slate-500);
+}
+
+.software-stat-summary-row > div > strong {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--ema-slate-900);
+}
+
+.software-stat-summary-row > div > small {
+  font-size: 0.7rem;
+  color: var(--ema-slate-400);
+}
+
+@media (max-width: 760px) {
+  .software-insights-modal-content-grid {
+    grid-template-columns: 1fr;
+  }
+}

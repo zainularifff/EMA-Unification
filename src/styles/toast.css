@@ -71,3 +71,81 @@
   font-size: 0.8rem;
   line-height: 1;
 }
+
+/* Generic .settings-toast pattern, reused by several pages alongside .ema-notice-card. */
+.settings-toast-layer {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--ema-card-bg);
+  border: 1px solid var(--ema-border);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  padding: 12px 14px;
+  min-width: 260px;
+  max-width: 360px;
+}
+
+.settings-toast-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: var(--ema-blue-50);
+  color: var(--ema-blue-600);
+}
+
+.settings-toast-success .settings-toast-icon {
+  background: var(--ema-green-50);
+  color: var(--ema-green-600);
+}
+
+.settings-toast-error .settings-toast-icon {
+  background: var(--ema-red-50);
+  color: var(--ema-red-600);
+}
+
+.settings-toast-info .settings-toast-icon {
+  background: var(--ema-blue-50);
+  color: var(--ema-blue-600);
+}
+
+.settings-toast > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-toast strong {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--ema-slate-900);
+}
+
+.settings-toast span {
+  font-size: 0.78rem;
+  color: var(--ema-slate-500);
+}
+
+.settings-toast button {
+  border: none;
+  background: transparent;
+  color: var(--ema-slate-400);
+  cursor: pointer;
+  flex: none;
+}

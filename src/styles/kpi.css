@@ -12,6 +12,7 @@
   background: var(--ema-card-bg);
   border-radius: 12px;
   padding: 8px 10px;
+  min-height: 90px;
   display: flex;
   text-align: left;
   cursor: pointer;
@@ -118,6 +119,123 @@
 
 @media (max-width: 640px) {
   .hardware-hero-score {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Generic .ema-kpi-card pattern (icon + label + value + note), reused by Software
+   and other pages alongside the page-specific .hardware-hero-score grid above. */
+.software-hero-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(118px, 1fr));
+  gap: 8px;
+  flex: 1 1 auto;
+  max-width: 680px;
+  margin-left: auto;
+}
+
+.ema-kpi-card {
+  border: 1px solid var(--ema-border);
+  background: var(--ema-card-bg);
+  border-radius: 12px;
+  padding: 8px 10px;
+  min-height: 90px;
+  display: flex;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.ema-kpi-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.ema-kpi-card.is-active {
+  border-color: var(--ema-blue-600);
+  box-shadow: 0 0 0 3px var(--ema-blue-50);
+}
+
+.ema-kpi-content {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.ema-kpi-icon {
+  grid-row: 1 / 3;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ema-blue-50);
+  color: var(--ema-blue-600);
+}
+
+.ema-kpi-card.is-green .ema-kpi-icon {
+  background: var(--ema-green-50);
+  color: var(--ema-green-600);
+}
+
+.ema-kpi-card.is-orange .ema-kpi-icon {
+  background: var(--ema-amber-50);
+  color: var(--ema-amber-600);
+}
+
+.ema-kpi-card.is-purple .ema-kpi-icon {
+  background: #f1e8ff;
+  color: #7c3aed;
+}
+
+.ema-kpi-card.is-red .ema-kpi-icon {
+  background: var(--ema-red-50);
+  color: var(--ema-red-600);
+}
+
+.ema-kpi-label {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.66rem;
+  color: var(--ema-slate-500);
+  font-weight: 700;
+  white-space: normal;
+  line-height: 1.2;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.ema-kpi-value {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: var(--ema-slate-900);
+  line-height: 1.15;
+}
+
+.ema-kpi-note {
+  display: none;
+}
+
+html.ema-dark .ema-kpi-card.is-purple .ema-kpi-icon {
+  background: #241a3d;
+  color: #c4b5fd;
+}
+
+@media (max-width: 980px) {
+  .software-hero-kpi-grid {
+    max-width: none;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .software-hero-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

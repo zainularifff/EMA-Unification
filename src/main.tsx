@@ -22,6 +22,7 @@ import "./styles/toast.css";
 import "./styles/modal.css";
 import "./styles/device-panel.css";
 import "./styles/geo-modal.css";
+import "./styles/software-insights.css";
 import "./styles/dark.css";
 
 import App from "./App";

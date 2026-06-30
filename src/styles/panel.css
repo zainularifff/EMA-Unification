@@ -22,7 +22,7 @@
   color: var(--ema-slate-900);
 }
 
-.section-search.ema-sidebar-field {
+.section-search {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -33,7 +33,7 @@
   color: var(--ema-slate-400);
 }
 
-.section-search.ema-sidebar-field input {
+.section-search input {
   border: none;
   outline: none;
   background: transparent;
@@ -42,7 +42,7 @@
   color: var(--ema-slate-900);
 }
 
-.section-search.ema-sidebar-field input::placeholder {
+.section-search input::placeholder {
   color: var(--ema-slate-400);
 }
 

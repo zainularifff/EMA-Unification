@@ -203,6 +203,33 @@
   color: var(--ema-amber-600);
 }
 
+.software-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 1.05rem 0.65rem;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ema-red-50);
+  color: var(--ema-red-600);
+}
+
+.software-error-banner > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.software-error-banner strong {
+  font-size: 0.85rem;
+}
+
+.software-error-banner span {
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+
 .hardware-info-banner.blue {
   background: var(--ema-blue-50);
   color: var(--ema-blue-600);

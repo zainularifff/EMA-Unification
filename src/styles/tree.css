@@ -5,6 +5,31 @@
   overflow-y: auto;
 }
 
+.ema-sidebar-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px;
+  font-size: 0.78rem;
+  color: var(--ema-slate-400);
+}
+
+.ema-sidebar-empty.is-error {
+  color: var(--ema-red-600);
+}
+
+.ema-sidebar-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ema-slate-500);
+}
+
 .ema-sidebar-tree-branch {
   display: flex;
   flex-direction: column;

@@ -4913,68 +4913,6 @@ export default function HardwareInventory() {
 
 
         /* Hardware sidebar tree: compact rows (smaller icons, badges, padding). */
-        .hardware-module-root .ema-sidebar-tree-node {
-          min-height: 1.85rem !important;
-          border-radius: 0.6rem !important;
-        }
-
-        .hardware-module-root button.ema-sidebar-tree-node {
-          grid-template-columns: 1.1rem minmax(0, 1fr) auto !important;
-          gap: 0.26rem !important;
-          padding: 0.2rem 0.34rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-node:not(button) {
-          grid-template-columns: 1.1rem minmax(0, 1fr) auto auto !important;
-          gap: 0.22rem !important;
-          padding: 0.18rem 0.3rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-node-chevron,
-        .hardware-module-root .ema-sidebar-tree-toggle {
-          width: 1rem !important;
-          height: 1rem !important;
-          min-width: 1rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-main {
-          gap: 0.34rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-node-icon,
-        .hardware-module-root .ema-sidebar-tree-icon {
-          width: 1.1rem !important;
-          height: 1.1rem !important;
-          flex: 0 0 1.1rem !important;
-          border-radius: 0.4rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-icon svg {
-          width: 0.66rem !important;
-          height: 0.66rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-label {
-          font-size: 0.68rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-count {
-          min-width: 1.3rem !important;
-          min-height: 1.1rem !important;
-          padding: 0 0.3rem !important;
-          font-size: 0.56rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-menu-btn {
-          width: 1.4rem !important;
-          height: 1.4rem !important;
-        }
-
-        .hardware-module-root .ema-sidebar-tree-menu-btn svg {
-          width: 0.7rem !important;
-          height: 0.7rem !important;
-        }
-
         .hardware-module-root .settings-menu > .ema-module-sidebar-switcher {
           flex: 0 0 auto !important;
           margin: 0 !important;

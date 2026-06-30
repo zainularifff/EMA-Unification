@@ -78,6 +78,25 @@ html.ema-dark .hardware-module-root .hardware-command-btn-muted b {
   color: #7fa8ff;
 }
 
+/* Same blue-tinted command-btn look reused by Software (and future pages) via
+   .soft-btn aliases — these don't have a competing inline override like Hardware
+   does, but the base light-mode rule uses hardcoded hex, so still needs a dark pass. */
+html.ema-dark .software-insights-toggle.soft-btn,
+html.ema-dark .software-scan-btn.soft-btn,
+html.ema-dark .icon-action-btn.software-icon-btn {
+  background: var(--ema-card-bg);
+  border-color: var(--ema-border);
+  color: #7fa8ff;
+  box-shadow: none;
+}
+
+html.ema-dark .software-insights-toggle.soft-btn:hover:not(:disabled),
+html.ema-dark .software-scan-btn.soft-btn:hover:not(:disabled),
+html.ema-dark .icon-action-btn.software-icon-btn:hover:not(:disabled) {
+  background: var(--ema-slate-100);
+  border-color: var(--ema-border);
+}
+
 html.ema-dark .hardware-kpi-card.is-online .hardware-kpi-icon {
   background: var(--ema-blue-50);
   color: #38bdf8;

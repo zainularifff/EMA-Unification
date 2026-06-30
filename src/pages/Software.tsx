@@ -86,6 +86,10 @@ type TreeNode = {
   devicesLoading?: boolean;
 };
 
+function collectSoftwareTreeNodeIds(nodes: TreeNode[]): string[] {
+  return nodes.flatMap((node) => [node.id, ...(node.children ? collectSoftwareTreeNodeIds(node.children) : [])]);
+}
+
 type SoftwareRecord = {
   id: string;
   softwareName: string;
@@ -147,7 +151,7 @@ const EMPTY_VALUE = "-";
 
 const tableColumns: Record<TableKey, string[]> = {
   registry: ["Software Name", "Category", "Publisher / Description", "Version", "Device", "Type", "IP Address", "Last Updated"],
-  installedSoftware: ["Original Software Name", "License Limit", "Used", "Classification", "Custom Info", "Software Name", "Expiry Date"],
+  installedSoftware: ["Software Name", "License Limit", "Used", "Classification", "Custom Info", "Expiry Date"],
   licenseStatus: ["Application Package", "Manufacturer", "Authorization", "Used", "Search Date", "Classification", "Detail"],
   fileExtensionExe: ["File Name", "Count"],
   fileExtensionDll: ["File Name", "Count"],
@@ -426,21 +430,42 @@ function formatCell(value: unknown) {
   return String(value);
 }
 
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+// Malaysian DD-MM-YYYY date display. Handles ISO strings, compact YYYYMMDD
+// (a common stored-procedure date format), and anything else Date can parse.
+function formatMalaysianDate(value: unknown) {
+  const raw = safeString(value, "").trim();
+  if (!raw || raw === EMPTY_VALUE) return EMPTY_VALUE;
+
+  const compact = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compact) {
+    const [, year, month, day] = compact;
+    return `${day}-${month}-${year}`;
+  }
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return `${pad2(date.getDate())}-${pad2(date.getMonth() + 1)}-${date.getFullYear()}`;
+}
+
 const columnAliases: Record<Exclude<TableKey, "registry">, string[][]> = {
   installedSoftware: [
-    ["Original Software Name", "OriginalSoftwareName", "SWUNI_Alias", "SWUNI_Name", "Name", "SoftwareName", "RawSoftwareName", "Id"],
+    ["Software Name", "SoftwareName", "SWName", "SWUNI_Name", "SWUNI_Alias", "Name", "OriginalSoftwareName"],
     ["License Limit", "LicenseLimit", "License_Limit", "Limit", "License", "SWUNI_License"],
-    ["Used", "", "UsedCount", "InUse", "Usage", "SWUNI_Used", "TotalUsed", "Total", "Count", "Cnt", "CCount"],
+    ["Used", "UsedCount", "InUse", "Usage", "SWUNI_Used", "TotalUsed", "Total", "Count", "Cnt", "CCount"],
     ["Classification", "CategoryName", "Category", "SW_Category", "SW_CATEGORY"],
     ["Custom Info", "CustomInfo", "Custom_Info", "Description", "Remark", "Remarks"],
-    ["Software Name", "SoftwareName", "SWName", "SWUNI_Name", "SWUNI_Alias", "Name"],
     ["Expiry Date", "ExpiryDate", "ExpiredDate", "ExpireDate", "LicenseExpiry", "LicenseExpiredDate"],
   ],
   licenseStatus: [
     ["Application Package", "ApplicationPackage", "SW_Pkg_Name", "SWPkgName", "PackageName", "Pkg_Name", "Name"],
     ["Manufacturer", "Mfr", "Vendor", "Publisher"],
     ["Authorization", "License_Type_Text", "LicenseType", "AuthorizationStatus", "Status"],
-    ["Used", "", "UsedCount", "IsUsed", "Usage", "TotalUsed", "Total", "Count", "Cnt", "CCount"],
+    ["Used", "UsedCount", "IsUsed", "Usage", "TotalUsed", "Total", "Count", "Cnt", "CCount"],
     ["Search Date", "SearchDate", "Search_Date", "LastUpdated"],
     ["Classification", "CategoryName", "Category", "SW_Category"],
     ["Detail", "Description", "Remark", "Remarks", "Info"],
@@ -452,7 +477,7 @@ const columnAliases: Record<Exclude<TableKey, "registry">, string[][]> = {
 
 const fileAliases = [
   ["File Name", "SW_OrgFileName", "SWOrgFileName", "OriginalFileName", "Original File Name", "FileName", "Filename", "File_Name", "SW_FileName", "SW_File_Name", "ProcessName", "Name"],
-  ["Count", "", "Count", "Cnt", "CCount", "Total", "TotalRecords", "FileCount", "Files"],
+  ["Count", "Cnt", "CCount", "Total", "TotalRecords", "FileCount", "Files"],
 ];
 
 columnAliases.fileExtensionExe = fileAliases;
@@ -460,7 +485,15 @@ columnAliases.fileExtensionDll = fileAliases;
 columnAliases.fileExtensionIni = fileAliases;
 
 function rowsToTableRows(tableKey: Exclude<TableKey, "registry">, rows: Record<string, unknown>[]) {
-  return rows.map((row) => columnAliases[tableKey].map((aliases, index) => formatCell(pickValue(row, aliases, index))));
+  // No positional fallback: guessing a field by column index (rather than a real
+  // key match) was pulling unrelated data into License Limit/Used/Custom Info
+  // whenever the actual API field name didn't match any alias.
+  return rows.map((row) =>
+    columnAliases[tableKey].map((aliases) => {
+      const value = pickValue(row, aliases);
+      return aliases[0].toLowerCase().includes("date") ? formatMalaysianDate(value) : formatCell(value);
+    })
+  );
 }
 
 function tableKeyFromStatistic(id: string): Exclude<TableKey, "registry"> | null {
@@ -738,7 +771,9 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
         })
       );
       const deviceNodes = assetResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
-      setDeviceTree(attachSoftwareDeviceInventoryToTree(baseTree, deviceNodes));
+      const nextTree = attachSoftwareDeviceInventoryToTree(baseTree, deviceNodes);
+      setDeviceTree(nextTree);
+      setExpandedGroups((current) => new Set([...current, ...collectSoftwareTreeNodeIds(nextTree)]));
     } catch (error) {
       const message = "Branch view is not available right now.";
       setTreeError(message);
@@ -1223,14 +1258,14 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
   const tableTitle = selected.tableKey === "registry" ? "Software" : selected.label;
 
   return (
-    <main className="settings-module-root ema-settings-pro ema-module-root software-inventory-module" data-section="software">
+    <main className="settings-module-root ema-settings-pro ema-module-root software-inventory-module container-fluid p-3 p-xl-4" data-section="software">
         <style>{`
           /* Server-safe Software Inventory isolation. Mirrors the page guard pattern used by pages that behave correctly on hosted builds. */
           body.software-inventory-page-active,
           body.software-inventory-page-active #root {
             min-height: 100% !important;
             overflow: hidden !important;
-            background: #f4f8fc !important;
+            background: var(--ema-page-bg) !important;
           }
 
           body.software-inventory-page-active .ema-main,
@@ -1373,17 +1408,17 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             flex: 0 0 auto !important;
             width: auto !important;
             min-width: 0 !important;
-            height: 34px !important;
+            height: 32px !important;
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            padding: 0 0.85rem !important;
-            border-radius: 999px !important;
-            border: 1px solid rgba(203, 213, 225, 0.9) !important;
-            background: #ffffff !important;
-            color: #102a5a !important;
-            font-size: 0.8rem !important;
-            font-weight: 900 !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            border: 0 !important;
+            background: transparent !important;
+            color: var(--ema-slate-500) !important;
+            font-size: 0.78rem !important;
+            font-weight: 600 !important;
             line-height: 1 !important;
             white-space: nowrap !important;
           }
@@ -1396,18 +1431,18 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             display: inline-flex !important;
             align-items: center !important;
             justify-content: flex-end !important;
-            gap: 0.35rem !important;
+            gap: 4px !important;
             width: auto !important;
             min-width: 0 !important;
             max-width: none !important;
-            height: 42px !important;
-            min-height: 42px !important;
-            padding: 0.25rem !important;
+            height: auto !important;
+            min-height: 0 !important;
+            padding: 0 !important;
             margin: 0 !important;
-            border: 1px solid rgba(203, 213, 225, 0.82) !important;
-            border-radius: 999px !important;
-            background: rgba(255, 255, 255, 0.96) !important;
-            box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08) !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
             overflow: visible !important;
           }
 
@@ -1415,16 +1450,16 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
           body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-current {
             position: static !important;
             float: none !important;
-            flex: 0 0 34px !important;
-            width: 34px !important;
-            min-width: 34px !important;
-            max-width: 34px !important;
-            height: 34px !important;
-            min-height: 34px !important;
-            max-height: 34px !important;
+            flex: 0 0 32px !important;
+            width: 32px !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
+            height: 32px !important;
+            min-height: 32px !important;
+            max-height: 32px !important;
             padding: 0 !important;
             margin: 0 !important;
-            border-radius: 12px !important;
+            border-radius: 8px !important;
             line-height: 1 !important;
             display: inline-flex !important;
             align-items: center !important;
@@ -1437,9 +1472,9 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
           }
 
           body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-icon {
-            border: 1px solid rgba(203, 213, 225, 0.9) !important;
-            background: #ffffff !important;
-            color: #1d4ed8 !important;
+            border: 1px solid var(--ema-border) !important;
+            background: var(--ema-card-bg) !important;
+            color: var(--ema-slate-600) !important;
             cursor: pointer !important;
           }
 
@@ -1449,15 +1484,15 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
           }
 
           body.software-inventory-page-active .software-inventory-module .software-page-pagination .uam-page-current {
-            border: 1px solid #2563eb !important;
-            background: #2563eb !important;
-            color: #ffffff !important;
+            border: 1px solid var(--ema-blue-600) !important;
+            background: var(--ema-blue-600) !important;
+            color: var(--ema-card-bg) !important;
             box-shadow: 0 9px 20px rgba(37, 99, 235, 0.26) !important;
           }
 
           /* Software sidebar alignment: match Hardware sidebar width and prevent the switcher from pushing the tree down. */
           .software-inventory-module .settings-layout.software-settings-layout {
-            grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
+            grid-template-columns: 300px minmax(0, 1fr) !important;
             height: 100% !important;
             min-height: 0 !important;
             gap: 0.85rem !important;
@@ -1466,7 +1501,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
 
           .software-inventory-module .settings-menu.software-left-panel {
             min-width: 300px !important;
-            max-width: 322px !important;
+            max-width: 300px !important;
             min-height: 0 !important;
             overflow: hidden !important;
             display: flex !important;
@@ -1608,8 +1643,8 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
           .software-inventory-module .software-registry-card {
             display: flex !important;
             flex-direction: column !important;
+            flex: 1 1 0 !important;
             min-height: 0 !important;
-            max-height: calc(100dvh - 196px) !important;
             overflow: hidden !important;
           }
 
@@ -1623,7 +1658,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
 
           .software-inventory-module .software-table-status-row {
             padding: 0 1rem 0.65rem !important;
-            color: #102a5a !important;
+            color: var(--ema-slate-900) !important;
             font-size: 0.92rem !important;
             font-weight: 800 !important;
           }
@@ -1666,12 +1701,12 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
 
           .software-inventory-module .software-device-table .software-registry-row {
             display: grid !important;
-            grid-template-columns: 56px minmax(250px, 1.8fr) minmax(170px, 1fr) minmax(210px, 1.2fr) minmax(140px, 0.8fr) minmax(160px, 0.95fr) minmax(170px, 0.9fr) !important;
+            grid-template-columns: 56px minmax(210px, 1.2fr) minmax(250px, 1.8fr) minmax(170px, 1fr) minmax(140px, 0.8fr) minmax(160px, 0.95fr) minmax(170px, 0.9fr) !important;
             min-width: 1150px !important;
           }
 
           .software-inventory-module .software-device-table .software-dynamic-row {
-            min-width: max-content !important;
+            display: grid !important;
           }
 
           .software-inventory-module .software-device-table .user-cell {
@@ -1684,8 +1719,8 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             position: sticky !important;
             top: 0 !important;
             z-index: 3 !important;
-            background: #eef3fb !important;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.28) !important;
+            background: var(--ema-slate-100) !important;
+            border-bottom: 1px solid var(--ema-border) !important;
           }
 
           .software-inventory-module .software-device-table .head.software-device-table-row > .user-cell {
@@ -1694,7 +1729,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             align-items: center !important;
             white-space: nowrap !important;
             text-transform: uppercase !important;
-            color: #64748b !important;
+            color: var(--ema-slate-500) !important;
             font-size: 0.72rem !important;
             letter-spacing: 0.08em !important;
             font-weight: 900 !important;
@@ -1705,17 +1740,24 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             overflow: hidden !important;
             text-overflow: ellipsis !important;
             white-space: nowrap !important;
-            color: #2f5fe3 !important;
-            font-size: 0.76rem !important;
-            font-weight: 900 !important;
+            background: none !important;
+            border: none !important;
+            padding: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 4px !important;
+            color: var(--ema-slate-500) !important;
+            font-size: 0.68rem !important;
+            font-weight: 800 !important;
             letter-spacing: 0.04em !important;
             text-transform: uppercase !important;
+            cursor: pointer !important;
           }
 
           .software-inventory-module .software-device-table .software-standard-row.software-device-table-row:not(.head) {
             border-bottom: 1px solid rgba(148, 163, 184, 0.18) !important;
             min-height: 68px !important;
-            background: #ffffff !important;
+            background: var(--ema-card-bg) !important;
           }
 
           .software-inventory-module .software-device-table .software-standard-row.software-device-table-row:not(.head):hover {
@@ -1754,23 +1796,42 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             overflow: hidden !important;
             text-overflow: ellipsis !important;
             white-space: nowrap !important;
-            color: #102a5a !important;
+            color: var(--ema-slate-900) !important;
             font-size: 0.76rem !important;
             font-weight: 900 !important;
             line-height: 1.12 !important;
           }
 
+          .software-inventory-module .software-name-wrap {
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            word-break: break-word !important;
+          }
+
+          .software-inventory-module .software-text-cell {
+            display: block !important;
+            max-width: 100% !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            color: var(--ema-slate-700) !important;
+            font-size: 0.74rem !important;
+            font-weight: 600 !important;
+            line-height: 1.3 !important;
+          }
+
           .software-inventory-module .software-user-name small,
           .software-inventory-module .software-device-cell small,
           .software-inventory-module .software-category-cell small,
-          .software-inventory-module .software-type-cell small,
-          .software-inventory-module .software-text-cell {
+          .software-inventory-module .software-type-cell small {
             display: block !important;
             max-width: 100% !important;
             overflow: hidden !important;
             text-overflow: ellipsis !important;
             white-space: nowrap !important;
-            color: #64748b !important;
+            color: var(--ema-slate-500) !important;
             font-size: 0.66rem !important;
             font-weight: 800 !important;
             line-height: 1.15 !important;
@@ -1781,7 +1842,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             height: 11px !important;
             min-width: 11px !important;
             border-radius: 999px !important;
-            background: #94a3b8 !important;
+            background: var(--ema-slate-400) !important;
             box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.18) !important;
             margin-top: 0.2rem !important;
           }
@@ -1792,7 +1853,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             align-items: center !important;
             justify-content: center !important;
             gap: 0.45rem !important;
-            color: #64748b !important;
+            color: var(--ema-slate-500) !important;
           }
 
           .software-inventory-module .settings-toast-layer.software-toast-layer {
@@ -1886,7 +1947,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             margin: 0 !important;
             overflow: visible !important;
             border-bottom: 1px solid rgba(203, 213, 225, 0.62) !important;
-            background: #ffffff !important;
+            background: var(--ema-card-bg) !important;
             z-index: 5 !important;
           }
 
@@ -2015,7 +2076,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
             padding: 0.8rem 1rem 0.72rem !important;
             margin: 0 !important;
             border-bottom: 1px solid rgba(203, 213, 225, 0.58) !important;
-            background: #ffffff !important;
+            background: var(--ema-card-bg) !important;
             overflow: visible !important;
           }
 
@@ -2246,9 +2307,9 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
                 <>
                   <div className="user-row head advanced clean-table-row software-standard-row software-device-table-row software-registry-row" role="row">
                     <div className="user-cell">No</div>
+                    <div className="user-cell"><SortButton label="Device" columnKey="deviceName" /></div>
                     <div className="user-cell"><SortButton label="Software Name" columnKey="softwareName" /></div>
                     <div className="user-cell"><SortButton label="Category" columnKey="category" /></div>
-                    <div className="user-cell"><SortButton label="Device" columnKey="deviceName" /></div>
                     <div className="user-cell"><SortButton label="Version" columnKey="version" /></div>
                     <div className="user-cell"><SortButton label="Type" columnKey="machineType" /></div>
                     <div className="user-cell"><SortButton label="Last Updated" columnKey="lastUpdated" /></div>
@@ -2256,9 +2317,9 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
                   {!isDataLoading && pageRegistryRecords.map((record, index) => (
                     <div className="user-row advanced clean-table-row software-standard-row software-device-table-row software-registry-row" role="row" key={record.id}>
                       <div className="user-cell ema-table-no-cell">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
-                      <div className="user-cell software-device-main-cell"><div className="user-name software-user-name"><span className="software-status-dot" /><div><strong title={record.softwareName}>{record.softwareName}</strong><small>{record.publisher || record.assetTag || "-"}</small></div></div></div>
-                      <div className="user-cell"><div className="software-category-cell"><strong>{record.category}</strong><small>{record.publisher || "Software category"}</small></div></div>
                       <div className="user-cell software-location-cell"><div className="software-device-cell"><strong title={record.deviceName}>{record.deviceName}</strong><small>{record.ip || record.assetTag || "-"}</small></div></div>
+                      <div className="user-cell software-device-main-cell"><div className="user-name software-user-name"><div><strong title={record.softwareName} className="software-name-wrap">{record.softwareName}</strong><small>{record.publisher || record.assetTag || "-"}</small></div></div></div>
+                      <div className="user-cell"><div className="software-category-cell"><strong>{record.category}</strong><small>{record.publisher || "Software category"}</small></div></div>
                       <div className="user-cell"><span className="software-model-text">{record.version}</span></div>
                       <div className="user-cell"><div className="software-type-cell"><strong>{record.machineType || "-"}</strong><small>{record.os || "-"}</small></div></div>
                       <div className="user-cell"><span className="muted-cell software-date-cell">{formatDateTime(record.lastUpdated)}</span></div>
@@ -2268,12 +2329,12 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
                 </>
               ) : (
                 <>
-                  <div className="user-row head advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" style={{ gridTemplateColumns: `52px repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))` }}>
+                  <div className="user-row head advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" style={{ gridTemplateColumns: `52px repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))`, minWidth: `calc(52px + ${tableColumns[selected.tableKey].length} * 11rem)` }}>
                     <div className="user-cell">No</div>
                     {tableColumns[selected.tableKey].map((column, index) => <div className="user-cell" key={column}><TableSortButton label={column} index={index} /></div>)}
                   </div>
                   {!isDataLoading && pageTableRows.map((row, rowIndex) => (
-                    <div className="user-row advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" key={`${selected.tableKey}-${rowIndex}`} style={{ gridTemplateColumns: `52px repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))` }}>
+                    <div className="user-row advanced clean-table-row software-standard-row software-device-table-row software-dynamic-row" role="row" key={`${selected.tableKey}-${rowIndex}`} style={{ gridTemplateColumns: `52px repeat(${tableColumns[selected.tableKey].length}, minmax(11rem, 1fr))`, minWidth: `calc(52px + ${tableColumns[selected.tableKey].length} * 11rem)` }}>
                       <div className="user-cell ema-table-no-cell">{String((page - 1) * PAGE_SIZE + rowIndex + 1).padStart(2, "0")}</div>
                       {row.map((cell, cellIndex) => <div className="user-cell software-text-cell" key={cellIndex}>{cell}</div>)}
                     </div>
