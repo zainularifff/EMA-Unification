@@ -1,0 +1,97 @@
+/* PATCH MANAGEMENT DEVICE EXPRESSION FINAL
+   Local CSS for existing old .user-name cell.
+   No runtime observer.
+*/
+
+.pm-device-expression-cell {
+  display: grid !important;
+  grid-template-columns: 18px minmax(0, 1fr) !important;
+  align-items: start !important;
+  gap: 8px !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  text-align: left !important;
+}
+
+.pm-device-expression-cell .user-mini-avatar,
+.pm-device-expression-cell > span:first-child {
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  margin-top: 1px !important;
+
+  color: #0f2746 !important;
+}
+
+.pm-device-expression-cell .user-mini-avatar svg,
+.pm-device-expression-cell > span:first-child svg {
+  width: 14px !important;
+  height: 14px !important;
+  stroke: #0f2746 !important;
+}
+
+.pm-device-expression-cell > span:last-child {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  text-align: left !important;
+}
+
+.pm-device-expression-cell strong {
+  display: block !important;
+
+  color: #0f2746 !important;
+
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+.pm-device-expression-cell small {
+  display: block !important;
+
+  color: #64748b !important;
+
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 750 !important;
+
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+/* Column width only when patched class exists in table */
+table:has(.pm-device-expression-cell) th:nth-child(2),
+table:has(.pm-device-expression-cell) td:nth-child(2) {
+  min-width: 250px !important;
+  width: 250px !important;
+}
+
+table:has(.pm-device-expression-cell) th:nth-child(3),
+table:has(.pm-device-expression-cell) td:nth-child(3) {
+  min-width: 430px !important;
+}
+
+.pm-device-expression-cell mark,
+.pm-device-expression-cell .highlight {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+}

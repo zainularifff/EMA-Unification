@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -12,9 +13,20 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const STORAGE_KEY = "ema-theme";
+
+function getInitialTheme() {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(STORAGE_KEY) === "dark";
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("ema-dark", isDark);
+    localStorage.setItem(STORAGE_KEY, isDark ? "dark" : "light");
+  }, [isDark]);
 
   const value = useMemo(
     () => ({

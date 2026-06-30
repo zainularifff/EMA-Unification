@@ -1,0 +1,184 @@
+/* MANAGEMENT DASHBOARD ACTION TABLE FIX
+   Local fix for Board Action Queue only.
+*/
+
+.management-center-page .md-decision-table-card {
+  overflow: hidden !important;
+}
+
+.management-center-page .md-table-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+
+  margin-top: 10px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+
+  box-sizing: border-box !important;
+}
+
+.management-center-page .md-table {
+  width: 100% !important;
+  min-width: 980px !important;
+
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  margin: 0 !important;
+  background: #ffffff !important;
+
+  display: table !important;
+}
+
+.management-center-page .md-table thead {
+  display: table-header-group !important;
+}
+
+.management-center-page .md-table tbody {
+  display: table-row-group !important;
+}
+
+.management-center-page .md-table tr {
+  display: table-row !important;
+  height: auto !important;
+}
+
+.management-center-page .md-table th,
+.management-center-page .md-table td {
+  display: table-cell !important;
+
+  padding: 10px 12px !important;
+
+  border-bottom: 1px solid #dbe7f6 !important;
+
+  color: #0f2746 !important;
+
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 750 !important;
+
+  text-align: left !important;
+  vertical-align: middle !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+
+  box-sizing: border-box !important;
+}
+
+.management-center-page .md-table th {
+  height: 38px !important;
+
+  background: #f3f6fb !important;
+  color: #2563eb !important;
+
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+
+.management-center-page .md-table td {
+  min-height: 44px !important;
+  height: 44px !important;
+
+  white-space: normal !important;
+}
+
+.management-center-page .md-table tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+/* Column sizing */
+.management-center-page .md-table th:nth-child(1),
+.management-center-page .md-table td:nth-child(1) {
+  width: 76px !important;
+  min-width: 76px !important;
+  max-width: 76px !important;
+
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+
+  font-weight: 900 !important;
+}
+
+.management-center-page .md-table th:nth-child(2),
+.management-center-page .md-table td:nth-child(2) {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+
+  font-weight: 900 !important;
+}
+
+.management-center-page .md-table th:nth-child(3),
+.management-center-page .md-table td:nth-child(3) {
+  width: 260px !important;
+}
+
+.management-center-page .md-table th:nth-child(4),
+.management-center-page .md-table td:nth-child(4) {
+  width: 160px !important;
+
+  white-space: nowrap !important;
+}
+
+.management-center-page .md-table th:nth-child(5),
+.management-center-page .md-table td:nth-child(5) {
+  width: auto !important;
+}
+
+.management-center-page .md-table th:nth-child(6),
+.management-center-page .md-table td:nth-child(6) {
+  width: 92px !important;
+  min-width: 92px !important;
+  max-width: 92px !important;
+
+  white-space: nowrap !important;
+
+  font-weight: 900 !important;
+}
+
+/* Prevent broken header/text */
+.management-center-page .md-table th *,
+.management-center-page .md-table td * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+.management-center-page .md-table th * {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+}
+
+/* Status text clean */
+.management-center-page .md-table td:nth-child(6) {
+  color: #0f2746 !important;
+}
+
+/* Table scrollbar */
+.management-center-page .md-table-wrap::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.management-center-page .md-table-wrap::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}

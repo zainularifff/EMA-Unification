@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { Eye, Pencil, Plus, RefreshCw, Save, Search, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 import NotificationChannelsSettings from "../components/settings/NotificationChannelsSettings";
 import api, { unwrapArray } from "../services/apiClient";
-import "../styles/resource-planning.css";
 import {
   accessControls as settingsAccessControls,
   auditLogs as settingsAuditLogs,
@@ -15,14 +14,6 @@ import {
   settingsRoles,
   settingsUsers,
 } from "../services/settingsService";
-import "../styles/settings-module-control-scroll-fix.css";
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-table-container-spacing-final.css";
 
 type SectionKey = "roles" | "users" | "modules" | "access" | "incident" | "notification" | "softwarePolicy" | "audit" | "pricing" | "aging" | "policy" | "risk" | "resources";
 type RoleStatus = "Active" | "Review" | "Locked" | "Inactive";
@@ -1573,7 +1564,7 @@ function normalizePcAgingRule(rule: Partial<PcAgingRule> = {}): PcAgingRule {
 
 
 // Software Registry merged from SettingsWithNotifications into the main Settings sidebar.
-type Classification = "Legal" | "Illegal";
+type Classification = "Legal"
 
 type CategoryRow = { CategoryID: number; CategoryName: string };
 type PublisherRow = { Publisher: string; SoftwareCount?: number; InstalledCount?: number };
@@ -2130,10 +2121,6 @@ function SoftwareRegistryManagement() {
                   <section className="sp-section">
                     <div className="sp-section-title"><strong>2. Classification, license & cost</strong><small>Classify the software and enter license cost for ROI calculation.</small></div>
                     <div className="sp-section-body">
-                      <div className="sp-class-grid">
-                        <button type="button" className={`sp-class-btn ${softwareForm.classification === "Legal" ? "active legal" : ""}`} onClick={() => setSoftwareForm((c) => ({ ...c, classification: "Legal" }))}><ShieldCheck size={18} /> Legal</button>
-                        <button type="button" className={`sp-class-btn ${softwareForm.classification === "Illegal" ? "active illegal" : ""}`} onClick={() => setSoftwareForm((c) => ({ ...c, classification: "Illegal" }))}><ShieldAlert size={18} /> Illegal</button>
-                      </div>
                       <div className="sp-selected-box">This registry applies to: {resolvedRegistrySoftware?.SoftwareName || "software name above"}</div>
                       <div className="sp-cost-grid">
                         <label className="sp-field"><span>Total license</span><input type="number" min="0" value={softwareForm.licenseCount} onChange={(e) => setSoftwareForm((c) => ({ ...c, licenseCount: e.target.value }))} /></label>
@@ -3717,6 +3704,236 @@ export default function Settings() {
   return (
     <main className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section={activeSection}>
       <style>{SETTINGS_SOFTWARE_POLICY_INLINE_CSS}</style>
+      <style>{`
+        /* SETTINGS_INCIDENT_TABLE_NATIVE_FORCE_START */
+        /* Settings > Incident Config only.
+           Current file uses native tables:
+           .incident-sla-panel table.settings-table.role-table
+           .incident-working-panel table.settings-table.role-table */
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel .table-shell.role-table-wrap,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel .table-shell.role-table-wrap {
+          display: block !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-width: 0 !important;
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          border: 1px solid rgba(203, 213, 225, 0.9) !important;
+          border-radius: 18px !important;
+          background: #ffffff !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table {
+          display: table !important;
+          width: 100% !important;
+          min-width: 980px !important;
+          max-width: none !important;
+          table-layout: fixed !important;
+          border-collapse: collapse !important;
+          border-spacing: 0 !important;
+          margin: 0 !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table thead,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table thead {
+          display: table-header-group !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table tbody,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table tbody {
+          display: table-row-group !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table tr,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table tr {
+          display: table-row !important;
+          width: auto !important;
+          max-width: none !important;
+          height: auto !important;
+          min-height: 0 !important;
+          float: none !important;
+          position: static !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table th,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table td,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table th,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table td {
+          display: table-cell !important;
+          float: none !important;
+          position: static !important;
+          vertical-align: middle !important;
+          width: auto !important;
+          max-width: none !important;
+          height: auto !important;
+          min-height: 0 !important;
+          padding: 0.7rem 0.82rem !important;
+          font-size: 0.74rem !important;
+          line-height: 1.3 !important;
+          text-align: left !important;
+          white-space: normal !important;
+          word-break: normal !important;
+          overflow-wrap: normal !important;
+          writing-mode: horizontal-tb !important;
+          text-orientation: mixed !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.95) !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table th,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table th {
+          background: #f3f6fb !important;
+          color: #2563eb !important;
+          font-size: 0.68rem !important;
+          font-weight: 900 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.045em !important;
+          white-space: nowrap !important;
+        }
+
+        /* SLA Rules columns */
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table th:nth-child(1),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table td:nth-child(1) {
+          width: 125px !important;
+          min-width: 125px !important;
+          max-width: 125px !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table th:nth-child(2),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table td:nth-child(2) {
+          width: 180px !important;
+          min-width: 180px !important;
+          max-width: 180px !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table th:nth-child(3),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table td:nth-child(3) {
+          width: 170px !important;
+          min-width: 170px !important;
+          max-width: 170px !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table th:nth-child(4),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table td:nth-child(4) {
+          width: 180px !important;
+          min-width: 180px !important;
+          max-width: 180px !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table th:nth-child(5),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table td:nth-child(5) {
+          width: auto !important;
+          min-width: 320px !important;
+        }
+
+        /* Working Hours columns */
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table th:nth-child(1),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table td:nth-child(1) {
+          width: 145px !important;
+          min-width: 145px !important;
+          max-width: 145px !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table th:nth-child(2),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table td:nth-child(2) {
+          width: 220px !important;
+          min-width: 220px !important;
+          max-width: 220px !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table th:nth-child(3),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table td:nth-child(3),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table th:nth-child(4),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table td:nth-child(4) {
+          width: 170px !important;
+          min-width: 170px !important;
+          max-width: 170px !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table th:nth-child(5),
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table td:nth-child(5) {
+          width: auto !important;
+          min-width: 210px !important;
+        }
+
+        /* Inputs / textarea / custom select inside Incident Config tables */
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-sla-panel table.settings-table.role-table .setting-input,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table .setting-input,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table .setting-select-dropdown,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table .setting-select-trigger {
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          writing-mode: horizontal-tb !important;
+          text-orientation: mixed !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table .setting-input {
+          display: block !important;
+          height: 36px !important;
+          padding: 0.46rem 0.65rem !important;
+          border: 1px solid rgba(203, 213, 225, 0.95) !important;
+          border-radius: 12px !important;
+          background: #ffffff !important;
+          color: #0f2748 !important;
+          font-size: 0.74rem !important;
+          font-weight: 800 !important;
+          line-height: 1.25 !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table textarea.setting-input,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table .resource-textarea {
+          height: 44px !important;
+          min-height: 44px !important;
+          max-height: 96px !important;
+          resize: vertical !important;
+          overflow: auto !important;
+          line-height: 1.35 !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module .incident-working-panel table.settings-table.role-table .setting-select-trigger {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          height: 36px !important;
+          min-height: 36px !important;
+          padding: 0.46rem 0.65rem !important;
+          border: 1px solid rgba(203, 213, 225, 0.95) !important;
+          border-radius: 12px !important;
+          background: #ffffff !important;
+          color: #0f2748 !important;
+          font-size: 0.74rem !important;
+          font-weight: 800 !important;
+          white-space: nowrap !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table strong,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table span,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table small,
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table .status-pill {
+          display: inline-flex !important;
+          align-items: center !important;
+          width: auto !important;
+          max-width: 100% !important;
+          white-space: nowrap !important;
+          word-break: normal !important;
+          overflow-wrap: normal !important;
+          writing-mode: horizontal-tb !important;
+          text-orientation: mixed !important;
+          text-indent: 0 !important;
+          letter-spacing: normal !important;
+        }
+
+        html body main.settings-module-root[data-section="incident"] .incident-config-module table.settings-table.role-table tbody tr:hover td {
+          background: #f8fbff !important;
+        }
+        /* SETTINGS_INCIDENT_TABLE_NATIVE_FORCE_END */
+`}</style>
+
       <input aria-hidden="true" id="globalSearch" type="hidden" />
       <button hidden id="themeBtn" type="button">
         <span id="themeLabel">Dark Mode</span>

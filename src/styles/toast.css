@@ -1,604 +1,73 @@
-html body .settings-toast-layer,
-html body [class*="settings-toast-layer"],
-html body .toast-layer,
-html body [class*="toast-layer"] {
-  position: static !important;
-  inset: auto !important;
-  width: auto !important;
-  height: auto !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  display: contents !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  pointer-events: none !important;
-  overflow: visible !important;
-}
-
 .ema-notice-card {
-  position: fixed !important;
-  top: 86px !important;
-  right: 28px !important;
-  left: auto !important;
-  bottom: auto !important;
-  z-index: 2147483647 !important;
-
-  width: 360px !important;
-  max-width: calc(100vw - 40px) !important;
-  min-height: 58px !important;
-
-  display: grid !important;
-  grid-template-columns: 36px minmax(0, 1fr) 24px !important;
-  align-items: center !important;
-  gap: 10px !important;
-
-  padding: 10px 12px !important;
-  margin: 0 !important;
-
-  border: 1px solid #d8e6fb !important;
-  border-left: 5px solid #2563eb !important;
-  border-radius: 16px !important;
-  background: #ffffff !important;
-  color: #0f2746 !important;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16) !important;
-
-  pointer-events: auto !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-}
-
-.ema-notice-card,
-.ema-notice-card * {
-  box-sizing: border-box !important;
-}
-
-.ema-notice-card.is-success {
-  border-left-color: #22c55e !important;
-}
-
-.ema-notice-card.is-info {
-  border-left-color: #2563eb !important;
-}
-
-.ema-notice-card.is-warning {
-  border-left-color: #f59e0b !important;
-}
-
-.ema-notice-card.is-error {
-  border-left-color: #ef4444 !important;
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--ema-card-bg);
+  border: 1px solid var(--ema-border);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  padding: 12px 14px;
+  min-width: 260px;
+  max-width: 360px;
 }
 
 .ema-notice-icon {
-  width: 30px !important;
-  height: 30px !important;
-  display: grid !important;
-  place-items: center !important;
-  border-radius: 10px !important;
-  font-size: 0.66rem !important;
-  font-weight: 950 !important;
-  line-height: 1 !important;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  flex: none;
+  background: var(--ema-blue-50);
+  color: var(--ema-blue-600);
 }
 
 .ema-notice-card.is-success .ema-notice-icon {
-  background: #dcfce7 !important;
-  color: #166534 !important;
-}
-
-.ema-notice-card.is-info .ema-notice-icon {
-  background: #dbeafe !important;
-  color: #1d4ed8 !important;
-}
-
-.ema-notice-card.is-warning .ema-notice-icon {
-  background: #fef3c7 !important;
-  color: #92400e !important;
+  background: var(--ema-green-50);
+  color: var(--ema-green-600);
 }
 
 .ema-notice-card.is-error .ema-notice-icon {
-  background: #fee2e2 !important;
-  color: #991b1b !important;
+  background: var(--ema-red-50);
+  color: var(--ema-red-600);
+}
+
+.ema-notice-card.is-warning .ema-notice-icon {
+  background: var(--ema-amber-50);
+  color: var(--ema-amber-600);
 }
 
 .ema-notice-body {
-  min-width: 0 !important;
-  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .ema-notice-title {
-  display: block !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  color: #0f2746 !important;
-  font-size: 0.78rem !important;
-  font-weight: 950 !important;
-  line-height: 1.18 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--ema-slate-900);
 }
 
 .ema-notice-message {
-  display: block !important;
-  margin: 3px 0 0 !important;
-  padding: 0 !important;
-  color: #475569 !important;
-  font-size: 0.72rem !important;
-  font-weight: 760 !important;
-  line-height: 1.25 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  font-size: 0.78rem;
+  color: var(--ema-slate-500);
 }
 
 .ema-notice-close {
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  min-height: 24px !important;
-  display: grid !important;
-  place-items: center !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: 0 !important;
-  border-radius: 8px !important;
-  background: transparent !important;
-  color: #64748b !important;
-  font-size: 13px !important;
-  font-weight: 950 !important;
-  line-height: 1 !important;
-  cursor: pointer !important;
-  appearance: none !important;
-  box-shadow: none !important;
+  border: none;
+  background: transparent;
+  color: var(--ema-slate-400);
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
 }
-
-.ema-notice-close:hover {
-  background: #f1f5f9 !important;
-  color: #0f2746 !important;
-}
-
-@media (max-width: 640px) {
-  .ema-notice-card {
-    top: 76px !important;
-    right: 12px !important;
-    width: calc(100vw - 24px) !important;
-    max-width: calc(100vw - 24px) !important;
-  }
-}
-
-
-/* EMA GLOBAL TOAST FORCE START */
-/* Source of truth: toast.css.
-   All module toasts are forced to one standard toast UI.
-*/
-
-:root {
-  --ema-toast-top: 86px;
-  --ema-toast-right: 28px;
-  --ema-toast-width: 360px;
-  --ema-toast-radius: 16px;
-
-  --ema-toast-bg: #ffffff;
-  --ema-toast-border: #d8e6fb;
-  --ema-toast-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
-
-  --ema-toast-text: #0f2746;
-  --ema-toast-muted: #475569;
-
-  --ema-toast-info: #2563eb;
-  --ema-toast-success: #22c55e;
-  --ema-toast-warning: #f59e0b;
-  --ema-toast-error: #ef4444;
-}
-
-/* Toast layer should not create modal/box */
-html body :is(
-  .toast-layer,
-  .settings-toast-layer,
-  .ema-toast-layer,
-  .notification-layer,
-  [class*="toast-layer"],
-  [class*="ToastLayer"]
-) {
-  position: static !important;
-  inset: auto !important;
-
-  width: auto !important;
-  height: auto !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-
-  display: contents !important;
-
-  padding: 0 !important;
-  margin: 0 !important;
-
-  background: transparent !important;
-  box-shadow: none !important;
-  border: 0 !important;
-
-  pointer-events: none !important;
-  overflow: visible !important;
-}
-
-/* Main toast card aliases */
-html body :is(
-  .ema-toast,
-  .ema-toast-card,
-  .ema-notice-card,
-  .settings-toast,
-  .hardware-toast,
-  .software-toast,
-  .network-toast,
-  .service-desk-toast,
-  .app-toast,
-  .toast-card,
-  .toast-message,
-  [class*="-toast"][role="status"],
-  [class*="Toast"][role="status"]
-) {
-  position: fixed !important;
-  top: var(--ema-toast-top) !important;
-  right: var(--ema-toast-right) !important;
-  left: auto !important;
-  bottom: auto !important;
-
-  z-index: 2147483647 !important;
-
-  width: var(--ema-toast-width) !important;
-  max-width: calc(100vw - 40px) !important;
-  min-height: 58px !important;
-
-  display: grid !important;
-  grid-template-columns: 36px minmax(0, 1fr) 24px !important;
-  align-items: center !important;
-  gap: 10px !important;
-
-  padding: 10px 12px !important;
-  margin: 0 !important;
-
-  border: 1px solid var(--ema-toast-border) !important;
-  border-left: 5px solid var(--ema-toast-info) !important;
-  border-radius: var(--ema-toast-radius) !important;
-
-  background: var(--ema-toast-bg) !important;
-  color: var(--ema-toast-text) !important;
-  box-shadow: var(--ema-toast-shadow) !important;
-
-  pointer-events: auto !important;
-  overflow: hidden !important;
-  box-sizing: border-box !important;
-
-  transform: none !important;
-}
-
-html body :is(
-  .ema-toast,
-  .ema-toast-card,
-  .ema-notice-card,
-  .settings-toast,
-  .hardware-toast,
-  .software-toast,
-  .network-toast,
-  .service-desk-toast,
-  .app-toast,
-  .toast-card,
-  .toast-message,
-  [class*="-toast"][role="status"],
-  [class*="Toast"][role="status"]
-),
-html body :is(
-  .ema-toast,
-  .ema-toast-card,
-  .ema-notice-card,
-  .settings-toast,
-  .hardware-toast,
-  .software-toast,
-  .network-toast,
-  .service-desk-toast,
-  .app-toast,
-  .toast-card,
-  .toast-message,
-  [class*="-toast"][role="status"],
-  [class*="Toast"][role="status"]
-) * {
-  box-sizing: border-box !important;
-}
-
-/* Tone */
-html body :is(
-  .is-success,
-  .toast-success,
-  .success,
-  .hardware-toast-success,
-  .settings-toast-success,
-  .software-toast-success
-) {
-  border-left-color: var(--ema-toast-success) !important;
-}
-
-html body :is(
-  .is-warning,
-  .toast-warning,
-  .warning,
-  .hardware-toast-warning,
-  .settings-toast-warning,
-  .software-toast-warning
-) {
-  border-left-color: var(--ema-toast-warning) !important;
-}
-
-html body :is(
-  .is-error,
-  .is-danger,
-  .is-delete,
-  .toast-error,
-  .toast-danger,
-  .error,
-  .danger,
-  .delete,
-  .hardware-toast-error,
-  .hardware-toast-delete,
-  .settings-toast-error,
-  .software-toast-error
-) {
-  border-left-color: var(--ema-toast-error) !important;
-}
-
-html body :is(
-  .is-info,
-  .toast-info,
-  .info,
-  .hardware-toast-info,
-  .settings-toast-info,
-  .software-toast-info
-) {
-  border-left-color: var(--ema-toast-info) !important;
-}
-
-/* Icon */
-html body :is(
-  .ema-toast-icon,
-  .ema-notice-icon,
-  .toast-icon,
-  .settings-toast-icon,
-  .hardware-toast-icon,
-  .software-toast-icon
-) {
-  width: 30px !important;
-  height: 30px !important;
-  min-width: 30px !important;
-
-  display: grid !important;
-  place-items: center !important;
-
-  border-radius: 10px !important;
-
-  font-size: 11px !important;
-  font-weight: 950 !important;
-  line-height: 1 !important;
-
-  background: #dbeafe !important;
-  color: #1d4ed8 !important;
-}
-
-html body :is(
-  .is-success,
-  .toast-success,
-  .success,
-  .hardware-toast-success,
-  .settings-toast-success,
-  .software-toast-success
-) :is(.ema-toast-icon, .ema-notice-icon, .toast-icon, .settings-toast-icon, .hardware-toast-icon, .software-toast-icon) {
-  background: #dcfce7 !important;
-  color: #166534 !important;
-}
-
-html body :is(
-  .is-warning,
-  .toast-warning,
-  .warning,
-  .hardware-toast-warning,
-  .settings-toast-warning,
-  .software-toast-warning
-) :is(.ema-toast-icon, .ema-notice-icon, .toast-icon, .settings-toast-icon, .hardware-toast-icon, .software-toast-icon) {
-  background: #fef3c7 !important;
-  color: #92400e !important;
-}
-
-html body :is(
-  .is-error,
-  .is-danger,
-  .is-delete,
-  .toast-error,
-  .toast-danger,
-  .error,
-  .danger,
-  .delete,
-  .hardware-toast-error,
-  .hardware-toast-delete,
-  .settings-toast-error,
-  .software-toast-error
-) :is(.ema-toast-icon, .ema-notice-icon, .toast-icon, .settings-toast-icon, .hardware-toast-icon, .software-toast-icon) {
-  background: #fee2e2 !important;
-  color: #991b1b !important;
-}
-
-/* Body */
-html body :is(
-  .ema-toast-body,
-  .ema-notice-body,
-  .toast-body,
-  .settings-toast-body,
-  .hardware-toast-body,
-  .software-toast-body
-) {
-  min-width: 0 !important;
-  overflow: hidden !important;
-}
-
-/* Title */
-html body :is(
-  .ema-toast-title,
-  .ema-notice-title,
-  .toast-title,
-  .settings-toast-title,
-  .hardware-toast-title,
-  .software-toast-title
-) {
-  display: block !important;
-
-  margin: 0 !important;
-  padding: 0 !important;
-
-  color: var(--ema-toast-text) !important;
-
-  font-size: 0.78rem !important;
-  font-weight: 950 !important;
-  line-height: 1.18 !important;
-
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-/* Message */
-html body :is(
-  .ema-toast-message,
-  .ema-notice-message,
-  .toast-text,
-  .toast-message-text,
-  .settings-toast-message,
-  .hardware-toast-message,
-  .software-toast-message
-) {
-  display: block !important;
-
-  margin: 3px 0 0 !important;
-  padding: 0 !important;
-
-  color: var(--ema-toast-muted) !important;
-
-  font-size: 0.72rem !important;
-  font-weight: 760 !important;
-  line-height: 1.25 !important;
-
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-/* Close button */
-html body :is(
-  .ema-toast-close,
-  .ema-notice-close,
-  .toast-close,
-  .settings-toast-close,
-  .hardware-toast-close,
-  .software-toast-close
-) {
-  width: 24px !important;
-  height: 24px !important;
-  min-width: 24px !important;
-  min-height: 24px !important;
-
-  display: grid !important;
-  place-items: center !important;
-
-  padding: 0 !important;
-  margin: 0 !important;
-
-  border: 0 !important;
-  border-radius: 8px !important;
-
-  background: transparent !important;
-  color: #64748b !important;
-  box-shadow: none !important;
-
-  font-size: 13px !important;
-  font-weight: 950 !important;
-  line-height: 1 !important;
-
-  cursor: pointer !important;
-  appearance: none !important;
-}
-
-html body :is(
-  .ema-toast-close,
-  .ema-notice-close,
-  .toast-close,
-  .settings-toast-close,
-  .hardware-toast-close,
-  .software-toast-close
-):hover {
-  background: #f1f5f9 !important;
-  color: var(--ema-toast-text) !important;
-}
-
-/* Old hardware toast inner markup fallback */
-html body .hardware-toast > svg,
-html body .settings-toast > svg,
-html body .software-toast > svg {
-  width: 18px !important;
-  height: 18px !important;
-  grid-column: 1 !important;
-}
-
-html body .hardware-toast > div,
-html body .settings-toast > div,
-html body .software-toast > div {
-  min-width: 0 !important;
-  overflow: hidden !important;
-}
-
-html body .hardware-toast strong,
-html body .settings-toast strong,
-html body .software-toast strong {
-  display: block !important;
-  color: var(--ema-toast-text) !important;
-  font-size: 0.78rem !important;
-  font-weight: 950 !important;
-  line-height: 1.18 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-html body .hardware-toast p,
-html body .settings-toast p,
-html body .software-toast p {
-  margin: 3px 0 0 !important;
-  color: var(--ema-toast-muted) !important;
-  font-size: 0.72rem !important;
-  font-weight: 760 !important;
-  line-height: 1.25 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-@media (max-width: 640px) {
-  html body :is(
-    .ema-toast,
-    .ema-toast-card,
-    .ema-notice-card,
-    .settings-toast,
-    .hardware-toast,
-    .software-toast,
-    .network-toast,
-    .service-desk-toast,
-    .app-toast,
-    .toast-card,
-    .toast-message,
-    [class*="-toast"][role="status"],
-    [class*="Toast"][role="status"]
-  ) {
-    top: 76px !important;
-    right: 12px !important;
-    width: calc(100vw - 24px) !important;
-    max-width: calc(100vw - 24px) !important;
-  }
-}
-
-/* EMA GLOBAL TOAST FORCE END */

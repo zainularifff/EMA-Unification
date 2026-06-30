@@ -1,67 +1,119 @@
-/* =========================================================
-   EMA Shared Panel Touch-up
-   Panel/card styling only.
-
-   Important:
-   Search, filter, dropdown and toolbar control styling belongs
-   in filter.css. Do not style .section-search or its input here,
-   otherwise Settings and Report will show double search borders.
-========================================================= */
-
-.content-panel,
-.uam-panel.clean,
-.content-shell {
-  min-width: 0;
+.ema-panel-surface {
+  background: var(--ema-card-bg);
+  border: 1px solid var(--ema-border);
+  border-radius: var(--ema-radius-lg);
+  box-shadow: var(--ema-shadow-card);
 }
 
-.content-panel.clean,
-.uam-panel.clean {
-  border: 1px solid rgba(203, 213, 225, 0.84);
-  border-radius: 1.35rem;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.96));
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
-  overflow: hidden;
+.settings-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  gap: 12px;
 }
 
-.content-head {
-  min-width: 0;
+.panel-head {
+  padding: 2px 4px 4px;
 }
 
-.content-head h3,
-.content-head h2 {
-  margin: 0;
-  color: #10233f;
-  font-family: var(--ema-font-display, "Manrope", "Inter", system-ui, sans-serif);
-  font-size: clamp(1.18rem, 1.8vw, 1.72rem);
-  font-weight: 900;
-  letter-spacing: -0.05em;
-  line-height: 1.08;
+.panel-head strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ema-slate-900);
 }
 
-.content-head p {
-  margin: 0.32rem 0 0;
-  color: #64748b;
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1.42;
-}
-
-.content-actions {
-  min-width: 0;
-  display: inline-flex;
+.section-search.ema-sidebar-field {
+  display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.52rem;
+  gap: 8px;
+  border: 1px solid var(--ema-border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: var(--ema-slate-100);
+  color: var(--ema-slate-400);
+}
+
+.section-search.ema-sidebar-field input {
+  border: none;
+  outline: none;
+  background: transparent;
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--ema-slate-900);
+}
+
+.section-search.ema-sidebar-field input::placeholder {
+  color: var(--ema-slate-400);
+}
+
+.ema-sidebar-content {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ema-sidebar-subpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.soft-btn {
+  border: 1px dashed var(--ema-border);
+  background: var(--ema-slate-100);
+  color: var(--ema-slate-600);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.soft-btn:hover {
+  background: var(--ema-blue-50);
+  border-color: var(--ema-blue-100);
+  color: var(--ema-blue-600);
+}
+
+.settings-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
   flex-wrap: wrap;
 }
 
-@media (max-width: 900px) {
-  .content-actions {
-    align-items: stretch;
-  }
+.settings-hero > div:first-child {
+  flex: 0 1 360px;
+  min-width: 220px;
+}
 
-  .content-actions > * {
-    width: 100%;
-  }
+.eyebrow,
+.section-tag {
+  display: inline-block;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ema-blue-600);
+  background: var(--ema-blue-50);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.settings-hero h2 {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--ema-slate-900);
+  margin: 0 0 6px;
+}
+
+.settings-hero p {
+  color: var(--ema-slate-500);
+  font-size: 0.84rem;
+  margin: 0;
+  line-height: 1.45;
 }

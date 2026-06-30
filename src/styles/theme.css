@@ -1,28 +1,84 @@
 :root {
-  --ema-bg: #071014;
-  --ema-bg-soft: #0b1620;
-  --ema-sidebar: #0d1726;
-  --ema-panel: rgba(15, 29, 43, 0.86);
-  --ema-panel-strong: rgba(18, 35, 52, 0.94);
-  --ema-border: rgba(148, 163, 184, 0.16);
-  --ema-border-strong: rgba(94, 234, 212, 0.3);
+  --ema-navy-950: #0a1330;
+  --ema-navy-900: #0d1838;
+  --ema-navy-800: #131f47;
+  --ema-blue-700: #2457d6;
+  --ema-blue-600: #2f6fed;
+  --ema-blue-500: #3b82f6;
+  --ema-blue-100: #dbe7ff;
+  --ema-blue-50: #eaf1ff;
+  --ema-green-600: #16a34a;
+  --ema-green-50: #dcfce7;
+  --ema-amber-600: #d97706;
+  --ema-amber-50: #fef3c7;
+  --ema-red-600: #dc2626;
+  --ema-red-50: #fee2e2;
+  --ema-slate-900: #0f172a;
+  --ema-slate-700: #334155;
+  --ema-slate-600: #475569;
+  --ema-slate-500: #64748b;
+  --ema-slate-400: #94a3b8;
+  --ema-slate-200: #e2e8f0;
+  --ema-slate-100: #f1f5f9;
+  --ema-page-bg: #f4f6fb;
+  --ema-card-bg: #ffffff;
+  --ema-border: #e6e9f2;
+  --ema-radius-lg: 16px;
+  --ema-radius-md: 12px;
+  --ema-radius-sm: 8px;
+  --ema-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.04);
+  --ema-font: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
 
-  --ema-text: #f8fafc;
-  --ema-text-soft: #cbd5e1;
-  --ema-muted: #7d8da1;
+* {
+  box-sizing: border-box;
+}
 
-  --ema-primary: #38bdf8;
-  --ema-primary-2: #2dd4bf;
-  --ema-purple: #8b5cf6;
-  --ema-success: #22c55e;
-  --ema-warning: #eab308;
-  --ema-danger: #ef4444;
+html {
+  font-size: 13px;
+}
 
-  --ema-radius: 1rem;
-  --ema-radius-lg: 1.4rem;
-  --ema-radius-xl: 1.8rem;
+html,
+body,
+#root {
+  height: 100%;
+}
 
-  --ema-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
-  --ema-glow: 0 0 0 1px rgba(94, 234, 212, 0.12),
-    0 24px 80px rgba(45, 212, 191, 0.08);
+body {
+  margin: 0;
+  font-family: var(--ema-font);
+  background: var(--ema-page-bg);
+  color: var(--ema-slate-900);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--ema-font);
+}
+
+button {
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ema-slate-200);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ema-slate-400);
 }

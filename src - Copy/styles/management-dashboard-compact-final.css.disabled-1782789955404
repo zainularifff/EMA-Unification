@@ -1,0 +1,257 @@
+/* MANAGEMENT DASHBOARD COMPACT FINAL
+   Scope: /management-dashboard only.
+*/
+
+body.ema-mgmt-compact-final {
+  --mgmt-border: #dbe7f6;
+  --mgmt-text: #0f2746;
+  --mgmt-muted: #64748b;
+  --mgmt-blue: #2563eb;
+}
+
+/* Page root */
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  padding: 10px !important;
+  gap: 10px !important;
+
+  box-sizing: border-box !important;
+  overflow: auto !important;
+}
+
+/* Main two-column layout */
+body.ema-mgmt-compact-final [data-mgmt-layout-final="true"] {
+  display: grid !important;
+  grid-template-columns: 330px minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: start !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+/* Left lens panel */
+body.ema-mgmt-compact-final [data-mgmt-lens-final="true"] {
+  width: 330px !important;
+  min-width: 330px !important;
+  max-width: 330px !important;
+
+  padding: 12px !important;
+
+  border: 1px solid var(--mgmt-border) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+/* Right queue panel */
+body.ema-mgmt-compact-final [data-mgmt-queue-final="true"] {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+
+  padding: 12px !important;
+
+  border: 1px solid var(--mgmt-border) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+/* Titles */
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] :is(h1, h2, h3, h4) {
+  color: var(--mgmt-text) !important;
+  line-height: 1.15 !important;
+  margin-top: 0 !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] h1 {
+  font-size: 22px !important;
+  font-weight: 900 !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] h2 {
+  font-size: 16px !important;
+  font-weight: 900 !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] h3,
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] h4 {
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] :is(p, small, span) {
+  line-height: 1.25 !important;
+}
+
+/* Left score cards: stop huge gedabak card */
+body.ema-mgmt-compact-final [data-mgmt-score-card-final="true"] {
+  height: 118px !important;
+  min-height: 118px !important;
+  max-height: 118px !important;
+
+  padding: 14px !important;
+  margin: 0 0 10px !important;
+
+  border-radius: 12px !important;
+  box-shadow: none !important;
+
+  display: flex !important;
+  align-items: center !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-score-card-final="true"] * {
+  max-width: 100% !important;
+  line-height: 1.15 !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-score-card-final="true"] :is(strong, b) {
+  font-size: 28px !important;
+  font-weight: 900 !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-score-card-final="true"] :is(p, span, small) {
+  font-size: 10px !important;
+  font-weight: 750 !important;
+}
+
+/* Decision table wrapper */
+body.ema-mgmt-compact-final [data-mgmt-table-wrap-final="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  max-height: calc(100vh - 190px) !important;
+
+  overflow: auto !important;
+  border: 1px solid var(--mgmt-border) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Management table only */
+body.ema-mgmt-compact-final [data-mgmt-table-final="true"] {
+  width: 100% !important;
+  min-width: 880px !important;
+
+  table-layout: auto !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  background: #ffffff !important;
+  color: var(--mgmt-text) !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-table-final="true"] thead {
+  display: table-header-group !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-table-final="true"] tbody {
+  display: table-row-group !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-table-final="true"] tr {
+  display: table-row !important;
+  height: auto !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-table-final="true"] th,
+body.ema-mgmt-compact-final [data-mgmt-table-final="true"] td {
+  display: table-cell !important;
+
+  padding: 9px 12px !important;
+
+  border-bottom: 1px solid #dbe7f6 !important;
+
+  color: var(--mgmt-text) !important;
+
+  font-size: 10.5px !important;
+  line-height: 1.3 !important;
+  font-weight: 750 !important;
+
+  text-align: left !important;
+  vertical-align: middle !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-mgmt-compact-final [data-mgmt-table-final="true"] th {
+  background: #f3f6fb !important;
+  color: #2563eb !important;
+
+  font-size: 9.5px !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+}
+
+/* If content is rendered as rows/divs instead of table */
+body.ema-mgmt-compact-final [data-mgmt-queue-final="true"] :is(.row, [class*="row"], [class*="item"], [class*="queue"]) {
+  font-size: 10.5px !important;
+  line-height: 1.3 !important;
+}
+
+/* Buttons */
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] button {
+  min-height: 30px !important;
+  height: 30px !important;
+
+  padding: 0 10px !important;
+
+  border-radius: 9px !important;
+
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+/* Prevent all text vertical */
+body.ema-mgmt-compact-final [data-mgmt-page-final="true"] * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+/* Responsive */
+@media (max-width: 1280px) {
+  body.ema-mgmt-compact-final [data-mgmt-layout-final="true"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  body.ema-mgmt-compact-final [data-mgmt-lens-final="true"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  body.ema-mgmt-compact-final [data-mgmt-score-card-final="true"] {
+    height: 96px !important;
+    min-height: 96px !important;
+  }
+}

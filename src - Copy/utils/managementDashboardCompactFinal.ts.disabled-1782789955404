@@ -1,0 +1,183 @@
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  return p.includes("/management-dashboard");
+}
+
+function text(el: Element | null) {
+  return String(el?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function visible(el: Element) {
+  const node = el as HTMLElement;
+  const r = node.getBoundingClientRect();
+  const s = window.getComputedStyle(node);
+  return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+}
+
+function clearMarks() {
+  document.querySelectorAll("[data-mgmt-page-final],[data-mgmt-layout-final],[data-mgmt-lens-final],[data-mgmt-queue-final],[data-mgmt-score-card-final],[data-mgmt-table-wrap-final],[data-mgmt-table-final]").forEach((el) => {
+    const n = el as HTMLElement;
+    [
+      "mgmtPageFinal",
+      "mgmtLayoutFinal",
+      "mgmtLensFinal",
+      "mgmtQueueFinal",
+      "mgmtScoreCardFinal",
+      "mgmtTableWrapFinal",
+      "mgmtTableFinal",
+    ].forEach((k) => delete n.dataset[k]);
+  });
+}
+
+function scorePage(el: HTMLElement) {
+  const t = text(el).toLowerCase();
+  const r = el.getBoundingClientRect();
+
+  let score = 0;
+  if (t.includes("management dashboard")) score += 120;
+  if (t.includes("main management lens")) score += 160;
+  if (t.includes("board action queue")) score += 160;
+  if (t.includes("decision table")) score += 100;
+  if (r.width > 900) score += 60;
+  if (r.height > 400) score += 40;
+  if (t.includes("ema system") || t.includes("logout")) score -= 500;
+
+  return score;
+}
+
+function findPage() {
+  const nodes = Array.from(document.querySelectorAll("main, section, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  return nodes
+    .map((el) => ({ el, score: scorePage(el), area: el.getBoundingClientRect().width * el.getBoundingClientRect().height }))
+    .filter((x) => x.score > 250)
+    .sort((a, b) => b.score - a.score || b.area - a.area)[0]?.el || null;
+}
+
+function findPanel(page: HTMLElement, keyword: string) {
+  const nodes = Array.from(page.querySelectorAll("section, article, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  return nodes
+    .map((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      let score = 0;
+      if (t.includes(keyword)) score += 200;
+      if (r.width > 250) score += 20;
+      if (r.height > 100) score += 20;
+      if (t.includes("ema system") || t.includes("logout")) score -= 400;
+
+      return { el, score, area: r.width * r.height };
+    })
+    .filter((x) => x.score > 180)
+    .sort((a, b) => b.score - a.score || a.area - b.area)[0]?.el || null;
+}
+
+function findLayout(lens: HTMLElement, queue: HTMLElement) {
+  let parent: HTMLElement | null = lens.parentElement;
+
+  while (parent && parent !== document.body) {
+    if (parent.contains(queue)) return parent;
+    parent = parent.parentElement;
+  }
+
+  return null;
+}
+
+function markScoreCards(lens: HTMLElement) {
+  const cards = Array.from(lens.querySelectorAll("section, article, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  for (const card of cards) {
+    const t = text(card).toLowerCase();
+    const r = card.getBoundingClientRect();
+
+    const looksScore =
+      t.includes("risk management") ||
+      t.includes("resources management") ||
+      t.includes("cost") ||
+      t.includes("score") ||
+      t.includes("/100") ||
+      t.includes("%");
+
+    if (looksScore && r.width > 180 && r.height > 100) {
+      card.setAttribute("data-mgmt-score-card-final", "true");
+    }
+  }
+}
+
+function markTables(queue: HTMLElement) {
+  const tables = Array.from(queue.querySelectorAll("table"))
+    .filter((el) => el instanceof HTMLTableElement && visible(el)) as HTMLTableElement[];
+
+  for (const table of tables) {
+    table.setAttribute("data-mgmt-table-final", "true");
+
+    const wrap = table.parentElement;
+    if (wrap instanceof HTMLElement) {
+      wrap.setAttribute("data-mgmt-table-wrap-final", "true");
+    }
+  }
+}
+
+function apply() {
+  clearMarks();
+
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-mgmt-compact-final");
+    return;
+  }
+
+  const page = findPage();
+
+  if (!page) {
+    document.body.classList.remove("ema-mgmt-compact-final");
+    return;
+  }
+
+  document.body.classList.add("ema-mgmt-compact-final");
+  page.setAttribute("data-mgmt-page-final", "true");
+
+  const lens = findPanel(page, "main management lens");
+  const queue = findPanel(page, "board action queue");
+
+  if (lens) {
+    lens.setAttribute("data-mgmt-lens-final", "true");
+    markScoreCards(lens);
+  }
+
+  if (queue) {
+    queue.setAttribute("data-mgmt-queue-final", "true");
+    markTables(queue);
+  }
+
+  if (lens && queue) {
+    const layout = findLayout(lens, queue);
+    if (layout) layout.setAttribute("data-mgmt-layout-final", "true");
+  }
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

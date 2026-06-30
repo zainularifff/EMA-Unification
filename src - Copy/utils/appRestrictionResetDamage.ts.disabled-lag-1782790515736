@@ -1,0 +1,96 @@
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  return p.includes("/app-restriction") || p.includes("/app-web-restriction");
+}
+
+const OLD_KEYS = [
+  "appresPackageSection",
+  "appresPackageHead",
+  "appresPackageSearch",
+  "appresTransferGrid",
+  "appresTransferActions",
+  "appresPackageList",
+  "appresPackageListHead",
+  "appresPackageListBody",
+  "appresPackageRow",
+  "appresPackageRowText",
+  "appresPackageRowAction",
+  "appresPackagePagination",
+  "arMain",
+  "arHeader",
+  "arKpiRow",
+  "arKpiCard",
+  "arTabs",
+  "arPolicyCard",
+  "arSectionTitle",
+  "arSettingsGrid",
+  "arInnerCard",
+  "arFieldGrid",
+  "arField",
+  "arCheckboxCard",
+  "arMethodGrid",
+  "arMethodOption",
+  "arTextareaBlock",
+  "arBottomOption"
+];
+
+function removeDamageMarks() {
+  document.querySelectorAll("[data-appres-package-section],[data-appres-package-head],[data-appres-package-search],[data-appres-transfer-grid],[data-appres-transfer-actions],[data-appres-package-list],[data-appres-package-list-head],[data-appres-package-list-body],[data-appres-package-row],[data-appres-package-row-text],[data-appres-package-row-action],[data-appres-package-pagination],[data-ar-main],[data-ar-header],[data-ar-policy-card],[data-ar-method-grid]").forEach((el) => {
+    const node = el as HTMLElement;
+
+    for (const key of OLD_KEYS) {
+      delete node.dataset[key];
+    }
+
+    node.style.removeProperty("display");
+    node.style.removeProperty("grid-template-columns");
+    node.style.removeProperty("position");
+    node.style.removeProperty("left");
+    node.style.removeProperty("right");
+    node.style.removeProperty("top");
+    node.style.removeProperty("transform");
+    node.style.removeProperty("width");
+    node.style.removeProperty("min-width");
+    node.style.removeProperty("max-width");
+    node.style.removeProperty("height");
+    node.style.removeProperty("min-height");
+    node.style.removeProperty("max-height");
+    node.style.removeProperty("overflow");
+    node.style.removeProperty("word-break");
+    node.style.removeProperty("overflow-wrap");
+    node.style.removeProperty("writing-mode");
+    node.style.removeProperty("text-orientation");
+  });
+}
+
+function apply() {
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-appres-reset-damage");
+    return;
+  }
+
+  document.body.classList.add("ema-appres-reset-damage");
+  removeDamageMarks();
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

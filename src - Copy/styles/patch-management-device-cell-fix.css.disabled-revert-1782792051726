@@ -1,0 +1,126 @@
+/* PATCH MANAGEMENT DEVICE CELL FIX
+   Scope: /patch-management only.
+   Device name and branch rendered separately.
+*/
+
+body.ema-patch-device-cell-fix table th,
+body.ema-patch-device-cell-fix table td {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+body.ema-patch-device-cell-fix [data-pm-device-cell-fixed="true"] {
+  min-width: 220px !important;
+  width: 220px !important;
+  max-width: 260px !important;
+
+  padding-left: 14px !important;
+  padding-right: 12px !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+
+  vertical-align: middle !important;
+}
+
+body.ema-patch-device-cell-fix .pm-device-cell-fixed {
+  display: grid !important;
+  grid-template-columns: 16px minmax(0, 1fr) !important;
+  gap: 7px !important;
+  align-items: start !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  color: #0f2746 !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-patch-device-cell-fix .pm-device-icon-fixed {
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  margin-top: 1px !important;
+
+  color: #2563eb !important;
+}
+
+body.ema-patch-device-cell-fix .pm-device-icon-fixed svg {
+  width: 13px !important;
+  height: 13px !important;
+  stroke: #2563eb !important;
+}
+
+body.ema-patch-device-cell-fix .pm-device-text-fixed {
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+
+  text-align: left !important;
+}
+
+body.ema-patch-device-cell-fix .pm-device-name-fixed {
+  display: block !important;
+
+  color: #0f2746 !important;
+
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+body.ema-patch-device-cell-fix .pm-device-branch-fixed {
+  display: block !important;
+
+  color: #64748b !important;
+
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 750 !important;
+
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+/* Remove old yellow search highlight look inside fixed device cell */
+body.ema-patch-device-cell-fix [data-pm-device-cell-fixed="true"] mark,
+body.ema-patch-device-cell-fix [data-pm-device-cell-fixed="true"] .highlight {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+}
+
+/* Make KB / Update column start clean after Device column */
+body.ema-patch-device-cell-fix table th:nth-child(3),
+body.ema-patch-device-cell-fix table td:nth-child(3) {
+  min-width: 420px !important;
+}
+
+/* Keep Patch table compact */
+body.ema-patch-device-cell-fix table td {
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  vertical-align: middle !important;
+}
+
+body.ema-patch-device-cell-fix table th {
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}

@@ -75,6 +75,9 @@ function panelScore(panel: HTMLElement) {
 }
 
 function findPanel() {
+  const marked = document.querySelector("[data-ema-branch-panel-v3='true']");
+  if (marked instanceof HTMLElement && visible(marked)) return marked;
+
   const panels = Array.from(document.querySelectorAll(
     "aside, .ema-page-sidebar, .ema-sidebar-panel, .module-sidepanel, .module-tree-panel, .sidebar-tree-panel, .branch-sidebar, .folder-sidebar, .inventory-sidebar, .tree-sidebar, .hardware-sidebar, .software-sidebar, .network-sidebar, [class*='sidepanel'], [class*='side-panel']"
   )).filter((el) => el instanceof HTMLElement) as HTMLElement[];
@@ -178,7 +181,7 @@ function markAdd(panel: HTMLElement) {
 function isChevron(el: Element) {
   const cls = String((el as HTMLElement).getAttribute("class") || "").toLowerCase();
   const tt = text(el);
-  return cls.includes("chevron") || cls.includes("expander") || cls.includes("arrow") || [">", "?", "?", "?", "?", "?", "?", "?"].includes(tt);
+  return cls.includes("chevron") || cls.includes("expander") || cls.includes("arrow") || [">", "<", "›", "‹", "▸", "▾", "▶", "◀"].includes(tt);
 }
 
 function styleLabel(label: HTMLElement) {
@@ -202,7 +205,7 @@ function styleLabel(label: HTMLElement) {
 
 function markRows(tree: HTMLElement) {
   const rows = Array.from(tree.querySelectorAll(
-    ".hardware-tree-select, .ema-sidebar-tree-main, .ema-sidebar-tree-node, button, [role='button'], [role='treeitem']"
+    ".hardware-tree-select, .ema-sidebar-tree-main, button, [role='button'], [role='treeitem']"
   )).filter((el) => el instanceof HTMLElement) as HTMLElement[];
 
   for (const row of rows) {

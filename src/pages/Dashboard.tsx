@@ -1,11 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-table-container-spacing-final.css";
 import {
   Activity,
   ArrowLeft,
@@ -3001,8 +2994,8 @@ export default function ITOperationsDashboard() {
     const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
     return (
-      <div className="itops-pro-table-wrap">
-        <table className="itops-pro-table">
+      <div className="itops-pro-table-wrap itops-open-ticket-table-wrap">
+        <table className="itops-pro-table itops-open-ticket-table">
           <thead>
             <tr>
               <th>Priority</th>

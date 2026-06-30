@@ -1,0 +1,298 @@
+/* APP RESTRICTION PACKAGE ROW HARD OVERRIDE
+   Final visual override. Detection already works.
+   Fixes package row text squeeze/vertical issue.
+*/
+
+body.ema-appres-package-ui-final [data-appres-package-section="true"] {
+  padding: 14px !important;
+  overflow: hidden !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-transfer-grid="true"] {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-package-list="true"] {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 420px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-package-list-head="true"] {
+  flex: 0 0 38px !important;
+  height: 38px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+
+  padding: 0 12px !important;
+  border-bottom: 1px solid #dbe7f6 !important;
+  background: #f3f6fb !important;
+
+  color: #2563eb !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-package-list-body="true"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  overflow: auto !important;
+}
+
+/* Kill table layout inside transfer list */
+body.ema-appres-package-ui-final [data-appres-package-list="true"] table,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] thead,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-package-list="true"] thead {
+  display: none !important;
+}
+
+/* ROW: block layout, action absolute, no text squeeze */
+body.ema-appres-package-ui-final [data-appres-package-row="true"],
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr {
+  position: relative !important;
+
+  display: block !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  min-height: 64px !important;
+  height: auto !important;
+
+  padding: 10px 54px 10px 14px !important;
+
+  border-bottom: 1px solid #e4edf8 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* TD becomes normal content, not skinny column */
+body.ema-appres-package-ui-final [data-appres-package-row="true"] td,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr td {
+  display: block !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+
+  color: #0f2746 !important;
+  text-align: left !important;
+  vertical-align: top !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Hide package cube/icon if it steals column width */
+body.ema-appres-package-ui-final [data-appres-package-row="true"] > svg,
+body.ema-appres-package-ui-final [data-appres-package-row="true"] td > svg,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr > svg,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr td > svg {
+  display: none !important;
+}
+
+/* Text full width */
+body.ema-appres-package-ui-final [data-appres-package-row-text="true"],
+body.ema-appres-package-ui-final [data-appres-package-row-text="true"] *,
+body.ema-appres-package-ui-final [data-appres-package-row="true"] :is(strong,b,span,p,small,div):not(button):not([role="button"]),
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr :is(strong,b,span,p,small,div):not(button):not([role="button"]) {
+  display: block !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  color: #0f2746 !important;
+
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+/* prevent one-letter vertical text */
+body.ema-appres-package-ui-final [data-appres-package-row="true"] *,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+}
+
+/* Action button fixed right */
+body.ema-appres-package-ui-final [data-appres-package-row-action="true"],
+body.ema-appres-package-ui-final [data-appres-package-row="true"] button,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr button {
+  position: absolute !important;
+  right: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 1px solid #fecaca !important;
+  border-radius: 10px !important;
+  background: #fff7f7 !important;
+  color: #ef4444 !important;
+  box-shadow: none !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-package-row-action="true"] svg,
+body.ema-appres-package-ui-final [data-appres-package-row="true"] button svg,
+body.ema-appres-package-ui-final [data-appres-package-list="true"] tbody tr button svg {
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+  stroke: #ef4444 !important;
+}
+
+/* Transfer arrows */
+body.ema-appres-package-ui-final [data-appres-transfer-actions="true"] {
+  width: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-transfer-actions="true"] button {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+}
+
+/* Pagination */
+body.ema-appres-package-ui-final [data-appres-package-pagination="true"] {
+  flex: 0 0 38px !important;
+  height: 38px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+
+  padding: 6px 10px !important;
+
+  border-top: 1px solid #dbe7f6 !important;
+  background: #fff !important;
+
+  color: #64748b !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+body.ema-appres-package-ui-final [data-appres-package-pagination="true"] button {
+  position: static !important;
+  transform: none !important;
+
+  width: auto !important;
+  min-width: 28px !important;
+  max-width: none !important;
+  height: 28px !important;
+
+  padding: 0 9px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 999px !important;
+  background: #fff !important;
+  color: #2563eb !important;
+}
+
+/* Search right */
+body.ema-appres-package-ui-final [data-appres-package-search="true"] {
+  max-width: 360px !important;
+  justify-self: end !important;
+}
+
+/* Avoid content overflow */
+body.ema-appres-package-ui-final [data-appres-package-section="true"] * {
+  box-sizing: border-box !important;
+}

@@ -1,0 +1,156 @@
+/* NETWORK INVENTORY TABLE FINAL FIX
+   Scope: Network Inventory page only.
+   Fix broken table where text becomes vertical.
+*/
+
+body.ema-network-table-final-fix [data-network-table-wrap-final="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Force table back to real table layout */
+body.ema-network-table-final-fix table[data-network-table-final="true"] {
+  width: 100% !important;
+  min-width: 760px !important;
+
+  table-layout: auto !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  display: table !important;
+
+  background: #ffffff !important;
+  color: #0f2746 !important;
+
+  box-sizing: border-box !important;
+}
+
+/* undo responsive/block table damage */
+body.ema-network-table-final-fix table[data-network-table-final="true"] thead {
+  display: table-header-group !important;
+}
+
+body.ema-network-table-final-fix table[data-network-table-final="true"] tbody {
+  display: table-row-group !important;
+}
+
+body.ema-network-table-final-fix table[data-network-table-final="true"] tr {
+  display: table-row !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+body.ema-network-table-final-fix table[data-network-table-final="true"] th,
+body.ema-network-table-final-fix table[data-network-table-final="true"] td {
+  display: table-cell !important;
+
+  padding: 10px 14px !important;
+
+  border-bottom: 1px solid #dbe7f6 !important;
+
+  color: #0f2746 !important;
+
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  font-weight: 750 !important;
+
+  text-align: left !important;
+  vertical-align: middle !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+
+  width: auto !important;
+  max-width: none !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-network-table-final-fix table[data-network-table-final="true"] th {
+  background: #f3f6fb !important;
+  color: #2563eb !important;
+
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+/* Common 3-column Network summary table */
+body.ema-network-table-final-fix table[data-network-table-final="true"] th:nth-child(1),
+body.ema-network-table-final-fix table[data-network-table-final="true"] td:nth-child(1) {
+  min-width: 320px !important;
+  width: 55% !important;
+}
+
+body.ema-network-table-final-fix table[data-network-table-final="true"] th:nth-child(2),
+body.ema-network-table-final-fix table[data-network-table-final="true"] td:nth-child(2) {
+  min-width: 110px !important;
+  width: 15% !important;
+  text-align: center !important;
+}
+
+body.ema-network-table-final-fix table[data-network-table-final="true"] th:nth-child(3),
+body.ema-network-table-final-fix table[data-network-table-final="true"] td:nth-child(3) {
+  min-width: 140px !important;
+  width: 20% !important;
+  text-align: center !important;
+}
+
+/* If there are more columns, keep them readable */
+body.ema-network-table-final-fix table[data-network-table-final="true"] th:nth-child(n+4),
+body.ema-network-table-final-fix table[data-network-table-final="true"] td:nth-child(n+4) {
+  min-width: 130px !important;
+}
+
+/* action buttons inline */
+body.ema-network-table-final-fix table[data-network-table-final="true"] td button,
+body.ema-network-table-final-fix table[data-network-table-final="true"] td a,
+body.ema-network-table-final-fix table[data-network-table-final="true"] td [role="button"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  width: 30px !important;
+  height: 30px !important;
+
+  margin: 0 4px !important;
+
+  border-radius: 8px !important;
+  white-space: nowrap !important;
+}
+
+/* remove weird vertical text from inner spans/divs */
+body.ema-network-table-final-fix table[data-network-table-final="true"] td *,
+body.ema-network-table-final-fix table[data-network-table-final="true"] th * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
+}
+
+/* table container/card right side */
+body.ema-network-table-final-fix [data-network-table-card-final="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}

@@ -1,0 +1,46 @@
+function cleanupWebDomainDamage() {
+  document.body.classList.remove("ema-web-domain-list-final");
+
+  document.querySelectorAll("[data-web-domain-section],[data-web-domain-grid],[data-web-domain-panel],[data-web-domain-head],[data-web-domain-body],[data-web-domain-row],[data-web-domain-icon],[data-web-domain-text],[data-web-domain-action],[data-web-domain-transfer],[data-web-domain-pagination]").forEach((el) => {
+    const node = el as HTMLElement;
+
+    [
+      "webDomainSection",
+      "webDomainGrid",
+      "webDomainPanel",
+      "webDomainHead",
+      "webDomainBody",
+      "webDomainRow",
+      "webDomainIcon",
+      "webDomainText",
+      "webDomainAction",
+      "webDomainTransfer",
+      "webDomainPagination",
+    ].forEach((key) => delete node.dataset[key]);
+
+    node.style.removeProperty("display");
+    node.style.removeProperty("grid-template-columns");
+    node.style.removeProperty("width");
+    node.style.removeProperty("min-width");
+    node.style.removeProperty("max-width");
+    node.style.removeProperty("height");
+    node.style.removeProperty("min-height");
+    node.style.removeProperty("max-height");
+    node.style.removeProperty("overflow");
+    node.style.removeProperty("position");
+    node.style.removeProperty("transform");
+    node.style.removeProperty("writing-mode");
+    node.style.removeProperty("text-orientation");
+    node.style.removeProperty("word-break");
+    node.style.removeProperty("overflow-wrap");
+  });
+}
+
+if (typeof window !== "undefined") {
+  cleanupWebDomainDamage();
+  setTimeout(cleanupWebDomainDamage, 100);
+  setTimeout(cleanupWebDomainDamage, 500);
+  setTimeout(cleanupWebDomainDamage, 1200);
+}
+
+export {};

@@ -1,0 +1,26 @@
+.btn-primary {
+  background: linear-gradient(135deg, var(--ema-blue-600), var(--ema-blue-700));
+  border-color: var(--ema-blue-600);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background: var(--ema-blue-700);
+  border-color: var(--ema-blue-700);
+}
+
+.btn-light {
+  background: var(--ema-slate-100);
+  border: 1px solid var(--ema-border);
+  color: var(--ema-slate-700);
+}
+
+.btn-light:hover {
+  background: var(--ema-slate-200);
+}
+
+input,
+select,
+textarea {
+  font-family: var(--ema-font);
+}

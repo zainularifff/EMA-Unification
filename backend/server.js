@@ -44,140 +44,6 @@ const { getMdmConfig } = require("./src/utils/mdmConfig");
 const app = express();
 
 // ============================================================
-// SOFTWARE_POLICY_DELETE_OVERRIDE_START
-// This override must run before older software-policy routes.
-// It fixes stale registry rows and hard deletes policy + items.
-// ============================================================
-app.use(async (req, res, next) => {
-  const method = String(req.method || "").toUpperCase();
-  const requestPath = String(req.path || req.url || "").split("?")[0];
-
-  const isPolicyList =
-    method === "GET" &&
-    requestPath === "/api/settings/software-policy/policies";
-
-  const policyDeleteMatch =
-    method === "DELETE"
-      ? requestPath.match(/^\/api\/settings\/software-policy\/policies\/(\d+)$/)
-      : null;
-
-  if (!isPolicyList && !policyDeleteMatch) {
-    return next();
-  }
-
-  try {
-    const pool = await sql.connect(dbConfig);
-
-    if (isPolicyList) {
-      const result = await pool.request().query(`
-        SELECT
-          p.PolicyID,
-          p.PolicyName,
-          p.Description,
-          p.CategoryID,
-          p.CategoryName,
-          p.WorkingStartTime,
-          p.WorkingEndTime,
-          p.WorkDays,
-          p.UtilizedHours,
-          p.UnderUtilizedHours,
-          p.OpenCountThreshold,
-          p.IsActive,
-          p.CreatedAt,
-          p.UpdatedAt,
-          COUNT(i.PolicyItemID) AS TotalItems,
-          SUM(CASE WHEN i.ComplianceStatus = 'Legal' THEN 1 ELSE 0 END) AS LegalCount,
-          SUM(CASE WHEN i.ComplianceStatus = 'Illegal' THEN 1 ELSE 0 END) AS IllegalCount,
-          SUM(ISNULL(i.LicenseCount, 0)) AS LicenseTotal
-        FROM EMA_SoftwarePolicy p
-        LEFT JOIN EMA_SoftwarePolicyItem i
-          ON i.PolicyID = p.PolicyID
-        WHERE ISNULL(p.IsActive, 1) = 1
-        GROUP BY
-          p.PolicyID,
-          p.PolicyName,
-          p.Description,
-          p.CategoryID,
-          p.CategoryName,
-          p.WorkingStartTime,
-          p.WorkingEndTime,
-          p.WorkDays,
-          p.UtilizedHours,
-          p.UnderUtilizedHours,
-          p.OpenCountThreshold,
-          p.IsActive,
-          p.CreatedAt,
-          p.UpdatedAt
-        ORDER BY ISNULL(p.UpdatedAt, p.CreatedAt) DESC;
-      `);
-
-      return res.json({
-        success: true,
-        data: result.recordset || []
-      });
-    }
-
-    if (policyDeleteMatch) {
-      const policyId = Number(policyDeleteMatch[1] || 0);
-
-      if (!policyId) {
-        return res.status(400).json({
-          success: false,
-          message: "Registry ID is required"
-        });
-      }
-
-      const transaction = new sql.Transaction(pool);
-      await transaction.begin();
-
-      try {
-        await new sql.Request(transaction)
-          .input("PolicyID", sql.Int, policyId)
-          .query(`
-            DELETE FROM EMA_SoftwarePolicyItem
-            WHERE PolicyID = @PolicyID;
-          `);
-
-        await new sql.Request(transaction)
-          .input("PolicyID", sql.Int, policyId)
-          .query(`
-            DELETE FROM EMA_SoftwarePolicy
-            WHERE PolicyID = @PolicyID;
-          `);
-
-        await transaction.commit();
-
-        return res.json({
-          success: true,
-          message: "Software registry deleted",
-          data: {
-            PolicyID: policyId
-          }
-        });
-      } catch (err) {
-        await transaction.rollback();
-        throw err;
-      }
-    }
-
-    return next();
-  } catch (err) {
-    console.error("SOFTWARE_POLICY_DELETE_OVERRIDE error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Software policy override failed",
-      error: err.message
-    });
-  }
-});
-
-console.log("Software policy delete/list override registered");
-// ============================================================
-// SOFTWARE_POLICY_DELETE_OVERRIDE_END
-// ============================================================
-
-
-// ============================================================
 // LIGHTWEIGHT DASHBOARD RESPONSE CACHE
 // Keeps expensive dashboard aggregation from running repeatedly
 // when users navigate between dashboards or refresh the same page.
@@ -1013,18 +879,8 @@ function buildModuleAccessMap(modules = []) {
     for (const moduleRow of modules) {
         const key = normalizeModuleKey(moduleRow.ModuleKey || moduleRow.moduleKey || moduleRow.key || moduleRow.ModuleName || moduleRow.name);
         if (!key) continue;
-
         access[key] = {
-            view: moduleRow.CanView === true || moduleRow.CanView === 1 || String(moduleRow.CanView || "").toLowerCase() === "true",
-            access: moduleRow.CanAccess === true || moduleRow.CanAccess === 1 || String(moduleRow.CanAccess || "").toLowerCase() === "true",
-            create: moduleRow.CanCreate === true || moduleRow.CanCreate === 1 || String(moduleRow.CanCreate || "").toLowerCase() === "true",
-            edit: moduleRow.CanEdit === true || moduleRow.CanEdit === 1 || String(moduleRow.CanEdit || "").toLowerCase() === "true",
-            delete: moduleRow.CanDelete === true || moduleRow.CanDelete === 1 || String(moduleRow.CanDelete || "").toLowerCase() === "true",
-            export: moduleRow.CanExport === true || moduleRow.CanExport === 1 || String(moduleRow.CanExport || "").toLowerCase() === "true",
-            approve: moduleRow.CanApprove === true || moduleRow.CanApprove === 1 || String(moduleRow.CanApprove || "").toLowerCase() === "true",
-            enabled: moduleRow.IsEnabled === undefined || moduleRow.IsEnabled === null || moduleRow.IsEnabled === true || moduleRow.IsEnabled === 1 || String(moduleRow.IsEnabled || "").toLowerCase() === "true",
-            permissionID: moduleRow.PermissionID || moduleRow.permissionID || null,
-            roleID: moduleRow.RoleID || moduleRow.roleID || null,
+            view: true,
             moduleID: moduleRow.ModuleID || moduleRow.moduleID || moduleRow.id || null,
             moduleKey: key,
             moduleName: moduleRow.ModuleName || moduleRow.moduleName || moduleRow.name || key,
@@ -46912,40 +46768,6 @@ app.post("/api/restrictions/:module/policy", authenticateToken, async (req, res)
 
 })();
 
-
-// ============================================================
-// AI ASSIST FALLBACK API - START
-// Prevent frontend 404 when AI Assist service is not configured.
-// ============================================================
-app.post("/api/ai-assist", authenticateToken, async (req, res) => {
-  return res.json({
-    success: true,
-    disabled: true,
-    message: "AI Assist API is not configured on this backend.",
-    data: {
-      reply: "",
-      answer: "",
-      disabled: true
-    }
-  });
-});
-
-app.get("/api/ai-assist", authenticateToken, async (req, res) => {
-  return res.json({
-    success: true,
-    disabled: true,
-    message: "AI Assist API is not configured on this backend.",
-    data: {
-      reply: "",
-      answer: "",
-      disabled: true
-    }
-  });
-});
-// ============================================================
-// AI ASSIST FALLBACK API - END
-// ============================================================
-
 // ============================================================
 // SOFTWARE POLICY API - START
 // ============================================================
@@ -47617,48 +47439,46 @@ app.post("/api/settings/software-policy/policies/:id/items", authenticateToken, 
 
 // 9. Delete software registry
 app.delete("/api/settings/software-policy/policies/:id", authenticateToken, async (req, res) => {
-  const policyId = spInt(req.params.id, 0);
-
-  if (!policyId) {
-    return res.status(400).json({
-      success: false,
-      message: "Registry ID is required"
-    });
-  }
-
-  const pool = await sql.connect(dbConfig);
-  await ensureSoftwarePolicyTables(pool);
-
-  const transaction = new sql.Transaction(pool);
-  await transaction.begin();
-
   try {
-    await new sql.Request(transaction)
+    const policyId = spInt(req.params.id, 0);
+
+    if (!policyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Registry ID is required"
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+    await ensureSoftwarePolicyTables(pool);
+
+    const result = await pool.request()
       .input("PolicyID", sql.Int, policyId)
       .query(`
-        DELETE FROM EMA_SoftwarePolicyItem
-        WHERE PolicyID = @PolicyID;
+        UPDATE EMA_SoftwarePolicy
+        SET
+          IsActive = 0,
+          UpdatedAt = SYSUTCDATETIME()
+        WHERE PolicyID = @PolicyID
+          AND ISNULL(IsActive, 1) = 1;
+
+        SELECT @@ROWCOUNT AS AffectedRows;
       `);
 
-    await new sql.Request(transaction)
-      .input("PolicyID", sql.Int, policyId)
-      .query(`
-        DELETE FROM EMA_SoftwarePolicy
-        WHERE PolicyID = @PolicyID;
-      `);
+    const affectedRows = result.recordset?.[0]?.AffectedRows || 0;
 
-    await transaction.commit();
+    if (affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "Software registry not found"
+      });
+    }
 
     return res.json({
       success: true,
-      message: "Software registry deleted",
-      data: {
-        PolicyID: policyId
-      }
+      message: "Software registry deleted"
     });
   } catch (err) {
-    await transaction.rollback();
-
     console.error("DELETE /api/settings/software-policy/policies/:id error:", err);
     return res.status(500).json({
       success: false,
@@ -47669,66 +47489,25 @@ app.delete("/api/settings/software-policy/policies/:id", authenticateToken, asyn
 });
 
 // 9. Delete software from policy
-// 10. Delete software from policy
 app.delete("/api/settings/software-policy/items/:itemId", authenticateToken, async (req, res) => {
-  const itemId = spInt(req.params.itemId, 0);
-
-  if (!itemId) {
-    return res.status(400).json({
-      success: false,
-      message: "Software item ID is required"
-    });
-  }
-
-  const pool = await sql.connect(dbConfig);
-  await ensureSoftwarePolicyTables(pool);
-
-  const transaction = new sql.Transaction(pool);
-  await transaction.begin();
-
   try {
-    const lookup = await new sql.Request(transaction)
-      .input("PolicyItemID", sql.Int, itemId)
-      .query(`
-        SELECT PolicyID
-        FROM EMA_SoftwarePolicyItem
-        WHERE PolicyItemID = @PolicyItemID;
-      `);
+    const itemId = spInt(req.params.itemId, 0);
 
-    const policyId = lookup.recordset?.[0]?.PolicyID || 0;
+    const pool = await sql.connect(dbConfig);
+    await ensureSoftwarePolicyTables(pool);
 
-    if (!policyId) {
-      await transaction.rollback();
-      return res.status(404).json({
-        success: false,
-        message: "Software item not found"
-      });
-    }
-
-    await new sql.Request(transaction)
+    await pool.request()
       .input("PolicyItemID", sql.Int, itemId)
       .query(`
         DELETE FROM EMA_SoftwarePolicyItem
         WHERE PolicyItemID = @PolicyItemID;
       `);
 
-    await new sql.Request(transaction)
-      .input("PolicyID", sql.Int, policyId)
-      .query(`
-        UPDATE EMA_SoftwarePolicy
-        SET UpdatedAt = SYSUTCDATETIME()
-        WHERE PolicyID = @PolicyID;
-      `);
-
-    await transaction.commit();
-
     return res.json({
       success: true,
-      message: "Software removed from policy",
-      data: { PolicyItemID: itemId, PolicyID: policyId }
+      message: "Software removed from policy"
     });
   } catch (err) {
-    await transaction.rollback();
     console.error("DELETE /api/settings/software-policy/items/:itemId error:", err);
     return res.status(500).json({
       success: false,
@@ -48056,6 +47835,1577 @@ console.log("Software Policy API registered");
 // ============================================================
 // MANAGEMENT DASHBOARD SOFTWARE POLICY API - END
 // ============================================================
+
+
+
+// ============================================================
+// SOFTWARE ROI API - START
+// Requirement:
+// - Utilized: usage hours >= UtilizedHours
+// - Underutilized: usage exists but usage hours < UtilizedHours
+// - Not Used: no tracking usage in TSSM_MONITOR_HISTORY
+// - Illegal Activity: ComplianceStatus = Illegal and has usage
+// ============================================================
+
+function roiText(value) {
+  return String(value ?? "").trim();
+}
+
+function roiInt(value, fallback = 0) {
+  const parsed = parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function roiDate(value) {
+  const text = roiText(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function roiBool(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const text = String(value).toLowerCase();
+  return text === "true" || text === "1" || text === "yes";
+}
+
+function roiPaging(req) {
+  const page = Math.max(roiInt(req.query.page, 1), 1);
+  const limit = Math.min(Math.max(roiInt(req.query.limit, 50), 1), 500);
+  const offset = (page - 1) * limit;
+  return { page, limit, offset };
+}
+
+function softwareRoiBaseCte() {
+  return `
+    WITH ActiveItems AS (
+      SELECT
+        i.PolicyItemID,
+        i.PolicyID,
+        p.PolicyName,
+        i.SWUNI_Idn,
+        LTRIM(RTRIM(COALESCE(NULLIF(i.SoftwareName, ''), uni.SWUNI_Name))) AS SoftwareName,
+        COALESCE(i.CategoryID, p.CategoryID, uni.SWUNI_Catg) AS CategoryID,
+        COALESCE(NULLIF(i.CategoryName, ''), NULLIF(p.CategoryName, ''), cat.CategoryName) AS CategoryName,
+        COALESCE(NULLIF(i.Publisher, ''), '') AS PublisherRule,
+        COALESCE(NULLIF(i.Version, ''), '') AS VersionRule,
+        CASE
+          WHEN LOWER(ISNULL(i.ComplianceStatus, '')) = 'illegal' THEN 'Illegal'
+          ELSE 'Legal'
+        END AS ComplianceStatus,
+        ISNULL(i.LicenseCount, 0) AS LicenseCount,
+        i.LicenseStartDate,
+        i.LicenseEndDate,
+        COALESCE(i.UtilizedHours, p.UtilizedHours, 2.00) AS UtilizedHours,
+        COALESCE(i.UnderUtilizedHours, p.UnderUtilizedHours, 0.01) AS UnderUtilizedHours,
+        COALESCE(i.OpenCountThreshold, p.OpenCountThreshold, 1) AS OpenCountThreshold,
+        COALESCE(NULLIF(i.WorkingStartTime, ''), NULLIF(p.WorkingStartTime, ''), '09:00') AS WorkingStartTime,
+        COALESCE(NULLIF(i.WorkingEndTime, ''), NULLIF(p.WorkingEndTime, ''), '17:00') AS WorkingEndTime,
+        COALESCE(NULLIF(i.WorkDays, ''), NULLIF(p.WorkDays, ''), 'Mon-Fri') AS WorkDays
+      FROM EMA_SoftwarePolicyItem i
+      INNER JOIN EMA_SoftwarePolicy p
+        ON p.PolicyID = i.PolicyID
+      LEFT JOIN TS_SWUNI_LIST uni
+        ON uni.SWUNI_Idn = i.SWUNI_Idn
+      LEFT JOIN TS_SW_CATEGORY cat
+        ON cat.CategoryID = COALESCE(i.CategoryID, p.CategoryID, uni.SWUNI_Catg)
+      WHERE ISNULL(p.IsActive, 1) = 1
+    ),
+
+    InstalledAttr AS (
+      SELECT
+        SWUNI_Idn,
+        Object_Root_Idn,
+        MAX(NULLIF(LTRIM(RTRIM(Publisher)), '')) AS Publisher,
+        MAX(NULLIF(LTRIM(RTRIM(DisplayVersion)), '')) AS DisplayVersion
+      FROM TSSI_SWUNI_ATTR
+      GROUP BY SWUNI_Idn, Object_Root_Idn
+    ),
+
+    InstalledScope AS (
+      SELECT
+        ai.PolicyItemID,
+        ai.PolicyID,
+        ai.PolicyName,
+        ai.SWUNI_Idn,
+        ai.SoftwareName,
+        ai.CategoryID,
+        ai.CategoryName,
+        ai.PublisherRule,
+        ai.VersionRule,
+        ai.ComplianceStatus,
+        ai.LicenseCount,
+        ai.LicenseStartDate,
+        ai.LicenseEndDate,
+        ai.UtilizedHours,
+        ai.UnderUtilizedHours,
+        ai.OpenCountThreshold,
+        ai.WorkingStartTime,
+        ai.WorkingEndTime,
+        ai.WorkDays,
+        obj.Object_Root_Idn,
+        obj.Object_Client_Name AS Branch,
+        obj.ComputerName,
+        attr.Publisher AS InstalledPublisher,
+        attr.DisplayVersion AS InstalledVersion
+      FROM ActiveItems ai
+      INNER JOIN InstalledAttr attr
+        ON attr.SWUNI_Idn = ai.SWUNI_Idn
+      INNER JOIN TS_OBJECT_ROOT obj
+        ON obj.Object_Root_Idn = attr.Object_Root_Idn
+
+      UNION ALL
+
+      SELECT
+        ai.PolicyItemID,
+        ai.PolicyID,
+        ai.PolicyName,
+        ai.SWUNI_Idn,
+        ai.SoftwareName,
+        ai.CategoryID,
+        ai.CategoryName,
+        ai.PublisherRule,
+        ai.VersionRule,
+        ai.ComplianceStatus,
+        ai.LicenseCount,
+        ai.LicenseStartDate,
+        ai.LicenseEndDate,
+        ai.UtilizedHours,
+        ai.UnderUtilizedHours,
+        ai.OpenCountThreshold,
+        ai.WorkingStartTime,
+        ai.WorkingEndTime,
+        ai.WorkDays,
+        NULL AS Object_Root_Idn,
+        NULL AS Branch,
+        NULL AS ComputerName,
+        NULL AS InstalledPublisher,
+        NULL AS InstalledVersion
+      FROM ActiveItems ai
+      WHERE ai.SWUNI_Idn IS NULL
+         OR NOT EXISTS (
+            SELECT 1
+            FROM InstalledAttr x
+            WHERE x.SWUNI_Idn = ai.SWUNI_Idn
+         )
+    ),
+
+    UsageAgg AS (
+      SELECT
+        ins.PolicyItemID,
+        ins.Object_Root_Idn,
+        COUNT(h.ID) AS OpenCount,
+        SUM(
+          CASE
+            WHEN h.ID IS NULL THEN 0
+            WHEN h.App_StartTime IS NOT NULL
+             AND h.App_EndTime IS NOT NULL
+             AND h.App_EndTime > h.App_StartTime
+              THEN DATEDIFF(SECOND, h.App_StartTime, h.App_EndTime)
+            WHEN ISNULL(h.ActiveTime, 0) > 0
+              THEN ISNULL(h.ActiveTime, 0)
+            ELSE 0
+          END
+        ) AS TotalSeconds,
+        MIN(h.App_StartTime) AS FirstUsedAt,
+        MAX(h.App_EndTime) AS LastUsedAt,
+        MAX(h.SW_Idn) AS MatchedSW_Idn,
+        MAX(h.SW_FileName) AS LastExecutedFile,
+        MAX(h.SW_Path) AS LastExecutedPath
+      FROM InstalledScope ins
+      LEFT JOIN TSSM_MONITOR_HISTORY h
+        ON h.Object_Root_Idn = ins.Object_Root_Idn
+       AND h.App_StartTime >= COALESCE(@DateFrom, DATEADD(DAY, -30, CONVERT(date, GETDATE())))
+       AND h.App_StartTime < DATEADD(DAY, 1, COALESCE(@DateTo, CONVERT(date, GETDATE())))
+       AND (
+          @WorkHoursOnly = 0
+          OR (
+            TRY_CONVERT(time, h.App_StartTime) >= TRY_CONVERT(time, ins.WorkingStartTime)
+            AND TRY_CONVERT(time, h.App_StartTime) <= TRY_CONVERT(time, ins.WorkingEndTime)
+          )
+       )
+       AND EXISTS (
+          SELECT 1
+          FROM TS_SW_INFO s
+          WHERE s.SW_Idn = h.SW_Idn
+            AND (
+              LOWER(LTRIM(RTRIM(ISNULL(s.SW_ProductName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+              OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_FileName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+              OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_OrgFileName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+              OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_InterName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+              OR LOWER(LTRIM(RTRIM(ISNULL(h.SW_FileName, '')))) = LOWER(LTRIM(RTRIM(ISNULL(s.SW_FileName, ''))))
+              OR (
+                LEN(LTRIM(RTRIM(ins.SoftwareName))) >= 5
+                AND LOWER(ISNULL(s.SW_ProductName, '')) LIKE '%' + LOWER(LTRIM(RTRIM(ins.SoftwareName))) + '%'
+              )
+            )
+       )
+      GROUP BY
+        ins.PolicyItemID,
+        ins.Object_Root_Idn
+    ),
+
+    FinalRows AS (
+      SELECT
+        ins.PolicyID,
+        ins.PolicyItemID,
+        ins.PolicyName,
+        ins.SWUNI_Idn,
+        ins.SoftwareName,
+        ins.CategoryID,
+        ins.CategoryName,
+        ins.PublisherRule,
+        ins.VersionRule,
+        ins.ComplianceStatus,
+        ins.LicenseCount,
+        ins.LicenseStartDate,
+        ins.LicenseEndDate,
+        CASE
+          WHEN ins.LicenseEndDate IS NULL THEN NULL
+          ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), ins.LicenseEndDate)
+        END AS DaysRemaining,
+        ins.UtilizedHours,
+        ins.UnderUtilizedHours,
+        ins.OpenCountThreshold,
+        ins.WorkingStartTime,
+        ins.WorkingEndTime,
+        ins.WorkDays,
+        ins.Object_Root_Idn,
+        ins.Branch,
+        ins.ComputerName,
+        ins.InstalledPublisher,
+        ins.InstalledVersion,
+        ISNULL(u.OpenCount, 0) AS OpenCount,
+        CAST(ROUND(ISNULL(u.TotalSeconds, 0) / 3600.0, 2) AS DECIMAL(18,2)) AS UsageHours,
+        u.FirstUsedAt,
+        u.LastUsedAt,
+        u.MatchedSW_Idn,
+        u.LastExecutedFile,
+        u.LastExecutedPath,
+        CASE
+          WHEN ISNULL(u.TotalSeconds, 0) <= 0 THEN 'Not Used'
+          WHEN CAST(ISNULL(u.TotalSeconds, 0) / 3600.0 AS DECIMAL(18,4)) >= ISNULL(ins.UtilizedHours, 0) THEN 'Utilized'
+          ELSE 'Underutilized'
+        END AS UsageStatus,
+        CASE
+          WHEN ins.ComplianceStatus = 'Illegal' AND ISNULL(u.TotalSeconds, 0) > 0 THEN 1
+          ELSE 0
+        END AS IsIllegalActivity
+      FROM InstalledScope ins
+      LEFT JOIN UsageAgg u
+        ON u.PolicyItemID = ins.PolicyItemID
+       AND ISNULL(u.Object_Root_Idn, -1) = ISNULL(ins.Object_Root_Idn, -1)
+    )
+  `;
+}
+
+function bindSoftwareRoiInputs(request, req) {
+  const dateFrom = roiDate(req.query.dateFrom || req.query.from || req.query.startDate);
+  const dateTo = roiDate(req.query.dateTo || req.query.to || req.query.endDate);
+  const workHoursOnly = roiBool(req.query.workHoursOnly, false);
+
+  request.input("DateFrom", sql.Date, dateFrom);
+  request.input("DateTo", sql.Date, dateTo);
+  request.input("WorkHoursOnly", sql.Bit, workHoursOnly ? 1 : 0);
+
+  return request;
+}
+
+// Dashboard summary
+app.get("/api/management-dashboard/software-roi", authenticateToken, async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+
+    const request = bindSoftwareRoiInputs(pool.request(), req);
+
+    const result = await request.query(`
+      IF OBJECT_ID('tempdb..#RoiRows') IS NOT NULL DROP TABLE #RoiRows;
+
+      ${softwareRoiBaseCte()}
+
+      SELECT *
+      INTO #RoiRows
+      FROM FinalRows;
+
+      SELECT
+        COUNT(DISTINCT PolicyItemID) AS TotalPolicySoftware,
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN CONCAT(PolicyItemID, ':', Object_Root_Idn) END) AS TotalInstalledRows,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Utilized' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS UtilizedCount,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Underutilized' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS UnderutilizedCount,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Not Used' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS NotUsedCount,
+        SUM(CASE WHEN IsIllegalActivity = 1 THEN 1 ELSE 0 END) AS IllegalActivityCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS TotalUsageHours,
+        (
+          SELECT ISNULL(SUM(LicenseCount), 0)
+          FROM (
+            SELECT PolicyItemID, MAX(ISNULL(LicenseCount, 0)) AS LicenseCount
+            FROM #RoiRows
+            GROUP BY PolicyItemID
+          ) x
+        ) AS TotalPurchasedLicense,
+        (
+          SELECT ISNULL(SUM(LicenseCount), 0)
+          FROM (
+            SELECT PolicyItemID, MAX(ISNULL(LicenseCount, 0)) AS LicenseCount
+            FROM #RoiRows
+            GROUP BY PolicyItemID
+          ) x
+        ) - COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN CONCAT(PolicyItemID, ':', Object_Root_Idn) END) AS LicenseBalance
+      FROM #RoiRows;
+
+      SELECT
+        UsageStatus,
+        COUNT(1) AS Total
+      FROM #RoiRows
+      GROUP BY UsageStatus
+      ORDER BY
+        CASE UsageStatus
+          WHEN 'Utilized' THEN 1
+          WHEN 'Underutilized' THEN 2
+          WHEN 'Not Used' THEN 3
+          ELSE 9
+        END;
+
+      SELECT TOP (10)
+        SoftwareName,
+        CategoryName,
+        COUNT(1) AS DeviceCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS UsageHours,
+        MAX(UtilizedHours) AS UtilizedHours,
+        MAX(LastUsedAt) AS LastUsedAt
+      FROM #RoiRows
+      WHERE UsageStatus IN ('Underutilized', 'Not Used')
+      GROUP BY SoftwareName, CategoryName
+      ORDER BY DeviceCount DESC, UsageHours ASC;
+
+      SELECT TOP (10)
+        SoftwareName,
+        Branch,
+        ComputerName,
+        COUNT(1) AS ActivityCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS UsageHours,
+        MAX(LastUsedAt) AS LastUsedAt
+      FROM #RoiRows
+      WHERE IsIllegalActivity = 1
+      GROUP BY SoftwareName, Branch, ComputerName
+      ORDER BY ActivityCount DESC, UsageHours DESC;
+
+      IF OBJECT_ID('tempdb..#RoiRows') IS NOT NULL DROP TABLE #RoiRows;
+    `);
+
+    return res.json({
+      success: true,
+      data: {
+        summary: result.recordsets?.[0]?.[0] || {},
+        utilizationBreakdown: result.recordsets?.[1] || [],
+        topUnderutilized: result.recordsets?.[2] || [],
+        illegalActivity: result.recordsets?.[3] || []
+      }
+    });
+  } catch (err) {
+    console.error("GET /api/management-dashboard/software-roi error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load software ROI dashboard",
+      error: err.message
+    });
+  }
+});
+
+// Report 1: Utilization report
+app.get("/api/software-roi/reports/utilization", authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, offset } = roiPaging(req);
+    const status = roiText(req.query.status);
+    const search = roiText(req.query.search);
+
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiInputs(pool.request(), req)
+      .input("Status", sql.NVarChar(50), status)
+      .input("Search", sql.NVarChar(255), search)
+      .input("Offset", sql.Int, offset)
+      .input("Limit", sql.Int, limit);
+
+    const result = await request.query(`
+      ${softwareRoiBaseCte()}
+
+      SELECT
+        COUNT(1) OVER() AS TotalRows,
+        PolicyName,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus,
+        Branch,
+        ComputerName,
+        Object_Root_Idn,
+        InstalledPublisher,
+        InstalledVersion,
+        UsageStatus,
+        UsageHours,
+        UtilizedHours,
+        UnderUtilizedHours,
+        OpenCount,
+        OpenCountThreshold,
+        FirstUsedAt,
+        LastUsedAt,
+        LastExecutedFile,
+        LastExecutedPath,
+        LicenseCount,
+        LicenseStartDate,
+        LicenseEndDate,
+        DaysRemaining
+      FROM FinalRows
+      WHERE (@Status = '' OR UsageStatus = @Status)
+        AND (
+          @Search = ''
+          OR SoftwareName LIKE '%' + @Search + '%'
+          OR CategoryName LIKE '%' + @Search + '%'
+          OR Branch LIKE '%' + @Search + '%'
+          OR ComputerName LIKE '%' + @Search + '%'
+        )
+      ORDER BY SoftwareName ASC, Branch ASC, ComputerName ASC
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
+    `);
+
+    const rows = result.recordset || [];
+    return res.json({
+      success: true,
+      page,
+      limit,
+      total: rows[0]?.TotalRows || 0,
+      data: rows
+    });
+  } catch (err) {
+    console.error("GET /api/software-roi/reports/utilization error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load utilization report",
+      error: err.message
+    });
+  }
+});
+
+// Report 2: Purchase and used report
+app.get("/api/software-roi/reports/purchase-used", authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, offset } = roiPaging(req);
+    const search = roiText(req.query.search);
+
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiInputs(pool.request(), req)
+      .input("Search", sql.NVarChar(255), search)
+      .input("Offset", sql.Int, offset)
+      .input("Limit", sql.Int, limit);
+
+    const result = await request.query(`
+      ${softwareRoiBaseCte()}
+
+      SELECT
+        COUNT(1) OVER() AS TotalRows,
+        PolicyName,
+        PolicyItemID,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus,
+        MAX(LicenseCount) AS PurchasedLicense,
+        COUNT(DISTINCT Object_Root_Idn) AS InstalledDevices,
+        SUM(CASE WHEN UsageHours > 0 THEN 1 ELSE 0 END) AS UsedDevices,
+        SUM(CASE WHEN UsageStatus = 'Utilized' THEN 1 ELSE 0 END) AS UtilizedDevices,
+        SUM(CASE WHEN UsageStatus = 'Underutilized' THEN 1 ELSE 0 END) AS UnderutilizedDevices,
+        SUM(CASE WHEN UsageStatus = 'Not Used' THEN 1 ELSE 0 END) AS NotUsedDevices,
+        MAX(LicenseCount) - COUNT(DISTINCT Object_Root_Idn) AS LicenseBalanceByInstall,
+        MAX(LicenseCount) - SUM(CASE WHEN UsageHours > 0 THEN 1 ELSE 0 END) AS LicenseBalanceByUsage,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS TotalUsageHours,
+        MAX(UtilizedHours) AS UtilizedHours,
+        MAX(UnderUtilizedHours) AS UnderUtilizedHours,
+        MAX(LicenseStartDate) AS LicenseStartDate,
+        MAX(LicenseEndDate) AS LicenseEndDate,
+        MAX(DaysRemaining) AS DaysRemaining,
+        MAX(LastUsedAt) AS LastUsedAt
+      FROM FinalRows
+      WHERE (
+        @Search = ''
+        OR SoftwareName LIKE '%' + @Search + '%'
+        OR CategoryName LIKE '%' + @Search + '%'
+      )
+      GROUP BY
+        PolicyName,
+        PolicyItemID,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus
+      ORDER BY SoftwareName ASC
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
+    `);
+
+    const rows = result.recordset || [];
+    return res.json({
+      success: true,
+      page,
+      limit,
+      total: rows[0]?.TotalRows || 0,
+      data: rows
+    });
+  } catch (err) {
+    console.error("GET /api/software-roi/reports/purchase-used error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load purchase and used report",
+      error: err.message
+    });
+  }
+});
+
+// Report 3: Illegal software activity report
+app.get("/api/software-roi/reports/illegal-activity", authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, offset } = roiPaging(req);
+    const search = roiText(req.query.search);
+
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiInputs(pool.request(), req)
+      .input("Search", sql.NVarChar(255), search)
+      .input("Offset", sql.Int, offset)
+      .input("Limit", sql.Int, limit);
+
+    const result = await request.query(`
+      ${softwareRoiBaseCte()}
+
+      SELECT
+        COUNT(1) OVER() AS TotalRows,
+        PolicyName,
+        SoftwareName,
+        CategoryName,
+        Branch,
+        ComputerName,
+        Object_Root_Idn,
+        UsageHours,
+        OpenCount,
+        FirstUsedAt,
+        LastUsedAt,
+        LastExecutedFile,
+        LastExecutedPath,
+        InstalledPublisher,
+        InstalledVersion,
+        MatchedSW_Idn
+      FROM FinalRows
+      WHERE IsIllegalActivity = 1
+        AND (
+          @Search = ''
+          OR SoftwareName LIKE '%' + @Search + '%'
+          OR CategoryName LIKE '%' + @Search + '%'
+          OR Branch LIKE '%' + @Search + '%'
+          OR ComputerName LIKE '%' + @Search + '%'
+          OR LastExecutedFile LIKE '%' + @Search + '%'
+        )
+      ORDER BY LastUsedAt DESC, SoftwareName ASC
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
+    `);
+
+    const rows = result.recordset || [];
+    return res.json({
+      success: true,
+      page,
+      limit,
+      total: rows[0]?.TotalRows || 0,
+      data: rows
+    });
+  } catch (err) {
+    console.error("GET /api/software-roi/reports/illegal-activity error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load illegal software activity report",
+      error: err.message
+    });
+  }
+});
+
+console.log("Software ROI API registered");
+// ============================================================
+// SOFTWARE ROI API - END
+// ============================================================
+
+// ============================================================
+// SOFTWARE ROI API V2 - START
+// Paste this at the bottom of server.js
+// ============================================================
+
+function roiV2Text(value) {
+  return String(value ?? "").trim();
+}
+
+function roiV2Int(value, fallback = 0) {
+  const parsed = parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function roiV2Date(value) {
+  const text = roiV2Text(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function roiV2Bool(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const text = String(value).toLowerCase();
+  return text === "true" || text === "1" || text === "yes";
+}
+
+function roiV2Paging(req) {
+  const page = Math.max(roiV2Int(req.query.page, 1), 1);
+  const limit = Math.min(Math.max(roiV2Int(req.query.limit, 50), 1), 500);
+  const offset = (page - 1) * limit;
+  return { page, limit, offset };
+}
+
+function bindSoftwareRoiV2Inputs(request, req) {
+  const dateFrom = roiV2Date(req.query.dateFrom || req.query.from || req.query.startDate);
+  const dateTo = roiV2Date(req.query.dateTo || req.query.to || req.query.endDate);
+  const workHoursOnly = roiV2Bool(req.query.workHoursOnly, false);
+
+  request.input("DateFrom", sql.Date, dateFrom);
+  request.input("DateTo", sql.Date, dateTo);
+  request.input("WorkHoursOnly", sql.Bit, workHoursOnly ? 1 : 0);
+
+  return request;
+}
+
+function softwareRoiV2BaseCte() {
+  return `
+    ;WITH ActiveItems AS (
+      SELECT
+        i.PolicyItemID,
+        i.PolicyID,
+        p.PolicyName,
+        i.SWUNI_Idn,
+
+        LTRIM(RTRIM(COALESCE(NULLIF(i.SoftwareName, ''), CONCAT('Software #', i.SWUNI_Idn)))) AS SoftwareName,
+        COALESCE(i.CategoryID, p.CategoryID) AS CategoryID,
+        COALESCE(NULLIF(i.CategoryName, ''), NULLIF(p.CategoryName, ''), 'Uncategorized') AS CategoryName,
+
+        COALESCE(NULLIF(i.Publisher, ''), '') AS PublisherRule,
+        COALESCE(NULLIF(i.Version, ''), '') AS VersionRule,
+
+        CASE
+          WHEN LOWER(ISNULL(i.ComplianceStatus, '')) = 'illegal' THEN 'Illegal'
+          ELSE 'Legal'
+        END AS ComplianceStatus,
+
+        CAST(ISNULL(TRY_CONVERT(DECIMAL(18,2), i.LicenseCount), 0) AS DECIMAL(18,2)) AS LicenseCount,
+        CAST(ISNULL(TRY_CONVERT(DECIMAL(18,2), i.UnitPrice), 0) AS DECIMAL(18,2)) AS UnitPrice,
+        COALESCE(NULLIF(LTRIM(RTRIM(i.Currency)), ''), 'RM') AS Currency,
+        CAST(ISNULL(TRY_CONVERT(DECIMAL(18,2), i.NotUsedHours), 0) AS DECIMAL(18,2)) AS NotUsedHours,
+
+        i.LicenseStartDate,
+        i.LicenseEndDate,
+
+        CAST(ISNULL(
+          TRY_CONVERT(DECIMAL(18,2), i.UtilizedHours),
+          ISNULL(TRY_CONVERT(DECIMAL(18,2), p.UtilizedHours), 2.00)
+        ) AS DECIMAL(18,2)) AS UtilizedHours,
+
+        CAST(ISNULL(
+          TRY_CONVERT(DECIMAL(18,2), i.UnderUtilizedHours),
+          ISNULL(TRY_CONVERT(DECIMAL(18,2), p.UnderUtilizedHours), 0.01)
+        ) AS DECIMAL(18,2)) AS UnderUtilizedHours,
+
+        ISNULL(
+          TRY_CONVERT(INT, i.OpenCountThreshold),
+          ISNULL(TRY_CONVERT(INT, p.OpenCountThreshold), 1)
+        ) AS OpenCountThreshold,
+
+        COALESCE(NULLIF(i.WorkingStartTime, ''), NULLIF(p.WorkingStartTime, ''), '09:00') AS WorkingStartTime,
+        COALESCE(NULLIF(i.WorkingEndTime, ''), NULLIF(p.WorkingEndTime, ''), '17:00') AS WorkingEndTime,
+        COALESCE(NULLIF(i.WorkDays, ''), NULLIF(p.WorkDays, ''), 'Mon-Fri') AS WorkDays
+      FROM EMA_SoftwarePolicyItem i
+      INNER JOIN EMA_SoftwarePolicy p
+        ON p.PolicyID = i.PolicyID
+      WHERE ISNULL(p.IsActive, 1) = 1
+    ),
+
+    InstalledAttr AS (
+      SELECT
+        SWUNI_Idn,
+        Object_Root_Idn
+      FROM TSSI_SWUNI_ATTR
+      GROUP BY SWUNI_Idn, Object_Root_Idn
+    ),
+
+    InstalledScope AS (
+      SELECT
+        ai.PolicyID,
+        ai.PolicyItemID,
+        ai.PolicyName,
+        ai.SWUNI_Idn,
+        ai.SoftwareName,
+        ai.CategoryID,
+        ai.CategoryName,
+        ai.PublisherRule,
+        ai.VersionRule,
+        ai.ComplianceStatus,
+        ai.LicenseCount,
+        ai.UnitPrice,
+        ai.Currency,
+        ai.NotUsedHours,
+        ai.LicenseStartDate,
+        ai.LicenseEndDate,
+        ai.UtilizedHours,
+        ai.UnderUtilizedHours,
+        ai.OpenCountThreshold,
+        ai.WorkingStartTime,
+        ai.WorkingEndTime,
+        ai.WorkDays,
+        obj.Object_Root_Idn,
+        obj.Object_Client_Name AS Branch,
+        obj.ComputerName
+      FROM ActiveItems ai
+      INNER JOIN InstalledAttr attr
+        ON attr.SWUNI_Idn = ai.SWUNI_Idn
+      INNER JOIN TS_OBJECT_ROOT obj
+        ON obj.Object_Root_Idn = attr.Object_Root_Idn
+
+      UNION ALL
+
+      SELECT
+        ai.PolicyID,
+        ai.PolicyItemID,
+        ai.PolicyName,
+        ai.SWUNI_Idn,
+        ai.SoftwareName,
+        ai.CategoryID,
+        ai.CategoryName,
+        ai.PublisherRule,
+        ai.VersionRule,
+        ai.ComplianceStatus,
+        ai.LicenseCount,
+        ai.UnitPrice,
+        ai.Currency,
+        ai.NotUsedHours,
+        ai.LicenseStartDate,
+        ai.LicenseEndDate,
+        ai.UtilizedHours,
+        ai.UnderUtilizedHours,
+        ai.OpenCountThreshold,
+        ai.WorkingStartTime,
+        ai.WorkingEndTime,
+        ai.WorkDays,
+        NULL AS Object_Root_Idn,
+        NULL AS Branch,
+        NULL AS ComputerName
+      FROM ActiveItems ai
+      WHERE ai.SWUNI_Idn IS NULL
+         OR NOT EXISTS (
+          SELECT 1
+          FROM InstalledAttr x
+          WHERE x.SWUNI_Idn = ai.SWUNI_Idn
+        )
+    ),
+
+    UsageAgg AS (
+      SELECT
+        ins.PolicyItemID,
+        ins.Object_Root_Idn,
+        COUNT(h.ID) AS OpenCount,
+        SUM(
+          CASE
+            WHEN h.ID IS NULL THEN 0
+            WHEN h.App_StartTime IS NOT NULL
+             AND h.App_EndTime IS NOT NULL
+             AND h.App_EndTime > h.App_StartTime
+              THEN DATEDIFF(SECOND, h.App_StartTime, h.App_EndTime)
+            WHEN ISNULL(h.ActiveTime, 0) > 0
+              THEN ISNULL(h.ActiveTime, 0)
+            ELSE 0
+          END
+        ) AS TotalSeconds,
+        MIN(h.App_StartTime) AS FirstUsedAt,
+        MAX(h.App_EndTime) AS LastUsedAt,
+        MAX(h.SW_Idn) AS MatchedSW_Idn,
+        MAX(h.SW_FileName) AS LastExecutedFile,
+        MAX(h.SW_Path) AS LastExecutedPath
+      FROM InstalledScope ins
+      LEFT JOIN TSSM_MONITOR_HISTORY h
+        ON h.Object_Root_Idn = ins.Object_Root_Idn
+       AND h.App_StartTime >= COALESCE(@DateFrom, DATEADD(DAY, -30, CONVERT(date, GETDATE())))
+       AND h.App_StartTime < DATEADD(DAY, 1, COALESCE(@DateTo, CONVERT(date, GETDATE())))
+       AND (
+          @WorkHoursOnly = 0
+          OR (
+            TRY_CONVERT(time, h.App_StartTime) >= TRY_CONVERT(time, ins.WorkingStartTime)
+            AND TRY_CONVERT(time, h.App_StartTime) <= TRY_CONVERT(time, ins.WorkingEndTime)
+          )
+       )
+       AND (
+          EXISTS (
+            SELECT 1
+            FROM TS_SW_INFO s
+            WHERE s.SW_Idn = h.SW_Idn
+              AND (
+                LOWER(LTRIM(RTRIM(ISNULL(s.SW_ProductName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_FileName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_OrgFileName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_InterName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(h.SW_FileName, '')))) = LOWER(LTRIM(RTRIM(ISNULL(s.SW_FileName, ''))))
+                OR (
+                  LEN(LTRIM(RTRIM(ins.SoftwareName))) >= 5
+                  AND LOWER(ISNULL(s.SW_ProductName, '')) LIKE '%' + LOWER(LTRIM(RTRIM(ins.SoftwareName))) + '%'
+                )
+              )
+          )
+          OR (
+            LEN(LTRIM(RTRIM(ins.SoftwareName))) >= 5
+            AND LOWER(ISNULL(h.SW_FileName, '')) LIKE '%' + LOWER(LTRIM(RTRIM(ins.SoftwareName))) + '%'
+          )
+       )
+      GROUP BY
+        ins.PolicyItemID,
+        ins.Object_Root_Idn
+    ),
+
+    FinalRows AS (
+      SELECT
+        ins.PolicyID,
+        ins.PolicyItemID,
+        ins.PolicyName,
+        ins.SWUNI_Idn,
+        ins.SoftwareName,
+        ins.CategoryID,
+        ins.CategoryName,
+        ins.PublisherRule,
+        ins.VersionRule,
+        ins.ComplianceStatus,
+        ins.LicenseCount,
+        ins.UnitPrice,
+        ins.Currency,
+        ins.NotUsedHours,
+        ins.LicenseStartDate,
+        ins.LicenseEndDate,
+        CASE
+          WHEN ins.LicenseEndDate IS NULL THEN NULL
+          ELSE DATEDIFF(DAY, CONVERT(date, GETDATE()), ins.LicenseEndDate)
+        END AS DaysRemaining,
+        ins.UtilizedHours,
+        ins.UnderUtilizedHours,
+        ins.OpenCountThreshold,
+        ins.WorkingStartTime,
+        ins.WorkingEndTime,
+        ins.WorkDays,
+        ins.Object_Root_Idn,
+        ins.Branch,
+        ins.ComputerName,
+        NULL AS InstalledPublisher,
+        NULL AS InstalledVersion,
+        ISNULL(u.OpenCount, 0) AS OpenCount,
+        CAST(ROUND(ISNULL(u.TotalSeconds, 0) / 3600.0, 2) AS DECIMAL(18,2)) AS UsageHours,
+        u.FirstUsedAt,
+        u.LastUsedAt,
+        u.MatchedSW_Idn,
+        u.LastExecutedFile,
+        u.LastExecutedPath,
+        CASE
+          WHEN CAST(ISNULL(u.TotalSeconds, 0) / 3600.0 AS DECIMAL(18,4)) <= ISNULL(ins.NotUsedHours, 0)
+            THEN 'Not Used'
+          WHEN CAST(ISNULL(u.TotalSeconds, 0) / 3600.0 AS DECIMAL(18,4)) >= ISNULL(ins.UtilizedHours, 0)
+            THEN 'Utilized'
+          ELSE 'Underutilized'
+        END AS UsageStatus,
+        CASE
+          WHEN ins.ComplianceStatus = 'Illegal' AND ISNULL(u.TotalSeconds, 0) > 0 THEN 1
+          ELSE 0
+        END AS IsIllegalActivity
+      FROM InstalledScope ins
+      LEFT JOIN UsageAgg u
+        ON u.PolicyItemID = ins.PolicyItemID
+       AND ISNULL(u.Object_Root_Idn, -1) = ISNULL(ins.Object_Root_Idn, -1)
+    )
+  `;
+}
+
+// Dashboard summary V2
+app.get("/api/management-dashboard/software-roi-v2", authenticateToken, async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiV2Inputs(pool.request(), req);
+
+    const result = await request.query(`
+      IF OBJECT_ID('tempdb..#RoiV2Rows') IS NOT NULL DROP TABLE #RoiV2Rows;
+
+      ${softwareRoiV2BaseCte()}
+
+      SELECT *
+      INTO #RoiV2Rows
+      FROM FinalRows;
+
+      SELECT
+        COUNT(DISTINCT PolicyItemID) AS TotalPolicySoftware,
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN CONCAT(PolicyItemID, ':', Object_Root_Idn) END) AS TotalInstalledRows,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Utilized' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS UtilizedCount,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Underutilized' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS UnderutilizedCount,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Not Used' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS NotUsedCount,
+        SUM(CASE WHEN IsIllegalActivity = 1 THEN 1 ELSE 0 END) AS IllegalActivityCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS TotalUsageHours,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)) / NULLIF(DATEDIFF(DAY, COALESCE(@DateFrom, DATEADD(DAY, -30, CONVERT(date, GETDATE()))), DATEADD(DAY, 1, COALESCE(@DateTo, CONVERT(date, GETDATE())))), 0), 2) AS DECIMAL(18,2)) AS AverageUsageHoursPerDay,
+        CAST(ROUND(SUM(ISNULL(UnitPrice, 0) * ISNULL(LicenseCount, 0)), 2) AS DECIMAL(18,2)) AS TotalLicenseCost,
+        CAST(ROUND(SUM(CASE WHEN UsageStatus = 'Not Used' THEN ISNULL(UnitPrice, 0) ELSE 0 END), 2) AS DECIMAL(18,2)) AS PotentialWasteCost,
+        (
+          SELECT ISNULL(SUM(LicenseCount), 0)
+          FROM (
+            SELECT PolicyItemID, MAX(ISNULL(LicenseCount, 0)) AS LicenseCount
+            FROM #RoiV2Rows
+            GROUP BY PolicyItemID
+          ) x
+        ) AS TotalPurchasedLicense,
+        (
+          SELECT ISNULL(SUM(LicenseCount), 0)
+          FROM (
+            SELECT PolicyItemID, MAX(ISNULL(LicenseCount, 0)) AS LicenseCount
+            FROM #RoiV2Rows
+            GROUP BY PolicyItemID
+          ) x
+        ) - COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN CONCAT(PolicyItemID, ':', Object_Root_Idn) END) AS LicenseBalance
+      FROM #RoiV2Rows;
+
+      SELECT
+        UsageStatus,
+        COUNT(1) AS Total
+      FROM #RoiV2Rows
+      GROUP BY UsageStatus
+      ORDER BY
+        CASE UsageStatus
+          WHEN 'Utilized' THEN 1
+          WHEN 'Underutilized' THEN 2
+          WHEN 'Not Used' THEN 3
+          ELSE 9
+        END;
+
+      SELECT TOP (10)
+        SoftwareName,
+        CategoryName,
+        COUNT(1) AS DeviceCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS UsageHours,
+        CAST(MAX(UtilizedHours) AS DECIMAL(18,2)) AS UtilizedHours,
+        CAST(MAX(UnitPrice) AS DECIMAL(18,2)) AS UnitPrice,
+        MAX(Currency) AS Currency,
+        MAX(LastUsedAt) AS LastUsedAt
+      FROM #RoiV2Rows
+      WHERE UsageStatus IN ('Underutilized', 'Not Used')
+      GROUP BY SoftwareName, CategoryName
+      ORDER BY DeviceCount DESC, UsageHours ASC;
+
+      SELECT TOP (10)
+        SoftwareName,
+        Branch,
+        ComputerName,
+        COUNT(1) AS ActivityCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS UsageHours,
+        MAX(LastUsedAt) AS LastUsedAt
+      FROM #RoiV2Rows
+      WHERE IsIllegalActivity = 1
+      GROUP BY SoftwareName, Branch, ComputerName
+      ORDER BY ActivityCount DESC, UsageHours DESC;
+
+      IF OBJECT_ID('tempdb..#RoiV2Rows') IS NOT NULL DROP TABLE #RoiV2Rows;
+    `);
+
+    return res.json({
+      success: true,
+      data: {
+        summary: result.recordsets?.[0]?.[0] || {},
+        utilizationBreakdown: result.recordsets?.[1] || [],
+        topUnderutilized: result.recordsets?.[2] || [],
+        illegalActivity: result.recordsets?.[3] || []
+      }
+    });
+  } catch (err) {
+    console.error("GET /api/management-dashboard/software-roi-v2 error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load software ROI dashboard V2",
+      error: err.message
+    });
+  }
+});
+
+// Report 1 V2: Utilization
+app.get("/api/software-roi-v2/reports/utilization", authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, offset } = roiV2Paging(req);
+    const status = roiV2Text(req.query.status);
+    const search = roiV2Text(req.query.search);
+
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiV2Inputs(pool.request(), req)
+      .input("Status", sql.NVarChar(50), status)
+      .input("Search", sql.NVarChar(255), search)
+      .input("Offset", sql.Int, offset)
+      .input("Limit", sql.Int, limit);
+
+    const result = await request.query(`
+      ${softwareRoiV2BaseCte()}
+
+      SELECT
+        COUNT(1) OVER() AS TotalRows,
+        PolicyName,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus,
+        Branch,
+        ComputerName,
+        Object_Root_Idn,
+        InstalledPublisher,
+        InstalledVersion,
+        UsageStatus,
+        UsageHours,
+        UtilizedHours,
+        UnderUtilizedHours,
+        NotUsedHours,
+        OpenCount,
+        OpenCountThreshold,
+        FirstUsedAt,
+        LastUsedAt,
+        LastExecutedFile,
+        LastExecutedPath,
+        LicenseCount,
+        UnitPrice,
+        Currency,
+        LicenseStartDate,
+        LicenseEndDate,
+        DaysRemaining
+      FROM FinalRows
+      WHERE (@Status = '' OR UsageStatus = @Status)
+        AND (
+          @Search = ''
+          OR SoftwareName LIKE '%' + @Search + '%'
+          OR CategoryName LIKE '%' + @Search + '%'
+          OR Branch LIKE '%' + @Search + '%'
+          OR ComputerName LIKE '%' + @Search + '%'
+        )
+      ORDER BY SoftwareName ASC, Branch ASC, ComputerName ASC
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
+    `);
+
+    const rows = result.recordset || [];
+
+    return res.json({
+      success: true,
+      page,
+      limit,
+      total: rows[0]?.TotalRows || 0,
+      data: rows
+    });
+  } catch (err) {
+    console.error("GET /api/software-roi-v2/reports/utilization error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load utilization report V2",
+      error: err.message
+    });
+  }
+});
+
+// Report 2 V2: Purchase and used / Budget Planning
+app.get("/api/software-roi-v2/reports/purchase-used", authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, offset } = roiV2Paging(req);
+    const search = roiV2Text(req.query.search);
+
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiV2Inputs(pool.request(), req)
+      .input("Search", sql.NVarChar(255), search)
+      .input("Offset", sql.Int, offset)
+      .input("Limit", sql.Int, limit);
+
+    const result = await request.query(`
+      DECLARE @StartDate date = COALESCE(@DateFrom, DATEADD(DAY, -30, CONVERT(date, GETDATE())));
+      DECLARE @EndDate date = COALESCE(@DateTo, CONVERT(date, GETDATE()));
+      DECLARE @TotalDays int = NULLIF(DATEDIFF(DAY, @StartDate, DATEADD(DAY, 1, @EndDate)), 0);
+
+      ${softwareRoiV2BaseCte()}
+
+      SELECT
+        COUNT(1) OVER() AS TotalRows,
+        PolicyName,
+        PolicyItemID,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus,
+
+        CAST(MAX(ISNULL(LicenseCount, 0)) AS DECIMAL(18,2)) AS PurchasedLicense,
+        COUNT(DISTINCT Object_Root_Idn) AS InstalledDevices,
+        SUM(CASE WHEN ISNULL(UsageHours, 0) > 0 THEN 1 ELSE 0 END) AS UsedDevices,
+        SUM(CASE WHEN UsageStatus = 'Utilized' THEN 1 ELSE 0 END) AS UtilizedDevices,
+        SUM(CASE WHEN UsageStatus = 'Underutilized' THEN 1 ELSE 0 END) AS UnderutilizedDevices,
+        SUM(CASE WHEN UsageStatus = 'Not Used' THEN 1 ELSE 0 END) AS NotUsedDevices,
+
+        CAST(MAX(ISNULL(LicenseCount, 0)) - COUNT(DISTINCT Object_Root_Idn) AS DECIMAL(18,2)) AS LicenseBalanceByInstall,
+        CAST(MAX(ISNULL(LicenseCount, 0)) - SUM(CASE WHEN ISNULL(UsageHours, 0) > 0 THEN 1 ELSE 0 END) AS DECIMAL(18,2)) AS LicenseBalanceByUsage,
+
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS TotalUsageHours,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)) / @TotalDays, 2) AS DECIMAL(18,2)) AS AverageUsageHoursPerDay,
+
+        CAST(MAX(ISNULL(UtilizedHours, 0)) AS DECIMAL(18,2)) AS UtilizedHours,
+        CAST(MAX(ISNULL(UnderUtilizedHours, 0)) AS DECIMAL(18,2)) AS UnderUtilizedHours,
+        CAST(MAX(ISNULL(NotUsedHours, 0)) AS DECIMAL(18,2)) AS NotUsedHours,
+
+        CAST(MAX(ISNULL(UnitPrice, 0)) AS DECIMAL(18,2)) AS UnitPrice,
+        MAX(Currency) AS Currency,
+
+        CAST(ROUND(MAX(ISNULL(UnitPrice, 0)) * MAX(ISNULL(LicenseCount, 0)), 2) AS DECIMAL(18,2)) AS TotalLicenseCost,
+
+        CAST(ROUND(
+          CASE
+            WHEN MAX(ISNULL(LicenseCount, 0)) - SUM(CASE WHEN ISNULL(UsageHours, 0) > 0 THEN 1 ELSE 0 END) > 0
+            THEN MAX(ISNULL(UnitPrice, 0)) * (MAX(ISNULL(LicenseCount, 0)) - SUM(CASE WHEN ISNULL(UsageHours, 0) > 0 THEN 1 ELSE 0 END))
+            ELSE 0
+          END
+        , 2) AS DECIMAL(18,2)) AS PotentialWasteCost,
+
+        MAX(LicenseStartDate) AS LicenseStartDate,
+        MAX(LicenseEndDate) AS LicenseEndDate,
+        MAX(DaysRemaining) AS DaysRemaining,
+        MAX(LastUsedAt) AS LastUsedAt,
+
+        CASE
+          WHEN SUM(CASE WHEN UsageStatus = 'Not Used' THEN 1 ELSE 0 END) > 0
+            THEN 'Review Renewal'
+          WHEN SUM(CASE WHEN UsageStatus = 'Underutilized' THEN 1 ELSE 0 END) > 0
+            THEN 'Reduce / Reassign'
+          WHEN MAX(ISNULL(LicenseCount, 0)) - SUM(CASE WHEN ISNULL(UsageHours, 0) > 0 THEN 1 ELSE 0 END) > 0
+            THEN 'Unused License'
+          ELSE 'Maintain Budget'
+        END AS BudgetSignal
+
+      FROM FinalRows
+      WHERE (
+        @Search = ''
+        OR SoftwareName LIKE '%' + @Search + '%'
+        OR CategoryName LIKE '%' + @Search + '%'
+        OR ComplianceStatus LIKE '%' + @Search + '%'
+      )
+      GROUP BY
+        PolicyName,
+        PolicyItemID,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus
+      ORDER BY SoftwareName ASC
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
+    `);
+
+    const rows = result.recordset || [];
+
+    return res.json({
+      success: true,
+      page,
+      limit,
+      total: rows[0]?.TotalRows || 0,
+      data: rows
+    });
+  } catch (err) {
+    console.error("GET /api/software-roi-v2/reports/purchase-used error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load purchase and used report V2",
+      error: err.message
+    });
+  }
+});
+
+// Report 3 V2: Illegal software activity
+app.get("/api/software-roi-v2/reports/illegal-activity", authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, offset } = roiV2Paging(req);
+    const search = roiV2Text(req.query.search);
+
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiV2Inputs(pool.request(), req)
+      .input("Search", sql.NVarChar(255), search)
+      .input("Offset", sql.Int, offset)
+      .input("Limit", sql.Int, limit);
+
+    const result = await request.query(`
+      ${softwareRoiV2BaseCte()}
+
+      SELECT
+        COUNT(1) OVER() AS TotalRows,
+        PolicyName,
+        SoftwareName,
+        CategoryName,
+        Branch,
+        ComputerName,
+        Object_Root_Idn,
+        UsageHours,
+        OpenCount,
+        FirstUsedAt,
+        LastUsedAt,
+        LastExecutedFile,
+        LastExecutedPath,
+        InstalledPublisher,
+        InstalledVersion,
+        MatchedSW_Idn,
+        UnitPrice,
+        Currency
+      FROM FinalRows
+      WHERE IsIllegalActivity = 1
+        AND (
+          @Search = ''
+          OR SoftwareName LIKE '%' + @Search + '%'
+          OR CategoryName LIKE '%' + @Search + '%'
+          OR Branch LIKE '%' + @Search + '%'
+          OR ComputerName LIKE '%' + @Search + '%'
+          OR LastExecutedFile LIKE '%' + @Search + '%'
+        )
+      ORDER BY LastUsedAt DESC, SoftwareName ASC
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
+    `);
+
+    const rows = result.recordset || [];
+
+    return res.json({
+      success: true,
+      page,
+      limit,
+      total: rows[0]?.TotalRows || 0,
+      data: rows
+    });
+  } catch (err) {
+    console.error("GET /api/software-roi-v2/reports/illegal-activity error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load illegal software activity report V2",
+      error: err.message
+    });
+  }
+});
+
+console.log("Software ROI API V2 registered");
+
+// ============================================================
+// SOFTWARE ROI API V2 - END
+// ============================================================
+
+// ============================================================
+// SOFTWARE ROI API V3 - UNREGISTERED / ILLEGAL SOFTWARE
+// Paste this BELOW the Software ROI API V2 block in server.js
+// Requires V2 helpers: roiV2Paging, bindSoftwareRoiV2Inputs, softwareRoiV2BaseCte
+// ============================================================
+
+function softwareRoiV3UnregisteredCte() {
+  return `
+    ;WITH ActivePolicySoftware AS (
+      SELECT DISTINCT
+        i.SWUNI_Idn,
+        LOWER(LTRIM(RTRIM(COALESCE(NULLIF(i.SoftwareName, ''), uni.SWUNI_Name, '')))) AS SoftwareKey
+      FROM EMA_SoftwarePolicyItem i
+      INNER JOIN EMA_SoftwarePolicy p
+        ON p.PolicyID = i.PolicyID
+      LEFT JOIN TS_SWUNI_LIST uni
+        ON uni.SWUNI_Idn = i.SWUNI_Idn
+      WHERE ISNULL(p.IsActive, 1) = 1
+    ),
+
+    InstalledAttr AS (
+      SELECT
+        SWUNI_Idn,
+        Object_Root_Idn,
+        MAX(NULLIF(LTRIM(RTRIM(Publisher)), '')) AS InstalledPublisher,
+        MAX(NULLIF(LTRIM(RTRIM(DisplayVersion)), '')) AS InstalledVersion
+      FROM TSSI_SWUNI_ATTR
+      GROUP BY SWUNI_Idn, Object_Root_Idn
+    ),
+
+    InstalledUnregistered AS (
+      SELECT
+        attr.SWUNI_Idn,
+        attr.Object_Root_Idn,
+        LTRIM(RTRIM(COALESCE(NULLIF(uni.SWUNI_Name, ''), CONCAT('Software #', attr.SWUNI_Idn)))) AS SoftwareName,
+        COALESCE(uni.SWUNI_Catg, cat.CategoryID) AS CategoryID,
+        COALESCE(cat.CategoryName, 'Uncategorized') AS CategoryName,
+        obj.Object_Client_Name AS Branch,
+        obj.ComputerName,
+        attr.InstalledPublisher,
+        attr.InstalledVersion
+      FROM InstalledAttr attr
+      INNER JOIN TS_OBJECT_ROOT obj
+        ON obj.Object_Root_Idn = attr.Object_Root_Idn
+      LEFT JOIN TS_SWUNI_LIST uni
+        ON uni.SWUNI_Idn = attr.SWUNI_Idn
+      LEFT JOIN TS_SW_CATEGORY cat
+        ON cat.CategoryID = uni.SWUNI_Catg
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM ActivePolicySoftware ap
+        WHERE (ap.SWUNI_Idn IS NOT NULL AND ap.SWUNI_Idn = attr.SWUNI_Idn)
+           OR (
+             ap.SoftwareKey <> ''
+             AND ap.SoftwareKey = LOWER(LTRIM(RTRIM(COALESCE(NULLIF(uni.SWUNI_Name, ''), CONCAT('Software #', attr.SWUNI_Idn)))))
+           )
+      )
+    ),
+
+    UsageAgg AS (
+      SELECT
+        ins.SWUNI_Idn,
+        ins.Object_Root_Idn,
+        COUNT(h.ID) AS OpenCount,
+        SUM(
+          CASE
+            WHEN h.ID IS NULL THEN 0
+            WHEN h.App_StartTime IS NOT NULL
+             AND h.App_EndTime IS NOT NULL
+             AND h.App_EndTime > h.App_StartTime
+              THEN DATEDIFF(SECOND, h.App_StartTime, h.App_EndTime)
+            WHEN ISNULL(h.ActiveTime, 0) > 0
+              THEN ISNULL(h.ActiveTime, 0)
+            ELSE 0
+          END
+        ) AS TotalSeconds,
+        MIN(h.App_StartTime) AS FirstUsedAt,
+        MAX(h.App_EndTime) AS LastUsedAt,
+        MAX(h.SW_Idn) AS MatchedSW_Idn,
+        MAX(h.SW_FileName) AS LastExecutedFile,
+        MAX(h.SW_Path) AS LastExecutedPath
+      FROM InstalledUnregistered ins
+      LEFT JOIN TSSM_MONITOR_HISTORY h
+        ON h.Object_Root_Idn = ins.Object_Root_Idn
+       AND h.App_StartTime >= COALESCE(@DateFrom, DATEADD(DAY, -30, CONVERT(date, GETDATE())))
+       AND h.App_StartTime < DATEADD(DAY, 1, COALESCE(@DateTo, CONVERT(date, GETDATE())))
+       AND (
+          EXISTS (
+            SELECT 1
+            FROM TS_SW_INFO s
+            WHERE s.SW_Idn = h.SW_Idn
+              AND (
+                LOWER(LTRIM(RTRIM(ISNULL(s.SW_ProductName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_FileName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_OrgFileName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(s.SW_InterName, '')))) = LOWER(LTRIM(RTRIM(ins.SoftwareName)))
+                OR LOWER(LTRIM(RTRIM(ISNULL(h.SW_FileName, '')))) = LOWER(LTRIM(RTRIM(ISNULL(s.SW_FileName, ''))))
+                OR (
+                  LEN(LTRIM(RTRIM(ins.SoftwareName))) >= 5
+                  AND LOWER(ISNULL(s.SW_ProductName, '')) LIKE '%' + LOWER(LTRIM(RTRIM(ins.SoftwareName))) + '%'
+                )
+              )
+          )
+          OR (
+            LEN(LTRIM(RTRIM(ins.SoftwareName))) >= 5
+            AND LOWER(ISNULL(h.SW_FileName, '')) LIKE '%' + LOWER(LTRIM(RTRIM(ins.SoftwareName))) + '%'
+          )
+       )
+      GROUP BY
+        ins.SWUNI_Idn,
+        ins.Object_Root_Idn
+    ),
+
+    FinalUnregisteredRows AS (
+      SELECT
+        CAST(NULL AS int) AS PolicyID,
+        CAST(NULL AS int) AS PolicyItemID,
+        CAST('Unregistered Software' AS nvarchar(200)) AS PolicyName,
+        ins.SWUNI_Idn,
+        ins.SoftwareName,
+        ins.CategoryID,
+        ins.CategoryName,
+        CAST('Illegal' AS nvarchar(50)) AS ComplianceStatus,
+        CAST('Not registered in Software Policy' AS nvarchar(200)) AS IllegalReason,
+        ins.Branch,
+        ins.ComputerName,
+        ins.Object_Root_Idn,
+        ins.InstalledPublisher,
+        ins.InstalledVersion,
+        ISNULL(u.OpenCount, 0) AS OpenCount,
+        CAST(ROUND(ISNULL(u.TotalSeconds, 0) / 3600.0, 2) AS DECIMAL(18,2)) AS UsageHours,
+        u.FirstUsedAt,
+        u.LastUsedAt,
+        u.MatchedSW_Idn,
+        u.LastExecutedFile,
+        u.LastExecutedPath
+      FROM InstalledUnregistered ins
+      LEFT JOIN UsageAgg u
+        ON u.SWUNI_Idn = ins.SWUNI_Idn
+       AND ISNULL(u.Object_Root_Idn, -1) = ISNULL(ins.Object_Root_Idn, -1)
+    )
+  `;
+}
+
+// Summary V3: registered summary from V2 + unregistered/illegal count
+app.get('/api/management-dashboard/software-roi-v3', authenticateToken, async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiV2Inputs(pool.request(), req);
+
+    const result = await request.query(`
+      IF OBJECT_ID('tempdb..#RoiV3Rows') IS NOT NULL DROP TABLE #RoiV3Rows;
+
+      ${softwareRoiV2BaseCte()}
+
+      SELECT *
+      INTO #RoiV3Rows
+      FROM FinalRows;
+
+      SELECT
+        COUNT(DISTINCT PolicyItemID) AS TotalPolicySoftware,
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN CONCAT(PolicyItemID, ':', Object_Root_Idn) END) AS TotalInstalledRows,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Utilized' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS UtilizedCount,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Underutilized' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS UnderutilizedCount,
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Not Used' THEN CONCAT(PolicyItemID, ':', ISNULL(Object_Root_Idn, -1)) END) AS NotUsedCount,
+        SUM(CASE WHEN IsIllegalActivity = 1 THEN 1 ELSE 0 END) AS IllegalActivityCount,
+        CAST(0 AS int) AS IllegalUnregisteredCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS TotalUsageHours,
+        (
+          SELECT ISNULL(SUM(LicenseCount), 0)
+          FROM (
+            SELECT PolicyItemID, MAX(ISNULL(LicenseCount, 0)) AS LicenseCount
+            FROM #RoiV3Rows
+            GROUP BY PolicyItemID
+          ) x
+        ) AS TotalPurchasedLicense,
+        (
+          SELECT ISNULL(SUM(LicenseCount), 0)
+          FROM (
+            SELECT PolicyItemID, MAX(ISNULL(LicenseCount, 0)) AS LicenseCount
+            FROM #RoiV3Rows
+            GROUP BY PolicyItemID
+          ) x
+        ) - COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN CONCAT(PolicyItemID, ':', Object_Root_Idn) END) AS LicenseBalance
+      FROM #RoiV3Rows;
+
+      SELECT UsageStatus, COUNT(1) AS Total
+      FROM #RoiV3Rows
+      GROUP BY UsageStatus
+      ORDER BY CASE UsageStatus WHEN 'Utilized' THEN 1 WHEN 'Underutilized' THEN 2 WHEN 'Not Used' THEN 3 ELSE 9 END;
+
+      SELECT TOP (10)
+        SoftwareName,
+        CategoryName,
+        COUNT(1) AS DeviceCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS UsageHours,
+        MAX(UtilizedHours) AS UtilizedHours,
+        MAX(LastUsedAt) AS LastUsedAt
+      FROM #RoiV3Rows
+      WHERE UsageStatus IN ('Underutilized', 'Not Used')
+      GROUP BY SoftwareName, CategoryName
+      ORDER BY DeviceCount DESC, UsageHours ASC;
+
+      SELECT TOP (10)
+        SoftwareName,
+        Branch,
+        ComputerName,
+        COUNT(1) AS ActivityCount,
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS DECIMAL(18,2)) AS UsageHours,
+        MAX(LastUsedAt) AS LastUsedAt
+      FROM #RoiV3Rows
+      WHERE IsIllegalActivity = 1
+      GROUP BY SoftwareName, Branch, ComputerName
+      ORDER BY ActivityCount DESC, UsageHours DESC;
+
+      ${softwareRoiV3UnregisteredCte()}
+
+      SELECT COUNT(1) AS IllegalUnregisteredCount
+      FROM FinalUnregisteredRows;
+
+      IF OBJECT_ID('tempdb..#RoiV3Rows') IS NOT NULL DROP TABLE #RoiV3Rows;
+    `);
+
+    const summary = result.recordsets?.[0]?.[0] || {};
+    const illegalUnregisteredCount = Number(result.recordsets?.[4]?.[0]?.IllegalUnregisteredCount || 0);
+
+    return res.json({
+      success: true,
+      data: {
+        summary: {
+          ...summary,
+          IllegalUnregisteredCount: illegalUnregisteredCount,
+          IllegalActivityCount: Number(summary.IllegalActivityCount || 0) + illegalUnregisteredCount,
+        },
+        utilizationBreakdown: result.recordsets?.[1] || [],
+        topUnderutilized: result.recordsets?.[2] || [],
+        illegalActivity: result.recordsets?.[3] || [],
+      },
+    });
+  } catch (err) {
+    console.error('GET /api/management-dashboard/software-roi-v3 error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load software ROI dashboard V3',
+      error: err.message,
+    });
+  }
+});
+
+// Report V3: every software installed/used but not registered in policy is illegal
+app.get('/api/software-roi-v3/reports/illegal-unregistered', authenticateToken, async (req, res) => {
+  try {
+    const { page, limit, offset } = roiV2Paging(req);
+    const search = String(req.query.search || '').trim();
+
+    const pool = await sql.connect(dbConfig);
+    const request = bindSoftwareRoiV2Inputs(pool.request(), req)
+      .input('Search', sql.NVarChar(255), search)
+      .input('Offset', sql.Int, offset)
+      .input('Limit', sql.Int, limit);
+
+    const result = await request.query(`
+      ${softwareRoiV3UnregisteredCte()}
+
+      SELECT
+        COUNT(1) OVER() AS TotalRows,
+        PolicyName,
+        PolicyID,
+        PolicyItemID,
+        SWUNI_Idn,
+        SoftwareName,
+        CategoryID,
+        CategoryName,
+        ComplianceStatus,
+        IllegalReason,
+        Branch,
+        ComputerName,
+        Object_Root_Idn,
+        InstalledPublisher,
+        InstalledVersion,
+        UsageHours,
+        OpenCount,
+        FirstUsedAt,
+        LastUsedAt,
+        LastExecutedFile,
+        LastExecutedPath,
+        MatchedSW_Idn
+      FROM FinalUnregisteredRows
+      WHERE (
+        @Search = ''
+        OR SoftwareName LIKE '%' + @Search + '%'
+        OR CategoryName LIKE '%' + @Search + '%'
+        OR Branch LIKE '%' + @Search + '%'
+        OR ComputerName LIKE '%' + @Search + '%'
+        OR LastExecutedFile LIKE '%' + @Search + '%'
+      )
+      ORDER BY UsageHours DESC, SoftwareName ASC, ComputerName ASC
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
+    `);
+
+    const rows = result.recordset || [];
+
+    return res.json({
+      success: true,
+      page,
+      limit,
+      total: rows[0]?.TotalRows || 0,
+      data: rows,
+    });
+  } catch (err) {
+    console.error('GET /api/software-roi-v3/reports/illegal-unregistered error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load unregistered / illegal software report',
+      error: err.message,
+    });
+  }
+});
+
+console.log('Software ROI API V3 registered');
+
+// ============================================================
+// SOFTWARE ROI API V3 - END
+// ============================================================
+
 
 
 // 1. Import router AI Assist

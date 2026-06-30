@@ -1,0 +1,347 @@
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  return p.includes("/app-restriction") || p.includes("/app-web-restriction");
+}
+
+function text(el: Element | null) {
+  return String(el?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function visible(el: Element) {
+  const node = el as HTMLElement;
+  const r = node.getBoundingClientRect();
+  const s = window.getComputedStyle(node);
+  return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+}
+
+function clearMarks() {
+  document.querySelectorAll("[data-appres-package-section],[data-appres-package-head],[data-appres-package-search],[data-appres-transfer-grid],[data-appres-transfer-actions],[data-appres-package-list],[data-appres-package-list-head],[data-appres-package-list-body],[data-appres-package-row],[data-appres-package-row-text],[data-appres-package-row-action],[data-appres-package-pagination]").forEach((el) => {
+    const n = el as HTMLElement;
+    [
+      "appresPackageSection",
+      "appresPackageHead",
+      "appresPackageSearch",
+      "appresTransferGrid",
+      "appresTransferActions",
+      "appresPackageList",
+      "appresPackageListHead",
+      "appresPackageListBody",
+      "appresPackageRow",
+      "appresPackageRowText",
+      "appresPackageRowAction",
+      "appresPackagePagination",
+    ].forEach((k) => delete n.dataset[k]);
+  });
+}
+
+function important(el: HTMLElement, prop: string, value: string) {
+  el.style.setProperty(prop, value, "important");
+}
+
+function findPackageSection() {
+  const candidates = Array.from(document.querySelectorAll("section, article, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  return candidates
+    .map((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      let score = 0;
+
+      if (t.includes("package selection")) score += 160;
+      if (t.includes("move items between")) score += 120;
+      if (t.includes("available list") || t.includes("policy selection list")) score += 90;
+      if (t.includes("search software") || t.includes("search package")) score += 60;
+      if (t.includes("prev") && t.includes("next")) score += 50;
+
+      if (r.width > 700) score += 40;
+      if (r.height > 250) score += 40;
+      if (r.height > 800) score -= 120;
+
+      return { el, score, area: r.width * r.height };
+    })
+    .filter((x) => x.score > 220)
+    .sort((a, b) => b.score - a.score || a.area - b.area)[0]?.el || null;
+}
+
+function markHead(section: HTMLElement) {
+  const children = Array.from(section.children).filter((el) => el instanceof HTMLElement) as HTMLElement[];
+
+  const head = children.find((child) => {
+    const t = text(child).toLowerCase();
+    const r = child.getBoundingClientRect();
+
+    return t.includes("package selection") && r.height < 90;
+  }) as HTMLElement | undefined;
+
+  if (head) head.setAttribute("data-appres-package-head", "true");
+
+  const input = section.querySelector("input[placeholder*='Search'], input[placeholder*='search']") as HTMLInputElement | null;
+
+  if (input) {
+    let row = input.closest("div") as HTMLElement | null;
+
+    for (let i = 0; i < 3 && row?.parentElement; i++) {
+      const r = row.getBoundingClientRect();
+
+      if (r.width >= 180 && r.height <= 58) break;
+      row = row.parentElement;
+    }
+
+    if (row) row.setAttribute("data-appres-package-search", "true");
+  }
+}
+
+function findListPanels(section: HTMLElement) {
+  const candidates = Array.from(section.querySelectorAll("div, section, article"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  return candidates
+    .map((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      let score = 0;
+
+      if (t.includes("prev") && t.includes("next")) score += 80;
+      if (t.includes("1-") || t.includes("1 -")) score += 40;
+      if (t.includes("adobe") || t.includes("bandicam") || t.includes("firefox")) score += 70;
+      if (t.includes("package")) score += 30;
+
+      if (r.height > 180 && r.height < 620) score += 40;
+      if (r.width > 220 && r.width < 700) score += 40;
+
+      if (t.includes("package selection") && t.includes("move items")) score -= 200;
+      if (t.includes("warning message")) score -= 200;
+      if (t.includes("weekly policy")) score -= 200;
+
+      return { el, score, left: r.left, width: r.width, height: r.height };
+    })
+    .filter((x) => x.score > 110)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
+function findTransferParent(section: HTMLElement, panels: HTMLElement[]) {
+  if (panels.length < 2) return null;
+
+  const [a, b] = panels;
+
+  let parent: HTMLElement | null = a.parentElement;
+
+  while (parent && parent !== section.parentElement) {
+    if (parent.contains(b)) return parent;
+    parent = parent.parentElement;
+  }
+
+  return null;
+}
+
+function markListPanel(panel: HTMLElement) {
+  panel.setAttribute("data-appres-package-list", "true");
+
+  important(panel, "display", "flex");
+  important(panel, "flex-direction", "column");
+  important(panel, "min-width", "0");
+  important(panel, "overflow", "hidden");
+
+  const children = Array.from(panel.children).filter((el) => el instanceof HTMLElement) as HTMLElement[];
+
+  const head = children.find((child) => {
+    const r = child.getBoundingClientRect();
+    const t = text(child).toLowerCase();
+
+    return r.height <= 60 && (t.includes("package") || /^\d+$/.test(t) || t.includes("17") || t.includes("177"));
+  }) as HTMLElement | undefined;
+
+  if (head) head.setAttribute("data-appres-package-list-head", "true");
+
+  const pagination = Array.from(panel.querySelectorAll("div, nav, footer"))
+    .filter((el) => el instanceof HTMLElement && visible(el))
+    .find((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      return r.height <= 60 && t.includes("prev") && t.includes("next");
+    }) as HTMLElement | undefined;
+
+  if (pagination) pagination.setAttribute("data-appres-package-pagination", "true");
+
+  const body = Array.from(panel.querySelectorAll("div, section, article, tbody, ul"))
+    .filter((el) => el instanceof HTMLElement && visible(el))
+    .map((el) => {
+      const r = el.getBoundingClientRect();
+      const t = text(el).toLowerCase();
+
+      let score = 0;
+
+      if (r.height > 120) score += 60;
+      if (t.includes("adobe") || t.includes("bandicam") || t.includes("firefox") || t.includes(".exe")) score += 80;
+      if (t.includes("prev") && t.includes("next")) score -= 80;
+
+      return { el, score };
+    })
+    .filter((x) => x.score > 60)
+    .sort((a, b) => b.score - a.score)[0]?.el as HTMLElement | undefined;
+
+  if (body) body.setAttribute("data-appres-package-list-body", "true");
+
+  const rowScope = body || panel;
+
+  const rows = Array.from(rowScope.querySelectorAll("tr, li, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  for (const row of rows) {
+    const t = text(row);
+    const low = t.toLowerCase();
+    const r = row.getBoundingClientRect();
+
+    if (!t) continue;
+    if (r.height < 24 || r.height > 120) continue;
+    if (low.includes("prev") && low.includes("next")) continue;
+    if (low.includes("package selection")) continue;
+    if (low.includes("search software")) continue;
+
+    const hasAction = !!row.querySelector("button, [role='button']");
+    const hasIcon = !!row.querySelector("svg");
+    const looksPackage =
+      low.includes(".exe") ||
+      low.includes("adobe") ||
+      low.includes("bandicam") ||
+      low.includes("firefox") ||
+      low.includes("foxgraph") ||
+      low.includes("foxpro") ||
+      low.includes("anydesk") ||
+      low.length > 12;
+
+    if (!looksPackage && !hasAction && !hasIcon) continue;
+
+    row.setAttribute("data-appres-package-row", "true");
+
+    important(row, "display", "grid");
+    important(row, "grid-template-columns", "22px minmax(0, 1fr) 36px");
+    important(row, "align-items", "center");
+    important(row, "gap", "8px");
+    important(row, "overflow", "hidden");
+
+    const button = row.querySelector("button, [role='button']") as HTMLElement | null;
+
+    if (button) {
+      button.setAttribute("data-appres-package-row-action", "true");
+    }
+
+    const textCandidates = Array.from(row.querySelectorAll("strong, b, span, p, small, div"))
+      .filter((el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        if (button && (el === button || button.contains(el))) return false;
+
+        const tt = text(el);
+        if (!tt) return false;
+        if (/^\d+$/.test(tt)) return false;
+        if (tt.length < 2) return false;
+
+        return /[a-zA-Z]/.test(tt);
+      }) as HTMLElement[];
+
+    const target =
+      textCandidates.find((el) => {
+        const tt = text(el).toLowerCase();
+        return tt.includes(".exe") || tt.includes("adobe") || tt.includes("bandicam") || tt.includes("firefox");
+      }) ||
+      textCandidates[textCandidates.length - 1];
+
+    if (target) {
+      target.setAttribute("data-appres-package-row-text", "true");
+
+      important(target, "min-width", "0");
+      important(target, "max-width", "100%");
+      important(target, "white-space", "normal");
+      important(target, "word-break", "break-word");
+      important(target, "overflow-wrap", "anywhere");
+      important(target, "writing-mode", "horizontal-tb");
+      important(target, "text-orientation", "mixed");
+    }
+  }
+}
+
+function markTransferActions(parent: HTMLElement, panels: HTMLElement[]) {
+  const panelSet = new Set(panels);
+
+  const candidates = Array.from(parent.children)
+    .filter((el) => el instanceof HTMLElement && !panelSet.has(el as HTMLElement)) as HTMLElement[];
+
+  const center = candidates.find((el) => {
+    const t = text(el).toLowerCase();
+    const r = el.getBoundingClientRect();
+
+    return (
+      r.width < 160 &&
+      r.height > 80 &&
+      (t.includes("?") || t.includes("?") || t.includes("<") || t.includes(">") || !!el.querySelector("button"))
+    );
+  });
+
+  if (center instanceof HTMLElement) {
+    center.setAttribute("data-appres-transfer-actions", "true");
+  }
+}
+
+function apply() {
+  clearMarks();
+
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-appres-package-ui-final");
+    return;
+  }
+
+  const section = findPackageSection();
+
+  if (!section) {
+    document.body.classList.remove("ema-appres-package-ui-final");
+    return;
+  }
+
+  document.body.classList.add("ema-appres-package-ui-final");
+
+  section.setAttribute("data-appres-package-section", "true");
+
+  markHead(section);
+
+  const panelInfos = findListPanels(section);
+  const panels = panelInfos
+    .sort((a, b) => a.left - b.left)
+    .slice(0, 2)
+    .map((x) => x.el);
+
+  for (const panel of panels) markListPanel(panel);
+
+  const parent = findTransferParent(section, panels);
+
+  if (parent) {
+    parent.setAttribute("data-appres-transfer-grid", "true");
+    markTransferActions(parent, panels);
+  }
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

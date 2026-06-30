@@ -1,6 +1,9 @@
+
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "./components/layout/AppShell";
+import EmaAssistWidget from "./components/AIAssist/EmaAssistWidget";
+
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Hardware from "./pages/Hardware";
@@ -17,25 +20,10 @@ import PatchManagement from "./pages/PatchManagement";
 import InternetMetering from "./pages/InternetMetering";
 import NetworkInventory from "./pages/NetworkInventory";
 import ManagementDashboard from "./pages/ManagementDashboard";
-//import ITOperationsDashboard from "./pages/ITOperationsDashboard";
-
+// import ITOperationsDashboard from "./pages/ITOperationsDashboard";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
-import "./styles/ema-table-system-lock-final.css";
-import "./styles/ema-table-data-no-box-hard.css";
-import "./styles/ema-action-icon-button-force.css";
-import "./styles/ema-action-icon-button-spacing-final.css";
-import "./styles/ema-delete-action-red-final.css";
-import "./styles/toast.css";
-import "./styles/ema-special-operational-table-override.css";
-import "./styles/ema-table-container-spacing-final.css";
-import "./styles/app-metering-target-table-hard-final.css";
-import "./styles/app-metering-target-table-direct-final.css";
-import "./utils/emaTreeLayoutReserveFinal";
-import "./styles/ema-tree-layout-reserve-final.css";
-import "./utils/emaTreeLayoutReserveFinal";
-import "./styles/ema-hide-tree-panel-title.css";
-import "./utils/emaHideTreePanelTitle";
+
 
 export default function App() {
   return (
@@ -45,7 +33,10 @@ export default function App() {
       <Route
         element={
           <ProtectedRoute>
-            <AppShell />
+            <>
+              <AppShell />
+              <EmaAssistWidget />
+            </>
           </ProtectedRoute>
         }
       >

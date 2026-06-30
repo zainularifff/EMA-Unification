@@ -1,0 +1,93 @@
+/* PATCH MANAGEMENT DEVICE CELL FINAL
+   Local CSS only. No runtime observer.
+*/
+
+.pm-device-td-final {
+  width: 250px !important;
+  min-width: 250px !important;
+  max-width: 290px !important;
+  padding: 10px 12px !important;
+  white-space: normal !important;
+  vertical-align: middle !important;
+}
+
+.pm-device-cell-final {
+  display: grid !important;
+  grid-template-columns: 18px minmax(0, 1fr) !important;
+  align-items: start !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.pm-device-icon-final {
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-top: 1px !important;
+  color: #0f2746 !important;
+}
+
+.pm-device-icon-final svg {
+  width: 14px !important;
+  height: 14px !important;
+  stroke: #0f2746 !important;
+}
+
+.pm-device-text-final {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  text-align: left !important;
+}
+
+.pm-device-name-final {
+  display: block !important;
+  color: #0f2746 !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+.pm-device-branch-final {
+  display: block !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 750 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+.patch-module-root table th:nth-child(2),
+.patch-module-root table td:nth-child(2),
+.patch-management-page table th:nth-child(2),
+.patch-management-page table td:nth-child(2) {
+  min-width: 250px !important;
+  width: 250px !important;
+}
+
+.patch-module-root table th:nth-child(3),
+.patch-module-root table td:nth-child(3),
+.patch-management-page table th:nth-child(3),
+.patch-management-page table td:nth-child(3) {
+  min-width: 430px !important;
+}
+
+.pm-device-td-final mark,
+.pm-device-td-final .highlight {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+}

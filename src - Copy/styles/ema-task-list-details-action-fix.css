@@ -1,0 +1,36 @@
+/* Task List Details action button fix */
+
+main[data-section="task-list"] .task-list-row-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0.35rem !important;
+  width: 100% !important;
+  white-space: nowrap !important;
+}
+
+main[data-section="task-list"] .task-list-row-actions button,
+main[data-section="task-list"] .task-list-detail-action-btn {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 12px !important;
+}
+
+main[data-section="task-list"] .task-list-detail-action-btn {
+  border: 1px solid rgba(37, 99, 235, 0.24) !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+main[data-section="task-list"] .task-list-detail-action-btn:hover {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+}
+
+main[data-section="task-list"] [role="button"] {
+  cursor: pointer !important;
+}

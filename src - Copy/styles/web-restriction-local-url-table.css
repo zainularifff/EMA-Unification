@@ -1,0 +1,250 @@
+/* WEB RESTRICTION LOCAL URL TABLE
+   Local component only. Does not use global table styling.
+*/
+
+.wr-local-url-table-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  height: 420px !important;
+  min-height: 420px !important;
+  max-height: 420px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.wr-local-url-table-head {
+  flex: 0 0 38px !important;
+  height: 38px !important;
+
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+
+  padding: 0 12px !important;
+
+  border-bottom: 1px solid #dbe7f6 !important;
+  background: #f3f6fb !important;
+
+  color: #2563eb !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+}
+
+.wr-local-url-table-head span,
+.wr-local-url-table-head strong {
+  color: #2563eb !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+}
+
+.wr-local-url-table-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* Local table only */
+.wr-local-url-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+
+  table-layout: fixed !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  margin: 0 !important;
+  background: #ffffff !important;
+
+  color: #0f2746 !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+.wr-local-url-table thead {
+  display: none !important;
+}
+
+.wr-local-url-table tbody,
+.wr-local-url-table tr {
+  width: 100% !important;
+}
+
+.wr-local-url-table tr {
+  min-height: 54px !important;
+}
+
+.wr-local-url-table td {
+  padding: 10px 12px !important;
+
+  border-bottom: 1px solid #e4edf8 !important;
+
+  color: #0f2746 !important;
+  background: #ffffff !important;
+
+  vertical-align: middle !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+
+  box-sizing: border-box !important;
+}
+
+.wr-local-url-table td:first-child {
+  width: auto !important;
+}
+
+.wr-local-url-action-head,
+.wr-local-url-action-cell {
+  width: 54px !important;
+  min-width: 54px !important;
+  max-width: 54px !important;
+  text-align: center !important;
+}
+
+.wr-local-url-cell {
+  min-width: 0 !important;
+  width: 100% !important;
+
+  display: grid !important;
+  grid-template-columns: 20px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.wr-local-url-icon {
+  width: 20px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  color: #2563eb !important;
+}
+
+.wr-local-url-icon svg {
+  width: 13px !important;
+  height: 13px !important;
+  stroke: #2563eb !important;
+}
+
+.wr-local-url-text {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+
+  display: block !important;
+
+  color: #0f2746 !important;
+
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: anywhere !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.wr-local-url-delete {
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  border: 1px solid #fecaca !important;
+  border-radius: 10px !important;
+  background: #fff7f7 !important;
+  color: #ef4444 !important;
+  box-shadow: none !important;
+}
+
+.wr-local-url-delete svg {
+  width: 14px !important;
+  height: 14px !important;
+  stroke: #ef4444 !important;
+}
+
+.wr-local-url-empty {
+  height: 160px !important;
+  text-align: center !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+/* Local pagination inside this table */
+.wr-local-url-table-card .appweb-compact-pagination,
+.wr-local-url-table-card .uam-pagination {
+  flex: 0 0 38px !important;
+  min-height: 38px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+
+  padding: 6px 10px !important;
+
+  border-top: 1px solid #dbe7f6 !important;
+  background: #ffffff !important;
+}
+
+.wr-local-url-table-card .uam-page-icon {
+  min-width: 28px !important;
+  height: 28px !important;
+
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+.wr-local-url-table-scroll::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.wr-local-url-table-scroll::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}

@@ -1,0 +1,26 @@
+import { useEffect } from "react";
+import "../styles/report-builder-canvas-center.css";
+import { installReportDateRangeEnhancer } from "../utils/reportDateRangeEnhancer";
+import ReportBuilderRulesLive from "./ReportBuilderRulesLive";
+import "../styles/ema-table-system-lock-final.css";
+import "../styles/ema-table-data-no-box-hard.css";
+import "../styles/ema-action-icon-button-force.css";
+import "../styles/ema-action-icon-button-spacing-final.css";
+import "../styles/ema-delete-action-red-final.css";
+import "../styles/toast.css";
+import "../styles/ema-table-container-spacing-final.css";
+
+export default function ReportBoard() {
+  useEffect(() => {
+    installReportDateRangeEnhancer();
+
+    document.documentElement.classList.add("ema-report-builder-active");
+    document.body.classList.add("ema-report-builder-active");
+
+    return () => {
+      document.documentElement.classList.remove("ema-report-builder-active");
+      document.body.classList.remove("ema-report-builder-active");
+    };
+  }, []);
+  return <ReportBuilderRulesLive />;
+}

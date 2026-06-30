@@ -1,0 +1,87 @@
+/* APP RESTRICTION RESET DAMAGE
+   Remove damage from previous package-selection hacks.
+   No forced transfer layout here.
+*/
+
+body.ema-appres-reset-damage * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+/* Undo old marker-based forced layout if marker remains before refresh */
+body.ema-appres-reset-damage [data-appres-package-section],
+body.ema-appres-reset-damage [data-appres-package-head],
+body.ema-appres-reset-damage [data-appres-package-search],
+body.ema-appres-reset-damage [data-appres-transfer-grid],
+body.ema-appres-reset-damage [data-appres-transfer-actions],
+body.ema-appres-reset-damage [data-appres-package-list],
+body.ema-appres-reset-damage [data-appres-package-list-head],
+body.ema-appres-reset-damage [data-appres-package-list-body],
+body.ema-appres-reset-damage [data-appres-package-row],
+body.ema-appres-reset-damage [data-appres-package-row-text],
+body.ema-appres-reset-damage [data-appres-package-row-action],
+body.ema-appres-reset-damage [data-appres-package-pagination] {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  position: static !important;
+  transform: none !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Restore normal tables/lists inside App Restriction */
+body.ema-appres-reset-damage table {
+  display: table !important;
+  width: 100% !important;
+  table-layout: auto !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+body.ema-appres-reset-damage thead {
+  display: table-header-group !important;
+}
+
+body.ema-appres-reset-damage tbody {
+  display: table-row-group !important;
+}
+
+body.ema-appres-reset-damage tr {
+  display: table-row !important;
+}
+
+body.ema-appres-reset-damage th,
+body.ema-appres-reset-damage td {
+  display: table-cell !important;
+  vertical-align: middle !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Stop absolute button from floating in middle */
+body.ema-appres-reset-damage [data-appres-package-row] button,
+body.ema-appres-reset-damage [data-appres-package-row-action],
+body.ema-appres-reset-damage td button {
+  position: static !important;
+  transform: none !important;
+}
+
+/* Keep text readable */
+body.ema-appres-reset-damage :is(td, th, div, span, p, strong, b, small) {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+}

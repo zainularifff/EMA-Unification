@@ -1,0 +1,285 @@
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  return p.includes("/web-restriction") || p.includes("/app-web-restriction");
+}
+
+function text(el: Element | null) {
+  return String(el?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function visible(el: Element) {
+  const node = el as HTMLElement;
+  const r = node.getBoundingClientRect();
+  const s = window.getComputedStyle(node);
+  return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+}
+
+function clearMarks() {
+  document.querySelectorAll("[data-web-domain-section],[data-web-domain-grid],[data-web-domain-panel],[data-web-domain-head],[data-web-domain-body],[data-web-domain-row],[data-web-domain-icon],[data-web-domain-text],[data-web-domain-action],[data-web-domain-transfer],[data-web-domain-pagination]").forEach((el) => {
+    const n = el as HTMLElement;
+    [
+      "webDomainSection",
+      "webDomainGrid",
+      "webDomainPanel",
+      "webDomainHead",
+      "webDomainBody",
+      "webDomainRow",
+      "webDomainIcon",
+      "webDomainText",
+      "webDomainAction",
+      "webDomainTransfer",
+      "webDomainPagination",
+    ].forEach((k) => delete n.dataset[k]);
+  });
+}
+
+function scoreSection(el: HTMLElement) {
+  const t = text(el).toLowerCase();
+  const r = el.getBoundingClientRect();
+
+  let score = 0;
+
+  if (t.includes("url") || t.includes("domain")) score += 80;
+  if (t.includes("fifa.com") || t.includes(".com") || t.includes(".org") || t.includes(".my")) score += 140;
+  if (t.includes("1-8 of") || t.includes("prev") || t.includes("next")) score += 80;
+  if (r.width > 700) score += 40;
+  if (r.height > 250) score += 40;
+  if (r.height > 900) score -= 100;
+
+  if (t.includes("all branches")) score -= 160;
+  if (t.includes("device registry")) score -= 160;
+  if (t.includes("package selection")) score -= 160;
+
+  return score;
+}
+
+function findSection() {
+  const nodes = Array.from(document.querySelectorAll("section, article, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  return nodes
+    .map((el) => ({ el, score: scoreSection(el), area: el.getBoundingClientRect().width * el.getBoundingClientRect().height }))
+    .filter((x) => x.score > 160)
+    .sort((a, b) => b.score - a.score || a.area - b.area)[0]?.el || null;
+}
+
+function findPanels(section: HTMLElement) {
+  const nodes = Array.from(section.querySelectorAll("div, section, article, table"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  return nodes
+    .map((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      let score = 0;
+
+      if (t.includes(".com") || t.includes(".org") || t.includes(".my")) score += 120;
+      if (t.includes("prev") && t.includes("next")) score += 70;
+      if (t.includes("1-8 of")) score += 50;
+      if (r.width > 220 && r.width < 900) score += 40;
+      if (r.height > 180 && r.height < 650) score += 40;
+
+      if (t.includes("all branches")) score -= 120;
+      if (t.includes("package selection")) score -= 120;
+
+      return { el, score, left: r.left };
+    })
+    .filter((x) => x.score > 120)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
+function markPanel(panel: HTMLElement) {
+  panel.setAttribute("data-web-domain-panel", "true");
+
+  const children = Array.from(panel.children).filter((el) => el instanceof HTMLElement) as HTMLElement[];
+
+  const head = children.find((child) => {
+    const r = child.getBoundingClientRect();
+    const t = text(child).toLowerCase();
+
+    return r.height <= 60 && (t.includes("url") || t.includes("domain") || t.includes("li") || /^\d+$/.test(t));
+  }) as HTMLElement | undefined;
+
+  if (head) head.setAttribute("data-web-domain-head", "true");
+
+  const pagination = Array.from(panel.querySelectorAll("div, nav, footer"))
+    .filter((el) => el instanceof HTMLElement && visible(el))
+    .find((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      return r.height <= 60 && t.includes("prev") && t.includes("next");
+    }) as HTMLElement | undefined;
+
+  if (pagination) pagination.setAttribute("data-web-domain-pagination", "true");
+
+  const body =
+    Array.from(panel.querySelectorAll("tbody, div, ul, section"))
+      .filter((el) => el instanceof HTMLElement && visible(el))
+      .map((el) => {
+        const t = text(el).toLowerCase();
+        const r = el.getBoundingClientRect();
+
+        let score = 0;
+
+        if (r.height > 120) score += 60;
+        if (t.includes(".com") || t.includes(".org") || t.includes(".my")) score += 100;
+        if (t.includes("prev") && t.includes("next")) score -= 80;
+
+        return { el, score };
+      })
+      .filter((x) => x.score > 70)
+      .sort((a, b) => b.score - a.score)[0]?.el as HTMLElement | undefined;
+
+  if (body) body.setAttribute("data-web-domain-body", "true");
+
+  const rowScope = body || panel;
+
+  const rows = Array.from(rowScope.querySelectorAll("tr, li, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  for (const row of rows) {
+    const t = text(row);
+    const low = t.toLowerCase();
+    const r = row.getBoundingClientRect();
+
+    if (!t) continue;
+    if (r.height < 24 || r.height > 130) continue;
+    if (low.includes("prev") && low.includes("next")) continue;
+    if (low.includes("search")) continue;
+
+    const looksDomain =
+      low.includes(".com") ||
+      low.includes(".org") ||
+      low.includes(".my") ||
+      low.includes(".net") ||
+      low.includes(".tw") ||
+      low.includes(".dlc");
+
+    if (!looksDomain) continue;
+
+    row.setAttribute("data-web-domain-row", "true");
+
+    const button = row.querySelector("button, [role='button']") as HTMLElement | null;
+
+    if (button) button.setAttribute("data-web-domain-action", "true");
+
+    const svg = row.querySelector("svg") as SVGElement | null;
+    if (svg) svg.setAttribute("data-web-domain-icon", "true");
+
+    const candidates = Array.from(row.querySelectorAll("strong, b, span, p, small, div, td"))
+      .filter((el) => {
+        if (!(el instanceof HTMLElement)) return false;
+        if (button && (el === button || button.contains(el))) return false;
+
+        const tt = text(el).toLowerCase();
+
+        return (
+          tt.includes(".com") ||
+          tt.includes(".org") ||
+          tt.includes(".my") ||
+          tt.includes(".net") ||
+          tt.includes(".tw") ||
+          tt.includes(".dlc")
+        );
+      }) as HTMLElement[];
+
+    const label = candidates.sort((a, b) => text(a).length - text(b).length)[0];
+
+    if (label) {
+      label.setAttribute("data-web-domain-text", "true");
+      label.style.setProperty("writing-mode", "horizontal-tb", "important");
+      label.style.setProperty("text-orientation", "mixed", "important");
+      label.style.setProperty("word-break", "break-word", "important");
+      label.style.setProperty("overflow-wrap", "break-word", "important");
+    }
+  }
+}
+
+function findGridParent(section: HTMLElement, panels: HTMLElement[]) {
+  if (panels.length < 2) return null;
+
+  const [a, b] = panels;
+
+  let parent: HTMLElement | null = a.parentElement;
+
+  while (parent && parent !== section.parentElement) {
+    if (parent.contains(b)) return parent;
+    parent = parent.parentElement;
+  }
+
+  return null;
+}
+
+function markTransfer(parent: HTMLElement, panels: HTMLElement[]) {
+  const set = new Set(panels);
+
+  const middle = Array.from(parent.children)
+    .filter((el) => el instanceof HTMLElement && !set.has(el as HTMLElement))
+    .find((el) => {
+      const r = (el as HTMLElement).getBoundingClientRect();
+      const t = text(el).toLowerCase();
+
+      return r.width < 180 && (t.includes("?") || t.includes("?") || !!el.querySelector("svg, button"));
+    }) as HTMLElement | undefined;
+
+  if (middle) middle.setAttribute("data-web-domain-transfer", "true");
+}
+
+function apply() {
+  clearMarks();
+
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-web-domain-list-final");
+    return;
+  }
+
+  const section = findSection();
+
+  if (!section) {
+    document.body.classList.remove("ema-web-domain-list-final");
+    return;
+  }
+
+  document.body.classList.add("ema-web-domain-list-final");
+
+  section.setAttribute("data-web-domain-section", "true");
+
+  const panels = findPanels(section)
+    .sort((a, b) => a.left - b.left)
+    .slice(0, 2)
+    .map((x) => x.el);
+
+  for (const panel of panels) markPanel(panel);
+
+  const parent = findGridParent(section, panels);
+
+  if (parent) {
+    parent.setAttribute("data-web-domain-grid", "true");
+    markTransfer(parent, panels);
+  }
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

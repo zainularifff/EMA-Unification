@@ -1,0 +1,167 @@
+function shouldRun() {
+  return window.location.pathname.toLowerCase().includes("/patch-management");
+}
+
+function text(el: Element | null) {
+  return String(el?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function isVisible(el: Element) {
+  const node = el as HTMLElement;
+  const r = node.getBoundingClientRect();
+  const s = window.getComputedStyle(node);
+  return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+}
+
+function splitDeviceBranch(raw: string) {
+  const value = raw.replace(/\s+/g, " ").trim();
+
+  if (!value) return null;
+
+  let device = value;
+  let branch = "";
+
+  if (value.includes(">")) {
+    const parts = value.split(">").map((x) => x.trim()).filter(Boolean);
+    device = parts[0] || value;
+    branch = parts.slice(1).join(" > ");
+  } else if (value.includes(" / ")) {
+    const parts = value.split(" / ").map((x) => x.trim()).filter(Boolean);
+    device = parts[0] || value;
+    branch = parts.slice(1).join(" / ");
+  } else if (value.includes("\n")) {
+    const parts = value.split("\n").map((x) => x.trim()).filter(Boolean);
+    device = parts[0] || value;
+    branch = parts.slice(1).join(" ");
+  }
+
+  return {
+    device: device.trim(),
+    branch: branch.trim()
+  };
+}
+
+function createFixedContent(device: string, branch: string) {
+  const wrap = document.createElement("div");
+  wrap.className = "pm-device-cell-fixed";
+
+  const icon = document.createElement("span");
+  icon.className = "pm-device-icon-fixed";
+  icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path></svg>';
+
+  const textWrap = document.createElement("span");
+  textWrap.className = "pm-device-text-fixed";
+
+  const name = document.createElement("strong");
+  name.className = "pm-device-name-fixed";
+  name.textContent = device || "-";
+
+  const small = document.createElement("small");
+  small.className = "pm-device-branch-fixed";
+  small.textContent = branch ? branch : "-";
+
+  textWrap.appendChild(name);
+  textWrap.appendChild(small);
+
+  wrap.appendChild(icon);
+  wrap.appendChild(textWrap);
+
+  return wrap;
+}
+
+function getDeviceColumnIndex(table: HTMLTableElement) {
+  const heads = Array.from(table.querySelectorAll("thead th, tr:first-child th"));
+  const idx = heads.findIndex((th) => text(th).toLowerCase().includes("device"));
+
+  if (idx >= 0) return idx;
+
+  // fallback based on screenshot: NO. = 0, DEVICE = 1
+  return 1;
+}
+
+function fixTable(table: HTMLTableElement) {
+  const tableText = text(table).toLowerCase();
+
+  if (!tableText.includes("kb") && !tableText.includes("update")) return;
+  if (!tableText.includes("device")) return;
+
+  const deviceIndex = getDeviceColumnIndex(table);
+
+  const rows = Array.from(table.querySelectorAll("tbody tr"))
+    .filter((row) => isVisible(row));
+
+  for (const row of rows) {
+    const cells = Array.from(row.children).filter((el) => el instanceof HTMLElement) as HTMLElement[];
+    const cell = cells[deviceIndex];
+
+    if (!cell) continue;
+
+    const existingRaw = cell.dataset.pmRawDeviceText || text(cell);
+    const parsed = splitDeviceBranch(existingRaw);
+
+    if (!parsed) continue;
+
+    // only fix real merged device/branch cells or device cells with existing raw data
+    const shouldFix =
+      existingRaw.includes(">") ||
+      existingRaw.includes(" / ") ||
+      cell.dataset.pmRawDeviceText;
+
+    if (!shouldFix) continue;
+
+    cell.dataset.pmRawDeviceText = existingRaw;
+    cell.setAttribute("data-pm-device-cell-fixed", "true");
+
+    const currentFixed = cell.querySelector(".pm-device-cell-fixed");
+    if (currentFixed) {
+      const name = currentFixed.querySelector(".pm-device-name-fixed");
+      const branch = currentFixed.querySelector(".pm-device-branch-fixed");
+
+      if (name) name.textContent = parsed.device || "-";
+      if (branch) branch.textContent = parsed.branch || "-";
+
+      continue;
+    }
+
+    cell.innerHTML = "";
+    cell.appendChild(createFixedContent(parsed.device, parsed.branch));
+  }
+}
+
+function apply() {
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-patch-device-cell-fix");
+    return;
+  }
+
+  document.body.classList.add("ema-patch-device-cell-fix");
+
+  const tables = Array.from(document.querySelectorAll("table"))
+    .filter((el) => el instanceof HTMLTableElement && isVisible(el)) as HTMLTableElement[];
+
+  for (const table of tables) {
+    fixTable(table);
+  }
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

@@ -1,0 +1,97 @@
+/* TASKLIST SUMMARY ROW EXACT
+   Scoped only to TaskList summary row.
+   No body:has, no runtime observer.
+*/
+
+.task-list-module .task-summary-row-exact {
+  min-height: 48px !important;
+  height: auto !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+
+  padding: 10px 14px !important;
+  margin: 0 0 14px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  box-sizing: border-box !important;
+}
+
+.task-list-module .task-summary-main-exact {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+
+  min-width: 0 !important;
+
+  color: #64748b !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  font-weight: 800 !important;
+}
+
+.task-list-module .task-summary-main-exact strong {
+  color: #0f2746 !important;
+  font-size: 11px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+}
+
+.task-list-module .task-summary-status-exact {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+
+  margin-left: auto !important;
+}
+
+.task-list-module .task-summary-status-exact span {
+  height: 28px !important;
+  min-height: 28px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+
+  padding: 0 11px !important;
+
+  border: 1px solid #dbe7f6 !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+
+  color: #0f2746 !important;
+  font-size: 10.5px !important;
+  line-height: 1 !important;
+  font-weight: 850 !important;
+
+  white-space: nowrap !important;
+}
+
+.task-list-module .task-summary-status-exact strong {
+  color: #64748b !important;
+  font-size: 10.5px !important;
+  font-weight: 900 !important;
+}
+
+@media (max-width: 980px) {
+  .task-list-module .task-summary-row-exact {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .task-list-module .task-summary-status-exact {
+    justify-content: flex-start !important;
+    margin-left: 0 !important;
+  }
+}

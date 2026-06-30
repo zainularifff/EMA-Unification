@@ -1,0 +1,312 @@
+/* WEB RESTRICTION DOMAIN LIST FINAL
+   Scope: Web Restriction only.
+   Fix URL/domain rows text becoming vertical.
+*/
+
+body.ema-web-domain-list-final {
+  --wr-border: #dbe7f6;
+  --wr-text: #0f2746;
+  --wr-muted: #64748b;
+  --wr-blue: #2563eb;
+  --wr-red: #ef4444;
+}
+
+body.ema-web-domain-list-final [data-web-domain-section="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-grid="true"] {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-panel="true"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  height: 430px !important;
+  min-height: 430px !important;
+  max-height: 430px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  border: 1px solid var(--wr-border) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-head="true"] {
+  flex: 0 0 38px !important;
+  height: 38px !important;
+
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  gap: 8px !important;
+
+  padding: 0 12px !important;
+
+  border-bottom: 1px solid var(--wr-border) !important;
+  background: #f3f6fb !important;
+
+  color: var(--wr-blue) !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-body="true"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* Kill any table/block damage inside URL panels */
+body.ema-web-domain-list-final [data-web-domain-panel="true"] table,
+body.ema-web-domain-list-final [data-web-domain-panel="true"] thead,
+body.ema-web-domain-list-final [data-web-domain-panel="true"] tbody {
+  display: block !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-panel="true"] thead {
+  display: none !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-row="true"],
+body.ema-web-domain-list-final [data-web-domain-panel="true"] tbody tr {
+  min-height: 58px !important;
+  height: auto !important;
+
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+
+  display: grid !important;
+  grid-template-columns: 22px minmax(0, 1fr) 42px !important;
+  align-items: center !important;
+  gap: 8px !important;
+
+  padding: 8px 10px !important;
+
+  border-bottom: 1px solid #e4edf8 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-row="true"] td,
+body.ema-web-domain-list-final [data-web-domain-panel="true"] tbody tr td {
+  display: contents !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+/* Icon */
+body.ema-web-domain-list-final [data-web-domain-icon="true"],
+body.ema-web-domain-list-final [data-web-domain-row="true"] svg:first-child {
+  width: 14px !important;
+  height: 14px !important;
+
+  color: var(--wr-blue) !important;
+  stroke: var(--wr-blue) !important;
+
+  justify-self: center !important;
+}
+
+/* Domain text */
+body.ema-web-domain-list-final [data-web-domain-text="true"],
+body.ema-web-domain-list-final [data-web-domain-text="true"] *,
+body.ema-web-domain-list-final [data-web-domain-row="true"] :is(strong,b,span,p,small,div):not(button):not([role="button"]) {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+
+  display: block !important;
+
+  color: var(--wr-text) !important;
+
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 850 !important;
+
+  text-align: left !important;
+
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  overflow: hidden !important;
+  text-overflow: clip !important;
+}
+
+/* Stop one-letter vertical damage */
+body.ema-web-domain-list-final [data-web-domain-panel="true"] *,
+body.ema-web-domain-list-final [data-web-domain-row="true"] * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+}
+
+/* Delete / action button */
+body.ema-web-domain-list-final [data-web-domain-action="true"],
+body.ema-web-domain-list-final [data-web-domain-row="true"] button,
+body.ema-web-domain-list-final [data-web-domain-row="true"] [role="button"] {
+  width: 30px !important;
+  min-width: 30px !important;
+  max-width: 30px !important;
+
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: 1px solid #fecaca !important;
+  border-radius: 10px !important;
+  background: #fff7f7 !important;
+  color: var(--wr-red) !important;
+  box-shadow: none !important;
+
+  justify-self: end !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-action="true"] svg,
+body.ema-web-domain-list-final [data-web-domain-row="true"] button svg {
+  width: 14px !important;
+  height: 14px !important;
+  stroke: var(--wr-red) !important;
+}
+
+/* Middle arrows */
+body.ema-web-domain-list-final [data-web-domain-transfer="true"] {
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-transfer="true"] button,
+body.ema-web-domain-list-final [data-web-domain-transfer="true"] svg {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* Pagination */
+body.ema-web-domain-list-final [data-web-domain-pagination="true"] {
+  flex: 0 0 38px !important;
+  height: 38px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+
+  padding: 6px 10px !important;
+
+  border-top: 1px solid var(--wr-border) !important;
+  background: #ffffff !important;
+
+  color: var(--wr-muted) !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-pagination="true"] button {
+  position: static !important;
+  transform: none !important;
+
+  width: auto !important;
+  min-width: 28px !important;
+  max-width: none !important;
+  height: 28px !important;
+
+  padding: 0 9px !important;
+
+  border: 1px solid var(--wr-border) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: var(--wr-blue) !important;
+}
+
+/* Scrollbar */
+body.ema-web-domain-list-final [data-web-domain-body="true"]::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+body.ema-web-domain-list-final [data-web-domain-body="true"]::-webkit-scrollbar-thumb {
+  background: #c8d3ec !important;
+  border-radius: 999px !important;
+}
+
+@media (max-width: 1280px) {
+  body.ema-web-domain-list-final [data-web-domain-grid="true"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  body.ema-web-domain-list-final [data-web-domain-transfer="true"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex-direction: row !important;
+    min-height: 42px !important;
+  }
+}

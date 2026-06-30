@@ -1,11 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-table-container-spacing-final.css";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -2136,31 +2129,10 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
       )}
 
       <div className="settings-layout software-settings-layout d-grid gap-3">
-        <aside className="settings-menu software-left-panel ema-panel-surface">
+        <aside className="settings-menu software-left-panel ema-panel-surface" data-ema-branch-panel-v3="true">
           <div className="panel-head">
-            <span>SOFTWARE</span>
-            <strong>Software</strong>
-            <small>Browse software records, devices and statistics.</small>
+            <strong>All Software</strong>
           </div>
-
-          <nav className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher" id="softwareMenu" role="tablist" aria-label="Software navigation">
-            <button
-              type="button"
-              className={cx("setting-btn", sidebarTab === "organization" && "active")}
-              onClick={() => setSidebarTab("organization")}
-            >
-              <span className="setting-icon"><FolderOpen size={16} /></span>
-              <span><strong>Branch</strong><small>Branch endpoint scope</small></span>
-            </button>
-            <button
-              type="button"
-              className={cx("setting-btn", sidebarTab === "statistic" && "active")}
-              onClick={() => setSidebarTab("statistic")}
-            >
-              <span className="setting-icon"><Database size={16} /></span>
-              <span><strong>Statistics</strong><small>Software evidence views</small></span>
-            </button>
-          </nav>
 
           <div className="ema-sidebar-content">
             <div className="ema-sidebar-subpanel">

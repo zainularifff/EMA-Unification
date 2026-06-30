@@ -1,0 +1,124 @@
+/* IT Ops Dashboard > Breakdown: Open Tickets table fix.
+   Scope only renderAlertDrillTable Ticket List. */
+
+.itops-open-ticket-table-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  border-radius: 18px !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table {
+  display: table !important;
+  width: 100% !important;
+  min-width: 900px !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table thead {
+  display: table-header-group !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table tbody {
+  display: table-row-group !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table tr {
+  display: table-row !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th,
+.itops-open-ticket-table-wrap .itops-open-ticket-table td {
+  display: table-cell !important;
+  float: none !important;
+  position: static !important;
+  vertical-align: middle !important;
+  padding: 0.72rem 0.8rem !important;
+  font-size: 0.74rem !important;
+  line-height: 1.3 !important;
+  text-align: left !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th {
+  background: #f3f6fb !important;
+  color: #2563eb !important;
+  font-size: 0.68rem !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.045em !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th:nth-child(1),
+.itops-open-ticket-table-wrap .itops-open-ticket-table td:nth-child(1) {
+  width: 115px !important;
+  min-width: 115px !important;
+  max-width: 115px !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th:nth-child(2),
+.itops-open-ticket-table-wrap .itops-open-ticket-table td:nth-child(2) {
+  width: auto !important;
+  min-width: 280px !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th:nth-child(3),
+.itops-open-ticket-table-wrap .itops-open-ticket-table td:nth-child(3) {
+  width: 190px !important;
+  min-width: 190px !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th:nth-child(4),
+.itops-open-ticket-table-wrap .itops-open-ticket-table td:nth-child(4) {
+  width: 150px !important;
+  min-width: 150px !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th:nth-child(5),
+.itops-open-ticket-table-wrap .itops-open-ticket-table td:nth-child(5) {
+  width: 130px !important;
+  min-width: 130px !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table th:nth-child(6),
+.itops-open-ticket-table-wrap .itops-open-ticket-table td:nth-child(6) {
+  width: 70px !important;
+  min-width: 70px !important;
+  max-width: 70px !important;
+  text-align: center !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table td:nth-child(2) strong {
+  display: block !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table .itops-pro-pill,
+.itops-open-ticket-table-wrap .itops-open-ticket-table .itops-pro-severity {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  max-width: 100% !important;
+  white-space: nowrap !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table .itops-pro-clickable-row {
+  cursor: pointer !important;
+}
+
+.itops-open-ticket-table-wrap .itops-open-ticket-table .itops-pro-clickable-row:hover td {
+  background: #f8fbff !important;
+}

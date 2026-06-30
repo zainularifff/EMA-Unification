@@ -1,0 +1,167 @@
+.ema-sidebar-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+}
+
+.ema-sidebar-tree-branch {
+  display: flex;
+  flex-direction: column;
+}
+
+.ema-sidebar-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 9px;
+  position: relative;
+}
+
+.ema-sidebar-tree-node.is-selected {
+  background: var(--ema-blue-50);
+}
+
+.ema-sidebar-tree-node.is-selected .ema-sidebar-tree-label {
+  color: var(--ema-blue-600);
+  font-weight: 800;
+}
+
+.ema-sidebar-tree-node.is-selected .ema-sidebar-tree-icon {
+  color: var(--ema-blue-600);
+}
+
+.ema-sidebar-tree-toggle {
+  width: 20px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ema-slate-400);
+  flex: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ema-sidebar-tree-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 6px 6px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--ema-slate-700);
+  text-align: left;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.ema-sidebar-tree-icon {
+  color: var(--ema-blue-600);
+  display: flex;
+  flex: none;
+}
+
+.ema-sidebar-tree-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  min-width: 0;
+}
+
+.ema-sidebar-tree-count {
+  font-size: 0.66rem;
+  color: var(--ema-slate-500);
+  background: var(--ema-slate-100);
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  flex: none;
+}
+
+.ema-sidebar-tree-node.is-selected .ema-sidebar-tree-count {
+  background: var(--ema-blue-100);
+  color: var(--ema-blue-600);
+}
+
+.ema-sidebar-tree-menu-wrap {
+  position: relative;
+  flex: none;
+}
+
+.ema-sidebar-tree-menu-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--ema-slate-400);
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ema-sidebar-tree-menu-btn:hover {
+  background: var(--ema-slate-100);
+  color: var(--ema-slate-700);
+}
+
+.ema-sidebar-tree-menu {
+  position: absolute;
+  right: 0;
+  top: 30px;
+  z-index: 40;
+  background: var(--ema-card-bg);
+  border: 1px solid var(--ema-border);
+  border-radius: 10px;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 6px;
+}
+
+.ema-sidebar-tree-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  color: var(--ema-slate-700);
+  cursor: pointer;
+}
+
+.ema-sidebar-tree-menu button:hover {
+  background: var(--ema-slate-100);
+}
+
+.ema-sidebar-tree-menu button.danger {
+  color: var(--ema-red-600);
+}
+
+.ema-sidebar-tree-menu button.danger:hover {
+  background: var(--ema-red-50);
+}
+
+.ema-sidebar-tree-children.is-nested {
+  padding-left: 16px;
+  border-left: 1px dashed var(--ema-slate-200);
+  margin-left: 18px;
+}
+
+.ema-sidebar-add-folder {
+  margin-top: 4px;
+  width: 100%;
+}

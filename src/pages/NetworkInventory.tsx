@@ -1,13 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FormEvent, MouseEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-table-container-spacing-final.css";
 import {
   Activity,
   AlertCircle,
@@ -387,6 +380,11 @@ function countTotal(counts: Partial<NetworkCounts> | undefined) {
   return safe.registered + safe.notRegistered + safe.notInstalled + safe.otherDevice;
 }
 
+function collectNetworkNodeIds(node?: NetworkHierarchyNode | null): string[] {
+  if (!node) return [];
+  return [node.id, ...(node.children || []).flatMap((child) => collectNetworkNodeIds(child))];
+}
+
 function getNetworkTreeCount(node?: NetworkHierarchyNode | null): number {
   if (!node) return 0;
   const ownTotal = countTotal(node.counts);
@@ -723,7 +721,7 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
         const nextHierarchy = hierarchyResult.value.data;
         setHierarchy(nextHierarchy);
         setSelectedNodeId(nextHierarchy.id || null);
-        setExpandedTreeIds(new Set<string>());
+        setExpandedTreeIds(new Set<string>(collectNetworkNodeIds(nextHierarchy)));
         setTreeSearch("");
       } else if (hierarchyResult.status === "rejected") {
         throw hierarchyResult.reason;
@@ -1029,18 +1027,7 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
   return (
     <main className="settings-module-root network-inventory-module ema-settings-pro container-fluid p-3 p-xl-4" data-section="users">
       <style>{`
-        /* Network page canvas only. Do not override AppShell/topbar/global sidebar colors. */
-        .network-inventory-module.settings-module-root {
-          background:
-            radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
-            radial-gradient(circle at 100% 10%, rgba(8, 126, 164, 0.045), transparent 24rem),
-            linear-gradient(135deg, #eef3f9 0%, #f9fbfd 45%, #e8eff7 100%) !important;
-        }
-
         /* Network sidebar: intentionally mirrors Hardware sidebar structure/spacing. */
-        .network-inventory-module .settings-layout.network-settings-layout {
-          grid-template-columns: minmax(300px, 322px) minmax(0, 1fr) !important;
-        }
 
         .network-inventory-module .settings-menu.network-left-panel {
           min-width: 300px !important;
@@ -1102,6 +1089,362 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
           border-radius: 22px !important;
         }
 
+
+
+        /* NETWORK_DEVICE_STATUS_TABLE_FORCE_FIX_START */
+        /* Force fix ONLY for Network Inventory > main Device Status table */
+        .network-inventory-module .network-device-status-table-card {
+          display: block !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+          padding: 0 !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card table {
+          display: table !important;
+          width: 100% !important;
+          min-width: 720px !important;
+          max-width: none !important;
+          table-layout: fixed !important;
+          border-collapse: collapse !important;
+          border-spacing: 0 !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card thead {
+          display: table-header-group !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card tbody {
+          display: table-row-group !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card tr {
+          display: table-row !important;
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          height: auto !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card th,
+        .network-inventory-module .network-device-status-table-card td {
+          display: table-cell !important;
+          float: none !important;
+          position: static !important;
+          vertical-align: middle !important;
+          padding: 0.7rem 0.85rem !important;
+          font-size: 0.78rem !important;
+          line-height: 1.35 !important;
+          white-space: normal !important;
+          word-break: normal !important;
+          overflow-wrap: normal !important;
+          writing-mode: horizontal-tb !important;
+          text-orientation: mixed !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card th:nth-child(1),
+        .network-inventory-module .network-device-status-table-card td:nth-child(1) {
+          width: auto !important;
+          min-width: 420px !important;
+          max-width: none !important;
+          text-align: left !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card th:nth-child(2),
+        .network-inventory-module .network-device-status-table-card td:nth-child(2) {
+          width: 140px !important;
+          min-width: 140px !important;
+          max-width: 140px !important;
+          text-align: center !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card th:nth-child(3),
+        .network-inventory-module .network-device-status-table-card td:nth-child(3) {
+          width: 130px !important;
+          min-width: 130px !important;
+          max-width: 130px !important;
+          text-align: center !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card .user-name {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: 0.65rem !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card .user-mini-avatar {
+          flex: 0 0 32px !important;
+          width: 32px !important;
+          height: 32px !important;
+          min-width: 32px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card .user-name > span:last-child {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: flex-start !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card .user-name strong,
+        .network-inventory-module .network-device-status-table-card .user-name small {
+          display: block !important;
+          width: auto !important;
+          max-width: 100% !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          writing-mode: horizontal-tb !important;
+          word-break: normal !important;
+          overflow-wrap: normal !important;
+          letter-spacing: normal !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card .user-pill {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          width: auto !important;
+          min-width: 44px !important;
+          max-width: none !important;
+          white-space: nowrap !important;
+          writing-mode: horizontal-tb !important;
+        }
+
+        .network-inventory-module .network-device-status-table-card .mini-btn.icon-only {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          width: 32px !important;
+          height: 32px !important;
+          min-width: 32px !important;
+          max-width: 32px !important;
+          padding: 0 !important;
+        }
+        /* NETWORK_DEVICE_STATUS_TABLE_FORCE_FIX_END */
+
+
+
+        /* NETWORK_STATUS_DETAIL_TABLE_FORCE_FIX_START */
+        /* Network Inventory > Registered Agent detail modal only */
+        .network-inventory-module .network-status-detail-modal {
+          width: min(94vw, 1080px) !important;
+          max-width: 1080px !important;
+          height: calc(100vh - 64px) !important;
+          max-height: calc(100vh - 64px) !important;
+          display: flex !important;
+          flex-direction: column !important;
+          overflow: hidden !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .user-modal-head {
+          flex: 0 0 auto !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .user-modal-body {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+          padding-bottom: 0.75rem !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .user-modal-body > .wide {
+          height: 100% !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-grid {
+          height: 100% !important;
+          min-height: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 0.85rem !important;
+          overflow: hidden !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .content-head,
+        .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .user-access-commandbar {
+          flex: 0 0 auto !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .user-access-commandbar {
+          display: grid !important;
+          grid-template-columns: minmax(260px, 1fr) 190px 190px auto !important;
+          align-items: center !important;
+          gap: 0.6rem !important;
+          width: 100% !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card {
+          flex: 1 1 auto !important;
+          min-height: 220px !important;
+          max-height: none !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow: auto !important;
+          border-radius: 18px !important;
+          padding: 0 !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card table {
+          display: table !important;
+          width: 100% !important;
+          min-width: 960px !important;
+          table-layout: fixed !important;
+          border-collapse: collapse !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card thead {
+          display: table-header-group !important;
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 5 !important;
+          background: #f3f6fb !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card tbody {
+          display: table-row-group !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card tr {
+          display: table-row !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th,
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td {
+          display: table-cell !important;
+          vertical-align: middle !important;
+          padding: 0.58rem 0.62rem !important;
+          font-size: 0.72rem !important;
+          line-height: 1.25 !important;
+          white-space: normal !important;
+          word-break: normal !important;
+          overflow-wrap: normal !important;
+          writing-mode: horizontal-tb !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(1),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(1) {
+          width: 48px !important;
+          text-align: center !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(2),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(2) {
+          width: 210px !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(3),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(3) {
+          width: 125px !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(4),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(4) {
+          width: 160px !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(5),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(5) {
+          width: 120px !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(6),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(6) {
+          width: 80px !important;
+          text-align: center !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(7),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(7) {
+          width: 150px !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card th:nth-child(8),
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card td:nth-child(8) {
+          width: 82px !important;
+          text-align: center !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card .user-name {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          gap: 0.45rem !important;
+          min-width: 0 !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card .user-name > div {
+          min-width: 0 !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card .user-name strong,
+        .network-inventory-module .network-status-detail-modal .network-status-detail-table-card .user-name small {
+          display: block !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .uam-pagination.global-style {
+          flex: 0 0 auto !important;
+          min-height: 48px !important;
+          margin-top: 0 !important;
+          padding: 0.6rem 0.8rem !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 0.75rem !important;
+          border: 1px solid rgba(148, 163, 184, 0.35) !important;
+          border-radius: 16px !important;
+          background: #ffffff !important;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
+          position: relative !important;
+          z-index: 10 !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .uam-pagination.global-style .uam-pagination-controls {
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 0.35rem !important;
+          flex-wrap: nowrap !important;
+        }
+
+        .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .uam-pagination.global-style .uam-page-icon,
+        .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .uam-pagination.global-style .uam-page-current {
+          width: 30px !important;
+          height: 30px !important;
+          min-width: 30px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+        /* NETWORK_STATUS_DETAIL_TABLE_FORCE_FIX_END */
+
         @media (max-width: 1100px) {
           .network-inventory-module .settings-layout.network-settings-layout {
             grid-template-columns: 1fr !important;
@@ -1149,28 +1492,10 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
       )}
 
       <div className="settings-layout network-settings-layout d-grid gap-3">
-        <aside className="settings-menu network-left-panel ema-panel-surface">
+        <aside className="settings-menu network-left-panel ema-panel-surface" data-ema-branch-panel-v3="true">
           <div className="panel-head">
-            <span>NETWORK INVENTORY</span>
-            <strong>Network Control</strong>
-            <small>IP/subnet hierarchy and synchronized device records.</small>
+            <strong>{getNetworkBranchLabel(selectedNode)}</strong>
           </div>
-
-          <nav className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher" role="tablist" aria-label="Network navigation">
-            <button
-              type="button"
-              className={cx("setting-btn", treeMode === "organization" && "active")}
-              onClick={() => {
-                setTreeMode("organization");
-                setTreeSearch("");
-                setExpandedTreeIds(new Set<string>());
-                setFolderMenuId(null);
-              }}
-            >
-              <span className="setting-icon"><FolderOpen size={16} /></span>
-              <span><strong>Network</strong><small>IP / subnet scope</small></span>
-            </button>
-          </nav>
 
           <div className="ema-sidebar-content">
             <div className="ema-sidebar-subpanel">
@@ -1609,7 +1934,7 @@ function DeviceStatusOverview({
         <span>{selectedLabel} • {targetCount.toLocaleString()} scan target(s) • {total.toLocaleString()} network object(s)</span>
       </div>
 
-      <div className="pricing-table-card table-responsive">
+      <div className="pricing-table-card table-responsive network-device-status-table-card">
         <table className="table table-hover align-middle mb-0">
           <thead>
             <tr>
@@ -1667,7 +1992,7 @@ function StatusDetailModal({
 }) {
   return (
     <div className="user-modal-backdrop open" onMouseDown={onClose}>
-      <section className="user-modal advanced" onMouseDown={(event) => event.stopPropagation()}>
+      <section className="user-modal advanced network-status-detail-modal" onMouseDown={(event) => event.stopPropagation()}>
         <div className="user-modal-head">
           <div>
             <span>{detail.source}</span>
@@ -1764,7 +2089,7 @@ function StatusDetailTable({
   };
 
   return (
-    <div className="d-grid gap-3">
+    <div className="d-grid gap-3 network-status-detail-grid">
       <div className="content-head">
         <div>
           <h3>{detail.title}</h3>
@@ -1813,7 +2138,7 @@ function StatusDetailTable({
         </span>
       </div>
 
-      <div className="pricing-table-card table-responsive">
+      <div className="pricing-table-card table-responsive network-status-detail-table-card">
         <table className="table table-hover align-middle mb-0">
           <thead>
             <tr>

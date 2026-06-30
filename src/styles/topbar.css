@@ -1,0 +1,103 @@
+.ema-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 28px;
+  background: var(--ema-card-bg);
+  border-bottom: 1px solid var(--ema-border);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.ema-topbar-title h1 {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ema-slate-900);
+  margin: 0;
+  line-height: 1.25;
+}
+
+.ema-topbar-title p {
+  font-size: 0.74rem;
+  color: var(--ema-slate-500);
+  margin: 0;
+}
+
+.ema-global-search {
+  flex: 1;
+  max-width: 540px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ema-slate-100);
+  border: 1px solid var(--ema-border);
+  border-radius: 999px;
+  padding: 9px 16px;
+}
+
+.ema-global-search input {
+  border: none;
+  background: transparent;
+  flex: 1;
+  font-size: 0.84rem;
+  outline: none;
+  color: var(--ema-slate-900);
+}
+
+.ema-global-search input::placeholder {
+  color: var(--ema-slate-400);
+}
+
+.ema-global-search-submit,
+.ema-global-search-clear {
+  border: none;
+  background: transparent;
+  color: var(--ema-slate-400);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ema-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--ema-border);
+  background: var(--ema-card-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ema-slate-600);
+  flex: none;
+  cursor: pointer;
+}
+
+.ema-icon-btn:hover {
+  background: var(--ema-slate-100);
+}
+
+.ema-ai-topbar-btn.btn-primary {
+  background: linear-gradient(135deg, var(--ema-blue-600), var(--ema-blue-700));
+  border: none;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 9px 16px;
+}
+
+.ema-admin-topbar-btn.btn-light {
+  border-radius: 999px;
+  background: var(--ema-slate-100);
+  border: 1px solid var(--ema-border) !important;
+  color: var(--ema-slate-900) !important;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 8px 14px;
+}
+
+.ema-topbar-role-label {
+  white-space: nowrap;
+}

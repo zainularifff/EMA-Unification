@@ -1,0 +1,30 @@
+/* Task List Detail Modal - Delete button cutoff only.
+   Keep original modal UI and click-to-open behavior. */
+
+section[role="dialog"][aria-label^="Task "][aria-label$=" detail"] {
+  max-height: calc(100vh - 42px) !important;
+  overflow: hidden !important;
+}
+
+section[role="dialog"][aria-label^="Task "][aria-label$=" detail"] > div:last-child > section:first-child > div {
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-bottom: 14px !important;
+  scrollbar-gutter: stable !important;
+}
+
+section[role="dialog"][aria-label^="Task "][aria-label$=" detail"] > div:last-child > section:first-child > div > div:last-child {
+  padding-bottom: 10px !important;
+  overflow: visible !important;
+}
+
+section[role="dialog"][aria-label^="Task "][aria-label$=" detail"] > div:last-child > section:first-child > div > div:last-child > button {
+  min-height: 52px !important;
+  height: auto !important;
+}
+
+section[role="dialog"][aria-label^="Task "][aria-label$=" detail"] > div:last-child > section:first-child > div > div:last-child > button:last-child {
+  margin-bottom: 8px !important;
+}

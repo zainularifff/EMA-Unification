@@ -1,16 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-special-operational-table-override.css";
-import "../styles/patch-management-table-final-fix.css";
-import { useEffect as usePatchManagementTableRouteEffect } from "react";
-import "../styles/patch-management-action-inline-fix.css";
-import "../styles/ema-table-container-spacing-final.css";
+import { useCallback, useEffect, useMemo, useState } from 'react';import type { ReactNode } from 'react';
 import {
   Boxes,
   ChevronDown,
@@ -187,10 +175,31 @@ const getKbText = (row?: OnlinePatchRow | null) => {
   return '-';
 };
 
+const isTruthyValue = (value: unknown) => (
+  value === true ||
+  value === 1 ||
+  String(value).trim().toLowerCase() === 'true' ||
+  String(value).trim() === '1'
+);
+
+const formatYesNo = (value: unknown) => (isTruthyValue(value) ? 'Yes' : 'No');
+
+const cleanExternalUrl = (url?: string | null) => (
+  String(url || '').replace(/&amp;/g, '&').trim()
+);
+
+const uniqueValues = (values: Array<string | number | null | undefined>) => (
+  Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)))
+);
+
 const getRowStatus = (row: OnlinePatchRow) => {
-  const installed = row.IsInstalled === true || row.IsInstalled === 1 || String(row.IsInstalled).toLowerCase() === 'true' || String(row.IsInstalled) === '1';
-  const downloaded = row.IsDownloaded === true || row.IsDownloaded === 1 || String(row.IsDownloaded).toLowerCase() === 'true' || String(row.IsDownloaded) === '1';
-  return installed || downloaded ? 'Installed' : 'Missing';
+  const apiStatus = String((row as any).Status || '').trim();
+  if (apiStatus && apiStatus !== '-') return apiStatus;
+
+  const installed = isTruthyValue(row.IsInstalled);
+  if (installed) return 'Installed';
+
+  return 'Missing';
 };
 
 const getSeverityPillClass = (severity?: string) => {
@@ -236,19 +245,6 @@ const extractPatchRows = (response: any): OnlinePatchRow[] => {
 
 
 function PatchManagement() {
-usePatchManagementTableRouteEffect(() => {
-    document.body.classList.add("ema-route-patch-management");
-    document.body.setAttribute("data-ema-route", "/patch-management");
-
-    return () => {
-      document.body.classList.remove("ema-route-patch-management");
-      if (document.body.getAttribute("data-ema-route") === "/patch-management") {
-        document.body.removeAttribute("data-ema-route");
-      }
-    };
-  }, []);
-
-
   const [mode, setMode] = useState<PatchMode>('online');
   const [activeTab, setActiveTab] = useState<PatchTab>('status');
   const [sidebarMode, setSidebarMode] = useState<PatchSidebarMode>('organization');
@@ -262,6 +258,7 @@ usePatchManagementTableRouteEffect(() => {
 
   const [summary, setSummary] = useState<OnlinePatchSummary>(defaultSummary);
   const [statusResult, setStatusResult] = useState<PagedPatchResponse>({ rows: [], page: 1, limit: 10, totalRecords: 0 });
+  const [kpiStatusRows, setKpiStatusRows] = useState<OnlinePatchRow[]>([]);
   const [catalogResult, setCatalogResult] = useState<PagedPatchResponse>({ rows: [], page: 1, limit: 10, totalRecords: 0 });
   const [loadingData, setLoadingData] = useState(false);
 
@@ -293,8 +290,14 @@ usePatchManagementTableRouteEffect(() => {
   }, [currentRows, limit, page]);
 
   const installableMissingCount = useMemo(() => {
-    return statusResult.rows.filter((row) => getRowStatus(row) === 'Missing' && Number(row.Object_Root_Idn || 0) > 0).length;
-  }, [statusResult.rows]);
+    return kpiStatusRows.filter((row) => getRowStatus(row) === 'Missing' && Number(row.Object_Root_Idn || 0) > 0).length;
+  }, [kpiStatusRows]);
+
+  const totalMissingRecords = Number(summary.MissingPatches || 0);
+
+  const missingKpiNote = totalMissingRecords > 0
+    ? `${formatNumber(totalMissingRecords)} total missing record(s)`
+    : 'No missing records';
 
   const patchCoverage = useMemo(() => {
     const installed = Number(summary.InstalledPatches || 0);
@@ -390,13 +393,27 @@ usePatchManagementTableRouteEffect(() => {
           limit: requestLimit,
         };
 
-        const [summaryResult, statusResultResponse] = await Promise.allSettled([
+        const kpiParams: OnlinePatchQueryParams = {
+          ...scopeParams,
+          search: debouncedSearch,
+          severity: severityFilter,
+          status: 'all',
+          page: 1,
+          limit: requestLimit,
+        };
+
+        const [summaryResult, statusResultResponse, kpiStatusResult] = await Promise.allSettled([
           getOnlinePatchSummary(scopeParams),
           getOnlinePatchStatus(params),
+          getOnlinePatchStatus(kpiParams),
         ]);
 
         if (summaryResult.status === 'fulfilled') {
           setSummary(summaryResult.value || defaultSummary);
+        }
+
+        if (kpiStatusResult.status === 'fulfilled') {
+          setKpiStatusRows(extractPatchRows(kpiStatusResult.value));
         }
 
         if (statusResultResponse.status === 'fulfilled') {
@@ -413,13 +430,27 @@ usePatchManagementTableRouteEffect(() => {
         throw statusResultResponse.reason;
       }
 
-      const [summaryResult, catalogResultResponse] = await Promise.allSettled([
+      const catalogKpiParams: OnlinePatchQueryParams = {
+        ...scopeParams,
+        search: debouncedSearch,
+        severity: severityFilter,
+        status: 'all',
+        page: 1,
+        limit: requestLimit,
+      };
+
+      const [summaryResult, catalogResultResponse, catalogKpiStatusResult] = await Promise.allSettled([
         getOnlinePatchSummary(scopeParams),
         getOnlinePatchCatalog({ search: debouncedSearch, severity: severityFilter, page: 1, limit: requestLimit }),
+        getOnlinePatchStatus(catalogKpiParams),
       ]);
 
       if (summaryResult.status === 'fulfilled') {
         setSummary(summaryResult.value || defaultSummary);
+      }
+
+      if (catalogKpiStatusResult.status === 'fulfilled') {
+        setKpiStatusRows(extractPatchRows(catalogKpiStatusResult.value));
       }
 
       if (catalogResultResponse.status === 'fulfilled') {
@@ -632,6 +663,233 @@ usePatchManagementTableRouteEffect(() => {
           width: 100% !important;
         }
 
+        .patch-module-root .patch-detail-source-grid {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) !important;
+          gap: 0.75rem !important;
+          width: 100% !important;
+        }
+
+        .patch-module-root .patch-detail-source-card {
+          width: 100% !important;
+          max-width: none !important;
+          min-width: 0 !important;
+        }
+
+        .patch-module-root .patch-detail-source-card strong,
+        .patch-module-root .patch-detail-source-card span,
+        .patch-module-root .patch-detail-source-card small {
+          overflow-wrap: anywhere !important;
+          word-break: break-word !important;
+        }
+
+        .patch-module-root .patch-source-summary {
+          display: grid !important;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
+          gap: 0.65rem !important;
+          margin-bottom: 0.75rem !important;
+        }
+
+
+
+        /* PATCH_REGISTRY_ACTION_BUTTON_INLINE_FIX_START */
+        /* Patch Registry: keep all columns inside one aligned table */
+        .patch-module-root .patch-registry-table-card {
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow-x: auto !important;
+          overflow-y: visible !important;
+          border-radius: 18px !important;
+        }
+
+        .patch-module-root .patch-registry-table-card table {
+          display: table !important;
+          width: 100% !important;
+          min-width: 1160px !important;
+          table-layout: fixed !important;
+          border-collapse: collapse !important;
+          border-spacing: 0 !important;
+        }
+
+        .patch-module-root .patch-registry-table-card thead {
+          display: table-header-group !important;
+        }
+
+        .patch-module-root .patch-registry-table-card tbody {
+          display: table-row-group !important;
+        }
+
+        .patch-module-root .patch-registry-table-card tr {
+          display: table-row !important;
+        }
+
+        .patch-module-root .patch-registry-table-card th,
+        .patch-module-root .patch-registry-table-card td {
+          display: table-cell !important;
+          float: none !important;
+          position: static !important;
+          vertical-align: middle !important;
+          padding: 0.62rem 0.65rem !important;
+          font-size: 0.72rem !important;
+          line-height: 1.25 !important;
+          word-break: normal !important;
+          overflow-wrap: normal !important;
+          white-space: normal !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(1),
+        .patch-module-root .patch-registry-status-table td:nth-child(1) {
+          width: 48px !important;
+          min-width: 48px !important;
+          max-width: 48px !important;
+          text-align: center !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(2),
+        .patch-module-root .patch-registry-status-table td:nth-child(2) {
+          width: 150px !important;
+          min-width: 150px !important;
+          max-width: 150px !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(3),
+        .patch-module-root .patch-registry-status-table td:nth-child(3) {
+          width: auto !important;
+          min-width: 330px !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(4),
+        .patch-module-root .patch-registry-status-table td:nth-child(4) {
+          width: 92px !important;
+          min-width: 92px !important;
+          max-width: 92px !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(5),
+        .patch-module-root .patch-registry-status-table td:nth-child(5) {
+          width: 96px !important;
+          min-width: 96px !important;
+          max-width: 96px !important;
+          white-space: nowrap !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(6),
+        .patch-module-root .patch-registry-status-table td:nth-child(6) {
+          width: 90px !important;
+          min-width: 90px !important;
+          max-width: 90px !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(7),
+        .patch-module-root .patch-registry-status-table td:nth-child(7) {
+          width: 158px !important;
+          min-width: 158px !important;
+          max-width: 158px !important;
+          white-space: nowrap !important;
+        }
+
+        .patch-module-root .patch-registry-status-table th:nth-child(8),
+        .patch-module-root .patch-registry-status-table td:nth-child(8) {
+          width: 168px !important;
+          min-width: 168px !important;
+          max-width: 168px !important;
+          text-align: right !important;
+          white-space: nowrap !important;
+        }
+
+        .patch-module-root .patch-registry-catalog-table th:nth-child(1),
+        .patch-module-root .patch-registry-catalog-table td:nth-child(1) {
+          width: 52px !important;
+          text-align: center !important;
+        }
+
+        .patch-module-root .patch-registry-catalog-table th:last-child,
+        .patch-module-root .patch-registry-catalog-table td.patch-action-cell {
+          width: 150px !important;
+          min-width: 150px !important;
+          max-width: 150px !important;
+          text-align: right !important;
+          white-space: nowrap !important;
+        }
+
+        .patch-module-root .patch-registry-table-card .user-name {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          gap: 0.45rem !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+
+        .patch-module-root .patch-registry-table-card .user-name > span:last-child {
+          display: flex !important;
+          flex-direction: column !important;
+          min-width: 0 !important;
+          max-width: 100% !important;
+        }
+
+        .patch-module-root .patch-registry-table-card .user-name strong,
+        .patch-module-root .patch-registry-table-card .user-name small,
+        .patch-module-root .patch-registry-table-card td:nth-child(3) strong {
+          display: block !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+
+        .patch-module-root .patch-registry-table-card .user-pill {
+          white-space: normal !important;
+          max-width: 100% !important;
+          line-height: 1.15 !important;
+        }
+
+        .patch-module-root .patch-registry-table-card td:nth-child(5),
+        .patch-module-root .patch-registry-table-card td:nth-child(7) {
+          font-size: 0.7rem !important;
+        }
+
+        .patch-module-root .patch-registry-table-card td.patch-action-cell {
+          padding-left: 0.45rem !important;
+          padding-right: 0.45rem !important;
+        }
+
+        .patch-module-root .patch-registry-table-card .patch-row-actions-inline {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          flex-wrap: nowrap !important;
+          gap: 0.35rem !important;
+          width: 100% !important;
+          min-width: 0 !important;
+          white-space: nowrap !important;
+        }
+
+        .patch-module-root .patch-registry-table-card .patch-row-actions-inline .primary-btn,
+        .patch-module-root .patch-registry-table-card .patch-row-actions-inline .mini-btn {
+          display: inline-flex !important;
+          flex: 0 0 auto !important;
+          align-items: center !important;
+          justify-content: center !important;
+          height: 28px !important;
+          min-height: 28px !important;
+          width: auto !important;
+          min-width: 70px !important;
+          max-width: 78px !important;
+          padding: 0.32rem 0.5rem !important;
+          margin: 0 !important;
+          font-size: 0.68rem !important;
+          line-height: 1 !important;
+          white-space: nowrap !important;
+        }
+
+        .patch-module-root .patch-registry-table-card .patch-row-actions-inline svg {
+          width: 12px !important;
+          height: 12px !important;
+          flex: 0 0 auto !important;
+        }
+        /* PATCH_REGISTRY_ACTION_BUTTON_INLINE_FIX_END */
+
         @media (max-width: 1100px) {
           .patch-module-root .settings-layout.patch-settings-layout {
             grid-template-columns: 1fr !important;
@@ -693,14 +951,14 @@ usePatchManagementTableRouteEffect(() => {
                     />
                   </div>
 
-                  <button
+                  {/* <button
                     type="button"
                     className="soft-btn d-inline-flex align-items-center gap-1 px-2"
                     onClick={() => showToast({ type: 'info', message: 'Branch path creation is managed from the organization settings.' })}
                   >
                     <FolderPlus size={13} />
-                    Add New Folder
-                  </button>
+                    New Branch Path
+                  </button> */}
 
                   <div className="ema-sidebar-tree" aria-label="Patch scope tree">
                     <div className="patch-tree-root">
@@ -753,7 +1011,7 @@ usePatchManagementTableRouteEffect(() => {
                     </button>
                     <button className={cx('setting-btn', (activeKpi === 'missing' || statusFilter === 'missing') && 'active')} type="button" onClick={() => handleKpiClick('missing')}>
                       <span className="setting-icon"><ShieldAlert size={15} /></span>
-                      <span><strong>Missing</strong><small>{formatNumber(summary.MissingPatches)} pending patches</small></span>
+                      <span><strong>Missing</strong><small>{missingKpiNote}</small></span>
                     </button>
                     <button className={cx('setting-btn', (activeKpi === 'installed' || statusFilter === 'installed') && 'active')} type="button" onClick={() => handleKpiClick('installed')}>
                       <span className="setting-icon"><PackageCheck size={15} /></span>
@@ -777,7 +1035,7 @@ usePatchManagementTableRouteEffect(() => {
             <div className="hardware-hero-score">
               <KpiCard color="is-total" label="Coverage" value={`${patchCoverage}%`} note="Installed rate" icon={<ShieldCheck size={17} />} active={activeKpi === 'coverage'} onClick={() => handleKpiClick('coverage')} />
               <KpiCard color="is-connected" label="Applicable" value={formatNumber(summary.ApplicablePatches)} note="Detected updates" icon={<ListChecks size={17} />} active={activeKpi === 'applicable'} onClick={() => handleKpiClick('applicable')} />
-              <KpiCard color="is-stale" attention label="Missing" value={formatNumber(summary.MissingPatches)} note={`${installableMissingCount} action row(s)`} icon={<ShieldAlert size={17} />} active={activeKpi === 'missing' || statusFilter === 'missing'} onClick={() => handleKpiClick('missing')} />
+              <KpiCard color="is-stale" attention label="Missing" value={formatNumber(installableMissingCount)} note={missingKpiNote} icon={<ShieldAlert size={17} />} active={activeKpi === 'missing' || statusFilter === 'missing'} onClick={() => handleKpiClick('missing')} />
               <KpiCard color="is-online" label="Installed" value={formatNumber(summary.InstalledPatches)} note="Completed updates" icon={<PackageCheck size={17} />} active={activeKpi === 'installed' || statusFilter === 'installed'} onClick={() => handleKpiClick('installed')} />
               <KpiCard color="is-locked" label="Devices" value={formatNumber(summary.DeviceCount)} note="Endpoint scope" icon={<Laptop size={17} />} active={activeKpi === 'devices'} onClick={() => handleKpiClick('devices')} />
             </div>
@@ -1067,7 +1325,7 @@ function PatchTable({ rows, activeTab, page, limit, onOpenDetails, onInstall }: 
   }
 
   return (
-    <div className="pricing-table-card table-responsive">
+    <div className={cx('pricing-table-card table-responsive patch-registry-table-card', activeTab === 'status' ? 'patch-registry-status-table' : 'patch-registry-catalog-table')}>
       <table className="table table-hover align-middle mb-0">
         <thead>
           <tr>
@@ -1115,8 +1373,8 @@ function PatchTable({ rows, activeTab, page, limit, onOpenDetails, onInstall }: 
                 {activeTab === 'status' && <td>{formatDateTime(row.LastScanTime)}</td>}
                 {activeTab === 'catalog' && <td>{formatNumber(row.FileCount)} / {formatFileSize(row.TotalFileSize)}</td>}
                 {activeTab === 'catalog' && <td>{formatNumber(row.DeviceCount)} devices</td>}
-                <td className="text-end text-nowrap">
-                  <div className="user-row-action-wrap clean justify-content-end flex-nowrap gap-1">
+                <td className="text-end text-nowrap patch-action-cell">
+                  <div className="user-row-action-wrap clean patch-row-actions-inline">
                     {canInstall && (
                       <button className="primary-btn px-3" type="button" onClick={() => onInstall(row)}>
                         <Play size={13} /> Install
@@ -1138,10 +1396,31 @@ function PatchTable({ rows, activeTab, page, limit, onOpenDetails, onInstall }: 
 
 function PatchDetailDrawer({ row, detail, loading, onClose, onInstall }: { row: OnlinePatchRow; detail: OnlinePatchDetail | null; loading: boolean; onClose: () => void; onInstall: (row: OnlinePatchRow) => void }) {
   const patch = detail?.patch || row;
+  const patchAny = patch as any;
+  const rowAny = row as any;
   const status = getRowStatus(row);
-  const products = Array.isArray(patch.Products) ? patch.Products : [];
-  const classifications = Array.isArray(patch.Classifications) ? patch.Classifications : [];
+  const categories = Array.isArray(patchAny.Categories) ? patchAny.Categories : [];
+  const products = uniqueValues([
+    ...(Array.isArray(patchAny.Products) ? patchAny.Products : []),
+    ...categories.filter((category: any) => String(category?.type || '').toLowerCase() === 'product').map((category: any) => category?.name),
+  ]);
+  const classifications = uniqueValues([
+    ...(Array.isArray(patchAny.Classifications) ? patchAny.Classifications : []),
+    ...categories.filter((category: any) => String(category?.type || '').toLowerCase() === 'updateclassification').map((category: any) => category?.name),
+  ]);
+  const cveIds = uniqueValues(Array.isArray(patchAny.CVEIDs) ? patchAny.CVEIDs : []);
+  const securityBulletins = uniqueValues(Array.isArray(patchAny.SecurityBulletinIDs) ? patchAny.SecurityBulletinIDs : []);
+  const files = detail?.files || [];
+  const supportUrl = cleanExternalUrl(patchAny.SupportUrl || rowAny.SupportUrl);
+  const kbArticleUrls = uniqueValues(Array.isArray(patchAny.KBArticleUrls) ? patchAny.KBArticleUrls.map(cleanExternalUrl) : Array.isArray(rowAny.KBArticleUrls) ? rowAny.KBArticleUrls.map(cleanExternalUrl) : []);
+  const sourceFileSizeTotal = files.reduce((sum: number, file: any) => sum + Number(file?.FileSize || file?.Size || 0), 0);
+  const fileCount = Number(patchAny.FileCount || rowAny.FileCount || files.length || 0);
+  const totalFileSize = Number(patchAny.TotalFileSize || rowAny.TotalFileSize || sourceFileSizeTotal || 0);
   const canInstall = status === 'Missing' && Number(row.Object_Root_Idn || 0) > 0;
+  const kbText = getKbText(patch);
+  const revisionText = patchAny.RevisionNumber || row.RevisionNumber || '-';
+  const detailTitle = kbText !== '-' ? `${kbText} - Revision ${revisionText}` : `${patchAny.Title || row.Title || 'Patch detail'} - Revision ${revisionText}`;
+  const hasSourceFileSection = files.length > 0 || fileCount > 0 || totalFileSize > 0;
 
   return (
     <div className="user-modal-backdrop open">
@@ -1149,8 +1428,8 @@ function PatchDetailDrawer({ row, detail, loading, onClose, onInstall }: { row: 
         <div className="user-modal-head">
           <div>
             <span className="section-tag">Patch Detail</span>
-            <h3>{getKbText(patch)} - Revision {patch.RevisionNumber || row.RevisionNumber}</h3>
-            <p>{patch.Title || row.Title}</p>
+            <h3>{detailTitle}</h3>
+            <p>{patchAny.Title || row.Title}</p>
           </div>
           <button className="modal-close" type="button" onClick={onClose} aria-label="Close"><X size={18} /></button>
         </div>
@@ -1164,10 +1443,10 @@ function PatchDetailDrawer({ row, detail, loading, onClose, onInstall }: { row: 
                 <div className="policy-top">
                   <div>
                     <h4>Patch Overview</h4>
-                    <p>{patch.Description || 'No description available.'}</p>
+                    <p>{patchAny.Description || 'No description available.'}</p>
                   </div>
                   <div className="content-actions">
-                    <span className={`user-pill ${getSeverityPillClass(patch.MsrcSeverity)}`}>{patch.MsrcSeverity || 'Unspecified'}</span>
+                    <span className={`user-pill ${getSeverityPillClass(patchAny.MsrcSeverity)}`}>{patchAny.MsrcSeverity || 'Unspecified'}</span>
                     <span className={`user-pill ${getStatusPillClass(status)}`}>{status}</span>
                     {canInstall && (
                       <button className="primary-btn" type="button" onClick={() => onInstall(row)}>
@@ -1181,12 +1460,13 @@ function PatchDetailDrawer({ row, detail, loading, onClose, onInstall }: { row: 
               <section className="policy-card p-3">
                 <h4>Patch metadata</h4>
                 <InfoGrid rows={[
-                  ['UpdateID:', patch.UpdateID || row.UpdateID],
-                  ['Revision:', patch.RevisionNumber || row.RevisionNumber],
-                  ['Release Date:', formatDateOnly(patch.ReleaseDate)],
-                  ['File Count:', formatNumber(patch.FileCount)],
-                  ['Total Size:', formatFileSize(patch.TotalFileSize)],
-                  ['Reboot Required:', patch.RebootRequired ? 'Yes' : 'No'],
+                  ['Update ID:', patchAny.UpdateID || row.UpdateID],
+                  ['Revision:', revisionText],
+                  ['KB Article:', kbText],
+                  ['Release Date:', formatDateOnly(patchAny.ReleaseDate)],
+                  ['File Count:', formatNumber(fileCount)],
+                  ['Total Size:', formatFileSize(totalFileSize)],
+                  ['Reboot Required:', formatYesNo(patchAny.RebootRequired ?? rowAny.RebootRequired)],
                 ]} />
               </section>
 
@@ -1195,42 +1475,92 @@ function PatchDetailDrawer({ row, detail, loading, onClose, onInstall }: { row: 
                 <InfoGrid rows={[
                   ['Device:', row.DeviceName || row.ComputerName || row.Object_Client_Name || '-'],
                   ['Department:', row.Department || row.Object_Full_Name || '-'],
+                  ['IP Address:', rowAny.IP || '-'],
+                  ['Device ID:', rowAny.Object_DeviceID || '-'],
                   ['Last Scan:', formatDateTime(row.LastScanTime)],
                   ['Last Install:', formatDateTime(row.LastInstallTime)],
-                  ['Applicable:', row.IsApplicable ? 'Yes' : 'No'],
-                  ['Downloaded:', row.IsDownloaded ? 'Yes' : 'No'],
+                  ['Install Result:', rowAny.InstallResult || '-'],
+                  ['Applicable:', formatYesNo(row.IsApplicable)],
+                  ['Installed:', formatYesNo(row.IsInstalled)],
+                  ['Downloaded:', formatYesNo(row.IsDownloaded)],
                 ]} />
               </section>
 
               <section className="policy-card p-3">
                 <h4>Products & classifications</h4>
-                <TagList values={[...products, ...classifications]} emptyText="No product/category data returned." />
-              </section>
-
-              <section className="policy-card p-3">
-                <h4>Security references</h4>
-                <TagList values={[...(patch.CVEIDs || []), ...(patch.SecurityBulletinIDs || [])]} emptyText="No CVE/security bulletin data returned." />
-              </section>
-
-              <section className="policy-card wide p-3">
-                <h4>Online source files</h4>
-                <div className="pricing-grid">
-                  {(detail?.files || []).length ? detail?.files.map((file) => (
-                    <div className="settings-helper-card" key={`${file.UpdateID}-${file.RevisionNumber}-${file.FileName}`}>
-                      <strong>{file.FileName || 'Unnamed file'}</strong>
-                      <span>{file.ShortLanguage || 'neutral'} - {formatFileSize(file.FileSize)}</span>
-                      {file.DownloadUrl && <a className="soft-btn mt-2" href={file.DownloadUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Open</a>}
-                    </div>
-                  )) : <p>No file list returned.</p>}
+                <div className="d-grid gap-3 mt-2">
+                  <div>
+                    <strong className="d-block mb-1">Products</strong>
+                    <TagList values={products} emptyText="No product data returned." />
+                  </div>
+                  <div>
+                    <strong className="d-block mb-1">Classifications</strong>
+                    <TagList values={classifications} emptyText="No classification data returned." />
+                  </div>
                 </div>
               </section>
+
+              {(cveIds.length > 0 || securityBulletins.length > 0) && (
+                <section className="policy-card p-3">
+                  <h4>Security references</h4>
+                  <div className="d-grid gap-3 mt-2">
+                    {cveIds.length > 0 && (
+                      <div>
+                        <strong className="d-block mb-1">CVE IDs</strong>
+                        <TagList values={cveIds} emptyText="No CVE data returned." />
+                      </div>
+                    )}
+                    {securityBulletins.length > 0 && (
+                      <div>
+                        <strong className="d-block mb-1">Security Bulletins</strong>
+                        <TagList values={securityBulletins} emptyText="No security bulletin data returned." />
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {hasSourceFileSection && (
+                <section className="policy-card wide p-3">
+                  <h4>Online source files</h4>
+                  <div className="patch-source-summary">
+                    <div className="settings-helper-card patch-detail-source-card">
+                      <strong>File Count</strong>
+                      <span>{formatNumber(fileCount)} file(s)</span>
+                    </div>
+                    <div className="settings-helper-card patch-detail-source-card">
+                      <strong>Total Size</strong>
+                      <span>{formatFileSize(totalFileSize)}</span>
+                    </div>
+                  </div>
+                  <div className="patch-detail-source-grid">
+                    {files.length ? files.map((file: any, index: number) => {
+                      const downloadUrl = cleanExternalUrl(file.DownloadUrl || file.Url || file.FileUrl);
+                      const fileSize = Number(file.FileSize || file.Size || 0);
+                      return (
+                        <div className="settings-helper-card patch-detail-source-card wide" key={`${file.UpdateID || patchAny.UpdateID || row.UpdateID}-${file.RevisionNumber || revisionText}-${file.FileName || index}`}>
+                          <strong>{file.FileName || 'Unnamed file'}</strong>
+                          <span>{file.ShortLanguage || file.Language || 'neutral'} - {formatFileSize(fileSize)}</span>
+                          {downloadUrl && <a className="soft-btn mt-2" href={downloadUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} /> Open</a>}
+                        </div>
+                      );
+                    }) : (
+                      <div className="settings-helper-card patch-detail-source-card wide">
+                        <strong>No downloadable file list returned</strong>
+                        <span>{formatNumber(fileCount)} file(s), {formatFileSize(totalFileSize)}</span>
+                        <small>The API returned package totals only. It did not return individual source file names or download URLs.</small>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
 
               <section className="policy-card wide p-3">
                 <h4>Links</h4>
                 <div className="pricing-grid">
-                  {patch.SupportUrl && <ExternalRow label="Support URL" url={patch.SupportUrl} />}
-                  {(patch.KBArticleUrls || []).map((url) => <ExternalRow key={url} label="KB Article" url={url} />)}
-                  {!patch.SupportUrl && !(patch.KBArticleUrls || []).length && <p>No support links returned.</p>}
+                  {supportUrl && <ExternalRow label="Support URL" url={supportUrl} />}
+                  {kbArticleUrls.map((url, index) => <ExternalRow key={url} label={`KB Article ${index + 1}`} url={url} />)}
+                  {!supportUrl && !kbArticleUrls.length && <p>No support links returned.</p>}
                 </div>
               </section>
             </>
@@ -1322,10 +1652,12 @@ function TagList({ values, emptyText }: { values: string[]; emptyText: string })
 }
 
 function ExternalRow({ label, url }: { label: string; url: string }) {
+  const cleanUrl = cleanExternalUrl(url);
+
   return (
-    <a className="settings-helper-card text-decoration-none" href={url} target="_blank" rel="noreferrer">
+    <a className="settings-helper-card text-decoration-none" href={cleanUrl} target="_blank" rel="noreferrer">
       <strong>{label}</strong>
-      <span>{url}</span>
+      <span>{cleanUrl}</span>
       <small><ExternalLink size={15} /> Open link</small>
     </a>
   );

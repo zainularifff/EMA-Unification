@@ -23,17 +23,7 @@ import {
   X,
 } from "lucide-react";
 import appMeteringService from "../services/appMeteringService";
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-table-container-spacing-final.css";
 import { useEffect as useAppMeteringTableRouteEffect } from "react";
-import "../styles/app-metering-table-final-fix.css";
-import "../styles/app-metering-target-table-hard-final.css";
-import "../styles/app-metering-target-table-direct-final.css";
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(" ");
@@ -1626,7 +1616,7 @@ useAppMeteringTableRouteEffect(() => {
       </button>
 
       <div className="settings-layout appmetering-settings-layout d-grid gap-3">
-        <aside className="settings-menu appmetering-left-panel ema-panel-surface">
+        <aside className="settings-menu appmetering-left-panel ema-panel-surface" data-ema-branch-panel-v3="true">
           <div className="panel-head">
             <span>APP METERING</span>
             <strong>Application Metering</strong>

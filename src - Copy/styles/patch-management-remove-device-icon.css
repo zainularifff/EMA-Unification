@@ -1,0 +1,49 @@
+/* PATCH MANAGEMENT - REMOVE DEVICE ICON ONLY
+   Safe CSS only. No JSX replace. No runtime observer.
+*/
+
+/* Hide laptop/device icon in Patch Management device column */
+[class*="patch" i] table tbody td:nth-child(2) .user-mini-avatar,
+[class*="patch" i] table tbody td:nth-child(2) span:has(> svg),
+[class*="patch" i] table tbody td:nth-child(2) > svg,
+[class*="patch" i] table tbody td:nth-child(2) svg {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Remove gap left by icon */
+[class*="patch" i] table tbody td:nth-child(2) .user-name,
+[class*="patch" i] table tbody td:nth-child(2) [class*="device" i] {
+  display: block !important;
+  gap: 0 !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Device text align clean */
+[class*="patch" i] table tbody td:nth-child(2) {
+  padding-left: 12px !important;
+  text-align: left !important;
+  white-space: normal !important;
+  vertical-align: middle !important;
+}
+
+[class*="patch" i] table tbody td:nth-child(2) strong,
+[class*="patch" i] table tbody td:nth-child(2) span,
+[class*="patch" i] table tbody td:nth-child(2) small {
+  text-align: left !important;
+}
+
+/* Avoid yellow mark/highlight look inside device column */
+[class*="patch" i] table tbody td:nth-child(2) mark,
+[class*="patch" i] table tbody td:nth-child(2) .highlight {
+  background: transparent !important;
+  color: inherit !important;
+  padding: 0 !important;
+}

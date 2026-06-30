@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import EmaToast from '../components/common/EmaToast';
 import type { ButtonHTMLAttributes, CSSProperties, FormEvent, ReactNode } from 'react';
 
 import {
@@ -38,14 +37,6 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import '../styles/service-desk-final-fix.css';
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-table-container-spacing-final.css";
 
 type AppUser = {
   id?: string | number;
@@ -385,15 +376,15 @@ const MALAYSIA_TIME_ZONE = 'Asia/Kuala_Lumpur';
 const MALAYSIA_UTC_OFFSET = '+08:00';
 
 const urgencyToSlaPriority: Record<string, string> = {
-  Critical: 'P1',
-  High: 'P2',
-  Medium: 'P3',
-  Low: 'P4',
+  Critical: 'Critical',
+  High: 'High',
+  Medium: 'Medium',
+  Low: 'Low',
 };
 
-
 function getSlaPriorityCode(priority: string) {
-  return urgencyToSlaPriority[String(priority || '').trim()] || 'P3';
+  const value = String(priority || '').trim();
+  return urgencyToSlaPriority[value] || value || 'Medium';
 }
 
 function formatSlaDuration(totalMinutes: number) {
@@ -1547,7 +1538,7 @@ export default function ServiceDesk() {
   const [currentUser] = useState<AppUser>(() => getStoredUser());
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [formMode, setFormMode] = useState<FormMode>('create');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingLookups, setIsLoadingLookups] = useState(false);
@@ -1737,7 +1728,7 @@ export default function ServiceDesk() {
   }, [clientAssets, assetSearchTerm]);
 
   useEffect(() => {
-    void loadData(true);
+    void loadData();
     void ensureKnowledgeBaseLoaded(true);
   }, []);
 
@@ -1947,7 +1938,7 @@ export default function ServiceDesk() {
       if (target.closest('.setting-select-menu')) return;
       if (target.closest('.uam-filter-menu')) return;
       if (target.closest('.service-desk-asset-dropdown')) return;
-      if (target.closest('.settings-toast') || target.closest('.ema-notice-card')) return;
+      if (target.closest('.settings-toast')) return;
 
       setSelectedIncidentId('');
     }
@@ -2230,10 +2221,10 @@ export default function ServiceDesk() {
   }
 
   function getSlaConfigForPriority(priority: string) {
-    const slaCode = getSlaPriorityCode(priority);
+    const slaCode = getSlaPriorityCode(priority).toLowerCase();
+
     return slaConfigs.find((item) =>
-      String(item.priority || '').trim() === slaCode ||
-      String(item.label || '').trim().toLowerCase() === String(priority || '').trim().toLowerCase()
+      String(item.priority || '').trim().toLowerCase() === slaCode
     );
   }
 
@@ -4286,7 +4277,7 @@ export default function ServiceDesk() {
     { key: 'in-progress' as QueueKey, label: 'In Progress', sub: 'Active work', count: queueCounts.inProgress, icon: ArrowRightLeft },
     { key: 'pending-approval' as QueueKey, label: 'Resolved', sub: 'Waiting closure', count: queueCounts.pendingApproval, icon: Settings },
     { key: 'resolved' as QueueKey, label: 'Closed', sub: 'Completed tickets', count: queueCounts.resolved, icon: CheckCircle2 },
-    { key: 'knowledge' as QueueKey, label: 'Knowledge Base', sub: 'Resolution articles', count: queueCounts.kb, icon: BookOpen },
+    { key: 'knowledge' as QueueKey, label: 'Knowledge Base', sub: hasLoadedKb ? 'Resolution articles' : 'Loading articles...', count: queueCounts.kb, icon: BookOpen },
   ];
 
   const kpis = [
@@ -4311,6 +4302,16 @@ export default function ServiceDesk() {
   const ticketTableColumns =
     '52px minmax(112px, .86fr) 106px minmax(132px, 1fr) minmax(96px, .72fr) minmax(220px, 1.55fr) 102px minmax(118px, .92fr) 104px 108px 104px';
   const ticketTableMinWidth = '100%';
+
+  if (isLoading) {
+    return (
+      <div className="settings-module-root ema-settings-pro container-fluid p-3 p-xl-4 d-grid place-items-center text-center">
+        <Loader2 className="ema-spin" size={28} />
+        <strong>Loading Service Desk</strong>
+        <span>Loading incident queue...</span>
+      </div>
+    );
+  }
 
   // Service Desk uses the existing Settings layout/classes.
   return (
@@ -5453,7 +5454,28 @@ export default function ServiceDesk() {
 
 `}</style>
 
-      {toast && <EmaToast toast={toast} onClose={() => setToast(null)} />}
+      {toast && (
+        <div className={cn('settings-toast', `is-${toast.type}`)} role="status" aria-live="polite">
+          <i className="settings-toast-icon">
+            {toast.type === 'success' ? <CheckCircle2 size={18} /> : toast.type === 'error' ? <ShieldAlert size={18} /> : <Clock size={18} />}
+          </i>
+          <div>
+            <strong>
+              {toast.type === 'success'
+                ? 'Success'
+                : toast.type === 'error'
+                  ? 'Action failed'
+                  : toast.type === 'warning'
+                    ? 'Attention'
+                    : 'Information'}
+            </strong>
+            <span>{toast.message}</span>
+          </div>
+          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss notification">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {confirmDialog && typeof document !== 'undefined' && createPortal(
         <main
@@ -5983,8 +6005,6 @@ export default function ServiceDesk() {
                   {paginatedIncidents.map((incident, index) => {
                     const runningNo = (currentPage - 1) * itemsPerPage + index + 1;
                     const sla = getSlaMeta(incident, now);
-                    const assetLabel = incident.assetId || incident.AssetID || incident.assetTag || incident.AssetTag || '?';
-                    const assetMeta = [incident.assetBrand || incident.AssetBrand, incident.assetModel || incident.AssetModel, incident.assetOS || incident.AssetOS || incident.deviceType || incident.DeviceType].filter(Boolean).join(' ? ');
                     const isSelected = getId(incident) === getId(selectedIncident || {});
 
                     return (
@@ -6017,9 +6037,11 @@ export default function ServiceDesk() {
                           </div>
                         </div>
 
-                        <div className="user-cell service-desk-asset-cell">
-                          <strong title={String(assetLabel)}>{assetLabel}</strong>
-                          <small title={assetMeta || 'No asset details'}>{assetMeta || 'No asset details'}</small>
+                        <div className="user-cell">
+                          <span className="muted-cell">
+                            <Monitor size={13} />
+                            {incident.assetId || '—'}
+                          </span>
                         </div>
 
                         <div className="user-cell role-info-cell">
@@ -6132,6 +6154,12 @@ export default function ServiceDesk() {
               </div>
             </header>
 
+            {!hasLoadedKb && (
+              <div className="settings-inline-alert">
+                <Loader2 size={14} className="ema-spin" />
+                <span>Loading knowledge base...</span>
+              </div>
+            )}
 
             <div className="ema-toolbar content-toolbar users-toolbar service-desk-kb-toolbar">
               <label className="ema-search-field">

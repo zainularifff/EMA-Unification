@@ -26,15 +26,6 @@ import {
 import clsx from 'clsx';
 
 import internetMeteringService from '../services/internetMeteringService';
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-special-operational-table-override.css";
-import "../styles/ema-table-container-spacing-final.css";
-import "../styles/internet-metering-table-final-fix.css";
 import { useEffect as useInternetMeteringTableRouteEffect } from "react";
 
 type NodeKind = 'all' | 'folder' | 'device' | 'url-folder' | 'url';
@@ -1637,7 +1628,7 @@ useInternetMeteringTableRouteEffect(() => {
       )}
 
       <div className="settings-layout internet-settings-layout d-grid gap-3">
-        <aside className="settings-menu internet-left-panel ema-panel-surface">
+        <aside className="settings-menu internet-left-panel ema-panel-surface" data-ema-branch-panel-v3="true">
           <div className="panel-head">
             <span>INTERNET METERING</span>
             <strong>Metering Control</strong>

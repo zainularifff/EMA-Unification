@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react';
 import clsx from 'clsx';
 import type { LucideIcon } from 'lucide-react';
-import "../styles/ema-table-system-lock-final.css";
-import "../styles/ema-table-data-no-box-hard.css";
-import "../styles/ema-action-icon-button-force.css";
-import "../styles/ema-action-icon-button-spacing-final.css";
-import "../styles/ema-delete-action-red-final.css";
-import "../styles/toast.css";
-import "../styles/ema-table-container-spacing-final.css";
 import {
   ArrowLeft,
   ArrowRight,
@@ -383,6 +376,90 @@ function AppTable<RowType extends { [key: string]: any }>({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+
+type WebUrlLocalTableProps<RowType> = {
+  title: string;
+  count: number;
+  rows: RowType[];
+  emptyText: string;
+  getKey: (row: RowType) => string;
+  getUrl: (row: RowType) => string;
+  action?: (row: RowType) => ReactNode;
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+};
+
+function WebUrlLocalTable<RowType,>({
+  title,
+  count,
+  rows,
+  emptyText,
+  getKey,
+  getUrl,
+  action,
+  page,
+  totalPages,
+  totalCount,
+  onPageChange,
+}: WebUrlLocalTableProps<RowType>) {
+  return (
+    <div className="wr-local-url-table-card">
+      <div className="wr-local-url-table-head">
+        <span>{title}</span>
+        <strong>{count}</strong>
+      </div>
+
+      <div className="wr-local-url-table-scroll">
+        <table className="wr-local-url-table">
+          <thead>
+            <tr>
+              <th>URL / Domain</th>
+              {action && <th className="wr-local-url-action-head">Action</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={action ? 2 : 1} className="wr-local-url-empty">
+                  {emptyText}
+                </td>
+              </tr>
+            ) : rows.map((row) => {
+              const url = getUrl(row);
+              return (
+                <tr key={getKey(row)}>
+                  <td>
+                    <div className="wr-local-url-cell">
+                      <span className="wr-local-url-icon">
+                        <Globe size={13} />
+                      </span>
+                      <span className="wr-local-url-text">{url || "-"}</span>
+                    </div>
+                  </td>
+                  {action && (
+                    <td className="wr-local-url-action-cell">
+                      {action(row)}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <CompactPagination
+        page={page}
+        totalPages={totalPages}
+        totalCount={totalCount}
+        onPageChange={onPageChange}
+      />
     </div>
   );
 }
@@ -2386,26 +2463,18 @@ const [activeModule, setActiveModule] = useState<RestrictionModule>('appBlacklis
             </select>
           </div>
 
-          <div className="appweb-list-panel rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="appweb-list-scroll p-0">
-              {webGroupUrls.length === 0 ? (
-                <div className="p-4 text-center text-muted fw-bold small">No URLs found in selected website group.</div>
-              ) : groupUrlPagination.pageItems.map((item) => (
-                <div key={`${item.idx}-${item.seq}`} className="user-row" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
-                  <div className="user-cell user-name">
-                    <span className="user-mini-avatar"><Globe size={13} /></span>
-                    <strong>{item.url}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <CompactPagination
-              page={groupUrlPagination.safePage}
-              totalPages={groupUrlPagination.totalPages}
-              totalCount={webGroupUrls.length}
-              onPageChange={setWebGroupUrlPage}
-            />
-          </div>
+          <WebUrlLocalTable<WebGroupUrl>
+            title="Website Group URLs"
+            count={webGroupUrls.length}
+            rows={groupUrlPagination.pageItems}
+            emptyText="No URLs found in selected website group."
+            getKey={(item) => `${item.idx}-${item.seq}`}
+            getUrl={(item) => item.url || "-"}
+            page={groupUrlPagination.safePage}
+            totalPages={groupUrlPagination.totalPages}
+            totalCount={webGroupUrls.length}
+            onPageChange={setWebGroupUrlPage}
+          />
         </div>
       </section>
     );
@@ -3028,31 +3097,46 @@ function DualListSection({
   onMoveRight,
 }: DualListSectionProps) {
   return (
-    <section className="policy-card">
-      <div className="policy-top">
+    <section className="appres-local-package-section">
+      <div className="appres-local-package-head">
         <div>
           <h4>{title}</h4>
           <p>Move items between the available list and the policy selection list.</p>
         </div>
-        <label className="section-search mb-0" style={{ maxWidth: '22rem' }}>
+
+        <label className="appres-local-package-search">
           <Search size={14} />
-          <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Search software or package" />
+          <input
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder="Search software or package"
+          />
         </label>
       </div>
 
-      <div className="row g-3 align-items-stretch">
-        <div className="col-12 col-lg-5">
-          <ListPanel title={leftTitle} items={leftItems} emptyText="No selected items." actionIcon={ArrowRight} disabled={disabled} onAction={onMoveRight} />
+      <div className="appres-local-package-grid">
+        <ListPanel
+          title={leftTitle}
+          items={leftItems}
+          emptyText="No selected items."
+          actionIcon={ArrowRight}
+          disabled={disabled}
+          onAction={onMoveRight}
+        />
+
+        <div className="appres-local-package-transfer" aria-hidden="true">
+          <ArrowLeft size={18} />
+          <ArrowRight size={18} />
         </div>
-        <div className="col-12 col-lg-2 d-flex align-items-center justify-content-center">
-          <div className="d-flex flex-lg-column gap-2 text-muted">
-            <ArrowLeft size={18} />
-            <ArrowRight size={18} />
-          </div>
-        </div>
-        <div className="col-12 col-lg-5">
-          <ListPanel title={rightTitle} items={rightItems} emptyText="No available items." actionIcon={ArrowLeft} disabled={disabled} onAction={onMoveLeft} />
-        </div>
+
+        <ListPanel
+          title={rightTitle}
+          items={rightItems}
+          emptyText="No available items."
+          actionIcon={ArrowLeft}
+          disabled={disabled}
+          onAction={onMoveLeft}
+        />
       </div>
     </section>
   );
@@ -3062,14 +3146,14 @@ type ListPanelProps = {
   title: string;
   items: DualListItem[];
   emptyText: string;
-  actionIcon: LucideIcon;
+  actionIcon: any;
   disabled?: boolean;
   onAction: (id: string) => void;
 };
 
 function ListPanel({ title, items, emptyText, actionIcon: ActionIcon, disabled, onAction }: ListPanelProps) {
   const [page, setPage] = useState(1);
-  const itemSignature = `${items.length}:${items[0]?.id || ''}:${items[items.length - 1]?.id || ''}`;
+  const itemSignature = `${items.length}:${items[0]?.id || ""}:${items[items.length - 1]?.id || ""}`;
   const pagination = getPaginationState<DualListItem>(items, page);
 
   useEffect(() => {
@@ -3077,33 +3161,61 @@ function ListPanel({ title, items, emptyText, actionIcon: ActionIcon, disabled, 
   }, [itemSignature, title]);
 
   return (
-    <div className="appweb-list-panel rounded-2xl border border-slate-200 overflow-hidden h-100">
-      <div className="user-row head" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
-        <div className="user-cell">{title}</div>
-        <div className="user-cell text-end">
-          <span className="row-index-pill">{items.length}</span>
-        </div>
+    <div className="appres-local-package-panel">
+      <div className="appres-local-package-panel-head">
+        <span>{title}</span>
+        <strong>{items.length}</strong>
       </div>
-      <div className="appweb-list-scroll p-0">
-        {items.length === 0 ? (
-          <div className="p-4 text-center text-muted fw-bold small">{emptyText}</div>
-        ) : pagination.pageItems.map((item) => (
-          <div key={item.id} className="user-row" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
-            <div className="user-cell user-name">
-              <span className="user-mini-avatar"><Package size={13} /></span>
-              <span className="min-w-0">
-                <strong>{item.title}</strong>
-                <small>{item.meta || '-'}</small>
-              </span>
-            </div>
-            <div className="user-cell text-end">
-              <button type="button" disabled={disabled} onClick={() => onAction(item.id)} className="icon-action-btn edit" aria-label={`Move ${item.title}`}>
-                <ActionIcon size={13} />
-              </button>
-            </div>
-          </div>
-        ))}
+
+      <div className="appres-local-package-table-scroll">
+        <table className="appres-local-package-table">
+          <colgroup>
+            <col />
+            <col style={{ width: 54 }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Package</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan={2} className="appres-local-package-empty">
+                  {emptyText}
+                </td>
+              </tr>
+            ) : pagination.pageItems.map((item) => (
+              <tr key={item.id}>
+                <td>
+                  <div className="appres-local-package-name">
+                    <span className="appres-local-package-icon">
+                      <Package size={13} />
+                    </span>
+                    <span className="appres-local-package-text">
+                      <strong>{item.title || "-"}</strong>
+                      <small>{item.meta || "-"}</small>
+                    </span>
+                  </div>
+                </td>
+                <td className="appres-local-package-action-cell">
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onAction(item.id)}
+                    className="appres-local-package-action"
+                    aria-label={`Move ${item.title}`}
+                  >
+                    <ActionIcon size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+
       <CompactPagination
         page={pagination.safePage}
         totalPages={pagination.totalPages}
@@ -3113,6 +3225,7 @@ function ListPanel({ title, items, emptyText, actionIcon: ActionIcon, disabled, 
     </div>
   );
 }
+
 
 function appRestrictionLabel(value: string) {
   if (value === '2') return 'Warn + restrict';

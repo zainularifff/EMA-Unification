@@ -1,0 +1,405 @@
+/* APP RESTRICTION UI FINAL FIX
+   Scope: App Restriction main content only.
+*/
+
+body.ema-app-restriction-ui-final {
+  --ar-border: #dbe7f6;
+  --ar-soft: #f5f8fc;
+  --ar-text: #0f2746;
+  --ar-muted: #64748b;
+  --ar-blue: #2563eb;
+  --ar-blue-2: #0ea5e9;
+  --ar-card-radius: 14px;
+}
+
+/* Main content area */
+body.ema-app-restriction-ui-final [data-ar-main="true"] {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+
+  overflow: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* Header card */
+body.ema-app-restriction-ui-final [data-ar-header="true"] {
+  padding: 14px 18px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: var(--ar-card-radius) !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  display: grid !important;
+  grid-template-columns: minmax(260px, 1fr) auto !important;
+  gap: 16px !important;
+  align-items: center !important;
+
+  min-height: 86px !important;
+  max-height: none !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-header="true"] h1,
+body.ema-app-restriction-ui-final [data-ar-header="true"] [class*="title"] {
+  color: var(--ar-text) !important;
+  font-size: 24px !important;
+  line-height: 1.05 !important;
+  font-weight: 900 !important;
+  margin: 0 !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-header="true"] p,
+body.ema-app-restriction-ui-final [data-ar-header="true"] small,
+body.ema-app-restriction-ui-final [data-ar-header="true"] [class*="subtitle"] {
+  color: var(--ar-muted) !important;
+  font-size: 11px !important;
+  line-height: 1.25 !important;
+  font-weight: 750 !important;
+  margin: 4px 0 0 !important;
+}
+
+/* KPI cards */
+body.ema-app-restriction-ui-final [data-ar-kpi-row="true"] {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(135px, 1fr)) !important;
+  gap: 10px !important;
+  width: min(760px, 100%) !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-kpi-card="true"] {
+  min-height: 64px !important;
+  height: 64px !important;
+
+  padding: 10px 12px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: 12px !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  box-shadow: none !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-kpi-card="true"] * {
+  line-height: 1.1 !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-kpi-card="true"] :is(strong, b, h2, h3) {
+  color: var(--ar-text) !important;
+  font-size: 19px !important;
+  font-weight: 900 !important;
+  margin: 2px 0 !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-kpi-card="true"] :is(span, small, p, div) {
+  font-size: 9px !important;
+}
+
+/* Tabs / toolbar */
+body.ema-app-restriction-ui-final [data-ar-tabs="true"] {
+  padding: 12px 14px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: var(--ar-card-radius) !important;
+  background: #ffffff !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+
+  min-height: 58px !important;
+  box-sizing: border-box !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-tabs="true"] button {
+  height: 34px !important;
+  min-height: 34px !important;
+
+  padding: 0 14px !important;
+
+  border-radius: 10px !important;
+
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+
+/* Section card */
+body.ema-app-restriction-ui-final [data-ar-policy-card="true"] {
+  padding: 14px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: var(--ar-card-radius) !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-policy-card="true"] > :first-child {
+  margin-top: 0 !important;
+}
+
+/* Description banner */
+body.ema-app-restriction-ui-final [data-ar-section-title="true"] {
+  padding: 12px 14px !important;
+  margin-bottom: 12px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+
+  min-height: 54px !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-section-title="true"] h2,
+body.ema-app-restriction-ui-final [data-ar-section-title="true"] h3,
+body.ema-app-restriction-ui-final [data-ar-section-title="true"] strong {
+  color: var(--ar-text) !important;
+  font-size: 13px !important;
+  line-height: 1.15 !important;
+  font-weight: 900 !important;
+  margin: 0 0 4px !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-section-title="true"] p,
+body.ema-app-restriction-ui-final [data-ar-section-title="true"] small {
+  color: var(--ar-muted) !important;
+  font-size: 10.5px !important;
+  line-height: 1.25 !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+}
+
+/* Two-column settings grid */
+body.ema-app-restriction-ui-final [data-ar-settings-grid="true"] {
+  display: grid !important;
+  grid-template-columns: minmax(280px, 1fr) minmax(360px, 1fr) !important;
+  gap: 12px !important;
+  align-items: stretch !important;
+}
+
+/* Inner cards */
+body.ema-app-restriction-ui-final [data-ar-inner-card="true"] {
+  padding: 14px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  min-height: 0 !important;
+  height: auto !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-inner-card="true"] h3,
+body.ema-app-restriction-ui-final [data-ar-inner-card="true"] h4,
+body.ema-app-restriction-ui-final [data-ar-inner-card="true"] strong {
+  color: var(--ar-text) !important;
+  font-size: 13px !important;
+  line-height: 1.15 !important;
+  font-weight: 900 !important;
+  margin: 0 0 4px !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-inner-card="true"] p,
+body.ema-app-restriction-ui-final [data-ar-inner-card="true"] small {
+  color: var(--ar-muted) !important;
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+  font-weight: 700 !important;
+}
+
+/* Basic setting form fields */
+body.ema-app-restriction-ui-final [data-ar-field-grid="true"] {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  margin-top: 12px !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-field="true"],
+body.ema-app-restriction-ui-final [data-ar-checkbox-card="true"] {
+  min-height: 46px !important;
+
+  padding: 10px 12px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: 11px !important;
+  background: #f8fbff !important;
+  box-shadow: none !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-field="true"] label,
+body.ema-app-restriction-ui-final [data-ar-field="true"] span:first-child {
+  color: var(--ar-muted) !important;
+  font-size: 9.5px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-field="true"] input,
+body.ema-app-restriction-ui-final [data-ar-field="true"] select {
+  height: 30px !important;
+  min-height: 30px !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+
+  color: var(--ar-text) !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+
+/* Restriction method cards */
+body.ema-app-restriction-ui-final [data-ar-method-grid="true"] {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  margin: 12px 0 !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-method-option="true"] {
+  min-height: 72px !important;
+  height: auto !important;
+
+  padding: 12px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: 12px !important;
+  background: #f8fbff !important;
+  box-shadow: none !important;
+
+  display: grid !important;
+  grid-template-columns: 18px minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: center !important;
+
+  box-sizing: border-box !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-method-option="true"]:has(input:checked),
+body.ema-app-restriction-ui-final [data-ar-method-option="true"].active,
+body.ema-app-restriction-ui-final [data-ar-method-option="true"][aria-selected="true"] {
+  border-color: var(--ar-blue) !important;
+  background: #eaf2ff !important;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2) inset !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-method-option="true"] input {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-method-option="true"] strong,
+body.ema-app-restriction-ui-final [data-ar-method-option="true"] b {
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  color: var(--ar-text) !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-method-option="true"] p,
+body.ema-app-restriction-ui-final [data-ar-method-option="true"] small,
+body.ema-app-restriction-ui-final [data-ar-method-option="true"] span {
+  font-size: 10px !important;
+  line-height: 1.25 !important;
+  color: var(--ar-muted) !important;
+  font-weight: 700 !important;
+}
+
+/* Warning message */
+body.ema-app-restriction-ui-final [data-ar-textarea-block="true"] {
+  margin-top: 10px !important;
+}
+
+body.ema-app-restriction-ui-final [data-ar-textarea-block="true"] label,
+body.ema-app-restriction-ui-final [data-ar-textarea-block="true"] span:first-child {
+  display: block !important;
+  margin-bottom: 6px !important;
+
+  color: var(--ar-muted) !important;
+  font-size: 9.5px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.04em !important;
+}
+
+body.ema-app-restriction-ui-final textarea,
+body.ema-app-restriction-ui-final [data-ar-textarea-block="true"] textarea {
+  min-height: 72px !important;
+  height: 72px !important;
+
+  padding: 10px 12px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: 11px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  color: var(--ar-text) !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  font-weight: 750 !important;
+
+  resize: vertical !important;
+  box-sizing: border-box !important;
+}
+
+/* Bottom checkbox cards */
+body.ema-app-restriction-ui-final [data-ar-bottom-option="true"] {
+  min-height: 44px !important;
+
+  padding: 10px 12px !important;
+  margin-top: 10px !important;
+
+  border: 1px solid var(--ar-border) !important;
+  border-radius: 11px !important;
+  background: #f8fbff !important;
+  box-shadow: none !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+
+  color: var(--ar-text) !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+}
+
+/* Responsive */
+@media (max-width: 1280px) {
+  body.ema-app-restriction-ui-final [data-ar-header="true"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  body.ema-app-restriction-ui-final [data-ar-kpi-row="true"] {
+    width: 100% !important;
+  }
+
+  body.ema-app-restriction-ui-final [data-ar-settings-grid="true"] {
+    grid-template-columns: 1fr !important;
+  }
+}

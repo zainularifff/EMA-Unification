@@ -1,0 +1,149 @@
+/* APP RESTRICTION SAFE UI FIX
+   Safe only. No auto grid/card rearrange.
+   Fixes broken squeeze caused by previous script.
+*/
+
+body.ema-app-restriction-safe {
+  --ar-border: #dbe7f6;
+  --ar-text: #0f2746;
+  --ar-muted: #64748b;
+  --ar-blue: #2563eb;
+}
+
+/* remove broken data-ar effects if attributes remain in DOM */
+body.ema-app-restriction-safe [data-ar-main],
+body.ema-app-restriction-safe [data-ar-header],
+body.ema-app-restriction-safe [data-ar-kpi-row],
+body.ema-app-restriction-safe [data-ar-kpi-card],
+body.ema-app-restriction-safe [data-ar-tabs],
+body.ema-app-restriction-safe [data-ar-policy-card],
+body.ema-app-restriction-safe [data-ar-section-title],
+body.ema-app-restriction-safe [data-ar-settings-grid],
+body.ema-app-restriction-safe [data-ar-inner-card],
+body.ema-app-restriction-safe [data-ar-field-grid],
+body.ema-app-restriction-safe [data-ar-field],
+body.ema-app-restriction-safe [data-ar-checkbox-card],
+body.ema-app-restriction-safe [data-ar-method-grid],
+body.ema-app-restriction-safe [data-ar-method-option],
+body.ema-app-restriction-safe [data-ar-textarea-block],
+body.ema-app-restriction-safe [data-ar-bottom-option] {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* right content container */
+body.ema-app-restriction-safe :is(main, section, article, div):has(h1, h2, h3) {
+  box-sizing: border-box !important;
+}
+
+/* Prevent form area from squeezing to tiny columns */
+body.ema-app-restriction-safe :is(
+  .app-restriction-page,
+  .app-restriction-root,
+  .app-restriction-content,
+  .policy-settings,
+  .policy-content,
+  .restriction-content,
+  .restriction-panel,
+  .policy-panel,
+  .settings-panel
+) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Any main card under app restriction must not clip horizontally */
+body.ema-app-restriction-safe :is(section, article, div):has(textarea),
+body.ema-app-restriction-safe :is(section, article, div):has(input[type="checkbox"]),
+body.ema-app-restriction-safe :is(section, article, div):has(input[type="radio"]) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Keep direct policy columns readable */
+body.ema-app-restriction-safe :is(section, article, div):has(textarea) {
+  overflow: visible !important;
+}
+
+/* Generic card style: compact but not forced grid */
+body.ema-app-restriction-safe :is(
+  .card,
+  .panel,
+  .policy-card,
+  .settings-card,
+  .restriction-card,
+  .package-card,
+  .schedule-card
+) {
+  border-color: var(--ar-border) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+
+/* Inputs */
+body.ema-app-restriction-safe :is(input, select, textarea) {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+}
+
+/* Textarea sane height */
+body.ema-app-restriction-safe textarea {
+  min-height: 72px !important;
+  max-height: 160px !important;
+  resize: vertical !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+}
+
+/* Buttons not huge */
+body.ema-app-restriction-safe button {
+  box-sizing: border-box !important;
+}
+
+/* Fix broken package selection columns from previous override */
+body.ema-app-restriction-safe :is(section, article, div):has(button):has(input[placeholder*="Search software"]),
+body.ema-app-restriction-safe :is(section, article, div):has(button):has(input[placeholder*="Search package"]) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+}
+
+/* Tables/lists inside package selection should scroll, not squeeze */
+body.ema-app-restriction-safe :is(table) {
+  table-layout: auto !important;
+  width: 100% !important;
+  min-width: 520px !important;
+}
+
+body.ema-app-restriction-safe :is(th, td) {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  word-break: normal !important;
+  overflow-wrap: break-word !important;
+  white-space: normal !important;
+}
+
+/* Stop vertical letter text */
+body.ema-app-restriction-safe * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+}
+
+/* Main title sizes sane */
+body.ema-app-restriction-safe h1 {
+  font-size: 24px !important;
+  line-height: 1.1 !important;
+}
+
+body.ema-app-restriction-safe h2 {
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+}
+
+body.ema-app-restriction-safe h3,
+body.ema-app-restriction-safe h4 {
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+}

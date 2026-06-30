@@ -1,0 +1,68 @@
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  return p.includes("/app-restriction") || p.includes("/app-web-restriction");
+}
+
+function removeBrokenMarks() {
+  document.querySelectorAll("[data-ar-main],[data-ar-header],[data-ar-kpi-row],[data-ar-kpi-card],[data-ar-tabs],[data-ar-policy-card],[data-ar-section-title],[data-ar-settings-grid],[data-ar-inner-card],[data-ar-field-grid],[data-ar-field],[data-ar-checkbox-card],[data-ar-method-grid],[data-ar-method-option],[data-ar-textarea-block],[data-ar-bottom-option]").forEach((el) => {
+    const n = el as HTMLElement;
+    [
+      "arMain",
+      "arHeader",
+      "arKpiRow",
+      "arKpiCard",
+      "arTabs",
+      "arPolicyCard",
+      "arSectionTitle",
+      "arSettingsGrid",
+      "arInnerCard",
+      "arFieldGrid",
+      "arField",
+      "arCheckboxCard",
+      "arMethodGrid",
+      "arMethodOption",
+      "arTextareaBlock",
+      "arBottomOption",
+    ].forEach((key) => delete n.dataset[key]);
+
+    n.style.removeProperty("display");
+    n.style.removeProperty("grid-template-columns");
+    n.style.removeProperty("width");
+    n.style.removeProperty("height");
+    n.style.removeProperty("min-height");
+    n.style.removeProperty("max-height");
+    n.style.removeProperty("overflow");
+  });
+}
+
+function apply() {
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-app-restriction-safe");
+    return;
+  }
+
+  document.body.classList.add("ema-app-restriction-safe");
+  removeBrokenMarks();
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

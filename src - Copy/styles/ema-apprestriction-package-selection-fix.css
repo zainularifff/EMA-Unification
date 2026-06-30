@@ -1,0 +1,223 @@
+/* AppRestriction Package Selection UI fix.
+   CSS only. No runtime DOM script. */
+
+.arx-package-selection-scope,
+body.ema-appwebrestriction-page-active .arx-dual-section {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.arx-package-selection-scope .arx-dual-section,
+body.ema-appwebrestriction-page-active .arx-dual-section {
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 1rem !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 20px !important;
+  background: #ffffff !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.055) !important;
+  overflow: hidden !important;
+}
+
+.arx-package-selection-scope .arx-dual-section > div:first-child,
+body.ema-appwebrestriction-page-active .arx-dual-section > div:first-child {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px) !important;
+  align-items: center !important;
+  gap: 0.85rem !important;
+  margin-bottom: 0.85rem !important;
+}
+
+.arx-package-selection-scope .arx-dual-section h4,
+body.ema-appwebrestriction-page-active .arx-dual-section h4 {
+  margin: 0 !important;
+  color: #0f2748 !important;
+  font-size: 0.95rem !important;
+  font-weight: 900 !important;
+}
+
+.arx-package-selection-scope .arx-dual-section p,
+body.ema-appwebrestriction-page-active .arx-dual-section p {
+  margin: 0.18rem 0 0 !important;
+  color: #64748b !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+}
+
+.arx-package-selection-scope .arx-dual-search,
+body.ema-appwebrestriction-page-active .arx-dual-search {
+  width: 100% !important;
+  max-width: none !important;
+  height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  padding: 0 0.75rem !important;
+  border: 1px solid rgba(203, 213, 225, 0.95) !important;
+  border-radius: 14px !important;
+  background: #f8fafc !important;
+}
+
+.arx-package-selection-scope .arx-dual-search input,
+body.ema-appwebrestriction-page-active .arx-dual-search input {
+  width: 100% !important;
+  min-width: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #0f2748 !important;
+  font-size: 0.74rem !important;
+  font-weight: 800 !important;
+}
+
+.arx-package-selection-scope .arx-dual-grid,
+body.ema-appwebrestriction-page-active .arx-dual-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr) !important;
+  align-items: stretch !important;
+  gap: 0.85rem !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.arx-package-selection-scope .arx-dual-col,
+body.ema-appwebrestriction-page-active .arx-dual-col {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.arx-package-selection-scope .arx-dual-grid > div:nth-child(2),
+body.ema-appwebrestriction-page-active .arx-dual-grid > div:nth-child(2) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.arx-package-selection-scope .arx-dual-grid > div:nth-child(2) > div,
+body.ema-appwebrestriction-page-active .arx-dual-grid > div:nth-child(2) > div {
+  width: 42px !important;
+  height: 82px !important;
+  display: grid !important;
+  place-items: center !important;
+  gap: 0.35rem !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 16px !important;
+  background: #f8fafc !important;
+  color: #2563eb !important;
+}
+
+.arx-package-selection-scope .arx-list-panel,
+body.ema-appwebrestriction-page-active .arx-list-panel {
+  height: 360px !important;
+  min-height: 360px !important;
+  max-height: 360px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(203, 213, 225, 0.9) !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+}
+
+.arx-package-selection-scope .arx-list-head,
+body.ema-appwebrestriction-page-active .arx-list-head {
+  flex: 0 0 auto !important;
+  min-height: 44px !important;
+  display: grid !important;
+  align-items: center !important;
+  padding: 0.65rem 0.8rem !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95) !important;
+  background: #f3f6fb !important;
+  color: #0f2748 !important;
+  font-size: 0.74rem !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.035em !important;
+}
+
+.arx-package-selection-scope .arx-list-body,
+body.ema-appwebrestriction-page-active .arx-list-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 0.45rem !important;
+  background: #ffffff !important;
+}
+
+.arx-package-selection-scope .arx-list-row,
+body.ema-appwebrestriction-page-active .arx-list-row {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 46px !important;
+  display: grid !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+  padding: 0.55rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 13px !important;
+  background: #ffffff !important;
+}
+
+.arx-package-selection-scope .arx-list-row + .arx-list-row,
+body.ema-appwebrestriction-page-active .arx-list-row + .arx-list-row {
+  margin-top: 0.35rem !important;
+}
+
+.arx-package-selection-scope .arx-list-row:hover,
+body.ema-appwebrestriction-page-active .arx-list-row:hover {
+  border-color: rgba(37, 99, 235, 0.18) !important;
+  background: #f8fbff !important;
+}
+
+.arx-package-selection-scope .arx-list-row strong,
+.arx-package-selection-scope .arx-list-row small,
+body.ema-appwebrestriction-page-active .arx-list-row strong,
+body.ema-appwebrestriction-page-active .arx-list-row small {
+  display: block !important;
+  max-width: 100% !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.arx-package-selection-scope .arx-list-row strong,
+body.ema-appwebrestriction-page-active .arx-list-row strong {
+  color: #0f2748 !important;
+  font-size: 0.74rem !important;
+  font-weight: 900 !important;
+}
+
+.arx-package-selection-scope .arx-list-row small,
+body.ema-appwebrestriction-page-active .arx-list-row small {
+  color: #64748b !important;
+  font-size: 0.66rem !important;
+  font-weight: 750 !important;
+}
+
+.arx-package-selection-scope .arx-list-panel > div:last-child,
+body.ema-appwebrestriction-page-active .arx-list-panel > div:last-child {
+  flex: 0 0 auto !important;
+  min-height: 42px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.55rem !important;
+  padding: 0.5rem 0.65rem !important;
+  border-top: 1px solid rgba(226, 232, 240, 0.95) !important;
+  background: #ffffff !important;
+}
+
+@media (max-width: 1180px) {
+  .arx-package-selection-scope .arx-dual-grid,
+  body.ema-appwebrestriction-page-active .arx-dual-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .arx-package-selection-scope .arx-dual-grid > div:nth-child(2) > div,
+  body.ema-appwebrestriction-page-active .arx-dual-grid > div:nth-child(2) > div {
+    width: 100% !important;
+    height: 42px !important;
+    grid-auto-flow: column !important;
+  }
+}

@@ -1,0 +1,117 @@
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  return p.includes("/network-inventory") || p.includes("/network");
+}
+
+function visible(el: Element) {
+  const node = el as HTMLElement;
+  const r = node.getBoundingClientRect();
+  const s = window.getComputedStyle(node);
+  return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+}
+
+function text(el: Element | null) {
+  return String(el?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function clearMarks() {
+  document.querySelectorAll("[data-network-table-final],[data-network-table-wrap-final],[data-network-table-card-final]").forEach((el) => {
+    const node = el as HTMLElement;
+    delete node.dataset.networkTableFinal;
+    delete node.dataset.networkTableWrapFinal;
+    delete node.dataset.networkTableCardFinal;
+  });
+}
+
+function isInsideLeftTree(el: HTMLElement) {
+  return !!el.closest(
+    "[data-tree-panel-final='true'], [data-unified-tree-panel='true'], [data-clean-tree-panel='true'], [data-ema-branch-panel-standard='true'], aside, .ema-page-sidebar, .ema-sidebar-panel, .module-sidepanel, .module-tree-panel, .sidebar-tree-panel, .branch-sidebar, .folder-sidebar, .inventory-sidebar, .tree-sidebar, .network-sidebar"
+  ) && !text(el).toLowerCase().includes("status");
+}
+
+function markTables() {
+  const tables = Array.from(document.querySelectorAll("table"))
+    .filter((el) => el instanceof HTMLTableElement && visible(el)) as HTMLTableElement[];
+
+  for (const table of tables) {
+    const t = text(table).toLowerCase();
+
+    if (!t) continue;
+    if (isInsideLeftTree(table)) continue;
+
+    const looksNetworkTable =
+      t.includes("status") ||
+      t.includes("count") ||
+      t.includes("action") ||
+      t.includes("registered") ||
+      t.includes("agent") ||
+      t.includes("viewer") ||
+      t.includes("device");
+
+    if (!looksNetworkTable) continue;
+
+    table.setAttribute("data-network-table-final", "true");
+
+    let wrap = table.parentElement as HTMLElement | null;
+    for (let i = 0; i < 3 && wrap?.parentElement; i++) {
+      const r = wrap.getBoundingClientRect();
+
+      if (r.width > table.getBoundingClientRect().width - 20) break;
+      wrap = wrap.parentElement;
+    }
+
+    if (wrap) {
+      wrap.setAttribute("data-network-table-wrap-final", "true");
+    }
+
+    let card = table.closest("section, article, div") as HTMLElement | null;
+    for (let i = 0; i < 6 && card?.parentElement; i++) {
+      const tt = text(card).toLowerCase();
+
+      if (
+        tt.includes("status") &&
+        tt.includes("count") &&
+        tt.includes("action")
+      ) {
+        card.setAttribute("data-network-table-card-final", "true");
+        break;
+      }
+
+      card = card.parentElement as HTMLElement | null;
+    }
+  }
+}
+
+function apply() {
+  clearMarks();
+
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-network-table-final-fix");
+    return;
+  }
+
+  document.body.classList.add("ema-network-table-final-fix");
+  markTables();
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};

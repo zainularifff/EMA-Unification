@@ -1,0 +1,177 @@
+/* TASK LIST FILTER + SUMMARY UI FIX
+   CSS only. No runtime observer.
+*/
+
+/* Scope by Task List search placeholder */
+body:has(input[placeholder*="Search job" i]) {
+  --tl-border: #dbe7f6;
+  --tl-text: #0f2746;
+  --tl-muted: #64748b;
+  --tl-blue: #2563eb;
+}
+
+/* Main filter card/container */
+body:has(input[placeholder*="Search job" i]) :is(section, div, article):has(input[placeholder*="Search job" i]):has(button) {
+  box-sizing: border-box !important;
+}
+
+/* Search row */
+body:has(input[placeholder*="Search job" i]) input[placeholder*="Search job" i] {
+  height: 36px !important;
+  min-height: 36px !important;
+
+  font-size: 11px !important;
+  font-weight: 750 !important;
+
+  color: var(--tl-text) !important;
+}
+
+/* All filter inputs/selects inside task list */
+body:has(input[placeholder*="Search job" i]) :is(input, select) {
+  height: 36px !important;
+  min-height: 36px !important;
+
+  border-radius: 11px !important;
+
+  font-size: 11px !important;
+  font-weight: 750 !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Labels: CLASSIFICATION / STATE / FROM / ROWS */
+body:has(input[placeholder*="Search job" i]) label,
+body:has(input[placeholder*="Search job" i]) :is(.filter-label, .field-label, [class*="label" i]) {
+  margin-bottom: 5px !important;
+
+  color: #64748b !important;
+
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em !important;
+  text-transform: uppercase !important;
+}
+
+/* Filter area should not be too tall */
+body:has(input[placeholder*="Search job" i]) :is(.filter-panel, .filters-panel, .task-filter-panel, .tasklist-filter-panel, [class*="filter" i]):has(input) {
+  gap: 8px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+/* Buttons */
+body:has(input[placeholder*="Search job" i]) button {
+  height: 34px !important;
+  min-height: 34px !important;
+
+  padding: 0 12px !important;
+
+  border-radius: 11px !important;
+
+  font-size: 10.5px !important;
+  font-weight: 850 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+
+/* Top actions spacing */
+body:has(input[placeholder*="Search job" i]) :is(.actions, .toolbar-actions, [class*="action" i]) {
+  gap: 8px !important;
+}
+
+/* Summary card: Showing 1-10 of 1000 Task List records */
+body:has(input[placeholder*="Search job" i]) :is(section, div, article):has(:is(button, span, strong)):has([class*="badge" i]),
+body:has(input[placeholder*="Search job" i]) :is(.summary-card, .record-summary, .task-summary, .tasklist-summary, [class*="summary" i]):has(button),
+body:has(input[placeholder*="Search job" i]) :is(.summary-card, .record-summary, .task-summary, .tasklist-summary, [class*="record" i]):has(button) {
+  min-height: 54px !important;
+  height: auto !important;
+
+  padding: 10px 14px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+
+  border: 1px solid var(--tl-border) !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Summary text numbers */
+body:has(input[placeholder*="Search job" i]) :is(.summary-card, .record-summary, .task-summary, .tasklist-summary, [class*="summary" i], [class*="record" i]) :is(span, strong, p, small) {
+  font-size: 10.5px !important;
+  line-height: 1.2 !important;
+  font-weight: 800 !important;
+  color: #64748b !important;
+}
+
+/* Make Showing / 1-10 / of / 1000 / records align compact */
+body:has(input[placeholder*="Search job" i]) :is(.summary-card, .record-summary, .task-summary, .tasklist-summary, [class*="summary" i], [class*="record" i]) > :is(div, span, p) {
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
+/* Status badges: Completed / Transferring / Stopped */
+body:has(input[placeholder*="Search job" i]) :is(button, .badge, .pill, [class*="badge" i], [class*="pill" i]) {
+  white-space: nowrap !important;
+}
+
+body:has(input[placeholder*="Search job" i]) :is(.badge, .pill, [class*="badge" i], [class*="pill" i]) {
+  min-height: 28px !important;
+  height: 28px !important;
+
+  padding: 0 11px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border: 1px solid var(--tl-border) !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+
+  color: #0f2746 !important;
+
+  font-size: 10.5px !important;
+  font-weight: 850 !important;
+}
+
+/* Badge group right side */
+body:has(input[placeholder*="Search job" i]) :is(.status-badges, .summary-badges, .record-badges, [class*="badge" i]):has(:is(.badge, .pill, button)) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+
+/* Prevent huge whitespace inside filter/result panel */
+body:has(input[placeholder*="Search job" i]) :is(.card, .panel, .filter-card, .task-card, [class*="card" i], [class*="panel" i]) {
+  box-sizing: border-box !important;
+}
+
+/* Keep table below closer */
+body:has(input[placeholder*="Search job" i]) table {
+  margin-top: 0 !important;
+}
+
+/* Specific fallback: any large empty card directly above table */
+body:has(input[placeholder*="Search job" i]) :is(section, div, article):has(+ table),
+body:has(input[placeholder*="Search job" i]) :is(section, div, article):has(+ div table) {
+  margin-bottom: 10px !important;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  body:has(input[placeholder*="Search job" i]) :is(.summary-card, .record-summary, .task-summary, .tasklist-summary, [class*="summary" i], [class*="record" i]):has(button) {
+    flex-wrap: wrap !important;
+  }
+}

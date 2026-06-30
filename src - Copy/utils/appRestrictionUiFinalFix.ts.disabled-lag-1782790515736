@@ -1,0 +1,300 @@
+function shouldRun() {
+  const p = window.location.pathname.toLowerCase();
+  return p.includes("/app-restriction") || p.includes("/app-web-restriction");
+}
+
+function text(el: Element | null) {
+  return String(el?.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function visible(el: Element) {
+  const node = el as HTMLElement;
+  const r = node.getBoundingClientRect();
+  const s = window.getComputedStyle(node);
+  return r.width > 0 && r.height > 0 && s.display !== "none" && s.visibility !== "hidden";
+}
+
+function clearMarks() {
+  document.querySelectorAll("[data-ar-main],[data-ar-header],[data-ar-kpi-row],[data-ar-kpi-card],[data-ar-tabs],[data-ar-policy-card],[data-ar-section-title],[data-ar-settings-grid],[data-ar-inner-card],[data-ar-field-grid],[data-ar-field],[data-ar-checkbox-card],[data-ar-method-grid],[data-ar-method-option],[data-ar-textarea-block],[data-ar-bottom-option]").forEach((el) => {
+    const n = el as HTMLElement;
+    [
+      "arMain",
+      "arHeader",
+      "arKpiRow",
+      "arKpiCard",
+      "arTabs",
+      "arPolicyCard",
+      "arSectionTitle",
+      "arSettingsGrid",
+      "arInnerCard",
+      "arFieldGrid",
+      "arField",
+      "arCheckboxCard",
+      "arMethodGrid",
+      "arMethodOption",
+      "arTextareaBlock",
+      "arBottomOption",
+    ].forEach((k) => delete n.dataset[k]);
+  });
+}
+
+function findMain() {
+  const candidates = Array.from(document.querySelectorAll("main, section, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  return candidates
+    .map((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      let score = 0;
+
+      if (t.includes("app restriction")) score += 200;
+      if (t.includes("policy settings")) score += 120;
+      if (t.includes("restriction method")) score += 120;
+      if (t.includes("warning message")) score += 80;
+      if (t.includes("package manager")) score += 50;
+
+      if (r.width > 700) score += 50;
+      if (r.left > 250) score += 40;
+
+      if (t.includes("all branches") && r.width < 400) score -= 300;
+      if (t.includes("ema system") || t.includes("logout")) score -= 500;
+
+      return { el, score };
+    })
+    .filter((x) => x.score > 250)
+    .sort((a, b) => {
+      const ar = a.el.getBoundingClientRect();
+      const br = b.el.getBoundingClientRect();
+      return b.score - a.score || ar.width - br.width;
+    })[0]?.el || null;
+}
+
+function markHeader(main: HTMLElement) {
+  const headers = Array.from(main.querySelectorAll("section, article, div, header"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  const header = headers.find((el) => {
+    const t = text(el).toLowerCase();
+    const r = el.getBoundingClientRect();
+
+    return (
+      t.includes("app restriction") &&
+      t.includes("policy management") &&
+      r.height < 160 &&
+      r.width > 600
+    );
+  });
+
+  if (!header) return;
+
+  header.setAttribute("data-ar-header", "true");
+
+  const kpiRow = Array.from(header.querySelectorAll("div"))
+    .filter((el) => el instanceof HTMLElement && visible(el))
+    .find((el) => {
+      const t = text(el).toLowerCase();
+      const children = Array.from(el.children).filter((child) => child instanceof HTMLElement);
+      return (
+        children.length >= 3 &&
+        t.includes("policy type") &&
+        t.includes("selected packages")
+      );
+    }) as HTMLElement | undefined;
+
+  if (kpiRow) {
+    kpiRow.setAttribute("data-ar-kpi-row", "true");
+    Array.from(kpiRow.children).forEach((child) => {
+      if (child instanceof HTMLElement) child.setAttribute("data-ar-kpi-card", "true");
+    });
+  }
+}
+
+function markTabs(main: HTMLElement) {
+  const tabs = Array.from(main.querySelectorAll("section, article, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el))
+    .find((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      return (
+        t.includes("policy settings") &&
+        t.includes("policy status") &&
+        r.height < 110 &&
+        r.width > 500
+      );
+    }) as HTMLElement | undefined;
+
+  if (tabs) tabs.setAttribute("data-ar-tabs", "true");
+}
+
+function markPolicyCard(main: HTMLElement) {
+  const cards = Array.from(main.querySelectorAll("section, article, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  const card = cards
+    .map((el) => {
+      const t = text(el).toLowerCase();
+      const r = el.getBoundingClientRect();
+
+      let score = 0;
+      if (t.includes("app restriction policy settings")) score += 120;
+      if (t.includes("basic setting")) score += 80;
+      if (t.includes("restriction method")) score += 80;
+      if (t.includes("warning message")) score += 40;
+      if (r.width > 700) score += 20;
+
+      return { el, score };
+    })
+    .filter((x) => x.score > 180)
+    .sort((a, b) => b.score - a.score)[0]?.el;
+
+  if (!card) return null;
+
+  card.setAttribute("data-ar-policy-card", "true");
+
+  const sectionTitle = Array.from(card.children).find((child) => {
+    if (!(child instanceof HTMLElement)) return false;
+    const t = text(child).toLowerCase();
+    return t.includes("app restriction policy settings") && t.includes("configure");
+  }) as HTMLElement | undefined;
+
+  if (sectionTitle) sectionTitle.setAttribute("data-ar-section-title", "true");
+
+  return card;
+}
+
+function markInnerCards(policyCard: HTMLElement) {
+  const cards = Array.from(policyCard.querySelectorAll("section, article, div"))
+    .filter((el) => el instanceof HTMLElement && visible(el)) as HTMLElement[];
+
+  const basic = cards.find((el) => {
+    const t = text(el).toLowerCase();
+    const r = el.getBoundingClientRect();
+
+    return t.includes("basic setting") && t.includes("policy id") && r.width > 250;
+  });
+
+  const method = cards.find((el) => {
+    const t = text(el).toLowerCase();
+    const r = el.getBoundingClientRect();
+
+    return t.includes("restriction method") && t.includes("warning message") && r.width > 300;
+  });
+
+  if (basic) basic.setAttribute("data-ar-inner-card", "true");
+  if (method) method.setAttribute("data-ar-inner-card", "true");
+
+  if (basic && method && basic.parentElement === method.parentElement) {
+    basic.parentElement.setAttribute("data-ar-settings-grid", "true");
+  }
+
+  if (basic) {
+    const fieldsParent = Array.from(basic.querySelectorAll("div"))
+      .filter((el) => el instanceof HTMLElement && visible(el))
+      .find((el) => {
+        const t = text(el).toLowerCase();
+        const children = Array.from(el.children).filter((child) => child instanceof HTMLElement);
+        return children.length >= 2 && t.includes("policy id") && t.includes("result update");
+      }) as HTMLElement | undefined;
+
+    if (fieldsParent) {
+      fieldsParent.setAttribute("data-ar-field-grid", "true");
+      Array.from(fieldsParent.children).forEach((child) => {
+        if (!(child instanceof HTMLElement)) return;
+        const t = text(child).toLowerCase();
+
+        if (t.includes("inherit") || t.includes("do not apply")) {
+          child.setAttribute("data-ar-checkbox-card", "true");
+        } else {
+          child.setAttribute("data-ar-field", "true");
+        }
+      });
+    }
+  }
+
+  if (method) {
+    const optionParent = Array.from(method.querySelectorAll("div"))
+      .filter((el) => el instanceof HTMLElement && visible(el))
+      .find((el) => {
+        const t = text(el).toLowerCase();
+        const children = Array.from(el.children).filter((child) => child instanceof HTMLElement);
+
+        return (
+          children.length >= 3 &&
+          t.includes("restrict") &&
+          t.includes("warning message")
+        );
+      }) as HTMLElement | undefined;
+
+    if (optionParent) {
+      optionParent.setAttribute("data-ar-method-grid", "true");
+      Array.from(optionParent.children).forEach((child) => {
+        if (child instanceof HTMLElement) child.setAttribute("data-ar-method-option", "true");
+      });
+    }
+
+    const textarea = method.querySelector("textarea") as HTMLElement | null;
+    if (textarea) {
+      const block = textarea.closest("div") as HTMLElement | null;
+      if (block) block.setAttribute("data-ar-textarea-block", "true");
+    }
+
+    Array.from(method.querySelectorAll("div, label")).forEach((el) => {
+      if (!(el instanceof HTMLElement)) return;
+      const t = text(el).toLowerCase();
+
+      if (t.includes("version comparison")) {
+        el.setAttribute("data-ar-bottom-option", "true");
+      }
+    });
+  }
+}
+
+function apply() {
+  clearMarks();
+
+  if (!shouldRun()) {
+    document.body.classList.remove("ema-app-restriction-ui-final");
+    return;
+  }
+
+  const main = findMain();
+
+  if (!main) {
+    document.body.classList.remove("ema-app-restriction-ui-final");
+    return;
+  }
+
+  document.body.classList.add("ema-app-restriction-ui-final");
+  main.setAttribute("data-ar-main", "true");
+
+  markHeader(main);
+  markTabs(main);
+
+  const policyCard = markPolicyCard(main);
+  if (policyCard) markInnerCards(policyCard);
+}
+
+function schedule() {
+  requestAnimationFrame(() => {
+    apply();
+    setTimeout(apply, 200);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1400);
+  });
+}
+
+if (typeof window !== "undefined") {
+  schedule();
+
+  const observer = new MutationObserver(() => schedule());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("resize", schedule);
+  window.addEventListener("popstate", schedule);
+  window.addEventListener("hashchange", schedule);
+}
+
+export {};
