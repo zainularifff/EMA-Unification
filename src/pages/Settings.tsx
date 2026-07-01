@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { createPortal } from "react-dom";
 import { Eye, Pencil, Plus, RefreshCw, Save, Search, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 import NotificationChannelsSettings from "../components/settings/NotificationChannelsSettings";
+import { useAuth } from "../context/AuthContext";
 import api, { unwrapArray } from "../services/apiClient";
 import {
   accessControls as settingsAccessControls,
@@ -161,7 +162,7 @@ type SectionItem = {
   subtitle: string;
 };
 
-type IconName = "role" | "matrix" | "access" | "audit" | "price" | "aging" | "risk";
+type IconName = "role" | "matrix" | "access" | "audit" | "price" | "aging" | "risk" | "user" | "incident" | "notification" | "software" | "policy" | "resource";
 
 type UserAccess = {
   id?: number | string;
@@ -644,7 +645,7 @@ const sections: Record<SectionKey, SectionItem> = {
     title: "User Access Management",
     desc: "Add new users, update existing user access, delete access and control account status.",
     tag: "User Access CRUD",
-    icon: "access",
+    icon: "user",
     count: 6,
     scoreOne: "6",
     scoreTwo: "3",
@@ -677,7 +678,7 @@ const sections: Record<SectionKey, SectionItem> = {
     title: "Incident Config",
     desc: "Configure Service Desk SLA rules and working hours used to calculate incident due dates.",
     tag: "Service Desk Config",
-    icon: "matrix",
+    icon: "incident",
     count: 2,
     scoreOne: "4",
     scoreTwo: "7",
@@ -688,7 +689,7 @@ const sections: Record<SectionKey, SectionItem> = {
     title: "Notification Channels",
     desc: "Configure WhatsApp, email, templates and alert rules used by EMA notification workflow.",
     tag: "Notification Config",
-    icon: "access",
+    icon: "notification",
     count: 3,
     scoreOne: "WA",
     scoreTwo: "Email",
@@ -699,7 +700,7 @@ const sections: Record<SectionKey, SectionItem> = {
     title: "Software Registry",
     desc: "Register software classification, license quantity, expiry date, cost and utilization rules for dashboard governance.",
     tag: "Software Policy",
-    icon: "matrix",
+    icon: "software",
     count: 4,
     scoreOne: "Legal",
     scoreTwo: "ROI",
@@ -743,7 +744,7 @@ const sections: Record<SectionKey, SectionItem> = {
     title: "Management Policy",
     desc: "Configure dashboard risk, exposure, saving and evidence assumptions by policy instead of hardcoded backend values.",
     tag: "Dashboard Policy",
-    icon: "risk",
+    icon: "policy",
     count: 24,
     scoreOne: "24",
     scoreTwo: "Global",
@@ -765,7 +766,7 @@ const sections: Record<SectionKey, SectionItem> = {
     title: "Resource Planning",
     desc: "Plan engineer leave and keep Service Desk assignment transparent by using EMA user roles only.",
     tag: "Engineer Planning",
-    icon: "access",
+    icon: "resource",
     count: 3,
     scoreOne: "0",
     scoreTwo: "0",
@@ -774,7 +775,225 @@ const sections: Record<SectionKey, SectionItem> = {
 };
 
 const sectionOrder: SectionKey[] = ["roles", "users", "modules", "access", "incident", "notification", "softwarePolicy", "audit", "pricing", "aging", "policy", "resources"];
-// const sectionOrder: SectionKey[] = ["roles", "users", "modules", "access", "incident", "audit", "pricing", "aging", "policy", "risk", "resources"];
+
+
+const SETTINGS_SECTION_MODULE_KEYS: Record<SectionKey, string> = {
+  roles: "settings.rbac",
+  users: "settings.user_access",
+  modules: "settings.module_control",
+  access: "settings.access_control",
+  incident: "settings.incident_config",
+  notification: "settings.notification_channels",
+  softwarePolicy: "settings.software_policy",
+  audit: "settings.audit_log",
+  pricing: "settings.device_pricing",
+  aging: "settings.aging_pc_rule",
+  policy: "settings.management_policy",
+  risk: "settings.risk_identifier",
+  resources: "settings.resource_planning",
+};
+
+type SettingsPermissionRow = {
+  moduleKey: string;
+  moduleName: string;
+  routePath: string;
+  canView: boolean;
+};
+
+type SettingsAccessInfo = {
+  rows: SettingsPermissionRow[];
+  hasRows: boolean;
+  hasSpecificSettingsRows: boolean;
+};
+
+function normalizeRbacText(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeRbacRoute(value: unknown) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const withSlash = text.startsWith("/") ? text : `/${text}`;
+  return withSlash.replace(/\/+$/, "").toLowerCase() || "/";
+}
+
+function readStoredRbacJson(key: string) {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function readRbacBoolean(value: unknown, fallback = true) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  const text = normalizeRbacText(value);
+  if (["true", "1", "yes", "y", "on", "allow", "allowed", "view"].includes(text)) return true;
+  if (["false", "0", "no", "n", "off", "deny", "denied", "blocked"].includes(text)) return false;
+  return fallback;
+}
+
+function rowLooksLikePermission(row: Record<string, unknown>) {
+  return (
+    row.moduleKey !== undefined ||
+    row.ModuleKey !== undefined ||
+    row.moduleName !== undefined ||
+    row.ModuleName !== undefined ||
+    row.routePath !== undefined ||
+    row.RoutePath !== undefined ||
+    row.canView !== undefined ||
+    row.CanView !== undefined ||
+    row.isAllowed !== undefined ||
+    row.IsAllowed !== undefined ||
+    row.allowed !== undefined ||
+    row.Allowed !== undefined
+  );
+}
+
+function makeSettingsPermissionRow(row: Record<string, unknown>): SettingsPermissionRow | null {
+  const moduleKey = normalizeRbacText(row.moduleKey ?? row.ModuleKey ?? row.key ?? row.Key);
+  const moduleName = normalizeRbacText(row.moduleName ?? row.ModuleName ?? row.name ?? row.Name);
+  const routePath = normalizeRbacRoute(row.routePath ?? row.RoutePath ?? row.path ?? row.Path);
+
+  if (!moduleKey && !moduleName && !routePath) return null;
+
+  return {
+    moduleKey,
+    moduleName,
+    routePath,
+    canView: readRbacBoolean(
+      row.canView ??
+        row.CanView ??
+        row.isAllowed ??
+        row.IsAllowed ??
+        row.allowed ??
+        row.Allowed ??
+        row.hasAccess ??
+        row.HasAccess,
+      true
+    ),
+  };
+}
+
+function collectSettingsPermissionRows(input: unknown, output: SettingsPermissionRow[] = [], seen = new WeakSet<object>()) {
+  if (!input) return output;
+
+  if (Array.isArray(input)) {
+    input.forEach((item) => collectSettingsPermissionRows(item, output, seen));
+    return output;
+  }
+
+  if (typeof input !== "object") return output;
+  const objectInput = input as Record<string, unknown>;
+  if (seen.has(objectInput)) return output;
+  seen.add(objectInput);
+
+  // Support object-map permission shape: { "settings.rbac": true, "hardware": { canView: true } }
+  Object.entries(objectInput).forEach(([key, value]) => {
+    const normalizedKey = normalizeRbacText(key);
+    if (!normalizedKey) return;
+
+    const keyLooksLikeModule =
+      normalizedKey === "settings" ||
+      normalizedKey.startsWith("settings.") ||
+      normalizedKey.startsWith("/") ||
+      normalizedKey.includes("dashboard") ||
+      normalizedKey.includes("hardware") ||
+      normalizedKey.includes("software") ||
+      normalizedKey.includes("service");
+
+    if (!keyLooksLikeModule) return;
+
+    if (typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
+      output.push({ moduleKey: normalizedKey.startsWith("/") ? "" : normalizedKey, moduleName: "", routePath: normalizedKey.startsWith("/") ? normalizeRbacRoute(normalizedKey) : "", canView: readRbacBoolean(value, false) });
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      const valueObject = value as Record<string, unknown>;
+      output.push({
+        moduleKey: normalizedKey.startsWith("/") ? normalizeRbacText(valueObject.moduleKey ?? valueObject.ModuleKey) : normalizedKey,
+        moduleName: normalizeRbacText(valueObject.moduleName ?? valueObject.ModuleName ?? valueObject.name ?? valueObject.Name),
+        routePath: normalizedKey.startsWith("/") ? normalizeRbacRoute(normalizedKey) : normalizeRbacRoute(valueObject.routePath ?? valueObject.RoutePath),
+        canView: readRbacBoolean(valueObject.canView ?? valueObject.CanView ?? valueObject.isAllowed ?? valueObject.IsAllowed ?? valueObject.allowed ?? valueObject.Allowed, true),
+      });
+    }
+  });
+
+  if (rowLooksLikePermission(objectInput)) {
+    const row = makeSettingsPermissionRow(objectInput);
+    if (row) output.push(row);
+  }
+
+  [
+    objectInput.permissions,
+    objectInput.Permissions,
+    objectInput.modulePermissions,
+    objectInput.ModulePermissions,
+    objectInput.rolePermissions,
+    objectInput.RolePermissions,
+    objectInput.menuPermissions,
+    objectInput.MenuPermissions,
+    objectInput.modules,
+    objectInput.Modules,
+    objectInput.access,
+    objectInput.Access,
+    objectInput.routes,
+    objectInput.Routes,
+    objectInput.user,
+    objectInput.User,
+    objectInput.data,
+    objectInput.Data,
+  ].forEach((child) => collectSettingsPermissionRows(child, output, seen));
+
+  return output;
+}
+
+function getSettingsAccessInfo(auth: unknown): SettingsAccessInfo {
+  const sources = [
+    auth,
+    readStoredRbacJson("ema-auth"),
+    readStoredRbacJson("ema-user"),
+    readStoredRbacJson("accessUser"),
+    readStoredRbacJson("user"),
+    readStoredRbacJson("auth"),
+  ];
+
+  const dedup = new Map<string, SettingsPermissionRow>();
+  collectSettingsPermissionRows(sources).forEach((row) => {
+    const key = `${row.moduleKey}|${row.moduleName}|${row.routePath}`;
+    if (!key.replace(/\|/g, "")) return;
+    dedup.set(key, row);
+  });
+
+  const rows = Array.from(dedup.values());
+  const hasSpecificSettingsRows = rows.some((row) => row.moduleKey.startsWith("settings."));
+
+  return { rows, hasRows: rows.length > 0, hasSpecificSettingsRows };
+}
+
+function canViewSettingsSection(_sectionKey: SectionKey, access: SettingsAccessInfo) {
+  // If login payload has no RBAC rows yet, fail open.
+  if (!access.hasRows) return true;
+
+  // Settings is enable/disable as a whole module — if any settings-related row
+  // grants access (by key prefix, name, or /settings route), show all sections.
+  return access.rows.some((row) => {
+    if (!row.canView) return false;
+    return (
+      row.moduleKey === "settings" ||
+      row.moduleKey.startsWith("settings") ||
+      row.moduleName === "settings" ||
+      row.moduleName.startsWith("settings") ||
+      row.routePath === "/settings"
+    );
+  });
+}
 
 const defaultAccessRoles: AccessRole[] = [
   { roleKey: "system_administrator", name: "System Administrator", description: "Full configuration access including roles, settings, pricing and risk rules.", type: "Administrator", defaultAccess: "Full Access", approvalRequired: true, status: "Active", assignedUsers: 0 },
@@ -1669,10 +1888,560 @@ const EMPTY_SOFTWARE_FORM: SoftwareForm = {
 
 const SETTINGS_SOFTWARE_POLICY_INLINE_CSS = `
 .management-control-wrapper.settings-management-shell{height:100%;min-height:0;display:grid!important;grid-template-columns:292px minmax(0,1fr)!important;gap:12px!important;overflow:hidden!important;padding:0!important;background:transparent!important;border:0!important}.management-control-sidebar{height:100%;display:flex;flex-direction:column;overflow:hidden;border:1px solid #dbe7fb;border-radius:20px;background:#fff}.management-control-sidebar-head{padding:16px 18px;border-bottom:1px solid #e5edf8}.management-control-sidebar-head span,.sp-chip{display:block;color:#2563eb;font-size:.64rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.management-control-sidebar-head strong{display:block;margin-top:6px;color:#0f2746;font-size:1.02rem;font-weight:900}.management-control-sidebar-head small{display:block;margin-top:4px;color:#64748b;font-size:.72rem;font-weight:700}.management-control-nav-list{flex:1;display:grid;align-content:start;gap:8px;overflow:auto;padding:14px 12px}.management-control-nav-btn{width:100%;min-height:56px;display:grid;grid-template-columns:38px minmax(0,1fr);align-items:center;gap:12px;padding:10px 13px;border:0;border-radius:16px;background:transparent;color:#0f2746;text-align:left;font-weight:900}.management-control-nav-btn.active{color:#fff;background:linear-gradient(135deg,#2563eb,#087ea4)}.management-control-nav-icon{width:38px;height:38px;display:grid;place-items:center;border-radius:13px;color:#2563eb;background:#eef4ff}.management-control-nav-btn.active .management-control-nav-icon{color:#fff;background:rgba(255,255,255,.2)}.management-control-content,.management-legacy-content{min-height:0;height:100%;overflow:hidden}.management-legacy-content>.settings-module-root{height:100%!important;max-height:100%!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}.management-legacy-content .settings-layout{height:100%!important;grid-template-columns:1fr!important;padding:0!important}.management-legacy-content .settings-menu{display:none!important}.management-legacy-content .settings-content{height:100%!important;min-height:0!important}
-.software-policy-module{height:100%;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;color:#0f2746;overflow:hidden}.software-policy-module *{box-sizing:border-box}.sp-top,.sp-section{border:1px solid #dbe7fb;border-radius:20px;background:#fff;box-shadow:0 14px 30px rgba(15,23,42,.045)}.sp-top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px}.sp-top h2{margin:3px 0;color:#0f2746;font-weight:950;letter-spacing:-.04em}.sp-top p,.sp-help{margin:0;color:#64748b;font-size:.74rem;font-weight:700;line-height:1.45}.sp-btn,.sp-icon,.sp-danger{min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;font-size:.76rem;font-weight:900;cursor:pointer}.sp-btn.primary{border:0;color:#fff;background:linear-gradient(135deg,#2563eb,#087ea4);padding:0 16px}.sp-btn.secondary{border:1px solid #d7e3f5;background:#fff;color:#2563eb;padding:0 16px}.sp-icon{width:40px;border:1px solid #d7e3f5;background:#fff;color:#2563eb}.sp-danger{width:40px;border:1px solid #fecaca;background:#fff1f2;color:#dc2626}.sp-btn:disabled,.sp-icon:disabled{opacity:.55;cursor:not-allowed}.sp-work{min-height:0;overflow:auto}.sp-section{overflow:hidden}.sp-section-title{padding:12px 14px;border-bottom:1px solid #eef3fb}.sp-section-title strong{display:block;color:#0f2746;font-size:.84rem;font-weight:900}.sp-section-title small{display:block;margin-top:2px;color:#64748b;font-size:.68rem;font-weight:700}.sp-section-body{padding:14px;min-height:0}.sp-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.sp-field{display:grid;gap:6px}.sp-field.full{grid-column:1/-1}.sp-field span{color:#64748b;font-size:.62rem;font-weight:900;text-transform:uppercase}.sp-field input,.sp-field select,.sp-field textarea,.sp-search input{width:100%;min-height:40px;border:1px solid #d7e3f5;border-radius:12px;background:#fff;color:#0f2746;padding:0 12px;font-size:.78rem;font-weight:750;outline:none}.sp-field textarea{min-height:78px;padding:10px;resize:vertical}.sp-action-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.sp-alert{padding:10px 14px;border-radius:14px;font-size:.74rem;font-weight:850;margin-bottom:12px}.sp-alert.error{color:#991b1b;background:#fef2f2;border:1px solid #fecaca}.sp-alert.success{color:#166534;background:#f0fdf4;border:1px solid #bbf7d0}.sp-alert.info{color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe}.sp-policy-table-screen{min-height:0;overflow:auto}.sp-policy-table-card{height:100%;min-height:0}.sp-policy-table-wrap{display:grid;gap:10px;overflow:auto;padding-bottom:4px}.sp-policy-table-row{width:100%;min-width:1040px;min-height:68px;display:grid;grid-template-columns:minmax(220px,1.45fr) minmax(150px,.85fr) 96px 88px 88px 110px 150px 124px;gap:12px;align-items:center;padding:12px 14px;border:1px solid #e5edf8;border-radius:15px;background:#fff;color:#0f2746;text-align:left}.sp-policy-table-row.head{min-height:42px;background:#f3f7fc;color:#64748b;font-size:.62rem;font-weight:900;text-transform:uppercase}.sp-policy-table-row strong,.sp-policy-table-row small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-policy-table-row small{margin-top:3px;color:#64748b;font-size:.66rem;font-weight:750}.sp-policy-table-row:not(.head):hover{border-color:#bfdbfe;background:#f8fbff}.sp-policy-table-actions{display:flex;justify-content:flex-end;gap:6px}.sp-policy-table-actions .sp-icon,.sp-policy-table-actions .sp-danger{width:34px;min-height:34px;border-radius:10px}.sp-badge{display:inline-flex;justify-content:center;align-items:center;min-height:24px;border-radius:999px;padding:0 8px;font-size:.62rem;font-weight:900}.sp-badge.legal{color:#166534;background:#dcfce7}.sp-badge.illegal{color:#991b1b;background:#fee2e2}.sp-empty{min-height:132px;display:grid;place-items:center;color:#64748b;font-size:.8rem;font-weight:800;text-align:center;padding:18px}.sp-policy-modal-backdrop{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.46);backdrop-filter:blur(6px)}.sp-policy-modal{width:min(1180px,calc(100vw - 56px));height:min(90vh,920px);display:grid;grid-template-rows:auto minmax(0,1fr);border:1px solid #dbe7fb;border-radius:24px;background:#f8fbff;box-shadow:0 30px 80px rgba(15,23,42,.32);overflow:hidden}.sp-policy-modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;border-bottom:1px solid #dbe7fb;background:#fff}.sp-policy-modal-head strong{display:block;color:#0f2746;font-size:1rem;font-weight:950}.sp-policy-modal-head small{display:block;margin-top:3px;color:#64748b;font-size:.72rem;font-weight:750}.sp-top-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}.sp-policy-modal-body{min-height:0;overflow:auto;padding:16px;display:grid;gap:12px}.sp-story{padding:10px 12px;border:1px solid #bfdbfe;border-radius:14px;background:#eff6ff;color:#1d4ed8;font-size:.72rem;font-weight:900}.sp-flow-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.sp-flow-tabs span{min-height:44px;display:flex;align-items:center;gap:8px;border:1px solid #dbe7fb;border-radius:14px;background:#fff;padding:0 12px;color:#64748b;font-size:.7rem;font-weight:900}.sp-flow-tabs b{width:22px;height:22px;display:grid;place-items:center;border-radius:999px;background:#eff6ff;color:#2563eb;font-size:.68rem}.sp-map-panel{margin-top:12px;border:1px solid #dbe7fb;border-radius:16px;background:#f8fbff;overflow:hidden}.sp-map-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px;border-bottom:1px solid #e5edf8}.sp-map-panel-head strong{display:block;font-size:.82rem;font-weight:950;color:#0f2746}.sp-map-panel-head small{display:block;margin-top:2px;color:#64748b;font-size:.68rem;font-weight:740}.sp-search{min-height:40px;display:flex;align-items:center;gap:8px;border:1px solid #d7e3f5;border-radius:12px;padding:0 11px;background:#fff;color:#64748b;min-width:260px}.sp-search input{min-height:0;border:0;padding:0}.sp-table{min-height:220px;max-height:330px;overflow:auto;background:#fff}.sp-row{min-height:56px;display:grid;grid-template-columns:42px minmax(240px,1.3fr) minmax(145px,.7fr) 86px;gap:12px;align-items:center;padding:0 14px;border-bottom:1px solid #edf2f7;font-size:.74rem;font-weight:740}.sp-row.head{position:sticky;top:0;z-index:2;min-height:42px;background:#f3f7fc;color:#64748b;font-size:.62rem;font-weight:900;text-transform:uppercase}.sp-row.selected{background:#eff6ff}.sp-row strong,.sp-row small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis}.sp-row strong{color:#0f2746}.sp-row small{color:#64748b;font-size:.64rem;white-space:nowrap}.sp-selected-box{margin-top:10px;padding:10px 12px;border:1px solid #bfdbfe;border-radius:15px;background:#eff6ff;color:#1d4ed8;font-size:.76rem;font-weight:850}.sp-selected-box.warning{border-color:#fde68a;background:#fffbeb;color:#92400e}.sp-class-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sp-class-btn{min-height:70px;padding:12px;border:1px solid #d7e3f5;border-radius:16px;background:#fff;color:#0f2746;text-align:left;font-weight:900}.sp-class-btn.active.legal{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.sp-class-btn.active.illegal{border-color:#fecaca;background:#fef2f2;color:#991b1b}.sp-cost-grid{display:grid;grid-template-columns:1fr .42fr 1fr 1fr;gap:10px}.sp-usage-note{margin-top:10px;padding:11px 12px;border-radius:14px;background:#f8fafc;border:1px dashed #cbd5e1;color:#475569;font-size:.72rem;font-weight:800}.sp-register-stack{display:grid;gap:12px}@media(max-width:1280px){.management-control-wrapper.settings-management-shell,.sp-form-grid,.sp-cost-grid,.sp-flow-tabs{grid-template-columns:1fr!important}.sp-row{grid-template-columns:42px 1fr}.sp-row.head{display:none}.sp-map-panel-head{display:grid}.sp-search{min-width:0}}
+.software-policy-module{height:100%;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);gap:12px;color:#0f2746;overflow:hidden}.software-policy-module *{box-sizing:border-box}.sp-top,.sp-section{border:1px solid #dbe7fb;border-radius:20px;background:#fff;box-shadow:0 14px 30px rgba(15,23,42,.045)}.sp-top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px}.sp-top h2{margin:3px 0;color:#0f2746;font-weight:950;letter-spacing:-.04em}.sp-top p,.sp-help{margin:0;color:#64748b;font-size:.74rem;font-weight:700;line-height:1.45}.sp-btn,.sp-icon,.sp-danger{min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;font-size:.76rem;font-weight:900;cursor:pointer}.sp-btn.primary{border:0;color:#fff;background:linear-gradient(135deg,#2563eb,#087ea4);padding:0 16px}.sp-btn.secondary{border:1px solid #d7e3f5;background:#fff;color:#2563eb;padding:0 16px}.sp-icon{width:40px;border:1px solid #d7e3f5;background:#fff;color:#2563eb}.sp-danger{width:40px;border:1px solid #fecaca;background:#fff1f2;color:#dc2626}.sp-btn:disabled,.sp-icon:disabled{opacity:.55;cursor:not-allowed}.sp-work{min-height:0;overflow:auto}.sp-section{overflow:hidden}.sp-section-title{padding:12px 14px;border-bottom:1px solid #eef3fb}.sp-section-title strong{display:block;color:#0f2746;font-size:.84rem;font-weight:900}.sp-section-title small{display:block;margin-top:2px;color:#64748b;font-size:.68rem;font-weight:700}.sp-section-body{padding:14px;min-height:0}.sp-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.sp-field{display:grid;gap:6px}.sp-field.full{grid-column:1/-1}.sp-field span{color:#64748b;font-size:.62rem;font-weight:900;text-transform:uppercase}.sp-field input,.sp-field select,.sp-field textarea,.sp-search input{width:100%;min-height:40px;border:1px solid #d7e3f5;border-radius:12px;background:#fff;color:#0f2746;padding:0 12px;font-size:.78rem;font-weight:750;outline:none}.sp-field textarea{min-height:78px;padding:10px;resize:vertical}.sp-action-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.sp-alert{padding:10px 14px;border-radius:14px;font-size:.74rem;font-weight:850;margin-bottom:12px}.sp-alert.error{color:#991b1b;background:#fef2f2;border:1px solid #fecaca}.sp-alert.success{color:#166534;background:#f0fdf4;border:1px solid #bbf7d0}.sp-alert.info{color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe}.sp-policy-table-screen{min-height:0;overflow:auto}.sp-policy-table-card{height:100%;min-height:0}.sp-policy-table-wrap{display:grid;gap:10px;overflow:auto;padding-bottom:4px}.sp-policy-table-row{width:100%;min-width:800px;min-height:68px;display:grid;grid-template-columns:minmax(220px,1.45fr) minmax(150px,.85fr) 96px 110px 150px 124px;gap:12px;align-items:center;padding:12px 14px;border:1px solid #e5edf8;border-radius:15px;background:#fff;color:#0f2746;text-align:left}.sp-policy-table-row.head{min-height:42px;background:#f3f7fc;color:#64748b;font-size:.62rem;font-weight:900;text-transform:uppercase}.sp-policy-table-row strong,.sp-policy-table-row small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-policy-table-row small{margin-top:3px;color:#64748b;font-size:.66rem;font-weight:750}.sp-policy-table-row:not(.head):hover{border-color:#bfdbfe;background:#f8fbff}.sp-policy-table-actions{display:flex;justify-content:flex-end;gap:6px}.sp-policy-table-actions .sp-icon,.sp-policy-table-actions .sp-danger{width:34px;min-height:34px;border-radius:10px}.sp-badge{display:inline-flex;justify-content:center;align-items:center;min-height:24px;border-radius:999px;padding:0 8px;font-size:.62rem;font-weight:900}.sp-badge.legal{color:#166534;background:#dcfce7}.sp-badge.illegal{color:#991b1b;background:#fee2e2}.sp-empty{min-height:132px;display:grid;place-items:center;color:#64748b;font-size:.8rem;font-weight:800;text-align:center;padding:18px}.sp-policy-modal-backdrop{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:24px;background:rgba(15,23,42,.46);backdrop-filter:blur(6px)}.sp-policy-modal{width:min(1180px,calc(100vw - 56px));height:min(90vh,920px);display:grid;grid-template-rows:auto minmax(0,1fr);border:1px solid #dbe7fb;border-radius:24px;background:#f8fbff;box-shadow:0 30px 80px rgba(15,23,42,.32);overflow:hidden}.sp-policy-modal-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;border-bottom:1px solid #dbe7fb;background:#fff}.sp-policy-modal-head strong{display:block;color:#0f2746;font-size:1rem;font-weight:950}.sp-policy-modal-head small{display:block;margin-top:3px;color:#64748b;font-size:.72rem;font-weight:750}.sp-top-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}.sp-policy-modal-body{min-height:0;overflow:auto;padding:16px;display:grid;gap:12px}.sp-story{padding:10px 12px;border:1px solid #bfdbfe;border-radius:14px;background:#eff6ff;color:#1d4ed8;font-size:.72rem;font-weight:900}.sp-flow-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.sp-flow-tabs span{min-height:44px;display:flex;align-items:center;gap:8px;border:1px solid #dbe7fb;border-radius:14px;background:#fff;padding:0 12px;color:#64748b;font-size:.7rem;font-weight:900}.sp-flow-tabs b{width:22px;height:22px;display:grid;place-items:center;border-radius:999px;background:#eff6ff;color:#2563eb;font-size:.68rem}.sp-map-panel{margin-top:12px;border:1px solid #dbe7fb;border-radius:16px;background:#f8fbff;overflow:hidden}.sp-map-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px;border-bottom:1px solid #e5edf8}.sp-map-panel-head strong{display:block;font-size:.82rem;font-weight:950;color:#0f2746}.sp-map-panel-head small{display:block;margin-top:2px;color:#64748b;font-size:.68rem;font-weight:740}.sp-search{min-height:40px;display:flex;align-items:center;gap:8px;border:1px solid #d7e3f5;border-radius:12px;padding:0 11px;background:#fff;color:#64748b;min-width:260px}.sp-search input{min-height:0;border:0;padding:0}.sp-table{min-height:220px;max-height:330px;overflow:auto;background:#fff}.sp-row{min-height:56px;display:grid;grid-template-columns:42px minmax(240px,1.3fr) minmax(145px,.7fr) 86px;gap:12px;align-items:center;padding:0 14px;border-bottom:1px solid #edf2f7;font-size:.74rem;font-weight:740}.sp-row.head{position:sticky;top:0;z-index:2;min-height:42px;background:#f3f7fc;color:#64748b;font-size:.62rem;font-weight:900;text-transform:uppercase}.sp-row.selected{background:#eff6ff}.sp-row strong,.sp-row small{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis}.sp-row strong{color:#0f2746}.sp-row small{color:#64748b;font-size:.64rem;white-space:nowrap}.sp-selected-box{margin-top:10px;padding:10px 12px;border:1px solid #bfdbfe;border-radius:15px;background:#eff6ff;color:#1d4ed8;font-size:.76rem;font-weight:850}.sp-selected-box.warning{border-color:#fde68a;background:#fffbeb;color:#92400e}.sp-class-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.sp-class-btn{min-height:70px;padding:12px;border:1px solid #d7e3f5;border-radius:16px;background:#fff;color:#0f2746;text-align:left;font-weight:900}.sp-class-btn.active.legal{border-color:#bbf7d0;background:#f0fdf4;color:#166534}.sp-class-btn.active.illegal{border-color:#fecaca;background:#fef2f2;color:#991b1b}.sp-cost-grid{display:grid;grid-template-columns:1fr .42fr 1fr 1fr;gap:10px}.sp-usage-note{margin-top:10px;padding:11px 12px;border-radius:14px;background:#f8fafc;border:1px dashed #cbd5e1;color:#475569;font-size:.72rem;font-weight:800}.sp-register-stack{display:grid;gap:12px}@media(max-width:1280px){.management-control-wrapper.settings-management-shell,.sp-form-grid,.sp-cost-grid,.sp-flow-tabs{grid-template-columns:1fr!important}.sp-row{grid-template-columns:42px 1fr}.sp-row.head{display:none}.sp-map-panel-head{display:grid}.sp-search{min-width:0}}
 
-.settings-inline-module{height:100%;min-height:0;overflow:auto}.settings-notification-inline{padding:0}.software-policy-content-shell .content-body,.notification-content-shell .content-body{height:100%;min-height:0;overflow:hidden}.software-policy-content-shell,.notification-content-shell{min-height:0;overflow:hidden}.settings-menu-list{padding-bottom:12px}.settings-menu{min-height:0}.settings-content{min-height:0}
+.settings-inline-module{height:100%;min-height:0;overflow:auto}.settings-notification-inline{padding:0}.software-policy-content-shell .content-body,.notification-content-shell .content-body{height:100%;min-height:0;overflow:hidden}.software-policy-content-shell,.notification-content-shell{min-height:0;overflow:hidden}.settings-menu-list{padding-bottom:12px}.settings-menu{min-height:0;overflow-y:auto}.settings-content{min-height:0}
+
+/* Scroll-lock: settings sidebar stays fixed, content body scrolls independently */
+body.ema-settings-page-active .ema-main{min-height:0!important;overflow:hidden!important}
+
+/* User modal grid layout */
+.user-modal-body.advanced{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;overflow-y:auto;flex:1;min-height:0;align-content:start}
+.user-modal-body.advanced .form-field.wide,.user-modal-body.advanced .modal-section-title,.user-modal-body.advanced small.form-helper-text{grid-column:1/-1}
+.user-modal-body.advanced .form-field{margin:0}
+
+/* ── Clean panel wrapper ── */
+.uam-panel.clean{display:flex;flex-direction:column;background:var(--ema-card-bg);border:1px solid var(--ema-border);border-radius:16px;overflow:hidden}
+
+/* ── Table container ── */
+.user-access-table.advanced.clean-table{display:flex;flex-direction:column;overflow-x:auto;min-width:0}
+
+/* ── Rows ── */
+.user-row.advanced.clean-table-row{display:grid;align-items:center;min-height:52px;padding:0 14px;border-bottom:1px solid var(--ema-border);gap:12px;font-size:.8rem;color:var(--ema-slate-900)}
+.user-row.head.advanced.clean-table-row{min-height:40px;background:var(--ema-slate-100);font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ema-slate-500);position:sticky;top:0;z-index:2}
+.user-row.advanced.clean-table-row:not(.head):last-child{border-bottom:none}
+.user-row.advanced.clean-table-row:not(.head):hover{background:var(--ema-blue-50)}
+
+/* ── Column grid templates ── */
+.role-standard-row{grid-template-columns:40px 1fr 110px 90px 72px}
+.access-standard-row{grid-template-columns:40px 1fr 100px 120px 100px 110px}
+.module-control-row{grid-template-columns:40px minmax(160px,1fr) repeat(var(--module-role-count,1),minmax(80px,100px))}
+.audit-standard-row{grid-template-columns:40px 140px 140px 120px 1fr 90px}
+.user-access-table.clean-table:not(.role-standard-table):not(.module-control-table):not(.audit-standard-table) .user-row.clean-table-row{grid-template-columns:40px 1fr 160px 72px 90px 130px 72px}
+
+/* ── Cells ── */
+.user-cell{min-width:0;overflow:hidden;display:flex;align-items:center}
+.user-cell.row-number{justify-content:center}
+
+/* ── Row index pill ── */
+.row-index-pill{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;border-radius:6px;background:var(--ema-slate-100);border:1px solid var(--ema-border);font-size:.68rem;font-weight:800;color:var(--ema-slate-500);padding:0 4px}
+
+/* ── Role / module info cell ── */
+.role-info-cell{display:flex;flex-direction:column;gap:2px;min-width:0}
+.role-info-cell strong{font-size:.8rem;font-weight:800;color:var(--ema-slate-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.role-info-cell small{font-size:.7rem;color:var(--ema-slate-500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.submodule-info{padding-left:14px}
+
+/* ── User name cell ── */
+.user-name{display:flex;align-items:center;gap:10px;min-width:0}
+.user-name>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.user-name strong,.user-name small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-name strong{font-size:.8rem;font-weight:800;color:var(--ema-slate-900)}
+.user-name small{font-size:.7rem;color:var(--ema-slate-500)}
+.user-mini-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--ema-blue-600),#0891b2);color:#fff;font-size:.68rem;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex:none;font-style:normal}
+
+/* ── Muted cell text ── */
+.muted-cell{font-size:.76rem;color:var(--ema-slate-500);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+
+/* ── Status pills (active/inactive/locked/review variants) ── */
+.user-pill.active{background:#dcfce7;border-color:#bbf7d0;color:#15803d}
+.user-pill.inactive{background:var(--ema-slate-100);border-color:var(--ema-border);color:var(--ema-slate-500)}
+.user-pill.locked{background:#fef2f2;border-color:#fecaca;color:#dc2626}
+.user-pill.review{background:#fffbeb;border-color:#fde68a;color:#b45309}
+
+/* ── Access control status dropdown ── */
+.access-status-select{appearance:none;-webkit-appearance:none;padding:4px 10px;border-radius:999px;font-size:.7rem;font-weight:800;border:1px solid transparent;cursor:pointer;outline:none;min-width:82px;text-align:center}
+.access-status-select.active{background:#dcfce7;border-color:#bbf7d0;color:#15803d}
+.access-status-select.inactive{background:#fff7ed;border-color:#fed7aa;color:#c2410c}
+.access-status-select:hover{opacity:.85}
+
+/* ── Red delete (trash) button ── */
+.mini-btn.icon-only.delete{color:#dc2626;border-color:#fecaca;background:#fef2f2}
+.mini-btn.icon-only.delete:hover:not(:disabled){background:#fee2e2;border-color:#fca5a5;color:#b91c1c}
+
+/* ── Approval chip ── */
+.approval-chip{display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:800;border:1px solid transparent}
+.approval-chip.required{color:#b45309;background:#fffbeb;border-color:#fde68a}
+.approval-chip.standard{color:var(--ema-blue-600);background:var(--ema-blue-50);border-color:var(--ema-blue-100)}
+
+/* ── MFA pill ── */
+.mfa-pill{display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border-radius:999px;font-size:.7rem;font-weight:800;border:1px solid transparent}
+.mfa-pill.on{color:#15803d;background:#dcfce7;border-color:#bbf7d0}
+.mfa-pill.off{color:var(--ema-slate-500);background:var(--ema-slate-100);border-color:var(--ema-border)}
+
+/* ── Role chips ── */
+.role-chip-stack{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0}
+.role-soft-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;background:var(--ema-blue-50);border:1px solid var(--ema-blue-100);color:var(--ema-blue-700);font-size:.68rem;font-weight:800;white-space:nowrap}
+.role-more-chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;background:var(--ema-slate-100);border:1px solid var(--ema-border);color:var(--ema-slate-500);font-size:.68rem;font-weight:800}
+
+/* ── Toggle switch ── */
+.toggle{width:36px;height:20px;border-radius:10px;border:2px solid var(--ema-border);background:var(--ema-slate-200);cursor:pointer;position:relative;transition:background .15s,border-color .15s;padding:0;outline:none;flex:none}
+.toggle::after{content:"";position:absolute;left:2px;top:50%;transform:translateY(-50%);width:12px;height:12px;border-radius:50%;background:var(--ema-slate-400);transition:left .15s,background .15s}
+.toggle.on{background:var(--ema-blue-600);border-color:var(--ema-blue-600)}
+.toggle.on::after{left:calc(100% - 14px);background:#fff}
+.toggle:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── Module control ── */
+.module-control-group-row.compact{display:flex;align-items:center;padding:6px 14px;background:var(--ema-slate-100);border-bottom:1px solid var(--ema-border);font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--ema-slate-500)}
+.module-toggle-cell{justify-content:center}
+.submodule-row .role-info-cell{padding-left:16px}
+.module-control-panel .settings-helper-card{border-radius:0;border:none;border-bottom:1px solid var(--ema-border)}
+
+/* ── Action buttons ── */
+.row-actions,.user-row-action-wrap.clean{display:flex;align-items:center;gap:6px}
+.mini-btn.icon-only.edit{color:var(--ema-blue-600);border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+.mini-btn.icon-only.edit:hover:not(:disabled){background:var(--ema-blue-100);border-color:var(--ema-blue-200)}
+.mini-btn svg,.icon-delete-btn svg{width:15px;height:15px;flex-shrink:0}
+
+/* ── Filter dropdown trigger ── */
+.uam-filter-dropdown{position:relative}
+.uam-filter-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;border:1px solid var(--ema-border);background:var(--ema-card-bg);border-radius:8px;padding:8px 10px;font-size:.8rem;color:var(--ema-slate-700);cursor:pointer;min-width:110px;white-space:nowrap}
+.uam-filter-trigger:hover{border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+.uam-filter-trigger[aria-expanded="true"]{border-color:var(--ema-blue-600)}
+.uam-filter-check{margin-left:auto;color:var(--ema-blue-600);font-size:.8rem;flex-shrink:0}
+.uam-filter-menu-portal{overflow-y:auto}
+
+/* ── Commandbar filter grid ── */
+.uam-filter-grid.clean.compact{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;flex:0 0 auto}
+
+/* ── Right-side action group in commandbar ── */
+.uam-actions-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0}
+
+/* ── Content toolbar ── */
+.content-toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--ema-border);flex-wrap:wrap}
+.content-toolbar .section-search{flex:1;min-width:200px;margin-bottom:0}
+.toolbar-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.settings-toolbar-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:nowrap}
+.settings-primary-actions{display:flex;align-items:center;gap:8px}
+
+/* ── Empty state ── */
+.settings-empty-state{display:flex;align-items:center;justify-content:center;min-height:120px;padding:24px;font-size:.82rem;color:var(--ema-slate-500);font-weight:700;text-align:center}
+.settings-empty-state.compact{min-height:64px;font-size:.78rem}
+
+/* ── Compact helper card ── */
+.settings-helper-card.compact{padding:8px 14px}
+.settings-helper-card.compact strong{font-size:.76rem}
+.settings-helper-card.compact span{font-size:.72rem}
+
+/* ── Audit log panel ── */
+.audit-log-panel{display:flex;flex-direction:column;background:var(--ema-card-bg);border:1px solid var(--ema-border);border-radius:16px;overflow:hidden}
+.audit-commandbar{display:flex;align-items:flex-end;gap:10px;padding:12px 14px;border-bottom:1px solid var(--ema-border);flex-wrap:wrap}
+.audit-filter-grid{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:10px;flex:1}
+.audit-filter-grid .form-field{margin:0;gap:4px}
+.audit-command-actions{display:flex;align-items:flex-end;gap:8px;flex-shrink:0}
+.audit-log-panel .audit-kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid var(--ema-border)}
+.audit-log-panel .audit-kpi-strip>div{display:flex;flex-direction:column;gap:2px;padding:10px 16px;border-right:1px solid var(--ema-border);border-radius:0;background:transparent;border-top:none;border-left:none;border-bottom:none}
+.audit-log-panel .audit-kpi-strip>div:last-child{border-right:none}
+.audit-log-panel .audit-kpi-strip>div>span{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ema-slate-500)}
+.audit-log-panel .audit-kpi-strip>div>strong{font-size:1.05rem;font-weight:900;color:var(--ema-slate-900)}
+.audit-time-cell{flex-direction:column;align-items:flex-start;gap:2px}
+.audit-time-cell strong{font-size:.76rem;font-weight:700;color:var(--ema-slate-900)}
+.audit-action-cell{flex-direction:column;align-items:flex-start;gap:2px;overflow:hidden}
+.audit-action-cell strong,.audit-action-cell small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.audit-action-cell strong{font-size:.78rem;font-weight:700;color:var(--ema-slate-900)}
+.audit-action-cell small{font-size:.68rem;color:var(--ema-slate-500)}
+.audit-module-chip{font-size:.72rem}
+.audit-user-chip{font-size:.74rem}
+.audit-pagination{justify-content:space-between}
+.uam-pagination-info{font-size:.76rem;color:var(--ema-slate-500);font-weight:600}
+
+/* ── Dark mode ── */
+html.ema-dark .uam-panel.clean,html.ema-dark .audit-log-panel{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .user-row.head.advanced.clean-table-row{background:var(--ema-slate-100)}
+html.ema-dark .user-row.advanced.clean-table-row:not(.head):hover{background:rgba(59,130,246,.07)}
+html.ema-dark .module-control-group-row.compact{background:var(--ema-slate-100);border-color:var(--ema-border)}
+html.ema-dark .user-pill.active{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#4ade80}
+html.ema-dark .user-pill.inactive{background:var(--ema-slate-100);border-color:var(--ema-border);color:var(--ema-slate-500)}
+html.ema-dark .user-pill.locked{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#f87171}
+html.ema-dark .user-pill.review{background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3);color:#fbbf24}
+html.ema-dark .approval-chip.required{color:#fbbf24;background:rgba(245,158,11,.15);border-color:rgba(245,158,11,.3)}
+html.ema-dark .approval-chip.standard{color:#93c5fd;background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.2)}
+html.ema-dark .mfa-pill.on{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#4ade80}
+html.ema-dark .mfa-pill.off{background:var(--ema-slate-100);border-color:var(--ema-border);color:var(--ema-slate-500)}
+html.ema-dark .role-soft-chip{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.2);color:#93c5fd}
+html.ema-dark .role-more-chip,html.ema-dark .audit-module-chip{background:var(--ema-slate-100);border-color:var(--ema-border);color:var(--ema-slate-500)}
+html.ema-dark .toggle{background:var(--ema-slate-200);border-color:var(--ema-border)}
+html.ema-dark .toggle::after{background:var(--ema-slate-400)}
+html.ema-dark .toggle.on{background:var(--ema-blue-600);border-color:var(--ema-blue-600)}
+html.ema-dark .toggle.on::after{background:#fff}
+html.ema-dark .uam-filter-trigger{background:var(--ema-card-bg);border-color:var(--ema-border);color:var(--ema-slate-900)}
+html.ema-dark .uam-filter-trigger:hover{background:var(--ema-slate-100);border-color:var(--ema-blue-100)}
+html.ema-dark .mini-btn.icon-only.edit{color:#60a5fa;border-color:rgba(59,130,246,.25);background:rgba(59,130,246,.1)}
+html.ema-dark .audit-log-panel .audit-kpi-strip>div{border-color:var(--ema-border)}
+html.ema-dark .row-index-pill{background:var(--ema-slate-200);border-color:var(--ema-border);color:var(--ema-slate-500)}
+
+/* ── Pricing editor ── */
+.pricing-editor{display:flex;flex-direction:column;gap:14px;padding:2px}
+.pricing-top-insights{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:12px}
+.pricing-info-card{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid var(--ema-border);border-radius:12px;background:var(--ema-card-bg)}
+.pricing-info-card.blue{border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+.pricing-info-card.green{border-color:#bbf7d0;background:#f0fdf4}
+.pricing-info-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--ema-blue-600);color:#fff;font-size:.62rem;font-weight:900;flex:none;letter-spacing:-.02em}
+.pricing-info-card.green .pricing-info-icon{background:#16a34a}
+.pricing-info-card strong{display:block;font-size:.8rem;font-weight:800;color:var(--ema-slate-900);margin-bottom:4px}
+.pricing-info-card p{margin:0;font-size:.72rem;color:var(--ema-slate-500);line-height:1.45}
+.pricing-disclaimer-card{padding:12px 14px;border:1px dashed var(--ema-border);border-radius:12px;background:var(--ema-slate-100)}
+.pricing-disclaimer-card strong{display:block;font-size:.76rem;font-weight:800;color:var(--ema-slate-700);margin-bottom:4px}
+.pricing-disclaimer-card p{margin:0;font-size:.7rem;color:var(--ema-slate-500);line-height:1.45}
+.pricing-table-card.pricing-modern-table{border:1px solid var(--ema-border);border-radius:12px;overflow:hidden}
+.pricing-row{display:grid;grid-template-columns:1fr 1fr 1fr 140px 100px 100px;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--ema-border)}
+.pricing-head-row{background:var(--ema-slate-100);font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ema-slate-500);min-height:38px}
+.pricing-data-row{min-height:52px}
+.pricing-data-row:last-child{border-bottom:none}
+.pricing-data-row:hover{background:var(--ema-blue-50)}
+.pricing-field-label{display:none}
+.price-input-shell{display:flex;align-items:center;border:1px solid var(--ema-border);border-radius:8px;background:var(--ema-card-bg);overflow:hidden}
+.price-input-shell>span{padding:0 8px;font-size:.76rem;font-weight:700;color:var(--ema-slate-500);border-right:1px solid var(--ema-border);background:var(--ema-slate-100);height:100%;display:flex;align-items:center;min-height:36px}
+.price-input-shell .setting-input,.pricing-price-input{border:0;border-radius:0;min-height:36px;padding:0 8px;flex:1}
+.pricing-row-actions{display:flex;align-items:center;gap:6px}
+.pricing-save-btn{display:inline-flex;align-items:center;justify-content:center;padding:0 12px;height:34px;border-radius:8px;border:1px solid var(--ema-blue-100);background:var(--ema-blue-50);color:var(--ema-blue-600);font-size:.76rem;font-weight:800;cursor:pointer;white-space:nowrap}
+.pricing-save-btn:hover:not(:disabled){background:var(--ema-blue-100)}
+.pricing-save-btn:disabled{opacity:.5;cursor:not-allowed}
+.icon-delete-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;cursor:pointer;flex:none}
+.icon-delete-btn:hover:not(:disabled){background:#fee2e2}
+.icon-delete-btn:disabled{opacity:.5;cursor:not-allowed}
+.pricing-empty-row{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:32px;color:var(--ema-slate-500);font-size:.82rem;text-align:center}
+
+/* ── Management policy editor ── */
+.management-policy-editor{display:flex;flex-direction:column;gap:12px;padding:2px}
+.management-policy-command{flex-direction:row!important;align-items:center;justify-content:space-between;gap:12px}
+.management-policy-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.management-policy-meta span{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;background:var(--ema-slate-100);border:1px solid var(--ema-border);font-size:.7rem;font-weight:700;color:var(--ema-slate-600)}
+.management-policy-actions{flex-shrink:0}
+.management-policy-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.management-policy-field-list{display:flex;flex-direction:column;gap:0}
+.management-policy-field{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--ema-border)}
+.management-policy-field:last-child{border-bottom:none}
+.management-policy-field>span{min-width:0}
+.management-policy-field strong{display:block;font-size:.78rem;font-weight:800;color:var(--ema-slate-900)}
+.management-policy-field small{display:block;font-size:.68rem;color:var(--ema-slate-500)}
+.management-policy-input-wrap{display:flex;align-items:center;gap:4px;width:80px}
+.management-policy-input-wrap .setting-input{width:60px;min-height:32px;padding:0 6px;text-align:right;font-size:.78rem}
+.management-policy-input-wrap em{font-size:.7rem;color:var(--ema-slate-500);font-style:normal;white-space:nowrap}
+.management-policy-field>b{font-size:.76rem;font-weight:700;color:var(--ema-blue-600);text-align:right;min-width:60px}
+
+/* ── PC Aging editor ── */
+.pc-aging-revamp{display:flex;flex-direction:column;gap:12px;padding:2px}
+.pc-aging-command-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border:1px solid var(--ema-border);border-radius:14px;background:var(--ema-card-bg)}
+.pc-aging-command-copy h3{margin:4px 0;font-size:.95rem;font-weight:800;color:var(--ema-slate-900)}
+.pc-aging-command-copy p{margin:0;font-size:.76rem;color:var(--ema-slate-500)}
+.pc-aging-command-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.pc-aging-kicker{display:block;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--ema-blue-600);margin-bottom:4px}
+.pc-aging-overview-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.pc-aging-overview-card{padding:12px 14px;border:1px solid var(--ema-border);border-radius:12px;background:var(--ema-card-bg)}
+.pc-aging-overview-card h4{margin:4px 0;font-size:1.15rem;font-weight:900;color:var(--ema-slate-900)}
+.pc-aging-overview-card p{margin:0;font-size:.72rem;color:var(--ema-slate-500);line-height:1.4}
+.pc-aging-status-card{grid-column:span 1}
+.pc-aging-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.pc-aging-status-strip{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--ema-border);font-size:.74rem;color:var(--ema-slate-600);font-weight:700}
+.pc-aging-main-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pc-aging-panel{padding:14px 16px;border:1px solid var(--ema-border);border-radius:14px;background:var(--ema-card-bg);display:flex;flex-direction:column;gap:10px}
+.pc-aging-panel-head h4{margin:4px 0;font-size:.88rem;font-weight:800;color:var(--ema-slate-900)}
+.pc-aging-panel-head p{margin:0;font-size:.72rem;color:var(--ema-slate-500)}
+.pc-aging-threshold-stack{display:flex;flex-direction:column;gap:10px}
+.threshold-line.aging-threshold-line{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--ema-border)}
+.threshold-line.aging-threshold-line:last-child{border-bottom:none}
+.threshold-label-block span{display:block;font-size:.78rem;font-weight:800;color:var(--ema-slate-900)}
+.threshold-label-block small{display:block;font-size:.68rem;color:var(--ema-slate-500)}
+.threshold-line input[type="range"]{width:100%;max-width:120px;accent-color:var(--ema-blue-600)}
+.threshold-number-wrap{display:flex;align-items:center;gap:6px}
+.threshold-number-wrap input{width:48px;min-height:32px;border:1px solid var(--ema-border);border-radius:7px;background:var(--ema-card-bg);color:var(--ema-slate-900);text-align:center;font-size:.8rem;font-weight:800;padding:0 4px}
+.threshold-number-wrap b{font-size:.7rem;color:var(--ema-slate-600);white-space:nowrap;font-weight:700;min-width:56px}
+.aging-action-list.pc-aging-action-list{display:flex;flex-direction:column;gap:6px;flex:1}
+.aging-action-row{display:grid;grid-template-columns:80px 1fr auto;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--ema-slate-100);border:1px solid var(--ema-border)}
+.aging-action-row span{font-size:.76rem;font-weight:800;color:var(--ema-slate-900)}
+.aging-action-row small{font-size:.7rem;color:var(--ema-slate-500)}
+.aging-action-row b{font-size:.7rem;font-weight:800;padding:2px 8px;border-radius:6px}
+.aging-action-blue .aging-action-row,.aging-action-row.aging-action-blue{border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+.aging-action-blue .aging-action-row b,.aging-action-row.aging-action-blue b{color:var(--ema-blue-700);background:var(--ema-blue-100)}
+.aging-action-amber .aging-action-row,.aging-action-row.aging-action-amber{border-color:#fde68a;background:#fffbeb}
+.aging-action-amber .aging-action-row b,.aging-action-row.aging-action-amber b{color:#b45309;background:#fde68a}
+.aging-action-red .aging-action-row,.aging-action-row.aging-action-red{border-color:#fecaca;background:#fef2f2}
+.aging-action-red .aging-action-row b,.aging-action-row.aging-action-red b{color:#dc2626;background:#fecaca}
+.pc-aging-secondary-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pc-aging-form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pc-aging-form-grid .form-field{margin:0;gap:4px}
+
+/* ── Risk content ── */
+.risk-simple-layout{display:grid;grid-template-columns:1fr 280px;gap:14px}
+.risk-simple-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-content:start}
+.risk-simple-card{padding:14px;border:1px solid var(--ema-border);border-radius:14px;background:var(--ema-card-bg);display:flex;flex-direction:column;gap:10px}
+.risk-simple-head{display:flex;align-items:flex-start;gap:10px}
+.risk-simple-head>div{flex:1;min-width:0}
+.risk-simple-head h4{margin:0 0 4px;font-size:.84rem;font-weight:800;color:var(--ema-slate-900)}
+.risk-simple-head p{margin:0;font-size:.72rem;color:var(--ema-slate-500)}
+.risk-color-dot{width:10px;height:10px;border-radius:50%;background:var(--risk-color,var(--ema-slate-400));flex:none;margin-top:5px}
+.risk-level-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:.68rem;font-weight:800;background:var(--risk-color,var(--ema-slate-400));color:#fff;flex:none}
+.risk-mini-meter{height:6px;border-radius:3px;background:var(--ema-slate-200);overflow:hidden}
+.risk-mini-meter i{display:block;height:100%;width:var(--w,50%);background:var(--risk-color,var(--ema-blue-600));border-radius:3px}
+.risk-simple-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.risk-simple-controls .form-field{margin:0;gap:3px}
+.risk-rule-panel{padding:14px 16px;border:1px solid var(--ema-border);border-radius:14px;background:var(--ema-card-bg);display:flex;flex-direction:column;gap:10px;height:fit-content}
+.risk-rule-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.risk-rule-head h4{margin:0 0 4px;font-size:.84rem;font-weight:800;color:var(--ema-slate-900)}
+.risk-rule-head p{margin:0;font-size:.72rem;color:var(--ema-slate-500)}
+.risk-rule-list{display:flex;flex-direction:column;gap:0}
+.summary-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--ema-border);font-size:.78rem}
+.summary-row:last-child{border-bottom:none}
+.summary-row span{color:var(--ema-slate-700);font-weight:600}
+.summary-row b{color:var(--ema-slate-900);font-weight:800}
+
+/* ── Dark mode additions ── */
+html.ema-dark .pricing-info-card.blue{border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+html.ema-dark .pricing-info-card.green{border-color:rgba(34,197,94,.25);background:rgba(34,197,94,.08)}
+html.ema-dark .pricing-disclaimer-card{background:var(--ema-slate-100);border-color:var(--ema-border)}
+html.ema-dark .pricing-table-card.pricing-modern-table{border-color:var(--ema-border)}
+html.ema-dark .pricing-head-row{background:var(--ema-slate-100)}
+html.ema-dark .pricing-data-row:hover{background:rgba(59,130,246,.07)}
+html.ema-dark .pc-aging-command-card,html.ema-dark .pc-aging-overview-card,html.ema-dark .pc-aging-panel{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .aging-action-row{background:var(--ema-slate-100);border-color:var(--ema-border)}
+html.ema-dark .aging-action-blue,html.ema-dark .aging-action-row.aging-action-blue{border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+html.ema-dark .risk-simple-card,html.ema-dark .risk-rule-panel{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .risk-mini-meter{background:var(--ema-slate-200)}
+html.ema-dark .summary-row{border-color:var(--ema-border)}
+
+/* ── Resource planning ── */
+.resource-planning-module{display:flex;flex-direction:column;gap:12px;padding:2px}
+.resource-command-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border:1px solid var(--ema-border);border-radius:14px;background:var(--ema-card-bg)}
+.resource-command-card h3{margin:4px 0;font-size:.95rem;font-weight:800;color:var(--ema-slate-900)}
+.resource-command-card p{margin:0;font-size:.76rem;color:var(--ema-slate-500)}
+.resource-command-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.resource-workbench{display:grid;grid-template-columns:340px 1fr;gap:12px;align-items:start}
+.resource-form-card,.resource-table-card{padding:14px 16px;border:1px solid var(--ema-border);border-radius:14px;background:var(--ema-card-bg);display:flex;flex-direction:column;gap:10px}
+.resource-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.resource-card-head h4{margin:4px 0;font-size:.88rem;font-weight:800;color:var(--ema-slate-900)}
+.resource-card-head p{margin:0;font-size:.72rem;color:var(--ema-slate-500)}
+.resource-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.resource-form-grid .form-field{margin:0;gap:4px}
+.resource-wide{grid-column:1/-1}
+.resource-textarea{min-height:60px;resize:vertical}
+.resource-form-actions{margin-top:4px;padding-top:10px;border-top:1px solid var(--ema-border)}
+.resource-selected-engineer{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:8px;background:var(--ema-blue-50);border:1px solid var(--ema-blue-100)}
+.resource-selected-engineer strong{font-size:.8rem;font-weight:800;color:var(--ema-blue-700)}
+.resource-selected-engineer span{font-size:.72rem;color:var(--ema-slate-500)}
+.resource-table-head{margin-bottom:2px}
+.resource-table-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.resource-table-wrap{overflow-x:auto;min-width:0}
+.resource-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.resource-table thead tr{border-bottom:2px solid var(--ema-border)}
+.resource-table th{text-align:left;padding:8px 10px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ema-slate-500);background:var(--ema-slate-100)}
+.resource-table td{padding:10px;border-bottom:1px solid var(--ema-border);color:var(--ema-slate-900);vertical-align:middle}
+.resource-table td strong{display:block;font-weight:800}
+.resource-table td small{display:block;font-size:.7rem;color:var(--ema-slate-500)}
+.resource-table tbody tr:last-child td{border-bottom:none}
+.resource-table tbody tr:hover td{background:var(--ema-blue-50)}
+.resource-sort-button{display:inline-flex;align-items:center;gap:4px;background:none;border:none;cursor:pointer;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ema-slate-500);padding:0}
+.resource-sort-button:hover{color:var(--ema-blue-600)}
+.resource-sort-button span{opacity:.5}
+.resource-status-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:800;background:var(--ema-slate-100);border:1px solid var(--ema-border);color:var(--ema-slate-600)}
+.resource-row-actions{display:flex;align-items:center;gap:6px}
+
+/* ── Status pill (working hours table) ── */
+.status-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:800;border:1px solid transparent}
+.status-pill.active{background:#dcfce7;border-color:#bbf7d0;color:#15803d}
+.status-pill.locked{background:#fef2f2;border-color:#fecaca;color:#dc2626}
+
+/* ── Danger button ── */
+.danger-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:10px;border:1px solid #fecaca;background:#fef2f2;color:#dc2626;font-size:.78rem;font-weight:800;cursor:pointer;white-space:nowrap}
+.danger-btn:hover:not(:disabled){background:#fee2e2;border-color:#fca5a5}
+.danger-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── Incident category management ── */
+.content-panel{display:flex;flex-direction:column;gap:0;background:var(--ema-card-bg);border:1px solid var(--ema-border);border-radius:16px;overflow:hidden}
+.incident-category-head,.resource-card-head.incident-category-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--ema-border)}
+.incident-category-head h4{margin:4px 0;font-size:.9rem;font-weight:800;color:var(--ema-slate-900)}
+.incident-category-head p{margin:0;font-size:.74rem;color:var(--ema-slate-500)}
+.incident-category-stats{display:flex;gap:12px;flex-shrink:0}
+.incident-category-stats span{font-size:.76rem;color:var(--ema-slate-600)}
+.incident-category-stats strong{font-weight:800;color:var(--ema-slate-900)}
+.incident-category-layout{display:grid;grid-template-columns:240px 1fr;min-height:0;overflow:hidden}
+.incident-category-sidebar{display:flex;flex-direction:column;gap:0;border-right:1px solid var(--ema-border);overflow:hidden}
+.incident-category-add-row{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--ema-border)}
+.incident-category-add-row .setting-input{flex:1;min-height:36px;padding:0 10px}
+.incident-category-add-row .primary-btn{flex-shrink:0}
+.incident-category-list{flex:1;overflow-y:auto;padding:6px}
+.incident-category-list-item{width:100%;display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:8px;border:1px solid transparent;background:transparent;text-align:left;cursor:pointer;transition:background .12s,border-color .12s}
+.incident-category-list-item span{font-size:.8rem;font-weight:700;color:var(--ema-slate-900)}
+.incident-category-list-item small{font-size:.68rem;color:var(--ema-slate-500)}
+.incident-category-list-item:hover{background:var(--ema-slate-100);border-color:var(--ema-border)}
+.incident-category-list-item.active{background:var(--ema-blue-50);border-color:var(--ema-blue-100)}
+.incident-category-list-item.active span{color:var(--ema-blue-700)}
+.incident-category-editor{display:flex;flex-direction:column;gap:10px;padding:12px;overflow-y:auto}
+.incident-editor-card{padding:12px 14px;border:1px solid var(--ema-border);border-radius:12px;display:flex;flex-direction:column;gap:8px}
+.incident-editor-title{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.incident-editor-title h5{margin:4px 0;font-size:.82rem;font-weight:800;color:var(--ema-slate-900)}
+.incident-editor-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap}
+.incident-add-inline{display:flex;gap:8px}
+.incident-add-inline .setting-input{flex:1}
+.incident-subcategory-list,.incident-detail-list{display:flex;flex-direction:column;gap:6px}
+.incident-subcategory-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--ema-border);border-radius:8px}
+.incident-subcategory-row.active{border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+.incident-subcategory-select{flex:0 0 140px;display:flex;flex-direction:column;gap:1px;text-align:left;background:transparent;border:none;cursor:pointer;padding:0}
+.incident-subcategory-select strong{font-size:.76rem;font-weight:800;color:var(--ema-slate-900)}
+.incident-subcategory-select small{font-size:.66rem;color:var(--ema-slate-500)}
+.incident-subcategory-row .setting-input{flex:1;min-height:32px}
+.incident-row-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.incident-detail-row{display:flex;align-items:center;gap:8px}
+.incident-detail-row .setting-input{flex:1;min-height:32px}
+.incident-empty-state{padding:14px;text-align:center;font-size:.78rem;color:var(--ema-slate-500)}
+.incident-empty-state.large{padding:32px}
+
+/* ── Dark mode: resource and incident ── */
+html.ema-dark .resource-command-card,html.ema-dark .resource-form-card,html.ema-dark .resource-table-card{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .resource-selected-engineer{background:var(--ema-blue-50);border-color:var(--ema-blue-100)}
+html.ema-dark .resource-table th{background:var(--ema-slate-100);color:var(--ema-slate-500)}
+html.ema-dark .resource-table td{border-color:var(--ema-border);color:var(--ema-slate-900)}
+html.ema-dark .resource-table tbody tr:hover td{background:rgba(59,130,246,.07)}
+html.ema-dark .content-panel{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .incident-editor-card{background:transparent;border-color:var(--ema-border)}
+html.ema-dark .incident-subcategory-row{border-color:var(--ema-border)}
+html.ema-dark .incident-subcategory-row.active{border-color:var(--ema-blue-100);background:rgba(59,130,246,.08)}
+html.ema-dark .incident-category-list-item.active{background:rgba(59,130,246,.1);border-color:var(--ema-blue-100)}
+html.ema-dark .danger-btn{border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#f87171}
+html.ema-dark .danger-btn:hover:not(:disabled){background:rgba(239,68,68,.18)}
+html.ema-dark .status-pill.active{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.3);color:#4ade80}
+html.ema-dark .status-pill.locked{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#f87171}
+
+/* ── SVG icon size fix (SearchSvg / ChevronDownSvg have no width/height) ── */
+.section-search svg,.user-search-inline svg,.content-toolbar svg{width:16px;height:16px;flex-shrink:0}
+.uam-filter-trigger svg,.setting-select-trigger svg{width:14px;height:14px;flex-shrink:0}
+
+/* ── Role modal (AccessPolicyModal, RoleModal) ── */
+.role-modal-backdrop{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .15s}
+.role-modal-backdrop.open{opacity:1;pointer-events:auto}
+.role-modal{width:min(560px,calc(100vw - 48px));max-height:90vh;display:flex;flex-direction:column;background:var(--ema-card-bg);border:1px solid var(--ema-border);border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,.3);overflow:hidden}
+.role-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--ema-border);flex-shrink:0}
+.role-modal-head h3{margin:4px 0 0;font-size:.95rem;font-weight:800;color:var(--ema-slate-900)}
+.role-modal-head p{margin:4px 0 0;font-size:.76rem;color:var(--ema-slate-500)}
+.role-modal-body{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.role-modal-body.simple-role-modal-body{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-content:start}
+.role-modal-body.simple-role-modal-body .form-field.wide{grid-column:1/-1}
+.role-modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--ema-border);flex-shrink:0}
+.role-delete-warning{margin:0;padding:10px 16px;font-size:.76rem;color:#b45309;background:#fffbeb;border-top:1px solid #fde68a;display:none}
+.role-delete-warning.show{display:block}
+html.ema-dark .role-modal{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .role-modal-head{border-color:var(--ema-border)}
+html.ema-dark .role-modal-foot{border-color:var(--ema-border)}
+html.ema-dark .role-delete-warning{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#fbbf24}
+
+/* ── Delete confirm modal (AccessPolicyDeleteConfirmModal, UserDeleteConfirmModal) ── */
+.user-delete-backdrop{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.5);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .15s}
+.user-delete-backdrop.open{opacity:1;pointer-events:auto}
+.user-delete-modal{width:min(400px,calc(100vw - 48px));background:var(--ema-card-bg);border:1px solid var(--ema-border);border-radius:16px;box-shadow:0 20px 60px rgba(15,23,42,.3);padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.user-delete-icon{width:48px;height:48px;border-radius:50%;background:#fef2f2;border:1px solid #fecaca;color:#dc2626;font-size:1.4rem;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.user-delete-copy h3{margin:4px 0;font-size:.95rem;font-weight:800;color:var(--ema-slate-900)}
+.user-delete-copy p{margin:0;font-size:.78rem;color:var(--ema-slate-500);line-height:1.5}
+.user-delete-actions{display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
+html.ema-dark .user-delete-modal{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .user-delete-icon{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.3);color:#f87171}
+
+/* ── Notification channels component ── */
+.settings-notification-shell{display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden}
+.notification-topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;border-bottom:1px solid var(--ema-border);flex-shrink:0;flex-wrap:wrap}
+.notification-topbar h2{margin:0 0 2px;font-size:1rem;font-weight:800;color:var(--ema-slate-900)}
+.notification-topbar p{margin:0;font-size:.76rem;color:var(--ema-slate-500)}
+.notification-tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.notification-tab{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid var(--ema-border);background:transparent;color:var(--ema-slate-600);font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.notification-tab:hover{background:var(--ema-slate-100);border-color:var(--ema-blue-100);color:var(--ema-blue-600)}
+.notification-tab.active{background:var(--ema-blue-50);border-color:var(--ema-blue-100);color:var(--ema-blue-700)}
+.notification-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:8px;border:1px solid var(--ema-border);background:var(--ema-card-bg);color:var(--ema-slate-700);font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap}
+.notification-btn:hover:not(:disabled){background:var(--ema-slate-100);border-color:var(--ema-blue-100);color:var(--ema-blue-600)}
+.notification-btn:disabled{opacity:.55;cursor:not-allowed}
+.notification-btn.primary{background:linear-gradient(135deg,var(--ema-blue-600),var(--ema-blue-700));border-color:transparent;color:#fff}
+.notification-btn.primary:hover:not(:disabled){background:var(--ema-blue-700)}
+.notification-btn.success{background:linear-gradient(135deg,#16a34a,#15803d);border-color:transparent;color:#fff}
+.notification-btn.success:hover:not(:disabled){background:#15803d}
+.notification-btn.danger{background:#fef2f2;border-color:#fecaca;color:#dc2626}
+.notification-btn.danger:hover:not(:disabled){background:#fee2e2}
+.notification-body{flex:1;min-height:0;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px}
+.notification-alert{padding:10px 14px;border-radius:10px;font-size:.8rem;font-weight:600;border:1px solid}
+.notification-alert.success{background:#f0fdf4;border-color:#bbf7d0;color:#166534}
+.notification-alert.error{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.notification-alert.info{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+.notification-grid{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start}
+.notification-whatsapp-grid,.notification-receiver-grid{grid-template-columns:1fr 320px}
+.notification-panel{background:var(--ema-card-bg);border:1px solid var(--ema-border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.notification-panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 16px;border-bottom:1px solid var(--ema-border)}
+.notification-panel-head.compact{padding:10px 14px}
+.notification-panel-head h3{margin:0 0 2px;font-size:.9rem;font-weight:800;color:var(--ema-slate-900)}
+.notification-panel-head p{margin:0;font-size:.74rem;color:var(--ema-slate-500)}
+.notification-provider-tabs{display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex-shrink:0}
+.notification-provider-tab{padding:5px 10px;border-radius:6px;border:1px solid var(--ema-border);background:transparent;color:var(--ema-slate-600);font-size:.74rem;font-weight:700;cursor:pointer}
+.notification-provider-tab:hover{background:var(--ema-blue-50);border-color:var(--ema-blue-100);color:var(--ema-blue-600)}
+.notification-provider-tab.active{background:var(--ema-blue-600);border-color:var(--ema-blue-600);color:#fff}
+.notification-form{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.notification-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.notification-recipient-form-grid{grid-template-columns:1fr 1fr}
+.notification-field{display:flex;flex-direction:column;gap:4px;font-size:.78rem;font-weight:700;color:var(--ema-slate-700)}
+.notification-field input{border:1px solid var(--ema-border);border-radius:8px;padding:8px 10px;font-size:.8rem;color:var(--ema-slate-900);background:var(--ema-card-bg);font-family:inherit;width:100%;outline:none}
+.notification-field input:focus{border-color:var(--ema-blue-500)}
+.notification-field-hint{display:block;font-size:.69rem;font-weight:600;color:var(--ema-slate-400);margin-top:1px}
+.notification-toggle{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:8px;border:1px solid var(--ema-border);background:var(--ema-slate-100);color:var(--ema-slate-600);font-size:.78rem;font-weight:700;cursor:pointer}
+.notification-toggle input{accent-color:var(--ema-blue-600)}
+.notification-toggle.on{background:var(--ema-blue-50);border-color:var(--ema-blue-100);color:var(--ema-blue-700)}
+.notification-toggle.whatsapp.on{background:#f0fdf4;border-color:#bbf7d0;color:#16a34a}
+.notification-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.notification-actions.split{justify-content:space-between}
+.notification-status-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--ema-border);background:var(--ema-slate-100);color:var(--ema-slate-500);font-size:.72rem;font-weight:800}
+.notification-status-pill.enabled{background:#dcfce7;border-color:#bbf7d0;color:#15803d}
+.notification-card{background:var(--ema-card-bg);border:1px solid var(--ema-border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.notification-usage-head{display:flex;align-items:flex-start;gap:10px;width:100%}
+.notification-usage-head>div{flex:1;min-width:0}
+.notification-usage-head h4{margin:0 0 2px;font-size:.82rem;font-weight:800;color:var(--ema-slate-900)}
+.notification-usage-head p{margin:0;font-size:.71rem;color:var(--ema-slate-500)}
+.notification-usage-meter{width:100%;height:8px;border-radius:4px;background:var(--ema-slate-200);overflow:hidden}
+.notification-usage-meter>i{display:block;height:100%;background:linear-gradient(90deg,var(--ema-blue-600),#0891b2);border-radius:4px}
+.notification-usage{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%}
+.notification-usage>div{display:flex;flex-direction:column;gap:2px}
+.notification-usage>div>span{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ema-slate-500)}
+.notification-usage>div>strong{font-size:.88rem;font-weight:800;color:var(--ema-slate-900)}
+.notification-recipient-list-panel{min-height:200px}
+.notification-recipient-list{flex:1;overflow-y:auto;padding:8px}
+.notification-empty{padding:24px;text-align:center;font-size:.78rem;color:var(--ema-slate-500)}
+.notification-recipient-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--ema-border);border-radius:8px;margin-bottom:6px}
+.notification-recipient-row:last-child{margin-bottom:0}
+.notification-recipient-row>div:first-child{min-width:0;flex:1}
+.notification-recipient-row strong{display:block;font-size:.8rem;font-weight:800;color:var(--ema-slate-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notification-recipient-row span{display:block;font-size:.72rem;color:var(--ema-slate-500)}
+.notification-recipient-row small{display:block;font-size:.68rem;color:var(--ema-slate-400)}
+.notification-recipient-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.notification-recipient-options{display:flex;flex-wrap:wrap;gap:8px}
+.notification-rule-list{display:flex;flex-direction:column;gap:8px}
+.notification-rule-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--ema-border);border-radius:10px}
+.notification-rule-card:hover{border-color:var(--ema-blue-100);background:var(--ema-blue-50)}
+.notification-rule-title{font-size:.82rem;font-weight:800;color:var(--ema-slate-900);margin-bottom:2px}
+.notification-rule-desc{font-size:.72rem;color:var(--ema-slate-500)}
+.notification-template-sid{font-size:.68rem;color:var(--ema-slate-400);margin-top:2px}
+.notification-toggle-group{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.notification-status-card{font-size:.76rem;color:var(--ema-slate-600);min-height:60px}
+html.ema-dark .notification-panel,.ema-dark .notification-card{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .notification-panel-head{border-color:var(--ema-border)}
+html.ema-dark .notification-rule-card:hover{background:rgba(59,130,246,.07)}
+html.ema-dark .notification-toggle{background:var(--ema-slate-100);border-color:var(--ema-border)}
+html.ema-dark .notification-btn{background:var(--ema-card-bg);border-color:var(--ema-border);color:var(--ema-slate-900)}
+html.ema-dark .notification-field input{background:var(--ema-card-bg);border-color:var(--ema-border);color:var(--ema-slate-900)}
+html.ema-dark .notification-usage-meter{background:var(--ema-slate-200)}
+html.ema-dark .notification-recipient-row{border-color:var(--ema-border)}
+
+/* ── Toast (shared by notification and other portal toasts) ── */
+.settings-toast-layer{position:fixed;bottom:24px;right:24px;z-index:9000;pointer-events:none}
+.settings-toast{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:12px;background:var(--ema-card-bg);border:1px solid var(--ema-border);box-shadow:0 8px 24px rgba(15,23,42,.2);max-width:360px;min-width:240px;pointer-events:auto}
+.settings-toast-success{border-color:#bbf7d0;background:#f0fdf4}
+.settings-toast-error{border-color:#fecaca;background:#fef2f2}
+.settings-toast-info{border-color:#bfdbfe;background:#eff6ff}
+.settings-toast-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:900;flex-shrink:0;background:var(--ema-slate-100)}
+.settings-toast-success .settings-toast-icon{background:#dcfce7;color:#15803d}
+.settings-toast-error .settings-toast-icon{background:#fee2e2;color:#dc2626}
+.settings-toast-info .settings-toast-icon{background:#dbeafe;color:#1d4ed8}
+.settings-toast>div strong{display:block;font-size:.78rem;font-weight:800;color:var(--ema-slate-900);margin-bottom:2px}
+.settings-toast>div span{display:block;font-size:.72rem;color:var(--ema-slate-600)}
+.settings-toast-close{margin-left:auto;flex-shrink:0;background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--ema-slate-400);line-height:1;padding:0}
+.settings-toast-close:hover{color:var(--ema-slate-700)}
+html.ema-dark .settings-toast{background:var(--ema-card-bg);border-color:var(--ema-border)}
+html.ema-dark .settings-toast-success{border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.08)}
+html.ema-dark .settings-toast-error{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08)}
 `;
+
 
 function getCategoryName(categories: CategoryRow[], categoryId: string) {
   return categories.find((category) => String(category.CategoryID) === String(categoryId))?.CategoryName || "";
@@ -1989,8 +2758,8 @@ function SoftwareRegistryManagement() {
           CategoryName: effectiveSoftware.CategoryName || currentCategoryName,
           Publisher: effectiveSoftware.Publisher || ruleForm.publisher,
           Version: effectiveSoftware.Version || subSoftwareName.trim(),
-          Classification: softwareForm.classification,
-          ComplianceStatus: softwareForm.classification,
+          Classification: "Legal",
+          ComplianceStatus: "Legal",
           WorkingStartTime: ruleForm.workingStartTime || "09:00",
           WorkingEndTime: ruleForm.workingEndTime || "17:00",
           WorkDays: "Mon-Fri",
@@ -2057,14 +2826,12 @@ function SoftwareRegistryManagement() {
                   <button className="sp-icon" type="button" onClick={loadBase} disabled={loading} title="Refresh"><RefreshCw size={15} /></button>
                 </div>
                 <div className="sp-policy-table-wrap">
-                  <div className="sp-policy-table-row head"><span>Registry Name</span><span>Category</span><span>Software</span><span>Legal</span><span>Illegal</span><span>License</span><span>Work hours</span><span>Action</span></div>
-                  {loading ? <div className="sp-empty">Loading software registry...</div> : policies.length === 0 ? <div className="sp-empty">No software registry found. Click Register Software to create the first entry.</div> : policies.map((policy) => (
+                  <div className="sp-policy-table-row head"><span>Registry Name</span><span>Category</span><span>Software</span><span>License</span><span>Work hours</span><span>Action</span></div>
+                  {policies.length === 0 ? <div className="sp-empty">No software registry found. Click Register Software to create the first entry.</div> : policies.map((policy) => (
                     <div key={policy.PolicyID} className="sp-policy-table-row">
                       <span><strong>{policy.PolicyName}</strong><small>{policy.Description || "No note"}</small></span>
                       <span>{policy.CategoryName || "No category"}</span>
                       <span>{policy.TotalItems || 0}</span>
-                      <span><b className="sp-badge legal">{policy.LegalCount || 0}</b></span>
-                      <span><b className="sp-badge illegal">{policy.IllegalCount || 0}</b></span>
                       <span>{policy.LicenseTotal || 0}</span>
                       <span>{normalizeTime(policy.WorkingStartTime) || "09:00"} - {normalizeTime(policy.WorkingEndTime) || "17:00"}</span>
                       <span className="sp-policy-table-actions">
@@ -2165,6 +2932,7 @@ function formatAgeSourceLabel(value: string) {
 }
 
 export default function Settings() {
+  const auth = useAuth() as any;
   const [activeSection, setActiveSection] = useState<SectionKey>("roles");
   const [sectionSearch, setSectionSearch] = useState("");
   const [users, setUsers] = useState<UserAccess[]>([]);
@@ -2264,7 +3032,21 @@ export default function Settings() {
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [brandOptionsByCategory, setBrandOptionsByCategory] = useState<Record<string, string[]>>({});
   const [modelOptionsByKey, setModelOptionsByKey] = useState<Record<string, string[]>>({});
-  const active = sections[activeSection];
+  const settingsAccessInfo = useMemo(() => getSettingsAccessInfo(auth), [auth]);
+  const allowedSectionOrder = useMemo(
+    () => sectionOrder.filter((key) => canViewSettingsSection(key, settingsAccessInfo)),
+    [settingsAccessInfo]
+  );
+  const canViewActiveSettingsSection = canViewSettingsSection(activeSection, settingsAccessInfo);
+
+  useEffect(() => {
+    if (allowedSectionOrder.length === 0) return;
+    if (canViewSettingsSection(activeSection, settingsAccessInfo)) return;
+    setActiveSection(allowedSectionOrder[0]);
+    setSectionSearch("");
+  }, [activeSection, allowedSectionOrder, settingsAccessInfo]);
+
+  const active = sections[canViewActiveSettingsSection ? activeSection : (allowedSectionOrder[0] || activeSection)];
   const usersTotalCount = users.length;
   const usersActiveCount = users.filter((user) => user.status === "Active" && user.isActive !== false).length;
   const usersLockedCount = users.filter((user) => user.accountLocked || user.status === "Locked").length;
@@ -2598,6 +3380,27 @@ export default function Settings() {
     }
   };
 
+  const toggleAccessPolicyStatus = async (index: number, newStatus: "Active" | "Inactive") => {
+    const policy = accessPolicies[index];
+    const policyId = getAccessPolicyId(policy);
+    const payload = {
+      policyName: policy.name,
+      description: policy.description || "",
+      scope: policy.scope || "All Users",
+      enforcement: policy.enforcement || "Mandatory",
+      reviewCycle: policy.reviewCycle || "Quarterly",
+      status: newStatus,
+      sortOrder: Number((policy as any).sortOrder || 0) || 0,
+    };
+    try {
+      const updated = await settingsAccessControls.update(policyId, payload) as AccessPolicyApiRow;
+      setAccessPolicies((current) => current.map((item, i) => i === index ? normalizeAccessPolicy(updated || { ...item, ...payload }) : item));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update status.";
+      showToast("error", "Status update failed", message);
+    }
+  };
+
   const toggleRoleModuleAccess = async (module: ModuleControlModule, role: AccessRole) => {
     const moduleId = getModuleId(module);
     const roleId = getAccessRoleId(role);
@@ -2708,8 +3511,9 @@ export default function Settings() {
     setPcAgingError("");
 
     try {
-      const payload = await settingsPcAgingRule.get() as PcAgingApiResponse;
-      setPcAgingRule(normalizePcAgingRule(payload.data?.rule || DEFAULT_PC_AGING_RULE));
+      const payload = await settingsPcAgingRule.get() as any;
+      const rawRule = payload?.rule ?? payload?.data?.rule ?? {};
+      setPcAgingRule(normalizePcAgingRule(rawRule));
       setPcAgingLoaded(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load PC aging rule.";
@@ -3948,7 +4752,10 @@ export default function Settings() {
           </div>
 
           <div className="settings-menu-list" id="settingsMenu" role="tablist" aria-label="Settings navigation">
-            {sectionOrder.map((key) => {
+            {allowedSectionOrder.length === 0 && (
+              <div className="settings-empty-state compact">No Settings module assigned to this role.</div>
+            )}
+            {allowedSectionOrder.map((key) => {
               const item = sections[key];
               return (
                 <button
@@ -4156,10 +4963,16 @@ export default function Settings() {
             )}
 
             <div className="content-body" id="contentBody">
+              {!canViewActiveSettingsSection ? (
+                <div className="settings-empty-state">
+                  No access to this Settings section. Enable the matching settings.* module for this role in Module Control.
+                </div>
+              ) : (
+                <>
               {activeSection === "roles" && <RoleContent roles={accessRoles} loading={rolesLoading} error={rolesError} search={filteredContentTerm} onEdit={openAccessRoleModal} onDelete={requestDeleteAccessRole} />}
               {activeSection === "users" && <UserAccessContent users={visibleUsers} sourceUsers={users} loading={usersLoading} error={usersError} search={sectionSearch} onSearchChange={setSectionSearch} onReload={loadUsers} onAdd={() => openUserModal(null)} onEdit={openUserModal} onDelete={requestDeleteUser} />}
               {activeSection === "modules" && <ModuleMatrixContent roles={accessRoles.filter((role) => role.status === "Active")} modules={moduleCatalog} permissions={modulePermissions} loading={moduleLoading} error={moduleError} search={filteredContentTerm} savingKey={moduleSavingKey} onReload={loadModuleAccess} onToggle={toggleRoleModuleAccess} />}
-              {activeSection === "access" && <AccessControlContent policies={accessPolicies} loading={accessPoliciesLoading} error={accessPoliciesError} onReload={loadAccessPolicies} onAdd={() => openAccessPolicyModal(null)} onEdit={openAccessPolicyModal} />}
+              {activeSection === "access" && <AccessControlContent policies={accessPolicies} loading={accessPoliciesLoading} error={accessPoliciesError} onReload={loadAccessPolicies} onAdd={() => openAccessPolicyModal(null)} onEdit={openAccessPolicyModal} onToggleStatus={toggleAccessPolicyStatus} />}
               {activeSection === "audit" && (
                 <AuditContent
                   logs={filteredAuditLogs}
@@ -4282,6 +5095,8 @@ export default function Settings() {
                   onReset={resetResourcePlanningForm}
                   onReload={loadResourcePlanning}
                 />
+              )}
+                </>
               )}
             </div>
           </div>
@@ -4474,7 +5289,7 @@ function IncidentConfigContent({
                 {slaRows.map((row) => (
                   <tr key={String(row.id)}>
                     <td><strong>{row.priority}</strong></td>
-                    <td><input className="setting-input" value={row.label} onChange={(event) => onSlaChange(row.id, { label: event.target.value })} /></td>
+                    <td><span>{row.label}</span></td>
                     <td><input className="setting-input" type="number" min="0" value={row.responseTimeMin} onChange={(event) => onSlaChange(row.id, { responseTimeMin: Number(event.target.value) })} /></td>
                     <td><input className="setting-input" type="number" min="1" value={row.resolutionTimeHrs} onChange={(event) => onSlaChange(row.id, { resolutionTimeHrs: Number(event.target.value) })} /></td>
                     <td><textarea className="setting-input resource-textarea" value={row.escalationPolicy} onChange={(event) => onSlaChange(row.id, { escalationPolicy: event.target.value })} placeholder="Escalation note for this SLA priority" /></td>
@@ -4979,19 +5794,13 @@ function ResourcePlanningContent({
                 </tr>
               </thead>
               <tbody>
-                {loading && (
-                  <tr>
-                    <td colSpan={6}>Loading resource planning...</td>
-                  </tr>
-                )}
-
-                {!loading && sortedSchedules.length === 0 && (
+                {sortedSchedules.length === 0 && (
                   <tr>
                     <td colSpan={6}>No engineer leave schedule found.</td>
                   </tr>
                 )}
 
-                {!loading && paginatedSchedules.map((row) => {
+                {paginatedSchedules.map((row) => {
                   const scheduleId = getResourceScheduleId(row);
 
                   return (
@@ -5020,7 +5829,7 @@ function ResourcePlanningContent({
             </table>
           </div>
 
-          {!loading && sortedSchedules.length > 0 && (
+          {sortedSchedules.length > 0 && (
             <div className="uam-pagination global-style resource-pagination">
               <div className="uam-page-summary">Page {safeCurrentPage} / {totalPages}</div>
               <div className="uam-pagination-info">Showing {showingFrom}-{showingTo} of {sortedSchedules.length} leave records</div>
@@ -5084,10 +5893,9 @@ function RoleContent({ roles, loading, error, search, onEdit, onDelete }: { role
           <div className="user-cell">Action</div>
         </div>
 
-        {loading && <div className="settings-empty-state">Loading role records from EMA_Roles...</div>}
-        {!loading && filteredRoles.length === 0 && <div className="settings-empty-state">No data available.</div>}
+        {filteredRoles.length === 0 && <div className="settings-empty-state">No data available.</div>}
 
-        {!loading && paginatedRoles.map((role, index) => {
+        {paginatedRoles.map((role, index) => {
           const actualIndex = getActualIndex(role);
           return (
             <div className="user-row advanced clean-table-row role-standard-row" key={`${role.id || role.roleKey}-${actualIndex}`}>
@@ -5102,19 +5910,16 @@ function RoleContent({ roles, loading, error, search, onEdit, onDelete }: { role
               <div className="user-cell"><span className={`user-pill ${role.status === "Active" ? "active" : role.status === "Inactive" ? "inactive" : "review"}`}>{role.status === "Inactive" ? "Inactive" : "Active"}</span></div>
               <div className="user-cell">
                 <div className="row-actions user-row-action-wrap clean">
-                  <button className="mini-btn icon-only edit" type="button" title="Edit role" aria-label="Edit role" onClick={() => onEdit(actualIndex)}>
-                    <PencilSvg />
-                  </button>
-                  <button
-                    className="mini-btn icon-only delete"
-                    type="button"
-                    title={isProtectedSuperAdminRole(role) ? "Super Admin is protected and cannot be deleted" : "Delete role"}
-                    aria-label={isProtectedSuperAdminRole(role) ? "Protected role" : "Delete role"}
-                    disabled={isProtectedSuperAdminRole(role)}
-                    onClick={() => onDelete(actualIndex)}
-                  >
-                    <TrashSvg />
-                  </button>
+                  {!isProtectedSuperAdminRole(role) && (
+                    <>
+                      <button className="mini-btn icon-only edit" type="button" title="Edit role" aria-label="Edit role" onClick={() => onEdit(actualIndex)}>
+                        <PencilSvg />
+                      </button>
+                      <button className="mini-btn icon-only delete" type="button" title="Delete role" aria-label="Delete role" onClick={() => onDelete(actualIndex)}>
+                        <TrashSvg />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -5122,7 +5927,7 @@ function RoleContent({ roles, loading, error, search, onEdit, onDelete }: { role
         })}
       </div>
 
-      {!loading && filteredRoles.length > 0 && (
+      {filteredRoles.length > 0 && (
         <div className="uam-pagination global-style">
           <div className="uam-page-summary">Page {safeCurrentPage} of {totalPages}</div>
           <div className="uam-pagination-controls global-style" aria-label="Role based control pagination">
@@ -5464,15 +6269,11 @@ function UserAccessContent({ users, sourceUsers, loading, error, search, onSearc
           <div className="user-cell">Action</div>
         </div>
 
-        {loading && (
-          <div className="settings-empty-state">Loading user access records from EMA_Users...</div>
-        )}
-
-        {!loading && filteredUsers.length === 0 && (
+        {filteredUsers.length === 0 && (
           <div className="settings-empty-state">No data available.</div>
         )}
 
-        {!loading && paginatedUsers.map((user, index) => {
+        {paginatedUsers.map((user, index) => {
           const actualIndex = getActualIndex(user);
           const isMfa = Boolean(user.requireMFA || user.mfa);
           const roles = normalizeUserRoles(user.roles || user.role || user.roleName);
@@ -5508,7 +6309,7 @@ function UserAccessContent({ users, sourceUsers, loading, error, search, onSearc
         })}
       </div>
 
-      {!loading && filteredUsers.length > 0 && (
+      {filteredUsers.length > 0 && (
         <div className="uam-pagination global-style">
           <div className="uam-page-summary">Page {safeCurrentPage} of {totalPages}</div>
           <div className="uam-pagination-controls global-style" aria-label="User access pagination">
@@ -5669,7 +6470,7 @@ function ModuleMatrixContent({ roles, modules, permissions, loading, error, sear
   );
 }
 
-function AccessControlContent({ policies, loading, error, onReload, onAdd, onEdit }: { policies: AccessPolicy[]; loading: boolean; error: string; onReload: () => void; onAdd: () => void; onEdit: (index: number) => void }) {
+function AccessControlContent({ policies, loading, error, onReload, onAdd, onEdit, onToggleStatus }: { policies: AccessPolicy[]; loading: boolean; error: string; onReload: () => void; onAdd: () => void; onEdit: (index: number) => void; onToggleStatus: (index: number, newStatus: "Active" | "Inactive") => void }) {
   const filteredPolicies = policies;
 
   return (
@@ -5694,7 +6495,6 @@ function AccessControlContent({ policies, loading, error, onReload, onAdd, onEdi
           <div className="user-cell">Enforcement</div>
           <div className="user-cell">Review</div>
           <div className="user-cell">Status</div>
-          <div className="user-cell">Action</div>
         </div>
 
         {loading && <div className="settings-empty-state">Loading access controls from EMA_AccessControls...</div>}
@@ -5709,13 +6509,16 @@ function AccessControlContent({ policies, loading, error, onReload, onAdd, onEdi
               <div className="user-cell"><span className="muted-cell">{policy.scope}</span></div>
               <div className="user-cell"><span className="approval-chip standard">{policy.enforcement}</span></div>
               <div className="user-cell"><span className="muted-cell">{policy.reviewCycle}</span></div>
-              <div className="user-cell"><span className={`user-pill ${policy.status === "Active" ? "active" : "inactive"}`}>{policy.status}</span></div>
               <div className="user-cell">
-                <div className="row-actions user-row-action-wrap clean">
-                  <button className="mini-btn icon-only edit" type="button" onClick={() => onEdit(actualIndex)} aria-label="Edit access control" title="Edit">
-                    <PencilSvg />
-                  </button>
-                </div>
+                <select
+                  className={`access-status-select ${policy.status === "Active" ? "active" : "inactive"}`}
+                  value={policy.status === "Active" ? "Active" : "Inactive"}
+                  onChange={(event) => onToggleStatus(actualIndex, event.target.value as "Active" | "Inactive")}
+                  aria-label="Policy status"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
             </div>
           );
@@ -5862,7 +6665,7 @@ function AuditContent({
             <div className="user-cell"><span className="role-soft-chip audit-module-chip">{row.module}</span></div>
             <div className="user-cell audit-action-cell">
               <strong>{row.action}</strong>
-              {row.details && <small>{row.details}</small>}
+              {row.details && <small>{(() => { try { const parsed = JSON.parse(row.details); return Object.entries(parsed).map(([k, v]) => `${k}: ${v}`).join(" · "); } catch { return row.details; } })()}</small>}
             </div>
             <div className="user-cell"><span className={`user-pill ${getAuditSeverityClass(row.severity)}`}>{row.severity}</span></div>
           </div>
@@ -6622,6 +7425,8 @@ function UserModal({ open, mode, title, form, setForm, onClose, onSave, roleOpti
     }
   }, [open]);
 
+  if (!open) return null;
+
   const selectedRoles = normalizeUserRoles(form.roles || form.role || form.roleName);
   const unassignedRoles = roleOptions.filter((role) => !selectedRoles.includes(role));
   const filteredRoleOptions = unassignedRoles.filter((role) =>
@@ -6659,8 +7464,8 @@ function UserModal({ open, mode, title, form, setForm, onClose, onSave, roleOpti
 
         <div className="user-modal-body advanced">
           <div className="modal-section-title">Profile</div>
-          <label className="form-field">Full Name<input className="setting-input" id="userFullName" placeholder="Example: Zainul Ariffin" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-          <label className="form-field">Username<input className="setting-input" id="userUsername" placeholder="Example: zainul" value={form.username || ""} onChange={(event) => setForm({ ...form, username: event.target.value })} /></label>
+          <label className="form-field">Full Name<input className="setting-input" id="userFullName" placeholder="Example: Ahmad Fauzi" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+          <label className="form-field">Username<input className="setting-input" id="userUsername" placeholder="Example: ahmad.fauzi" value={form.username || ""} onChange={(event) => setForm({ ...form, username: event.target.value })} /></label>
           <label className="form-field">Email<input className="setting-input" id="userEmail" placeholder="user@company.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
           <label className="form-field">Phone No<input className="setting-input" id="userPhoneNo" placeholder="Optional" value={form.phoneNo || ""} onChange={(event) => setForm({ ...form, phoneNo: event.target.value })} /></label>
 
@@ -6919,11 +7724,17 @@ function RoleModal({ open, mode, form, setForm, onClose, onSave, onDelete }: { o
 
 function Icon({ name }: { name: IconName }) {
   if (name === "role") return <svg viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
+  if (name === "user") return <svg viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   if (name === "matrix") return <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" stroke="currentColor" strokeWidth="1.9" /></svg>;
   if (name === "access") return <svg viewBox="0 0 24 24" fill="none"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v11H6V10Z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" /></svg>;
+  if (name === "incident") return <svg viewBox="0 0 24 24" fill="none"><path d="M3 18v-6a9 9 0 0 1 18 0v6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /><path d="M21 18.5a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3v3ZM3 18.5a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3v3Z" stroke="currentColor" strokeWidth="1.9" /></svg>;
+  if (name === "notification") return <svg viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (name === "software") return <svg viewBox="0 0 24 24" fill="none"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" /><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /></svg>;
   if (name === "audit") return <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h7l4 4v14H7V3Zm7 0v5h5M9 13h6M9 17h6" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   if (name === "price") return <svg viewBox="0 0 24 24" fill="none"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>;
   if (name === "aging") return <svg viewBox="0 0 24 24" fill="none"><path d="M12 8v5l3 2M21 12a9 9 0 1 1-3-6.7M21 4v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (name === "policy") return <svg viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (name === "resource") return <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" /><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" /><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>;
   return <svg viewBox="0 0 24 24" fill="none"><path d="M12 3 21 20H3L12 3Zm0 6v5m0 3h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
 

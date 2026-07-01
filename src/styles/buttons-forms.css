@@ -1,3 +1,173 @@
+/* Generic form-modal building blocks (.form-grid/.form-field/.setting-input/
+   .setting-textarea/.audit-kpi-strip), used by ~10 pages' secondary modals
+   (Network Inventory's scan dialog, Patch Management, Service Desk, etc.) but
+   never given base styling anywhere, so they rendered as plain unstyled HTML. */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-grid.wide,
+.form-field.wide {
+  grid-column: 1 / -1;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-field > span {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ema-slate-600);
+}
+
+.setting-input,
+.setting-textarea,
+select.setting-select,
+textarea.setting-input {
+  border: 1px solid var(--ema-border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 0.82rem;
+  color: var(--ema-slate-900);
+  background: var(--ema-card-bg);
+  font-family: var(--ema-font);
+  width: 100%;
+}
+
+.setting-input:focus,
+.setting-textarea:focus,
+select.setting-select:focus {
+  outline: none;
+  border-color: var(--ema-blue-500);
+}
+
+.setting-textarea,
+textarea.setting-input {
+  resize: vertical;
+  min-height: 100px;
+  width: 100%;
+}
+
+/* Icon-only delete button — used by Web Restriction website list and similar.
+   Different from .mini-btn.delete in that it uses a dedicated class. */
+.icon-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--ema-border);
+  background: var(--ema-card-bg);
+  color: var(--ema-slate-500);
+  cursor: pointer;
+}
+
+.icon-delete-btn:hover:not(:disabled) {
+  background: var(--ema-red-50);
+  border-color: var(--ema-red-600);
+  color: var(--ema-red-600);
+}
+
+.icon-delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.setting-input:disabled,
+.setting-textarea:disabled,
+select.setting-select:disabled {
+  background: var(--ema-slate-100);
+  color: var(--ema-slate-400);
+  cursor: not-allowed;
+}
+
+.audit-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.audit-kpi-strip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--ema-border);
+  border-radius: 10px;
+  background: var(--ema-slate-100);
+}
+
+.audit-kpi-strip > div > span {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ema-slate-500);
+}
+
+.audit-kpi-strip > div > strong {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: var(--ema-slate-900);
+}
+
+/* Generic action buttons used across the whole app. These were never given a base
+   style; individual pages worked because Bootstrap or a random inline rule
+   happened to style them, but in new pages they rendered as plain browser buttons. */
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, var(--ema-blue-600), var(--ema-blue-700));
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.primary-btn:hover:not(:disabled) {
+  background: var(--ema-blue-700);
+}
+
+.primary-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.danger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.danger-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .btn-primary {
   background: linear-gradient(135deg, var(--ema-blue-600), var(--ema-blue-700));
   border-color: var(--ema-blue-600);
@@ -23,4 +193,80 @@ input,
 select,
 textarea {
   font-family: var(--ema-font);
+}
+
+/* Small row-action icon button (view/edit/delete), reused across pages that haven't
+   migrated to .hardware-icon-btn yet (Network Inventory, Patch Management, Service Desk). */
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ema-border);
+  background: var(--ema-card-bg);
+  color: var(--ema-slate-600);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mini-btn:hover:not(:disabled) {
+  background: var(--ema-slate-100);
+  border-color: var(--ema-blue-100);
+  color: var(--ema-blue-600);
+}
+
+.mini-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mini-btn.icon-only {
+  width: 32px;
+  padding: 0;
+}
+
+.mini-btn.delete:hover:not(:disabled) {
+  background: var(--ema-red-50);
+  border-color: var(--ema-red-600);
+  color: var(--ema-red-600);
+}
+
+/* Checkbox + label row — used by App Metering's metering-modal and ~6 other
+   pages as a styled inline checkbox. Had no base style. */
+.inline-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--ema-slate-700);
+}
+
+.inline-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 1px;
+  accent-color: var(--ema-blue-600);
+}
+
+/* Inline alert bar (error / warning) inside a content card, not the floating
+   toast. Used by ~9 pages. */
+.settings-inline-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--ema-red-600);
+  background: var(--ema-red-50);
+  color: var(--ema-red-600);
+  font-size: 0.82rem;
+  font-weight: 600;
 }

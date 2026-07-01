@@ -5834,7 +5834,7 @@ export default function HardwareInventory() {
                     if (event.key === "Enter" || event.key === " ") handleDeviceRowSelect(device);
                   }}
                 >
-                  <div className="ui-td">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
+                  <div className="ui-td"><span className="row-index-pill">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></div>
                   <div className="ui-td">
                     <div className="hardware-user-name">
                       <Monitor size={14} className="hardware-user-name-icon" />

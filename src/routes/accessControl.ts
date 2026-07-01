@@ -361,7 +361,8 @@ export function canAccessRoute(user: AccessUser | null | undefined, pathname: st
 
   return routes.some((route) => {
     const allowed = cleanPath(route);
-    return path === allowed || path.startsWith(allowed + "/");
+    // Allow exact match, sub-path access (user at /settings/roles can reach /settings)
+    return path === allowed || path.startsWith(allowed + "/") || allowed.startsWith(path + "/");
   });
 }
 
@@ -392,12 +393,25 @@ export function getDefaultRouteForUser(user?: AccessUser | null) {
   const routes = getAllowedRoutesForUser(user);
 
   for (const route of DEFAULT_ROUTE_ORDER) {
-    if (routes.some((allowed) => cleanPath(allowed) === route)) {
+    if (routes.some((allowed) => {
+      const a = cleanPath(allowed);
+      // Also match if user has a sub-path of this route (e.g., /settings/roles → /settings)
+      return a === route || a.startsWith(route + "/");
+    })) {
       return route;
     }
   }
 
-  return routes[0] || "/login";
+  // Normalize first route to its nearest parent in DEFAULT_ROUTE_ORDER
+  if (routes.length > 0) {
+    const first = cleanPath(routes[0]);
+    for (const route of DEFAULT_ROUTE_ORDER) {
+      if (first === route || first.startsWith(route + "/")) return route;
+    }
+    return routes[0];
+  }
+
+  return "/login";
 }
 
 export const getAccessLandingPath = getDefaultRouteForUser;

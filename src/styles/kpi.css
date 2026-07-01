@@ -134,6 +134,15 @@
   margin-left: auto;
 }
 
+.network-hero-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(118px, 1fr));
+  gap: 8px;
+  flex: 1 1 auto;
+  max-width: 560px;
+  margin-left: auto;
+}
+
 .ema-kpi-card {
   border: 1px solid var(--ema-border);
   background: var(--ema-card-bg);

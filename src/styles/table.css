@@ -1,3 +1,66 @@
+/* Bootstrap-table fallback pattern (.pricing-table-card > table.table) used by pages
+   that haven't migrated to the .ui-table grid system yet (Network Inventory and
+   others). Bootstrap's own .table class carries no border/header chrome on its own,
+   so without this the table renders as plain unstyled text rows. */
+/* Card container for Bootstrap tables. When .pricing-table-card is on the SAME
+   element as .table-responsive, overflow:hidden would cancel the horizontal
+   scroll. Always nest: pricing-table-card > table-responsive > table so that
+   the card can safely clip its corners while the inner table-responsive scrolls.
+   position:relative + z-index:1 ensures the card appears above any page-level
+   ::before overlay (e.g. Internet Metering's grid-pattern pseudo-element). */
+.pricing-table-card {
+  border: 1px solid var(--ema-border);
+  border-radius: 12px;
+  background: var(--ema-card-bg);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+/* When used as both card + scroll on the same element (legacy), don't clip */
+.pricing-table-card.table-responsive {
+  overflow-x: auto;
+}
+
+.pricing-table-card table {
+  width: 100%;
+  margin-bottom: 0;
+  border-collapse: collapse;
+  color: var(--ema-slate-900);
+}
+
+.pricing-table-card thead {
+  background: var(--ema-slate-100);
+}
+
+.pricing-table-card th {
+  padding: 10px 16px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: var(--ema-slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  border-bottom: 1px solid var(--ema-border);
+  white-space: nowrap;
+}
+
+.pricing-table-card td {
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  color: var(--ema-slate-700);
+  border-bottom: 1px solid var(--ema-border);
+  vertical-align: middle;
+}
+
+.pricing-table-card tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.pricing-table-card tbody tr:hover {
+  background: var(--ema-slate-100);
+}
+
 .ui-table-frame {
   display: flex;
   flex-direction: column;
@@ -184,4 +247,112 @@
   text-align: center;
   color: var(--ema-slate-400);
   font-size: 0.85rem;
+}
+
+/* .user-row / .user-cell: generic grid-row pattern used in list panels (App Restriction
+   website list, package lists, etc.). Zero CSS before — no display:grid applied. */
+.user-row {
+  display: grid;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ema-border);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.user-row:last-child {
+  border-bottom: none;
+}
+
+.user-row.head {
+  background: var(--ema-slate-100);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ema-slate-500);
+}
+
+.user-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Policy list-panel (Website List, Package List, etc.) */
+.appweb-list-panel {
+  border: 1px solid var(--ema-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ema-card-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.appweb-list-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  max-height: 320px;
+}
+
+/* .user-name: icon + text flex row used in device/package table cells across 5 pages.
+   No global CSS existed — icon and text rendered inline (causing them to merge). */
+.user-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.user-mini-avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ema-slate-400);
+}
+
+.user-name > div,
+.user-name > span:not(.user-mini-avatar) {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.user-name strong {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--ema-slate-900);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-name small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ema-slate-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Row number pill (01, 02, ...) — used by ~9 pages as a padded index cell.
+   Had no base style; rendered as plain text without visual distinction. */
+.row-index-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--ema-slate-100);
+  border: 1px solid var(--ema-border);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--ema-slate-500);
+  font-variant-numeric: tabular-nums;
 }

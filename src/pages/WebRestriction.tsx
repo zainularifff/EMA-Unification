@@ -1710,11 +1710,14 @@ export default function WebRestriction() {
     <main className="settings-module-root hardware-module-root ema-settings-pro appwebrestriction-module container-fluid p-3 p-xl-4" data-section="appwebrestriction">
       <style>{`
 
+        /* Web Restriction shares the same scroll behaviour as App Restriction:
+           the policy form is long so we allow the module root to scroll naturally.
+           The sidebar stays sticky within the viewport. */
 
         /* Web Restriction tab navigation active state. */
         .appwebrestriction-module .appweb-main-card > .content-head .content-actions .soft-btn.appweb-tab-btn {
           border: 1px solid rgba(37, 99, 235, 0.22) !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           color: #0f2744 !important;
           box-shadow: none !important;
           transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease !important;
@@ -1786,7 +1789,7 @@ export default function WebRestriction() {
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search svg {
           flex: 0 0 auto !important;
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
         }
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input {
@@ -1802,7 +1805,7 @@ export default function WebRestriction() {
           outline: none !important;
           background: transparent !important;
           box-shadow: none !important;
-          color: #0f172a !important;
+          color: var(--ema-slate-900) !important;
         }
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input:focus,
@@ -1824,13 +1827,13 @@ export default function WebRestriction() {
           border: 0 !important;
           border-radius: 999px !important;
           background: transparent !important;
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
           box-shadow: none !important;
         }
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-search-clear:hover {
           background: rgba(148, 163, 184, 0.16) !important;
-          color: #0f172a !important;
+          color: var(--ema-slate-900) !important;
         }
 
 
@@ -1879,7 +1882,7 @@ export default function WebRestriction() {
           flex-direction: column !important;
           border: 1px solid rgba(203, 213, 225, 0.82) !important;
           border-radius: 16px !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           box-shadow: none !important;
         }
 
@@ -1889,7 +1892,7 @@ export default function WebRestriction() {
           max-height: 432px !important;
           overflow-y: auto !important;
           overflow-x: hidden !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-url-list-panel .user-row {
@@ -1903,7 +1906,7 @@ export default function WebRestriction() {
           border: 0 !important;
           border-bottom: 1px solid rgba(226, 232, 240, 0.95) !important;
           border-radius: 0 !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           box-shadow: none !important;
         }
 
@@ -2319,7 +2322,7 @@ export default function WebRestriction() {
           overflow: hidden !important;
           border: 1px solid rgba(226, 232, 240, 0.95) !important;
           border-radius: 24px !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28) !important;
         }
 
@@ -2355,7 +2358,7 @@ export default function WebRestriction() {
         .appwebrestriction-module .appweb-webgroup-pane-head p,
         .appwebrestriction-module .appweb-webgroup-domain-head p {
           margin: 0.25rem 0 0 !important;
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
           font-size: 0.72rem !important;
           font-weight: 700 !important;
         }
@@ -2369,14 +2372,14 @@ export default function WebRestriction() {
           justify-content: center !important;
           border: 0 !important;
           border-radius: 12px !important;
-          background: #ffffff !important;
-          color: #64748b !important;
+          background: var(--ema-card-bg) !important;
+          color: var(--ema-slate-500) !important;
           box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.8) !important;
         }
 
         .appwebrestriction-module .appweb-modal-close:hover {
           background: #f1f5f9 !important;
-          color: #0f172a !important;
+          color: var(--ema-slate-900) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-modal-body {
@@ -2411,7 +2414,7 @@ export default function WebRestriction() {
           overflow: auto !important;
           border: 1px solid rgba(203, 213, 225, 0.8) !important;
           border-radius: 16px !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-list-item {
@@ -2423,7 +2426,7 @@ export default function WebRestriction() {
           padding: 0.78rem 0.85rem !important;
           border: 0 !important;
           border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           text-align: left !important;
         }
 
@@ -2456,7 +2459,7 @@ export default function WebRestriction() {
         }
 
         .appwebrestriction-module .appweb-webgroup-list-item small {
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
           font-size: 0.68rem !important;
           font-weight: 700 !important;
         }
@@ -2477,7 +2480,7 @@ export default function WebRestriction() {
           min-height: 0 !important;
           overflow: auto !important;
           padding: 1rem !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-form-grid {
@@ -2534,7 +2537,7 @@ export default function WebRestriction() {
         }
 
         .appwebrestriction-module .appweb-modal-light-btn {
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           color: #475569 !important;
           box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.85) !important;
         }
@@ -2562,7 +2565,7 @@ export default function WebRestriction() {
           border: 1px solid rgba(203, 213, 225, 0.82) !important;
           border-radius: 18px !important;
           padding: 0.95rem !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-domain-add {
@@ -2579,7 +2582,7 @@ export default function WebRestriction() {
           overflow: auto !important;
           border: 1px solid rgba(203, 213, 225, 0.82) !important;
           border-radius: 14px !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-url-row {
@@ -2600,7 +2603,7 @@ export default function WebRestriction() {
           display: inline-flex !important;
           align-items: center !important;
           gap: 0.48rem !important;
-          color: #334155 !important;
+          color: var(--ema-slate-700) !important;
           font-size: 0.76rem !important;
           font-weight: 800 !important;
         }
@@ -2663,7 +2666,7 @@ export default function WebRestriction() {
         .appwebrestriction-module .appweb-webgroup-modal-body {
           grid-template-columns: minmax(280px, 330px) minmax(0, 1fr) !important;
           min-height: 440px !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-list-pane {
@@ -2699,7 +2702,7 @@ export default function WebRestriction() {
         .appwebrestriction-module .appweb-webgroup-list-item:hover {
           transform: translateY(-1px) !important;
           border-color: rgba(37, 99, 235, 0.34) !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-list-item.is-selected {
@@ -2713,7 +2716,7 @@ export default function WebRestriction() {
           flex-direction: column !important;
           gap: 0.9rem !important;
           padding: 1rem 1.1rem !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-form-grid {
@@ -2732,7 +2735,7 @@ export default function WebRestriction() {
         .appwebrestriction-module .appweb-webgroup-domain-add .setting-input {
           height: 40px !important;
           border-radius: 13px !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-actions {
@@ -2774,7 +2777,7 @@ export default function WebRestriction() {
         .appwebrestriction-module .appweb-webgroup-url-row {
           min-height: 46px !important;
           margin: 0 !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
         }
 
         .appwebrestriction-module .appweb-webgroup-url-row > div svg {
@@ -2899,33 +2902,35 @@ export default function WebRestriction() {
             <small>Device scope and website restriction policies.</small>
           </div>
 
-          <nav
-            className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher"
-            role="tablist"
-            aria-label="Restriction module navigation"
-          >
-            {modules.map((item) => {
-              const Icon = item.icon;
-              const selected = item.id === activeModule;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={clsx('setting-btn', selected && 'active')}
-                  title={`${item.label} - ${item.helper}`}
-                  onClick={() => {
-                    setActiveModule(item.id);
-                    setActiveTab(item.tabs[0]);
-                    setSearchText('');
-                    setMessage(null);
-                  }}
-                >
-                  <span className="setting-icon"><Icon size={16} /></span>
-                  <span><strong>{item.label}</strong><small>{item.helper}</small></span>
-                </button>
-              );
-            })}
-          </nav>
+          {modules.length > 1 && (
+            <nav
+              className="settings-menu-list ema-module-sidebar-nav ema-module-sidebar-switcher"
+              role="tablist"
+              aria-label="Restriction module navigation"
+            >
+              {modules.map((item) => {
+                const Icon = item.icon;
+                const selected = item.id === activeModule;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={clsx('setting-btn', selected && 'active')}
+                    title={`${item.label} - ${item.helper}`}
+                    onClick={() => {
+                      setActiveModule(item.id);
+                      setActiveTab(item.tabs[0]);
+                      setSearchText('');
+                      setMessage(null);
+                    }}
+                  >
+                    <span className="setting-icon"><Icon size={16} /></span>
+                    <span><strong>{item.label}</strong><small>{item.helper}</small></span>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
 
           <div className="ema-sidebar-content">
             <div className="ema-sidebar-subpanel">
@@ -3393,17 +3398,20 @@ export default function WebRestriction() {
         </div>
 
         <div className="row g-2">
-          {options.map(([value, label, helper]) => (
-            <div key={value} className="col-12 col-md-6">
-              <label className={clsx('inline-check mb-0 h-100', form.webRestrictType === value && 'border-primary bg-primary-subtle text-primary')}>
-                <input className="form-check-input" type="radio" name="webRestrictType" checked={form.webRestrictType === value} disabled={isInherited} onChange={() => updateForm('webRestrictType', value)} />
-                <span>
-                  <strong className="d-block">{label}</strong>
-                  <small className="d-block text-muted fw-bold">{helper}</small>
-                </span>
-              </label>
-            </div>
-          ))}
+          {options.map(([value, label, helper]) => {
+            const selected = form.webRestrictType === value;
+            return (
+              <div key={value} className="col-12 col-md-6">
+                <label className={clsx('appweb-restrict-option', selected && 'is-selected')}>
+                  <input className="form-check-input" type="radio" name="webRestrictType" checked={selected} disabled={isInherited} onChange={() => updateForm('webRestrictType', value)} style={{ flexShrink: 0 }} />
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <strong style={{ display: 'block', fontSize: '0.82rem' }}>{label}</strong>
+                    <small style={{ display: 'block', fontSize: '0.72rem', color: selected ? 'var(--ema-blue-600)' : 'var(--ema-slate-500)', fontWeight: 600 }}>{helper}</small>
+                  </span>
+                </label>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-3">

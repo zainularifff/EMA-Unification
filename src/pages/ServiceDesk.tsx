@@ -1375,6 +1375,25 @@ function priorityClass(priority: string) {
   return priority.toLowerCase();
 }
 
+function getPriorityTone(priority: string) {
+  switch (priority.toLowerCase()) {
+    case 'critical': return 'is-bad';
+    case 'high': return 'is-warn';
+    case 'low': return 'is-good';
+    default: return 'is-neutral';
+  }
+}
+
+function getStatusTone(status: string) {
+  switch (status.toLowerCase()) {
+    case 'resolved': return 'is-good';
+    case 'in progress':
+    case 'assigned': return 'is-warn';
+    case 'closed': return 'is-bad';
+    default: return 'is-neutral';
+  }
+}
+
 function statusRank(status: string) {
   const map: Record<string, number> = {
     Awaiting: 1,
@@ -1574,7 +1593,7 @@ export default function ServiceDesk() {
     direction: 'desc',
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(emptyAdvancedFilters());
@@ -4290,18 +4309,18 @@ export default function ServiceDesk() {
   ];
 
   useEffect(() => {
-    document.documentElement.classList.add('ema-settings-page-active');
-    document.body.classList.add('ema-settings-page-active');
+    document.documentElement.classList.add('ema-settings-page-active', 'service-desk-page-active');
+    document.body.classList.add('ema-settings-page-active', 'service-desk-page-active');
 
     return () => {
-      document.documentElement.classList.remove('ema-settings-page-active');
-      document.body.classList.remove('ema-settings-page-active');
+      document.documentElement.classList.remove('ema-settings-page-active', 'service-desk-page-active');
+      document.body.classList.remove('ema-settings-page-active', 'service-desk-page-active');
     };
   }, []);
 
   const ticketTableColumns =
-    '52px minmax(112px, .86fr) 106px minmax(132px, 1fr) minmax(96px, .72fr) minmax(220px, 1.55fr) 102px minmax(118px, .92fr) 104px 108px 104px';
-  const ticketTableMinWidth = '100%';
+    '36px minmax(88px, .65fr) 78px minmax(82px, .65fr) minmax(74px, .55fr) minmax(150px, 1.4fr) 68px minmax(84px, .65fr) 106px 78px 58px';
+  const ticketTableMinWidth = '900px';
 
   if (isLoading) {
     return (
@@ -4319,7 +4338,7 @@ export default function ServiceDesk() {
       <style>{`
         main[data-section="service-desk"] .service-desk-hero {
           display: grid !important;
-          grid-template-columns: minmax(0, 1fr) minmax(620px, 820px) !important;
+          grid-template-columns: minmax(0, 1fr) minmax(0, auto) !important;
           align-items: center !important;
           gap: 1rem !important;
           min-height: 7.25rem !important;
@@ -4378,18 +4397,14 @@ export default function ServiceDesk() {
 
         main[data-section="service-desk"] .service-desk-kpi-force-row > .service-desk-kpi-card,
         main[data-section="service-desk"] .service-desk-kpi-force-row > .score-box {
-          flex: 0 0 150px !important;
-          width: 150px !important;
-          min-width: 150px !important;
-          max-width: 150px !important;
+          flex: 1 1 120px !important;
+          width: auto !important;
+          min-width: 120px !important;
+          max-width: 180px !important;
           min-height: 4.55rem !important;
           max-height: 4.55rem !important;
           padding: .66rem .72rem !important;
           overflow: hidden !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-hero {
-          grid-template-columns: minmax(0, 1fr) max-content !important;
         }
 
         main[data-section="service-desk"] .service-desk-commandbar {
@@ -4452,7 +4467,7 @@ export default function ServiceDesk() {
           padding: 1rem !important;
           border: 1px solid rgba(148, 163, 184, 0.22) !important;
           border-radius: 1.1rem !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
         }
 
@@ -4538,18 +4553,74 @@ export default function ServiceDesk() {
           box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.09) !important;
         }
 
-        main[data-section="service-desk"] .service-desk-table-wrap {
-          width: 100% !important;
-          max-width: 100% !important;
-          overflow-x: hidden !important;
-          overflow-y: hidden !important;
-          scrollbar-gutter: auto !important;
-          contain: layout paint !important;
-          transform: translateZ(0) !important;
+        main[data-section="service-desk"] .service-desk-registry-tablebody {
+          min-width: 0;
         }
 
-        main[data-section="service-desk"] .service-desk-list-panel > .content-body {
-          contain: layout paint !important;
+        main[data-section="service-desk"] .service-desk-table-frame {
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          overflow: hidden;
+          width: 100%;
+          min-width: 0;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-table {
+          overflow-x: auto;
+          min-width: 0;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td {
+          padding: 7px 8px !important;
+          font-size: 0.76rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-th {
+          padding: 8px 8px !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td-stack {
+          gap: 1px !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td-stack strong {
+          font-size: 0.76rem !important;
+          line-height: 1.3 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td-stack small {
+          font-size: 0.65rem !important;
+          line-height: 1.3 !important;
+          color: var(--ema-slate-400) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          overflow: visible;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .mini-btn.icon-only {
+          width: 26px !important;
+          height: 26px !important;
+          min-width: 26px !important;
+          min-height: 26px !important;
+          padding: 0 !important;
+          border-radius: 6px !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td.overdue strong {
+          color: #dc2626 !important;
+        }
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td.overdue small {
+          color: #ef4444 !important;
+        }
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td.near strong {
+          color: #d97706 !important;
+        }
+        main[data-section="service-desk"] .service-desk-table-frame .ui-td.near small {
+          color: #f59e0b !important;
         }
 
         main[data-section="service-desk"].service-desk-modal-portal-root .settings-confirm-backdrop.open {
@@ -4559,7 +4630,38 @@ export default function ServiceDesk() {
           contain: layout paint style !important;
         }
 
+        main[data-section="service-desk"].service-desk-modal-portal-root,
+        main[data-section="service-desk"].service-desk-confirm-portal-root {
+          position: fixed !important;
+          inset: 0 !important;
+          z-index: 2100 !important;
+          height: 100dvh !important;
+          max-height: 100dvh !important;
+          overflow: hidden !important;
+          background: transparent !important;
+          pointer-events: none !important;
+        }
+
+        main[data-section="service-desk"].service-desk-modal-portal-root .settings-confirm-backdrop,
+        main[data-section="service-desk"].service-desk-confirm-portal-root .settings-confirm-backdrop {
+          pointer-events: auto !important;
+          min-height: 100dvh !important;
+          align-items: center !important;
+          padding: 1.25rem !important;
+          overflow: hidden !important;
+        }
+
         main[data-section="service-desk"] .service-desk-ticket-modal {
+          width: min(96vw, 1080px) !important;
+          max-height: min(90dvh, 920px) !important;
+          padding: 0 !important;
+          gap: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          overflow: hidden !important;
+          border-radius: 1.1rem !important;
+          border: 1px solid rgba(203, 213, 225, 0.78) !important;
+          background: var(--ema-card-bg) !important;
           contain: layout paint style !important;
           transform: translate3d(0, 0, 0) !important;
           backface-visibility: hidden !important;
@@ -4567,8 +4669,42 @@ export default function ServiceDesk() {
           box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18) !important;
         }
 
+        main[data-section="service-desk"] .service-desk-ticket-modal > .content-head,
+        main[data-section="service-desk"] .service-desk-ticket-modal > footer {
+          flex: 0 0 auto !important;
+          background: var(--ema-card-bg) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-modal > .content-head {
+          min-height: 4.6rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-modal > .content-head h2,
+        main[data-section="service-desk"] .service-desk-ticket-modal > .content-head p {
+          margin-bottom: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-modal > .content-head button {
+          width: 2.15rem !important;
+          min-width: 2.15rem !important;
+          height: 2.15rem !important;
+          border-radius: .72rem !important;
+          border: 1px solid var(--ema-border) !important;
+          background: var(--ema-card-bg) !important;
+          color: var(--ema-slate-600) !important;
+          display: inline-grid !important;
+          place-items: center !important;
+        }
+
         main[data-section="service-desk"] .service-desk-ticket-form-body {
+          flex: 1 1 auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          display: grid !important;
+          gap: .9rem !important;
+          padding: 1rem !important;
           overflow-y: auto !important;
+          overflow-x: hidden !important;
           overscroll-behavior: contain !important;
           scrollbar-gutter: stable !important;
           -webkit-overflow-scrolling: touch !important;
@@ -4577,13 +4713,120 @@ export default function ServiceDesk() {
           will-change: scroll-position !important;
         }
 
-        main[data-section="service-desk"] .service-desk-ticket-form-body .settings-helper-card {
-          contain: layout paint !important;
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035) !important;
+        main[data-section="service-desk"] .service-desk-ticket-form-body > .settings-helper-card {
+          margin: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body .form-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: .85rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body label,
+        main[data-section="service-desk"] .service-desk-ticket-form-body .form-field {
+          min-width: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body label > span,
+        main[data-section="service-desk"] .service-desk-ticket-form-body .form-field > span {
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: .28rem !important;
         }
 
         main[data-section="service-desk"] .service-desk-ticket-form-body input,
         main[data-section="service-desk"] .service-desk-ticket-form-body textarea,
+        main[data-section="service-desk"] .service-desk-ticket-form-body .setting-select-trigger {
+          width: 100% !important;
+          min-width: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body textarea {
+          min-height: 6.5rem !important;
+          resize: vertical !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-asset-lookup {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) auto !important;
+          gap: .5rem !important;
+          align-items: center !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-asset-search {
+          min-width: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-asset-choose-btn {
+          white-space: nowrap !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body .settings-helper-card {
+          border-radius: 12px !important;
+          border: 1px solid rgba(226, 232, 240, 0.9) !important;
+          padding: 1rem 1.1rem !important;
+          background: #f8fafc !important;
+          box-shadow: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body .settings-helper-card h4,
+        main[data-section="service-desk"] .service-desk-ticket-form-body .settings-helper-card > strong:first-child,
+        main[data-section="service-desk"] .service-desk-ticket-form-body .settings-helper-card > .settings-section-title {
+          font-size: 0.75rem !important;
+          font-weight: 800 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.05em !important;
+          color: #1e40af !important;
+          margin-bottom: .6rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body input:not([type="checkbox"]):not([type="radio"]),
+        main[data-section="service-desk"] .service-desk-ticket-form-body textarea {
+          height: 2.25rem !important;
+          padding: 0 .72rem !important;
+          border: 1px solid rgba(148, 163, 184, 0.4) !important;
+          border-radius: 8px !important;
+          background: #ffffff !important;
+          font-size: .8rem !important;
+          font-weight: 600 !important;
+          color: #0f172a !important;
+          outline: none !important;
+          transition-duration: 80ms !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body textarea {
+          height: auto !important;
+          min-height: 5.5rem !important;
+          padding: .55rem .72rem !important;
+          resize: vertical !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body input:focus,
+        main[data-section="service-desk"] .service-desk-ticket-form-body textarea:focus {
+          border-color: #3b82f6 !important;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-form-body input:disabled,
+        main[data-section="service-desk"] .service-desk-ticket-form-body textarea:disabled {
+          background: #f1f5f9 !important;
+          color: #64748b !important;
+          cursor: not-allowed !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-modal > .content-head {
+          border-bottom: 1px solid #e2e8f0 !important;
+          padding: .95rem 1.1rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-ticket-modal > footer {
+          border-top: 1px solid #e2e8f0 !important;
+          padding: .8rem 1.1rem !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: .5rem !important;
+        }
+
         main[data-section="service-desk"] .service-desk-ticket-form-body button,
         main[data-section="service-desk"] .service-desk-ticket-form-body .setting-select-trigger {
           transition-duration: 80ms !important;
@@ -4613,89 +4856,251 @@ export default function ServiceDesk() {
           box-shadow: none !important;
         }
 
-        main[data-section="service-desk"] .service-desk-table-wrap .user-row {
-          width: 100% !important;
-          min-width: 100% !important;
+        main[data-section="service-desk"] .service-desk-detail-backdrop {
+          background: rgba(15, 23, 42, 0.45) !important;
         }
 
-        main[data-section="service-desk"] .service-desk-table-wrap .user-cell {
-          min-width: 0 !important;
-          overflow: hidden !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-table-wrap .user-row.head {
-          min-height: 3.05rem !important;
-          align-items: center !important;
-          overflow: visible !important;
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card {
           position: relative !important;
-          z-index: 2 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-table-wrap .user-row.head .user-cell {
-          overflow: visible !important;
+          top: auto !important;
+          right: auto !important;
+          bottom: auto !important;
+          width: min(58rem, calc(100vw - 2rem)) !important;
+          max-width: calc(100vw - 2rem) !important;
+          max-height: min(88dvh, 50rem) !important;
           display: flex !important;
-          align-items: center !important;
-          min-width: 0 !important;
+          flex-direction: column !important;
+          gap: .75rem !important;
+          padding: 1rem 1.15rem !important;
+          overflow: auto !important;
+          border: 1px solid rgba(203, 213, 225, 0.82) !important;
+          border-radius: .95rem !important;
+          background: var(--ema-card-bg) !important;
+          box-shadow: 0 32px 80px rgba(15, 23, 42, 0.22) !important;
         }
 
-        main[data-section="service-desk"] .service-desk-table-wrap .user-row.head .soft-btn {
-          width: auto !important;
-          min-width: max-content !important;
-          max-width: 100% !important;
-          height: 2rem !important;
-          min-height: 2rem !important;
-          padding: 0 .62rem !important;
-          border-radius: .72rem !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-          gap: .24rem !important;
-          overflow: visible !important;
-          white-space: nowrap !important;
-          line-height: 1 !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-table-wrap .user-row .user-cell:last-child {
-          overflow: visible !important;
-          display: flex !important;
-          align-items: center !important;
-          justify-content: center !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-table-wrap .row-actions.user-row-action-wrap.clean {
-          display: inline-flex !important;
-          flex-direction: row !important;
-          align-items: center !important;
-          justify-content: center !important;
-          flex-wrap: nowrap !important;
-          gap: .38rem !important;
-          width: auto !important;
-          min-width: max-content !important;
-          overflow: visible !important;
-        }
-
-        main[data-section="service-desk"] .service-desk-table-wrap .row-actions.user-row-action-wrap.clean .mini-btn {
-          width: 2.08rem !important;
-          min-width: 2.08rem !important;
-          height: 2.08rem !important;
-          min-height: 2.08rem !important;
-          margin: 0 !important;
-          flex: 0 0 2.08rem !important;
-        }
-
-        main[data-section="service-desk"] .uam-pagination.global-style {
-          width: calc(100% - 1.5rem) !important;
-          margin: .9rem .75rem 0 !important;
-          padding: 0 !important;
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .panel-head {
           display: grid !important;
           grid-template-columns: auto minmax(0, 1fr) auto !important;
-          align-items: center !important;
-          column-gap: 1rem !important;
+          align-items: start !important;
+          gap: .7rem !important;
+          padding: 0 0 .78rem !important;
+          border-bottom: 1px solid var(--ema-border) !important;
         }
 
-        main[data-section="service-desk"] .uam-pagination-info {
-          text-align: center !important;
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .panel-head .setting-icon {
+          width: 2rem !important;
+          height: 2rem !important;
+          border-radius: .68rem !important;
         }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .panel-head span {
+          font-size: .72rem !important;
+          font-weight: 780 !important;
+          color: var(--ema-slate-600) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .panel-head h2 {
+          margin: .1rem 0 .12rem !important;
+          font-size: 1.25rem !important;
+          line-height: 1.18 !important;
+          letter-spacing: 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .panel-head p {
+          margin: 0 !important;
+          font-size: .8rem !important;
+          line-height: 1.4 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .panel-head h2,
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .panel-head p {
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .form-grid {
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          gap: .65rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .form-grid > div {
+          min-width: 0 !important;
+          padding: .68rem .75rem !important;
+          border: 1px solid var(--ema-border) !important;
+          border-radius: .72rem !important;
+          background: var(--ema-slate-100) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .form-grid span {
+          display: block !important;
+          color: var(--ema-slate-500) !important;
+          font-size: .64rem !important;
+          font-weight: 850 !important;
+          text-transform: uppercase !important;
+          letter-spacing: .04em !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .form-grid strong {
+          display: block !important;
+          margin-top: .18rem !important;
+          min-width: 0 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          color: var(--ema-slate-900) !important;
+          font-size: .8rem !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-card {
+          padding: .8rem .95rem !important;
+          border: 1px solid rgba(203, 213, 225, 0.78) !important;
+          border-radius: .78rem !important;
+          background: #f8fafc !important;
+          box-shadow: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-card > strong {
+          display: block !important;
+          margin: 0 0 .35rem !important;
+          color: #0f172a !important;
+          font-size: .8rem !important;
+          font-weight: 850 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-card p {
+          margin: 0 !important;
+          color: #334155 !important;
+          font-size: .82rem !important;
+          line-height: 1.45 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop .service-desk-attachment-card {
+          padding: .9rem 1rem !important;
+          border-radius: .85rem !important;
+          background: #ffffff !important;
+          box-shadow: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop .service-desk-attachment-head,
+        main[data-section="service-desk"] .service-desk-detail-backdrop .service-desk-detail-timeline .content-head {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: .7rem !important;
+          padding: 0 0 .72rem !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop .service-desk-attachment-head strong,
+        main[data-section="service-desk"] .service-desk-detail-backdrop .service-desk-detail-timeline .content-head strong {
+          color: #0f172a !important;
+          font-size: .82rem !important;
+          font-weight: 850 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop .service-desk-attachment-head p {
+          margin: .08rem 0 0 !important;
+          font-size: .72rem !important;
+          line-height: 1.35 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-backdrop .service-desk-empty-attachment {
+          min-height: 3rem !important;
+          margin-top: .72rem !important;
+          border-radius: .72rem !important;
+          text-transform: none !important;
+          letter-spacing: 0 !important;
+          color: #92400e !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-actions {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: flex-end !important;
+          gap: .5rem !important;
+          padding: .05rem 0 !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-actions > button {
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: .38rem !important;
+          min-height: 2.15rem !important;
+          padding: 0 .85rem !important;
+          border-radius: .65rem !important;
+          border: 1px solid rgba(148, 163, 184, 0.45) !important;
+          background: #ffffff !important;
+          color: #334155 !important;
+          font-size: .78rem !important;
+          font-weight: 780 !important;
+          cursor: pointer !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-actions > button:first-child {
+          border-color: rgba(37, 99, 235, 0.3) !important;
+          background: #2563eb !important;
+          color: #ffffff !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-actions > button:disabled {
+          opacity: .55 !important;
+          cursor: not-allowed !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-timeline {
+          padding: .9rem 1rem !important;
+          border-radius: .85rem !important;
+          background: #f8fafc !important;
+          box-shadow: none !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-timeline .summary-row {
+          margin-top: .7rem !important;
+          padding: .75rem .85rem !important;
+          border: 1px solid rgba(226, 232, 240, 0.95) !important;
+          border-radius: .75rem !important;
+          background: #ffffff !important;
+        }
+
+        main[data-section="service-desk"] .service-desk-detail-timeline .summary-row p {
+          margin: .16rem 0 !important;
+        }
+
+        @media (max-width: 760px) {
+          main[data-section="service-desk"] .service-desk-ticket-form-body .form-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-ticket-modal {
+            width: 96vw !important;
+            max-height: 92dvh !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-asset-lookup {
+            grid-template-columns: 1fr !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card {
+            width: calc(100vw - 1.5rem) !important;
+            max-height: min(88dvh, 42rem) !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-detail-backdrop > .side-card .form-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-detail-actions {
+            justify-content: stretch !important;
+            flex-direction: column !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-detail-actions > button {
+            width: 100% !important;
+          }
+        }
+
 
         @media (max-width: 1480px) {
           main[data-section="service-desk"] .service-desk-hero {
@@ -4739,6 +5144,68 @@ export default function ServiceDesk() {
 
           main[data-section="service-desk"] .service-desk-command-actions {
             justify-self: start !important;
+          }
+        }
+
+        @media (max-width: 980px) {
+          main[data-section="service-desk"] .settings-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          main[data-section="service-desk"] .settings-menu {
+            max-height: none !important;
+          }
+
+          main[data-section="service-desk"] .settings-menu-list {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            gap: .55rem !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-commandbar {
+            grid-template-columns: 1fr !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-command-actions {
+            width: 100% !important;
+            justify-content: flex-start !important;
+            flex-wrap: wrap !important;
+            min-width: 0 !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-command-actions .primary-btn,
+          main[data-section="service-desk"] .service-desk-reset-btn {
+            flex: 1 1 11rem !important;
+            justify-content: center !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-advanced-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 620px) {
+          main[data-section="service-desk"] {
+            padding: .75rem !important;
+          }
+
+          main[data-section="service-desk"] .settings-menu-list,
+          main[data-section="service-desk"] .service-desk-advanced-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-kpi-force-row {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          main[data-section="service-desk"] .service-desk-kpi-force-row > .service-desk-kpi-card,
+          main[data-section="service-desk"] .service-desk-kpi-force-row > .score-box {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            flex-basis: auto !important;
           }
         }
       
@@ -5406,6 +5873,14 @@ export default function ServiceDesk() {
         }
 
 
+        /* Width containment chain — every flex item on the path from main to
+           the table must have min-width:0 so the grid doesn't expand to
+           accommodate the 1378px-wide table rows instead of scrolling. */
+        main[data-section="service-desk"] .roles-content-shell,
+        main[data-section="service-desk"] .content-shell {
+          min-width: 0 !important;
+        }
+
         /* FINAL OVERRIDE: Service Desk registry visual order
            This forces the command/filter bar to sit above the ticket table,
            then the advanced filter, then the table, then pagination. */
@@ -5414,6 +5889,7 @@ export default function ServiceDesk() {
           display: flex !important;
           flex-direction: column !important;
           align-items: stretch !important;
+          min-width: 0 !important;
         }
 
         main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-registry-filterbar,
@@ -5442,14 +5918,40 @@ export default function ServiceDesk() {
           margin-top: 0 !important;
           position: relative !important;
           z-index: 1 !important;
+          min-width: 0 !important;
         }
 
-        main[data-section="service-desk"] .service-desk-registry-panel > .service-desk-registry-pagination,
-        main[data-section="service-desk"] .service-desk-registry-panel > .uam-pagination,
-        main[data-section="service-desk"] section.content-panel.clean > .uam-pagination {
-          order: 1000 !important;
-          position: relative !important;
-          z-index: 1 !important;
+
+        html.service-desk-page-active,
+        body.service-desk-page-active,
+        body.service-desk-page-active #root {
+          min-height: 100% !important;
+          height: 100% !important;
+        }
+
+        body.service-desk-page-active {
+          overflow: hidden !important;
+        }
+
+        body.service-desk-page-active .ema-shell {
+          min-height: 0 !important;
+          height: 100dvh !important;
+          overflow: hidden !important;
+        }
+
+        body.service-desk-page-active .ema-main,
+        body.service-desk-page-active .ema-page {
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+
+        body.service-desk-page-active .settings-module-root[data-section="service-desk"] {
+          height: 100% !important;
+          max-height: 100% !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          min-height: 0 !important;
+          box-sizing: border-box !important;
         }
 
 `}</style>
@@ -5677,7 +6179,7 @@ export default function ServiceDesk() {
               style={{
                 order: -1000,
                 display: 'grid',
-                gridTemplateColumns: 'minmax(260px, 1fr) 150px 150px 150px 150px max-content',
+                gridTemplateColumns: 'minmax(260px, 1fr) 150px 150px 150px max-content',
                 alignItems: 'center',
                 gap: '.55rem',
                 overflow: 'visible',
@@ -5915,211 +6417,175 @@ export default function ServiceDesk() {
                   )}
                 </div>
               ) : (
-                <div className="user-access-table advanced clean-table service-desk-table-wrap" style={{ overflowX: 'hidden', overflowY: 'hidden', maxWidth: '100%', width: '100%' }}>
-                  <div className="user-row head advanced clean-table-row" style={{ gridTemplateColumns: ticketTableColumns, minWidth: ticketTableMinWidth, width: '100%', alignItems: 'center' }}>
-                    <div className="user-cell">No</div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'id' && 'is-active')}
-                        onClick={() => requestSort('id')}
-                      >
-                        <span>Req No</span>
-                        <i>{sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
+                <div
+                  className="ui-table-frame service-desk-table-frame"
+                  style={{ '--ui-cols': ticketTableColumns } as React.CSSProperties}
+                >
+                  <div className="ui-table">
+                    <div className="ui-tr ui-thead">
+                      <div className="ui-th">No</div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('id')}>
+                          Req No <i>{sortConfig.key === 'id' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('createdAt')}>
+                          Submitted <i>{sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('requesterName')}>
+                          Requester <i>{sortConfig.key === 'requesterName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th">Asset</div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('title')}>
+                          Incident <i>{sortConfig.key === 'title' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('priority')}>
+                          Urgency <i>{sortConfig.key === 'priority' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('assignedTo')}>
+                          Assigned <i>{sortConfig.key === 'assignedTo' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('slaDue')}>
+                          SLA <i>{sortConfig.key === 'slaDue' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th">
+                        <button type="button" className="ui-th-control" onClick={() => requestSort('status')}>
+                          Status <i>{sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
+                        </button>
+                      </div>
+                      <div className="ui-th ui-th-actions">Action</div>
                     </div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'createdAt' && 'is-active')}
-                        onClick={() => requestSort('createdAt')}
-                      >
-                        <span>Submitted</span>
-                        <i>{sortConfig.key === 'createdAt' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'requesterName' && 'is-active')}
-                        onClick={() => requestSort('requesterName')}
-                      >
-                        <span>Requester</span>
-                        <i>{sortConfig.key === 'requesterName' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div className="user-cell">Asset</div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'title' && 'is-active')}
-                        onClick={() => requestSort('title')}
-                      >
-                        <span>Incident</span>
-                        <i>{sortConfig.key === 'title' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'priority' && 'is-active')}
-                        onClick={() => requestSort('priority')}
-                      >
-                        <span>Urgency</span>
-                        <i>{sortConfig.key === 'priority' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'assignedTo' && 'is-active')}
-                        onClick={() => requestSort('assignedTo')}
-                      >
-                        <span>Assigned</span>
-                        <i>{sortConfig.key === 'assignedTo' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'slaDue' && 'is-active')}
-                        onClick={() => requestSort('slaDue')}
-                      >
-                        <span>SLA</span>
-                        <i>{sortConfig.key === 'slaDue' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div className="user-cell">
-                      <button
-                        type="button"
-                        className={cn('soft-btn', sortConfig.key === 'status' && 'is-active')}
-                        onClick={() => requestSort('status')}
-                      >
-                        <span>Status</span>
-                        <i>{sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}</i>
-                      </button>
-                    </div>
-                    <div className="user-cell">Action</div>
-                  </div>
 
-                  {paginatedIncidents.map((incident, index) => {
-                    const runningNo = (currentPage - 1) * itemsPerPage + index + 1;
-                    const sla = getSlaMeta(incident, now);
-                    const isSelected = getId(incident) === getId(selectedIncident || {});
+                    {paginatedIncidents.map((incident, index) => {
+                      const runningNo = (currentPage - 1) * itemsPerPage + index + 1;
+                      const sla = getSlaMeta(incident, now);
+                      const isSelected = getId(incident) === getId(selectedIncident || {});
 
-                    return (
-                      <div
-                        key={getId(incident)}
-                        data-ticket-row="true"
-                        className={cn('user-row advanced clean-table-row', isSelected && 'is-selected')}
-                        style={{ gridTemplateColumns: ticketTableColumns, minWidth: ticketTableMinWidth, width: '100%' }}
-                        onClick={() => {
-                          setSelectedIncidentId(getId(incident));
-                          showSlaOverdueWarning(incident);
-                        }}
-                      >
-                        <div className="user-cell row-number">
-                          <span className="row-index-pill">{String(runningNo).padStart(2, '0')}</span>
-                        </div>
+                      return (
+                        <div
+                          key={getId(incident)}
+                          data-ticket-row="true"
+                          className={cn('ui-tr', isSelected && 'is-selected')}
+                          onClick={() => {
+                            setSelectedIncidentId(getId(incident));
+                          }}
+                        >
+                          <div className="ui-td">
+                            <span className="row-index-pill">{String(runningNo).padStart(2, '0')}</span>
+                          </div>
 
-                        <div className="user-cell">
-                          <strong>{getId(incident)}</strong>
-                        </div>
+                          <div className="ui-td">
+                            <strong style={{ fontSize: '11.5px' }}>{getId(incident)}</strong>
+                          </div>
 
-                        <div className="user-cell">{normalizeDate(incident.createdAt)}</div>
+                          <div className="ui-td">{normalizeDate(incident.createdAt)}</div>
 
-                        <div className="user-cell">
-                          <div className="user-name">
-                            <span className="user-mini-avatar">{initialText(incident.requesterName || incident.reporterId)}</span>
-                            <span>
-                              <strong>{incident.requesterName || 'N/A'}</strong>
+                          <div className="ui-td">
+                            <div className="user-name">
+                              <span className="user-mini-avatar">{initialText(incident.requesterName || incident.reporterId)}</span>
+                              <span>
+                                <strong>{incident.requesterName || 'N/A'}</strong>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="ui-td" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Monitor size={12} style={{ flexShrink: 0, color: 'var(--ema-slate-400)' }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{incident.assetId || '—'}</span>
+                          </div>
+
+                          <div className="ui-td ui-td-stack" style={{ whiteSpace: 'normal' }}>
+                            <strong>{incident.title || 'Untitled incident'}</strong>
+                            <small>
+                              {[incident.category, incident.subcategory, incident.incidentDetail].filter(Boolean).join(' / ') ||
+                                incident.description ||
+                                'No classification'}
+                            </small>
+                          </div>
+
+                          <div className="ui-td">
+                            <span className={cn('ui-tag', getPriorityTone(incident.priority || 'Medium'))}>
+                              {incident.priority || 'Medium'}
                             </span>
                           </div>
-                        </div>
 
-                        <div className="user-cell">
-                          <span className="muted-cell">
-                            <Monitor size={13} />
-                            {incident.assetId || '—'}
-                          </span>
-                        </div>
+                          <div className="ui-td ui-td-stack" style={{ whiteSpace: 'normal' }}>
+                            <strong>{incident.assignedTo || 'Unassigned'}</strong>
+                            <small>{incident.assignedLevel || 'No level'}</small>
+                          </div>
 
-                        <div className="user-cell role-info-cell">
-                          <strong>{incident.title || 'Untitled incident'}</strong>
-                          <small>
-                            {[incident.category, incident.subcategory, incident.incidentDetail].filter(Boolean).join(' / ') ||
-                              incident.description ||
-                              'No classification'}
-                          </small>
-                        </div>
+                          <div className={cn('ui-td ui-td-stack', sla.className)} style={{ whiteSpace: 'normal' }}>
+                            <strong>{sla.label}</strong>
+                            <small>{sla.detail}</small>
+                            <small>Due: {sla.dueText}</small>
+                          </div>
 
-                        <div className="user-cell">
-                          <span className={cn('user-pill', priorityClass(incident.priority || 'Medium'))}>
-                            {incident.priority || 'Medium'}
-                          </span>
-                        </div>
+                          <div className="ui-td">
+                            <span className={cn('ui-tag', getStatusTone(incident.status || 'Awaiting'))}>
+                              {incident.status || 'Awaiting'}
+                            </span>
+                          </div>
 
-                        <div className="user-cell role-info-cell">
-                          <strong>{incident.assignedTo || 'Unassigned'}</strong>
-                          <small>{incident.assignedLevel || 'No level'}</small>
-                        </div>
-
-                        <div className={cn('user-cell role-info-cell', sla.className)}>
-                          <strong>{sla.label}</strong>
-                          <small>{sla.detail}</small>
-                          <small>Due: {sla.dueText}</small>
-                        </div>
-
-                        <div className="user-cell">
-                          <span className={cn('user-pill', statusClass(incident.status || 'Awaiting'))}>
-                            {incident.status || 'Awaiting'}
-                          </span>
-                        </div>
-
-                        <div className="user-cell" onClick={(event) => event.stopPropagation()}>
-                          <div className="row-actions user-row-action-wrap clean" style={{ display: 'inline-flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'nowrap', gap: '.38rem', minWidth: 'max-content' }}>
-                            {canEditIncident(incident) && (
+                          <div className="ui-td ui-td-actions" onClick={(event) => event.stopPropagation()}>
+                            <div style={{ display: 'inline-flex', gap: 4 }}>
                               <button
                                 type="button"
-                                className="mini-btn icon-only edit"
-                                title="Edit ticket"
-                                aria-label="Edit ticket"
-                                onClick={() => openEditForm(incident)}
+                                className="mini-btn icon-only"
+                                title="View ticket"
+                                aria-label="View ticket"
+                                onClick={() => {
+                                  setSelectedIncidentId(getId(incident));
+                                }}
                               >
-                                <Pencil size={14} />
+                                <Eye size={13} />
                               </button>
-                            )}
 
-                            {canDelete && (
-                              <button
-                                type="button"
-                                className="mini-btn icon-only delete"
-                                title={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed tickets' : 'Delete ticket'}
-                                aria-label={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed tickets' : 'Delete ticket'}
-                                disabled={isDeleteLockedStatus(incident.status)}
-                                onClick={() => deleteIncident(incident)}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  className="mini-btn icon-only delete"
+                                  title={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed tickets' : 'Delete ticket'}
+                                  aria-label={isDeleteLockedStatus(incident.status) ? 'Delete disabled for closed tickets' : 'Delete ticket'}
+                                  disabled={isDeleteLockedStatus(incident.status)}
+                                  onClick={() => deleteIncident(incident)}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+
+                  <div className="ui-pager">
+                    <div className="ui-pager-summary">
+                      Page {currentPage} of {totalPages} &middot; {sortedIncidents.length} tickets
+                    </div>
+                    <div className="ui-pager-nav" aria-label="Service desk pagination">
+                      <button className="ui-pager-step" type="button" onClick={() => setCurrentPage(1)} disabled={currentPage === 1} aria-label="First page">«</button>
+                      <button className="ui-pager-step" type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Previous page">‹</button>
+                      <span className="ui-pager-current">{currentPage}</span>
+                      <button className="ui-pager-step" type="button" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Next page">›</button>
+                      <button className="ui-pager-step" type="button" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages} aria-label="Last page">»</button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-
-            <AppPagination
-              className="uam-pagination global-style service-desk-registry-pagination"
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={sortedIncidents.length}
-              pageSize={itemsPerPage}
-              showPageSize={false}
-              onPageChange={setCurrentPage}
-            />
           </section>
         )}
 
@@ -6325,8 +6791,15 @@ export default function ServiceDesk() {
         </div>
       )}
 
-      {selectedIncident && (
-        <aside ref={detailPanelRef} className="side-card">
+      {selectedIncident && typeof document !== 'undefined' && createPortal(
+        <main data-section="service-desk" className="settings-module-root ema-settings-pro service-desk-modal-portal-root">
+          <div
+            className="settings-confirm-backdrop open service-desk-detail-backdrop"
+            aria-modal="true"
+            role="dialog"
+            onClick={() => setSelectedIncidentId('')}
+          >
+        <aside ref={detailPanelRef} className="side-card" onClick={(e) => e.stopPropagation()}>
           <>
             <div className="panel-head">
               <div className="setting-icon">
@@ -6382,7 +6855,7 @@ export default function ServiceDesk() {
               </div>
             </div>
 
-            <div className="settings-helper-card">
+            <div className="settings-helper-card service-desk-detail-card">
               <strong>Operational Note</strong>
               <p>{selectedIncident.additionalMemo || selectedIncident.remarks || 'Service desk queue ready.'}</p>
             </div>
@@ -6429,7 +6902,7 @@ export default function ServiceDesk() {
               )}
             </div>
 
-            <div className="content-actions service-desk-row-actions">
+            <div className="content-actions service-desk-row-actions service-desk-detail-actions">
               {canEditIncident(selectedIncident) && (
                 <button
                   type="button"
@@ -6445,7 +6918,7 @@ export default function ServiceDesk() {
               </button>
             </div>
 
-            <div className="settings-helper-card">
+            <div className="settings-helper-card service-desk-detail-timeline">
               <div className="content-head">
                 <Clock size={16} />
                 <strong>Ticket Timeline</strong>
@@ -6484,6 +6957,9 @@ export default function ServiceDesk() {
             </div>
           </>
         </aside>
+          </div>
+        </main>,
+        document.body
       )}
 
       {viewMode === 'form' && typeof document !== 'undefined' && createPortal(

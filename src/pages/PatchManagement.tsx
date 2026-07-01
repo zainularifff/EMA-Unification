@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';import type { ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { CSSProperties, ReactNode } from 'react';
 import {
   Boxes,
   ChevronDown,
@@ -50,6 +52,78 @@ import {
 
 function cx(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
+}
+
+function PatchSelect({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+  ariaLabel: string;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const selected = options.find((o) => o.value === value) || options[0];
+
+  const updatePos = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const w = Math.max(rect.width, 160);
+    const estH = Math.min(240, options.length * 36 + 10);
+    const below = window.innerHeight - rect.bottom - 8;
+    const above = rect.top - 8;
+    const openAbove = below < estH && above > below;
+    const maxH = Math.min(estH, openAbove ? above : below);
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - w - 8);
+    const top = openAbove ? rect.top - maxH - 4 : rect.bottom + 4;
+    setMenuStyle({ position: 'fixed', left, top, width: w, maxHeight: maxH, zIndex: 9999 });
+  }, [options.length]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    updatePos();
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('resize', updatePos);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('resize', updatePos);
+    };
+  }, [open, updatePos]);
+
+  return (
+    <div className="uam-filter-dropdown setting-select-dropdown" style={{ minWidth: 120 }}>
+      <button ref={triggerRef} type="button" className="uam-filter-trigger setting-select-trigger"
+        aria-label={ariaLabel} aria-expanded={open} onClick={() => setOpen((c) => !c)}>
+        <span>{selected?.label || 'Select'}</span>
+        <ChevronDown size={14} />
+      </button>
+      {open && typeof document !== 'undefined' ? createPortal(
+        <div ref={menuRef} className="uam-filter-menu uam-filter-menu-portal setting-select-menu" style={menuStyle} role="listbox">
+          {options.map((o) => (
+            <button key={o.value} type="button" className={cx('uam-filter-option', o.value === value && 'selected')}
+              role="option" aria-selected={o.value === value}
+              onClick={() => { onChange(o.value); setOpen(false); }}>
+              <span>{o.label}</span>
+              {o.value === value && <span className="uam-filter-check">✓</span>}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      ) : null}
+    </div>
+  );
 }
 
 type PatchMode = 'online' | 'offline';
@@ -313,12 +387,12 @@ function PatchManagement() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.add('ema-settings-page-active');
-    document.body.classList.add('ema-settings-page-active');
+    document.documentElement.classList.add('ema-settings-page-active', 'patch-management-page-active');
+    document.body.classList.add('ema-settings-page-active', 'patch-management-page-active');
 
     return () => {
-      document.documentElement.classList.remove('ema-settings-page-active');
-      document.body.classList.remove('ema-settings-page-active');
+      document.documentElement.classList.remove('ema-settings-page-active', 'patch-management-page-active');
+      document.body.classList.remove('ema-settings-page-active', 'patch-management-page-active');
     };
   }, []);
 
@@ -605,6 +679,45 @@ function PatchManagement() {
   return (
     <main className="settings-module-root hardware-module-root patch-module-root ema-settings-pro container-fluid p-3 p-xl-4" data-section="patch-management">
       <style>{`
+        /* Scroll-lock: prevent the outer shell from scrolling while this page is mounted. */
+        body.patch-management-page-active,
+        body.patch-management-page-active #root {
+          min-height: 100% !important;
+          overflow: hidden !important;
+        }
+        body.patch-management-page-active .ema-main,
+        body.patch-management-page-active .ema-content,
+        body.patch-management-page-active .ema-content-area {
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+        body.patch-management-page-active .patch-module-root {
+          width: 100% !important;
+          max-width: none !important;
+          height: calc(100dvh - 76px) !important;
+          min-height: 0 !important;
+          max-height: calc(100dvh - 76px) !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+        }
+        body.patch-management-page-active .patch-module-root .settings-layout {
+          min-height: 0 !important;
+          height: 100% !important;
+          align-items: stretch !important;
+        }
+        body.patch-management-page-active .patch-module-root .settings-menu {
+          height: 100% !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+        body.patch-management-page-active .patch-module-root .settings-content {
+          min-height: 0 !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+
         /* Patch page shell: match Hardware without touching the global AppShell sidebar. */
         .patch-module-root.settings-module-root {
           background:
@@ -628,16 +741,33 @@ function PatchManagement() {
         }
 
         .patch-module-root .settings-menu > .ema-sidebar-content {
-          flex: 1 1 auto !important;
+          flex: 1 1 0 !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
           padding-top: 0.65rem !important;
         }
 
+        /* Hide Branch/Statistics nav — only one view is active at a time and the
+           switcher takes unnecessary space in the sidebar panel. */
+        .patch-module-root .ema-module-sidebar-switcher {
+          display: none !important;
+        }
+
         .patch-module-root .ema-sidebar-subpanel {
+          flex: 1 1 0 !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
           justify-content: flex-start !important;
         }
 
         .patch-module-root .ema-sidebar-tree {
+          flex: 1 1 0 !important;
           min-height: 0 !important;
+          overflow-y: auto !important;
         }
 
         .patch-module-root .patch-tree-root {
@@ -691,6 +821,13 @@ function PatchManagement() {
         }
 
 
+
+        /* Online patching info card: prevent it from stretching to fill the full
+           content-body height when the table is absent or loading. */
+        .patch-module-root .content-body > .settings-helper-card {
+          flex: 0 0 auto !important;
+          align-self: flex-start !important;
+        }
 
         /* PATCH_REGISTRY_ACTION_BUTTON_INLINE_FIX_START */
         /* Patch Registry: keep all columns inside one aligned table */
@@ -1067,25 +1204,33 @@ function PatchManagement() {
                 <input value={searchTerm} onChange={(event) => { setActiveKpi(null); setSearchTerm(event.target.value); }} placeholder="Search KB, title, update id" />
               </label>
 
-              <select className="setting-select" value={severityFilter} onChange={(event) => { setActiveKpi(null); setSeverityFilter(event.target.value); }}>
-                <option value="">All severity</option>
-                {severityOptions.map((severity) => <option key={severity} value={severity}>{severity}</option>)}
-              </select>
+              <PatchSelect
+                value={severityFilter || ''}
+                onChange={(v) => { setActiveKpi(null); setSeverityFilter(v); }}
+                options={[{ value: '', label: 'All severity' }, ...severityOptions.map((s) => ({ value: s, label: s }))]}
+                ariaLabel="Filter by severity"
+              />
 
-              <select className="setting-select" value={statusFilter} onChange={(event) => { setActiveKpi(null); setStatusFilter(event.target.value as OnlinePatchStatusFilter); }} disabled={activeTab === 'catalog'}>
-                <option value="all">All status</option>
-                <option value="missing">Missing</option>
-                <option value="installed">Installed</option>
-              </select>
+              <PatchSelect
+                value={statusFilter}
+                onChange={(v) => { setActiveKpi(null); setStatusFilter(v as OnlinePatchStatusFilter); }}
+                options={[{ value: 'all', label: 'All status' }, { value: 'missing', label: 'Missing' }, { value: 'installed', label: 'Installed' }]}
+                ariaLabel="Filter by status"
+              />
 
-              <select className="setting-select" value={activeTab} onChange={(event) => setActiveTab(event.target.value as PatchTab)}>
-                <option value="status">Device status</option>
-                <option value="catalog">Update catalog</option>
-              </select>
+              <PatchSelect
+                value={activeTab}
+                onChange={(v) => setActiveTab(v as PatchTab)}
+                options={[{ value: 'status', label: 'Device status' }, { value: 'catalog', label: 'Update catalog' }]}
+                ariaLabel="View mode"
+              />
 
-              <select className="setting-select" value={limit} onChange={(event) => { setActiveKpi(null); setLimit(Number(event.target.value)); }}>
-                {pageSizeOptions.map((size) => <option key={size} value={size}>{size} / page</option>)}
-              </select>
+              <PatchSelect
+                value={String(limit)}
+                onChange={(v) => { setActiveKpi(null); setLimit(Number(v)); }}
+                options={pageSizeOptions.map((size) => ({ value: String(size), label: `${size} / page` }))}
+                ariaLabel="Rows per page"
+              />
             </div>
 
             <div className="content-body">

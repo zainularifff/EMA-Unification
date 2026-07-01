@@ -29,6 +29,93 @@
   max-width: 520px;
 }
 
+/* Generic .user-modal-head / .modal-close pattern: the modal shell itself
+   (.user-modal-backdrop, .user-modal.advanced) is styled in software-insights.css,
+   but the header row and close button were never given base styling anywhere,
+   even though ~10 pages (Hardware, Software, Network Inventory, Patch Management,
+   Service Desk, Settings, etc.) use this exact markup for secondary modals. */
+.user-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--ema-border);
+  flex: 0 0 auto;
+}
+
+.user-modal-head > div > span {
+  display: inline-block;
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ema-blue-600);
+  background: var(--ema-blue-50);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+.user-modal-head h2 {
+  margin: 8px 0 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ema-slate-900);
+}
+
+.user-modal-head p {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--ema-slate-500);
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--ema-border);
+  background: var(--ema-card-bg);
+  color: var(--ema-slate-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: var(--ema-slate-100);
+  color: var(--ema-slate-900);
+}
+
+.user-modal-body {
+  padding: 18px 20px;
+}
+
+.user-modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--ema-border);
+  flex: 0 0 auto;
+}
+
+/* Divider row inside modal body — separates named sections (Application Info,
+   Endpoint Context, etc.). Used by App Metering's usage-detail drawer and
+   ~2 other pages; had no base style. */
+.modal-section-title {
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ema-slate-500);
+  padding: 10px 0 4px;
+  border-bottom: 1px solid var(--ema-border);
+  margin-bottom: 10px;
+}
+
 .hardware-modal-message {
   max-width: 520px;
 }
@@ -444,4 +531,51 @@
 
 .hardware-btn.danger:hover:not(:disabled) {
   background: #b91c1c;
+}
+
+/* Simple confirm dialog pattern — used by Patch Management, Network Inventory,
+   Internet Metering, Service Desk (4 pages). Zero CSS before this. */
+.settings-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.settings-confirm-modal {
+  background: var(--ema-card-bg);
+  border: 1px solid var(--ema-border);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+  padding: 24px;
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-confirm-modal h3 {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--ema-slate-900);
+  margin: 0;
+}
+
+.settings-confirm-modal p {
+  font-size: 0.82rem;
+  color: var(--ema-slate-500);
+  margin: 0;
+}
+
+.settings-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
 }

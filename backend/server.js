@@ -874,17 +874,45 @@ function isSuperAdminRoleName(value) {
     return key === "super_admin" || key === "superadmin" || key === "system_administrator" || key === "system_admin" || key === "administrator_super";
 }
 
+function inferRoutePath(key, rawPath) {
+    const path = normalizeAuthValue(rawPath);
+    if (path) return path;
+    // Infer route from module key when RoutePath is not stored in DB
+    if (key.startsWith("settings")) return "/settings";
+    const knownKeys = {
+        management_dashboard: "/management-dashboard",
+        managementdashboard: "/management-dashboard",
+        dashboard: "/dashboard",
+        it_operations_dashboard: "/dashboard",
+        operations_dashboard: "/dashboard",
+        hardware: "/hardware", hardware_inventory: "/hardware",
+        software: "/software", software_inventory: "/software",
+        network: "/network-inventory", network_inventory: "/network-inventory",
+        service_desk: "/service-desk", servicedesk: "/service-desk",
+        tasklist: "/tasklist", task_list: "/tasklist",
+        report: "/report", reports: "/report",
+        appmetering: "/appmetering", app_metering: "/appmetering",
+        app_restriction: "/app-restriction",
+        web_restriction: "/web-restriction",
+        software_distribution: "/software-distribution",
+        patch_management: "/patch-management",
+        internet_metering: "/internet-metering",
+    };
+    return knownKeys[key] || "";
+}
+
 function buildModuleAccessMap(modules = []) {
     const access = {};
     for (const moduleRow of modules) {
         const key = normalizeModuleKey(moduleRow.ModuleKey || moduleRow.moduleKey || moduleRow.key || moduleRow.ModuleName || moduleRow.name);
         if (!key) continue;
+        const routePath = inferRoutePath(key, moduleRow.RoutePath || moduleRow.routePath);
         access[key] = {
             view: true,
             moduleID: moduleRow.ModuleID || moduleRow.moduleID || moduleRow.id || null,
             moduleKey: key,
             moduleName: moduleRow.ModuleName || moduleRow.moduleName || moduleRow.name || key,
-            routePath: moduleRow.RoutePath || moduleRow.routePath || ""
+            routePath
         };
     }
     return access;
@@ -1270,7 +1298,11 @@ async function getEmaUserAccessContext(pool, emaUserID) {
         roles: roles.map(role => role.RoleName).filter(Boolean),
         roleRows: roles,
         allowedModules: Object.keys(moduleAccess),
-        allowedRoutes: allowedRows.map(row => normalizeAuthValue(row.RoutePath)).filter(Boolean),
+        allowedRoutes: Array.from(new Set(
+            Object.values(moduleAccess)
+                .map(m => m.routePath)
+                .filter(Boolean)
+        )),
         moduleAccess,
         isSuperAdmin
     };
@@ -3867,6 +3899,324 @@ function normalizeServiceDeskIncidentStatus(value, fallback = 'Awaiting') {
 }
 
 // ============================================================
+// SERVICE DESK SLA CALCULATION
+// ============================================================
+
+function normalizeServiceDeskPriority(value, fallback = 'Medium') {
+    const text = String(value || '').trim();
+    if (!text) return fallback;
+
+    const lower = text.toLowerCase();
+    if (lower === 'critical') return 'Critical';
+    if (lower === 'high') return 'High';
+    if (lower === 'medium') return 'Medium';
+    if (lower === 'low') return 'Low';
+
+    return text;
+}
+
+function parseServiceDeskLocalDateTime(value) {
+    if (!value) return new Date();
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return new Date(
+            value.getFullYear(),
+            value.getMonth(),
+            value.getDate(),
+            value.getHours(),
+            value.getMinutes(),
+            value.getSeconds(),
+            value.getMilliseconds()
+        );
+    }
+
+    const text = String(value).trim();
+    if (!text) return new Date();
+
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,7}))?/);
+    if (match) {
+        return new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+            Number(match[4]),
+            Number(match[5]),
+            Number(match[6] || 0),
+            Number(String(match[7] || '0').slice(0, 3).padEnd(3, '0'))
+        );
+    }
+
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+
+    return new Date();
+}
+
+function parseServiceDeskTimeParts(value, fallbackHour, fallbackMinute = 0) {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        // SQL TIME may come back as Date-like value.
+        return {
+            hour: value.getUTCHours(),
+            minute: value.getUTCMinutes()
+        };
+    }
+
+    const text = String(value || '').trim();
+
+    const match = text.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+    if (match) {
+        return {
+            hour: Math.max(0, Math.min(23, Number(match[1]))),
+            minute: Math.max(0, Math.min(59, Number(match[2])))
+        };
+    }
+
+    return {
+        hour: fallbackHour,
+        minute: fallbackMinute
+    };
+}
+
+function getServiceDeskDayName(date) {
+    return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()];
+}
+
+function getServiceDeskWorkingRuleForDate(date, workingHours = []) {
+    const dayName = getServiceDeskDayName(date).toLowerCase();
+
+    const matched = (workingHours || []).find((row) => {
+        const rowDay = String(row.dayOfWeek || row.DayOfWeek || '').trim().toLowerCase();
+        return rowDay === dayName;
+    });
+
+    // Safe fallback: Monday-Friday, 09:00-18:00.
+    if (!matched) {
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        return {
+            dayOfWeek: getServiceDeskDayName(date),
+            isRestDay: isWeekend,
+            is24Hours: false,
+            startTime: '09:00:00',
+            endTime: '18:00:00'
+        };
+    }
+
+    return {
+        dayOfWeek: matched.dayOfWeek || matched.DayOfWeek,
+        isRestDay: matched.isRestDay === true || matched.isRestDay === 1 || matched.IsRestDay === true || matched.IsRestDay === 1,
+        is24Hours: matched.is24Hours === true || matched.is24Hours === 1 || matched.Is24Hours === true || matched.Is24Hours === 1,
+        startTime: matched.startTime || matched.StartTime || '09:00:00',
+        endTime: matched.endTime || matched.EndTime || '18:00:00'
+    };
+}
+
+function getStartOfNextServiceDeskDay(date) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + 1);
+    next.setHours(0, 0, 0, 0);
+    return next;
+}
+
+function getServiceDeskWorkingWindow(date, workingHours = []) {
+    const rule = getServiceDeskWorkingRuleForDate(date, workingHours);
+
+    if (rule.isRestDay) {
+        return {
+            isWorkingDay: false,
+            start: null,
+            end: null
+        };
+    }
+
+    if (rule.is24Hours) {
+        const start = new Date(date);
+        start.setHours(0, 0, 0, 0);
+
+        const end = new Date(date);
+        end.setDate(end.getDate() + 1);
+        end.setHours(0, 0, 0, 0);
+
+        return {
+            isWorkingDay: true,
+            start,
+            end
+        };
+    }
+
+    const startParts = parseServiceDeskTimeParts(rule.startTime, 9, 0);
+    const endParts = parseServiceDeskTimeParts(rule.endTime, 18, 0);
+
+    const start = new Date(date);
+    start.setHours(startParts.hour, startParts.minute, 0, 0);
+
+    const end = new Date(date);
+    end.setHours(endParts.hour, endParts.minute, 0, 0);
+
+    // If end <= start, treat as next day window.
+    if (end <= start) {
+        end.setDate(end.getDate() + 1);
+    }
+
+    return {
+        isWorkingDay: true,
+        start,
+        end
+    };
+}
+
+function addServiceDeskWorkingMinutes(startValue, minutesToAdd, workingHours = []) {
+    let remainingMinutes = Math.max(0, Number(minutesToAdd || 0));
+    let cursor = parseServiceDeskLocalDateTime(startValue);
+
+    if (remainingMinutes <= 0) return cursor;
+
+    // Safety guard to avoid infinite loop if working hour config is wrong.
+    for (let guard = 0; guard < 370; guard += 1) {
+        const window = getServiceDeskWorkingWindow(cursor, workingHours);
+
+        if (!window.isWorkingDay || !window.start || !window.end) {
+            cursor = getStartOfNextServiceDeskDay(cursor);
+            continue;
+        }
+
+        if (cursor < window.start) {
+            cursor = new Date(window.start);
+        }
+
+        if (cursor >= window.end) {
+            cursor = getStartOfNextServiceDeskDay(cursor);
+            continue;
+        }
+
+        const availableMinutes = Math.max(0, Math.floor((window.end.getTime() - cursor.getTime()) / 60000));
+
+        if (remainingMinutes <= availableMinutes) {
+            return new Date(cursor.getTime() + remainingMinutes * 60000);
+        }
+
+        remainingMinutes -= availableMinutes;
+        cursor = getStartOfNextServiceDeskDay(cursor);
+    }
+
+    // Fallback if config is invalid: add calendar minutes.
+    const fallback = parseServiceDeskLocalDateTime(startValue);
+    fallback.setMinutes(fallback.getMinutes() + Math.max(0, Number(minutesToAdd || 0)));
+    return fallback;
+}
+
+async function getServiceDeskSlaRule(pool, priorityValue) {
+    const priority = normalizeServiceDeskPriority(priorityValue, 'Medium');
+
+    const result = await pool.request()
+        .input('Priority', sql.NVarChar, priority)
+        .query(`
+            SELECT TOP 1
+                ConfigID,
+                Priority,
+                Label,
+                ResponseTimeMin,
+                ResolutionTimeHrs,
+                EscalationPolicy
+            FROM EMA_SLA_Configs WITH (NOLOCK)
+            WHERE LOWER(Priority) = LOWER(@Priority)
+            ORDER BY ConfigID;
+        `);
+
+    if (result.recordset?.length > 0) {
+        return result.recordset[0];
+    }
+
+    const fallbackResult = await pool.request().query(`
+        SELECT TOP 1
+            ConfigID,
+            Priority,
+            Label,
+            ResponseTimeMin,
+            ResolutionTimeHrs,
+            EscalationPolicy
+        FROM EMA_SLA_Configs WITH (NOLOCK)
+        WHERE LOWER(Priority) = 'medium'
+        ORDER BY ConfigID;
+    `);
+
+    return fallbackResult.recordset?.[0] || {
+        Priority: 'Medium',
+        Label: 'Medium',
+        ResponseTimeMin: 60,
+        ResolutionTimeHrs: 24,
+        EscalationPolicy: ''
+    };
+}
+
+async function getServiceDeskWorkingHours(pool) {
+    const result = await pool.request().query(`
+        SELECT
+            DayOfWeek as dayOfWeek,
+            IsRestDay as isRestDay,
+            Is24Hours as is24Hours,
+            StartTime as startTime,
+            EndTime as endTime,
+            AutoResponseMsg as autoResponseMsg,
+            SortOrder as sortOrder
+        FROM EMA_WorkingHours WITH (NOLOCK)
+        ORDER BY SortOrder;
+    `);
+
+    return result.recordset || [];
+}
+
+async function calculateServiceDeskSlaDates(pool, priorityValue, createdAtValue) {
+    const slaRule = await getServiceDeskSlaRule(pool, priorityValue);
+    const workingHours = await getServiceDeskWorkingHours(pool);
+
+    const responseMinutes = Math.max(0, Number(slaRule.ResponseTimeMin || slaRule.responseTimeMin || 0));
+    const resolutionHours = Math.max(0, Number(slaRule.ResolutionTimeHrs || slaRule.resolutionTimeHrs || 0));
+    const resolutionMinutes = resolutionHours * 60;
+
+    const firstResponseDueDate = addServiceDeskWorkingMinutes(createdAtValue, responseMinutes, workingHours);
+    const slaDueDate = addServiceDeskWorkingMinutes(createdAtValue, resolutionMinutes, workingHours);
+
+    return {
+        priority: normalizeServiceDeskPriority(priorityValue, 'Medium'),
+        responseTimeMin: responseMinutes,
+        resolutionTimeHrs: resolutionHours,
+        firstResponseDue: formatServerLocalDateTime(firstResponseDueDate, true),
+        slaDue: formatServerLocalDateTime(slaDueDate, true)
+    };
+}
+
+function normalizeServiceDeskDateTimeForDb(value) {
+    if (value === undefined || value === null || value === '') return null;
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return formatServerLocalDateTime(value, true);
+    }
+
+    const text = String(value).trim();
+    if (!text) return null;
+
+    const hasExplicitTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+    if (hasExplicitTimezone) {
+        const parsedWithTimezone = new Date(text);
+        if (!Number.isNaN(parsedWithTimezone.getTime())) {
+            return formatServerLocalDateTime(parsedWithTimezone, true);
+        }
+    }
+
+    const localMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,7}))?/);
+    if (localMatch) {
+        return formatServerLocalDateTime(parseServiceDeskLocalDateTime(text), true);
+    }
+
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) {
+        return formatServerLocalDateTime(parsed, true);
+    }
+
+    return text.replace('T', ' ').replace(/Z$/i, '');
+}
+
+// ============================================================
 // INCIDENTS API
 // ============================================================
 
@@ -3964,14 +4314,24 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
     
     try {
         const pool = await getDbPool(typeof req !== 'undefined' ? req : null);
+
+        // Backend is the source of truth for CreatedAt and SlaDue.
+        // Do not trust frontend-created SLA values because update/assign actions can resend stale SLA dates.
+        const incidentCreatedAt = formatServerLocalDateTime();
+        const calculatedSla = await calculateServiceDeskSlaDates(pool, priority || 'Medium', incidentCreatedAt);
+        const finalSlaDue = calculatedSla.slaDue || '';
+        const normalizedStatus = normalizeServiceDeskIncidentStatus(status, 'Awaiting');
+        const finalFirstResponseAt = normalizeServiceDeskDateTimeForDb(firstResponseAt);
+        const finalResolvedAt = normalizeServiceDeskDateTimeForDb(resolvedAt);
+
         await pool.request()
             .input('id', sql.NVarChar, id)
             .input('title', sql.NVarChar, title || '')
             .input('description', sql.NVarChar, description || '')
             .input('priority', sql.NVarChar, priority || 'Medium')
-            .input('status', sql.NVarChar, normalizeServiceDeskIncidentStatus(status, 'Awaiting'))
+            .input('status', sql.NVarChar, normalizedStatus)
             .input('category', sql.NVarChar, category || '')
-            .input('createdAt', sql.NVarChar, createdAt || formatServerLocalDateTime())
+            .input('createdAt', sql.NVarChar, incidentCreatedAt)
             .input('requesterId', sql.NVarChar, requesterId || '')
             .input('requesterName', sql.NVarChar, requesterName || '')
             .input('deviceType', sql.NVarChar, deviceType || '')
@@ -3979,11 +4339,11 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
             .input('subcategory', sql.NVarChar, subcategory || '')
             .input('incidentDetail', sql.NVarChar, incidentDetail || '')
             .input('reporterId', sql.NVarChar, reporterId || '')
-            .input('slaDue', sql.NVarChar, slaDue || '')
+            .input('slaDue', sql.NVarChar, finalSlaDue)
             .input('assignedTo', sql.NVarChar, assignedTo || '')
             .input('assignedLevel', sql.NVarChar, assignedLevel || '')
-            .input('firstResponseAt', sql.NVarChar, firstResponseAt || null)
-            .input('resolvedAt', sql.NVarChar, resolvedAt || null)
+            .input('firstResponseAt', sql.NVarChar, finalFirstResponseAt)
+            .input('resolvedAt', sql.NVarChar, finalResolvedAt)
             .input('rootCause', sql.NVarChar, rootCause || '')
             .input('actionPlan', sql.NVarChar, actionPlan || '')
             .input('additionalMemo', sql.NVarChar, additionalMemo || '')
@@ -4001,7 +4361,16 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
                 )
             `);
 
-        const incidentPayload = { id, title, description, priority, status: normalizeServiceDeskIncidentStatus(status, 'Awaiting'), requesterName, assignedTo };
+        const incidentPayload = {
+            id,
+            title,
+            description,
+            priority,
+            status: normalizedStatus,
+            requesterName,
+            assignedTo
+        };
+
         let notificationResult = null;
         try {
             notificationResult = await triggerIncidentNotification(pool, 'INCIDENT_CREATED', incidentPayload, req);
@@ -4013,7 +4382,15 @@ app.post('/api/incidents', authenticateToken, async (req, res) => {
             console.warn('INCIDENT_CREATED notification skipped:', notifyErr.message);
         }
 
-        res.json({ success: true, id, ...req.body, notification: notificationResult });
+        res.json({
+            success: true,
+            id,
+            ...req.body,
+            createdAt: incidentCreatedAt,
+            slaDue: finalSlaDue,
+            slaCalculation: calculatedSla,
+            notification: notificationResult
+        });
     } catch (err) {
         console.error('POST /api/incidents error:', err);
         res.status(500).json({ status: 'error', message: 'Failed to create incident', error: err.message });
@@ -4032,18 +4409,61 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
     
     try {
         const pool = await getDbPool(typeof req !== 'undefined' ? req : null);
+
         const previousIncidentResult = await pool.request()
             .input('id', sql.NVarChar, id)
-            .query(`SELECT TOP 1 Status, Title, Priority, AssignedTo, RequesterName FROM EMA_Incidents WITH (NOLOCK) WHERE IncidentID = @id;`);
-        const previousStatus = normalizeServiceDeskIncidentStatus(previousIncidentResult.recordset?.[0]?.Status || '', '');
+            .query(`
+                SELECT TOP 1
+                    Status,
+                    Title,
+                    Priority,
+                    AssignedTo,
+                    RequesterName,
+                    CreatedAt,
+                    SlaDue,
+                    ResolvedAt
+                FROM EMA_Incidents WITH (NOLOCK)
+                WHERE IncidentID = @id;
+            `);
+
+        const previousIncident = previousIncidentResult.recordset?.[0] || {};
+        const previousStatus = normalizeServiceDeskIncidentStatus(previousIncident.Status || '', '');
+
+        const previousPriorityValue = normalizeServiceDeskPriority(previousIncident.Priority || 'Medium', 'Medium');
+        const finalPriority = normalizeServiceDeskPriority(priority || previousIncident.Priority || 'Medium', 'Medium');
+        const priorityChanged = previousPriorityValue.toLowerCase() !== finalPriority.toLowerCase();
+
+        // Preserve original CreatedAt during normal updates such as engineer assignment.
+        // Frontend may send createdAt/slaDue, but backend should not let those overwrite SLA.
+        const finalCreatedAt = previousIncident.CreatedAt || createdAt || formatServerLocalDateTime();
+
+        let finalSlaDue = previousIncident.SlaDue || '';
+
+        if (priorityChanged || !finalSlaDue) {
+            const calculatedSla = await calculateServiceDeskSlaDates(pool, finalPriority, finalCreatedAt);
+            finalSlaDue = calculatedSla.slaDue || finalSlaDue;
+        }
+
+        const normalizedStatus = normalizeServiceDeskIncidentStatus(status, 'Awaiting');
+        const previousStatusText = String(previousStatus || '').toLowerCase();
+        const currentStatusText = String(normalizedStatus || '').toLowerCase();
+        const isReopenTransition =
+            ['resolved', 'solved'].includes(previousStatusText) &&
+            ['in progress', 're-open', 'reopen'].includes(currentStatusText);
+
+        const finalFirstResponseAt = normalizeServiceDeskDateTimeForDb(firstResponseAt);
+        const finalResolvedAt = isReopenTransition
+            ? null
+            : normalizeServiceDeskDateTimeForDb(resolvedAt);
+
         await pool.request()
             .input('id', sql.NVarChar, id)
             .input('title', sql.NVarChar, title || '')
             .input('description', sql.NVarChar, description || '')
-            .input('priority', sql.NVarChar, priority || 'Medium')
-            .input('status', sql.NVarChar, normalizeServiceDeskIncidentStatus(status, 'Awaiting'))
+            .input('priority', sql.NVarChar, finalPriority)
+            .input('status', sql.NVarChar, normalizedStatus)
             .input('category', sql.NVarChar, category || '')
-            .input('createdAt', sql.NVarChar, createdAt || null)
+            .input('createdAt', sql.NVarChar, finalCreatedAt || null)
             .input('requesterId', sql.NVarChar, requesterId || '')
             .input('requesterName', sql.NVarChar, requesterName || '')
             .input('deviceType', sql.NVarChar, deviceType || '')
@@ -4051,11 +4471,11 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
             .input('subcategory', sql.NVarChar, subcategory || '')
             .input('incidentDetail', sql.NVarChar, incidentDetail || '')
             .input('reporterId', sql.NVarChar, reporterId || '')
-            .input('slaDue', sql.NVarChar, slaDue || '')
+            .input('slaDue', sql.NVarChar, finalSlaDue || '')
             .input('assignedTo', sql.NVarChar, assignedTo || '')
             .input('assignedLevel', sql.NVarChar, assignedLevel || '')
-            .input('firstResponseAt', sql.NVarChar, firstResponseAt || null)
-            .input('resolvedAt', sql.NVarChar, resolvedAt || null)
+            .input('firstResponseAt', sql.NVarChar, finalFirstResponseAt)
+            .input('resolvedAt', sql.NVarChar, finalResolvedAt)
             .input('rootCause', sql.NVarChar, rootCause || '')
             .input('actionPlan', sql.NVarChar, actionPlan || '')
             .input('additionalMemo', sql.NVarChar, additionalMemo || '')
@@ -4085,13 +4505,22 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
                 WHERE IncidentID = @id
             `);
 
-        const normalizedStatus = normalizeServiceDeskIncidentStatus(status, 'Awaiting');
-        const previousStatusText = String(previousStatus || '').toLowerCase();
-        const currentStatusText = String(normalizedStatus || '').toLowerCase();
         const resolvedNow = ['resolved', 'solved', 'closed'].includes(currentStatusText);
         const wasResolved = ['resolved', 'solved', 'closed'].includes(previousStatusText);
         const notificationRuleKey = resolvedNow && !wasResolved ? 'INCIDENT_RESOLVED' : 'INCIDENT_UPDATED';
-        const incidentPayload = { id, title, description, priority, status: normalizedStatus, requesterName, assignedTo, rootCause, actionPlan };
+
+        const incidentPayload = {
+            id,
+            title,
+            description,
+            priority: finalPriority,
+            status: normalizedStatus,
+            requesterName,
+            assignedTo,
+            rootCause,
+            actionPlan
+        };
+
         let notificationResult = null;
         try {
             notificationResult = await triggerIncidentNotification(pool, notificationRuleKey, incidentPayload, req);
@@ -4103,7 +4532,18 @@ app.put('/api/incidents/:id', authenticateToken, async (req, res) => {
             console.warn(`${notificationRuleKey} notification skipped:`, notifyErr.message);
         }
 
-        res.json({ success: true, id, ...req.body, notification: notificationResult });
+        res.json({
+            success: true,
+            id,
+            ...req.body,
+            createdAt: finalCreatedAt,
+            priority: finalPriority,
+            slaDue: finalSlaDue,
+            firstResponseAt: finalFirstResponseAt,
+            resolvedAt: finalResolvedAt,
+            priorityChanged,
+            notification: notificationResult
+        });
     } catch (err) {
         console.error('PUT /api/incidents/:id error:', err);
         res.status(500).json({ status: 'error', message: 'Failed to update incident', error: err.message });
@@ -4708,13 +5148,49 @@ app.post('/api/incidents/search', authenticateToken, async (req, res) => {
 
         // 7. SLA Status
         if (slaStatus && slaStatus !== 'All') {
-            const now = new Date().toISOString();
+            const openStatusCondition = `Status NOT IN ('Resolved', 'Solved', 'Closed')`;
+            const slaDueDateExpression = `
+                COALESCE(
+                    TRY_CONVERT(datetime, SlaDue, 121),
+                    TRY_CONVERT(datetime, SlaDue, 120),
+                    TRY_CONVERT(datetime, REPLACE(REPLACE(SlaDue, 'T', ' '), 'Z', ''), 121),
+                    TRY_CONVERT(datetime, REPLACE(REPLACE(SlaDue, 'T', ' '), 'Z', ''), 120),
+                    TRY_CONVERT(datetime, SlaDue)
+                )
+            `;
+
+            const nearDueCondition = `
+                (
+                    (LOWER(ISNULL(Priority, '')) = 'critical' AND ${slaDueDateExpression} <= DATEADD(hour, 1, GETDATE()))
+                    OR (LOWER(ISNULL(Priority, '')) = 'high' AND ${slaDueDateExpression} <= DATEADD(hour, 2, GETDATE()))
+                    OR (LOWER(ISNULL(Priority, '')) = 'medium' AND ${slaDueDateExpression} <= DATEADD(hour, 6, GETDATE()))
+                    OR (LOWER(ISNULL(Priority, '')) = 'low' AND ${slaDueDateExpression} <= DATEADD(hour, 12, GETDATE()))
+                )
+            `;
+
             if (slaStatus === 'On Time') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue > GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
+                conditions.push(`
+                    NULLIF(LTRIM(RTRIM(ISNULL(SlaDue, ''))), '') IS NOT NULL
+                    AND ${slaDueDateExpression} IS NOT NULL
+                    AND ${slaDueDateExpression} > GETDATE()
+                    AND ${openStatusCondition}
+                    AND NOT ${nearDueCondition}
+                `);
             } else if (slaStatus === 'Near Due') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue <= DATEADD(hour, 24, GETDATE()) AND SlaDue > GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
+                conditions.push(`
+                    NULLIF(LTRIM(RTRIM(ISNULL(SlaDue, ''))), '') IS NOT NULL
+                    AND ${slaDueDateExpression} IS NOT NULL
+                    AND ${slaDueDateExpression} > GETDATE()
+                    AND ${openStatusCondition}
+                    AND ${nearDueCondition}
+                `);
             } else if (slaStatus === 'Overdue') {
-                conditions.push(`SlaDue IS NOT NULL AND SlaDue < GETDATE() AND Status NOT IN ('Resolved', 'Solved')`);
+                conditions.push(`
+                    NULLIF(LTRIM(RTRIM(ISNULL(SlaDue, ''))), '') IS NOT NULL
+                    AND ${slaDueDateExpression} IS NOT NULL
+                    AND ${slaDueDateExpression} < GETDATE()
+                    AND ${openStatusCondition}
+                `);
             }
         }
 
@@ -9702,6 +10178,8 @@ async function getMdmAssetByObjectRoot(pool, objectRootIdn, options = {}) {
 | - UpdateMDMAssetFrequent(): frequent online/lost-mode/tracking fields only
 |--------------------------------------------------------------------------
 */
+
+
 const mdmAssetSyncState = {
     updateAll: { enabled: false, running: false, intervalMs: 0, lastStartedAt: null, lastFinishedAt: null, lastResult: null, lastError: null },
     updateAssets: { enabled: false, running: false, intervalMs: 0, lastStartedAt: null, lastFinishedAt: null, lastResult: null, lastError: null },
@@ -9778,7 +10256,8 @@ async function mdmApiGetVersion() {
 
 async function mdmApiGetMDMAssets(groupId_MDM = getSureMdmGroupId()) {
     const groupId = normalizeMdmValue(groupId_MDM) || "null";
-    const pullAllDevices = !groupId || groupId.toLowerCase() === "null" || groupId.toLowerCase() === "all";
+
+    const pullAllDevices = (!groupId || groupId.toLowerCase() === "null" || groupId.toLowerCase() === "alldevices") ? "AllDevices" : "";
 
     const requestPayload = {
         ID: pullAllDevices ? null : groupId,
@@ -10644,6 +11123,9 @@ app.post("/api/mdm/UpdateAssetsFrequent", authenticateToken, async (req, res) =>
     const result = await runUpdateMDMAssetFrequent({ trigger: "api:/api/mdm/UpdateAssetsFrequent", ...(req.body || {}), enrichCustomProperties: false });
     return res.json(result);
 });
+
+
+
 
 /*
 |--------------------------------------------------------------------------
@@ -12064,7 +12546,7 @@ async function runUpdateAssetsGeolocationCustomReport(options = {}) {
     geoWorkerState.scheduledGeolocation.lastFinishedAt = new Date();
 
     console.log(`EMA [${runId}] [END] UpdateAssetsGeolocation_CustomReport(): ${result.endTime}`);
-    logGeoDebugResult("UpdateAssetsGeolocation_CustomReport", result);
+    // logGeoDebugResult("UpdateAssetsGeolocation_CustomReport", result);
 
     return result;
 }
@@ -26621,510 +27103,6 @@ async function createOnlinePatchScanJob(req, res) {
 */
 
 // ============================================================
-// IT OPERATIONS DASHBOARD API
-// GET /api/dashboard/it-operations
-// Live API only. No dummy/fallback dashboard data.
-// ============================================================
-
-function itopsToNumber(value, fallback = 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function itopsRound(value, digits = 1) {
-    const factor = Math.pow(10, digits);
-    return Math.round(itopsToNumber(value) * factor) / factor;
-}
-
-function itopsPercent(part, total, fallback = 0) {
-    const denominator = itopsToNumber(total);
-    if (!denominator) return Math.max(0, Math.min(100, fallback));
-    const percent = itopsRound((itopsToNumber(part) / denominator) * 100, 1);
-    return Math.max(0, Math.min(100, percent));
-}
-
-function itopsFormatInt(value) {
-    return itopsToNumber(value).toLocaleString("en-US");
-}
-
-function itopsFormatPercent(value) {
-    return `${itopsRound(value, 1).toFixed(1)}%`;
-}
-
-function itopsFormatDuration(minutes) {
-    const totalMinutes = Math.max(0, Math.round(itopsToNumber(minutes)));
-    if (!totalMinutes) return "0m";
-
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
-    if (!hours) return `${mins}m`;
-    if (!mins) return `${hours}h`;
-    return `${hours}h ${mins}m`;
-}
-
-function itopsSeverity(value) {
-    const text = String(value || "").trim();
-    if (["Critical", "High", "Medium", "Low"].includes(text)) return text;
-    return "Medium";
-}
-
-function itopsStatusTone(status, priority) {
-    const normalizedStatus = String(status || "").toLowerCase();
-    const normalizedPriority = String(priority || "").toLowerCase();
-
-    if (normalizedStatus.includes("resolved") || normalizedStatus.includes("closed") || normalizedStatus.includes("transferred")) return "success";
-    if (normalizedStatus.includes("running") || normalizedStatus.includes("progress") || normalizedStatus.includes("investigat")) return "info";
-    if (normalizedStatus.includes("cancel") || normalizedStatus.includes("fail") || normalizedPriority === "critical") return "danger";
-    if (normalizedPriority === "high" || normalizedPriority === "medium" || normalizedStatus.includes("await")) return "warning";
-    return "neutral";
-}
-
-function itopsDateLabel(value) {
-    if (!value) return "-";
-    const dbLocalDisplay = formatDbLocalDisplayDateTime(value, { includeSeconds: false });
-    if (dbLocalDisplay) return dbLocalDisplay;
-    return String(value);
-}
-
-async function itopsTableExists(pool, tableName) {
-    if (typeof tableExists === "function") {
-        return tableExists(pool, tableName);
-    }
-
-    const result = await pool.request()
-        .input("tableName", sql.NVarChar, tableName)
-        .query(`
-            SELECT 1 AS existsFlag
-            FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_NAME = @tableName
-        `);
-
-    return result.recordset.length > 0;
-}
-
-async function itopsColumnExists(pool, tableName, columnName) {
-    const result = await pool.request()
-        .input("tableName", sql.NVarChar, tableName)
-        .input("columnName", sql.NVarChar, columnName)
-        .query(`
-            SELECT 1 AS existsFlag
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_NAME = @tableName
-              AND COLUMN_NAME = @columnName
-        `);
-
-    return result.recordset.length > 0;
-}
-
-function itopsRiskPercent(value, total) {
-    return itopsPercent(value, total, 0);
-}
-
-
-function itopsRiskSeverityCount(count, criticalThreshold, highThreshold) {
-    const value = itopsToNumber(count);
-    if (value >= criticalThreshold) return "Critical";
-    if (value >= highThreshold) return "High";
-    if (value > 0) return "Medium";
-    return "Low";
-}
-
-
-async function getItOpsSoftwareSummary(pool) {
-    const hasSoftware = await itopsTableExists(pool, "TSMDM_SW_LIST");
-    const hasAsset = await itopsTableExists(pool, "TSMDM_ASSET");
-    const hasCategory = await itopsTableExists(pool, "TS_SW_CATEGORY");
-
-    if (!hasSoftware) {
-        return {
-            totalInstallations: 0,
-            uniqueSoftware: 0,
-            devicesWithSoftware: 0,
-            unclassifiedSoftware: 0,
-            latestScan: "-",
-            topCategories: []
-        };
-    }
-
-    const assetJoin = hasAsset
-        ? "LEFT JOIN TSMDM_ASSET asset WITH (NOLOCK) ON sw.DeviceID = asset.DeviceID"
-        : "";
-
-    const categoryJoin = hasCategory
-        ? "LEFT JOIN TS_SW_CATEGORY cat WITH (NOLOCK) ON sw.SW_CATEGORY = cat.CategoryID"
-        : "";
-
-    const categoryExpression = hasCategory
-        ? "ISNULL(NULLIF(LTRIM(RTRIM(cat.CategoryName)), ''), 'Unclassified')"
-        : "'Unclassified'";
-
-    const result = await pool.request().query(`
-        ;WITH SoftwareBase AS (
-            SELECT
-                CASE
-                    WHEN TRY_CONVERT(uniqueidentifier, NULLIF(LTRIM(RTRIM(CAST(sw.Name AS NVARCHAR(255)))), '')) IS NOT NULL
-                         AND NULLIF(LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255)))), '') IS NOT NULL
-                        THEN LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255))))
-                    WHEN NULLIF(LTRIM(RTRIM(CAST(sw.Name AS NVARCHAR(255)))), '') IS NOT NULL
-                        THEN LTRIM(RTRIM(CAST(sw.Name AS NVARCHAR(255))))
-                    WHEN NULLIF(LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255)))), '') IS NOT NULL
-                        THEN LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255))))
-                    ELSE '-'
-                END AS SoftwareName,
-                sw.DeviceID,
-                ${categoryExpression} AS CategoryName,
-                TRY_CONVERT(datetime, sw.SearchDate) AS SearchDate
-            FROM TSMDM_SW_LIST sw WITH (NOLOCK)
-            ${assetJoin}
-            ${categoryJoin}
-        )
-        SELECT
-            COUNT(1) AS TotalInstallations,
-            COUNT(DISTINCT SoftwareName) AS UniqueSoftware,
-            COUNT(DISTINCT DeviceID) AS DevicesWithSoftware,
-            SUM(CASE WHEN CategoryName = 'Unclassified' THEN 1 ELSE 0 END) AS UnclassifiedSoftware,
-            MAX(SearchDate) AS LatestScan
-        FROM SoftwareBase;
-    `);
-
-    const categoryResult = await pool.request().query(`
-        ;WITH SoftwareBase AS (
-            SELECT
-                ${categoryExpression} AS CategoryName
-            FROM TSMDM_SW_LIST sw WITH (NOLOCK)
-            ${assetJoin}
-            ${categoryJoin}
-        )
-        SELECT TOP 6
-            CategoryName AS Name,
-            COUNT(1) AS Value
-        FROM SoftwareBase
-        GROUP BY CategoryName
-        ORDER BY COUNT(1) DESC;
-    `);
-
-    const row = result.recordset?.[0] || {};
-    const totalInstallations = itopsToNumber(row.TotalInstallations);
-
-    return {
-        totalInstallations,
-        uniqueSoftware: itopsToNumber(row.UniqueSoftware),
-        devicesWithSoftware: itopsToNumber(row.DevicesWithSoftware),
-        unclassifiedSoftware: itopsToNumber(row.UnclassifiedSoftware),
-        latestScan: itopsDateLabel(row.LatestScan),
-        topCategories: (categoryResult.recordset || []).map(item => ({
-            name: item.Name || "Unclassified",
-            value: itopsToNumber(item.Value),
-            percent: itopsPercent(item.Value, totalInstallations)
-        }))
-    };
-}
-
-async function getItOpsNetworkSummary(pool) {
-    let rows = [];
-
-    try {
-        if (typeof getNetworkInventoryRows === "function") {
-            rows = await getNetworkInventoryRows(pool, {});
-        }
-    } catch (err) {
-        console.warn("ITOps V2 network summary getNetworkInventoryRows failed:", err.message || err);
-    }
-
-    let lastScan = "-";
-
-    try {
-        if (typeof getNetworkLastSearchDate === "function") {
-            lastScan = getNetworkLastSearchDate ? await getNetworkLastSearchDate(pool) : "-";
-        }
-    } catch (err) {
-        console.warn("ITOps V2 network last scan failed:", err.message || err);
-    }
-
-    const knownIps = rows.length;
-    const registeredDevices = rows.filter(row => {
-        const text = JSON.stringify(row || {}).toLowerCase();
-        return text.includes("registered") || text.includes("installed") || text.includes("agent");
-    }).length;
-    const activeIps = rows.filter(row => {
-        const text = JSON.stringify(row || {}).toLowerCase();
-        return text.includes("active") || text.includes("online") || text.includes("up");
-    }).length;
-
-    const subnetSet = new Set();
-    const workgroupMap = new Map();
-
-    for (const row of rows) {
-        const ip = row.IP || row.Ip || row.ip || row.IPAddress || row.IP_Address || row.Subnet || row.subnet || "";
-        const subnet = String(ip).split(".").slice(0, 3).join(".");
-        if (subnet) subnetSet.add(subnet);
-
-        const workgroup = row.WorkGroup || row.Workgroup || row.WorkgroupName || row.GroupName || row.Object_Full_Name || "Unknown";
-        workgroupMap.set(workgroup, (workgroupMap.get(workgroup) || 0) + 1);
-    }
-
-    const workgroups = [...workgroupMap.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 6)
-        .map(([name, value]) => ({
-            name,
-            value,
-            percent: itopsPercent(value, knownIps)
-        }));
-
-    return {
-        knownIps,
-        registeredDevices,
-        unregisteredIps: Math.max(knownIps - registeredDevices, 0),
-        activeIps,
-        subnetCount: subnetSet.size,
-        lastScan: itopsDateLabel(lastScan),
-        workgroups
-    };
-}
-
-async function getItOpsHardwareSummary(pool) {
-    const rows = await itopsGetHardwareInventoryRows(pool).catch((err) => {
-        console.warn("ITOps hardware inventory summary failed:", err.message || err);
-        return [];
-    });
-
-    const totalDevices = rows.length;
-    const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const onlineDevices = rows.filter((row) => itopsIsOnlineStatus(row.status)).length;
-    const offlineDevices = Math.max(totalDevices - onlineDevices, 0);
-    const staleSync = rows.filter((row) => {
-        const lastSeen = itopsDateValue(row.lastSeen);
-        return !lastSeen || lastSeen < staleCutoff;
-    }).length;
-    const lockedDevices = rows.filter((row) => itopsLower(row.status).includes("lock")).length;
-    const mdmDevices = rows.filter((row) => itopsLower(row.source) === "mdm").length;
-    const emDevices = rows.filter((row) => itopsLower(row.source) === "em").length;
-
-    const bucket = (field, fallback) => {
-        const map = new Map();
-        for (const row of rows) {
-            const name = itopsText(row[field], fallback);
-            map.set(name, (map.get(name) || 0) + 1);
-        }
-        return [...map.entries()]
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 6)
-            .map(([name, value]) => ({ name, value, percent: itopsPercent(value, totalDevices) }));
-    };
-
-    const endpointRows = rows.map((row) => {
-        const lastSeen = itopsDateValue(row.lastSeen);
-        const isOnline = itopsIsOnlineStatus(row.status);
-        const isStale = !lastSeen || lastSeen < staleCutoff;
-        const hasMissingIdentity = !itopsText(row.deviceName) || !itopsText(row.model) || row.model === "-" || !itopsText(row.ipAddress);
-        const riskScore = (isOnline ? 0 : 20) + (isStale ? 25 : 0) + (hasMissingIdentity ? 10 : 0);
-        const reasons = [
-            !isOnline ? "Offline endpoint" : "",
-            isStale ? "Stale connection" : "",
-            hasMissingIdentity ? "Missing identity" : ""
-        ].filter(Boolean).join("; ");
-
-        return {
-            deviceName: row.deviceName || "-",
-            deviceId: row.deviceId || row.assetId || "",
-            platform: row.platform || row.osName || "Unknown",
-            osName: row.osName || row.platform || "Unknown",
-            model: row.model || "-",
-            department: row.department || "Unmapped",
-            lastSeen: itopsDateLabel(row.lastSeen),
-            status: row.status || (isOnline ? "Online" : "Offline"),
-            isOnline,
-            isStale,
-            riskScore,
-            reasons: reasons || "Inventory evidence"
-        };
-    }).sort((a, b) => b.riskScore - a.riskScore || a.deviceName.localeCompare(b.deviceName)).slice(0, 500);
-
-    return {
-        totalDevices,
-        onlineDevices,
-        offlineDevices,
-        staleSync,
-        lockedDevices,
-        mdmDevices,
-        emDevices,
-        topModels: bucket("model", "Unknown Model"),
-        platformBreakdown: bucket("platform", "Unknown"),
-        endpointRows
-    };
-}
-
-
-async function getItOpsTaskSummary(pool) {
-    const hasJobs = await itopsTableExists(pool, "TS_JOB");
-
-    if (!hasJobs) {
-        return {
-            totalTasks: 0,
-            runningTasks: 0,
-            completedTasks: 0,
-            failedTasks: 0,
-            latestTaskTime: "-",
-            jobTypeBreakdown: [],
-            recentTasks: []
-        };
-    }
-
-    const result = await pool.request().query(`
-        SELECT
-            COUNT(1) AS TotalTasks,
-            COUNT(CASE WHEN Job_Status IN (2200, 2201) THEN 1 END) AS RunningTasks,
-            COUNT(CASE WHEN Job_Status = 2202 THEN 1 END) AS CompletedTasks,
-            COUNT(CASE WHEN Job_Status IN (2203, 2204) THEN 1 END) AS FailedTasks,
-            MAX(COALESCE(Job_StartTime, Job_ScheduleTime, Job_EndTime)) AS LatestTaskTime
-        FROM TS_JOB WITH (NOLOCK);
-    `);
-
-    const typeResult = await pool.request().query(`
-        SELECT TOP 6
-            Job_Type AS JobType,
-            COUNT(1) AS Value
-        FROM TS_JOB WITH (NOLOCK)
-        GROUP BY Job_Type
-        ORDER BY COUNT(1) DESC;
-    `);
-
-    const recentResult = await pool.request().query(`
-        SELECT TOP 5
-            Job_Idn,
-            Job_Type,
-            Job_Status,
-            ISNULL(NULLIF(Job_Description, ''), CONVERT(varchar(50), Job_Idn)) AS JobName,
-            COALESCE(Job_StartTime, Job_ScheduleTime, Job_EndTime) AS TaskTime
-        FROM TS_JOB WITH (NOLOCK)
-        ORDER BY COALESCE(Job_StartTime, Job_ScheduleTime, Job_EndTime) DESC;
-    `);
-
-    const jobTypeLabels = typeof TASK_JOB_TYPE_LABELS !== "undefined" ? TASK_JOB_TYPE_LABELS : {};
-    const statusLabels = typeof TASK_JOB_STATUS_LABELS !== "undefined" ? TASK_JOB_STATUS_LABELS : {};
-
-    const summary = result.recordset?.[0] || {};
-    const totalTasks = itopsToNumber(summary.TotalTasks);
-
-    return {
-        totalTasks,
-        runningTasks: itopsToNumber(summary.RunningTasks),
-        completedTasks: itopsToNumber(summary.CompletedTasks),
-        failedTasks: itopsToNumber(summary.FailedTasks),
-        latestTaskTime: itopsDateLabel(summary.LatestTaskTime),
-        jobTypeBreakdown: (typeResult.recordset || []).map(row => {
-            const value = itopsToNumber(row.Value);
-            const typeLabel = jobTypeLabels[row.JobType] || `Job Type ${row.JobType || "-"}`;
-            return {
-                name: typeLabel,
-                value,
-                percent: itopsPercent(value, totalTasks)
-            };
-        }),
-        recentTasks: (recentResult.recordset || []).map(row => {
-            const status = statusLabels[row.Job_Status] || `Status ${row.Job_Status || "-"}`;
-            return {
-                id: String(row.Job_Idn || row.JobName),
-                type: jobTypeLabels[row.Job_Type] || `Job Type ${row.Job_Type || "-"}`,
-                status,
-                target: row.JobName || "-",
-                time: itopsDateLabel(row.TaskTime),
-                tone: itopsStatusTone(status, "")
-            };
-        })
-    };
-}
-
-
-async function getItOpsDepartmentRows(pool) {
-    const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
-    const hasEmAssets = await itopsTableExists(pool, "TS_OBJECT_ROOT");
-    const hasEmaIncidents = await itopsTableExists(pool, "EMA_Incidents");
-    const hasHdIncidents = await itopsTableExists(pool, "HD_Incidents");
-    const incidentTable = hasEmaIncidents ? "EMA_Incidents" : hasHdIncidents ? "HD_Incidents" : "";
-    const hasIncidents = Boolean(incidentTable);
-    const incidentOwnerExpr = hasEmaIncidents ? "RequesterName" : "CustomerName";
-    const hasPatchStatus = await itopsTableExists(pool, "TS_UPDATE_ONLINE_STATUS");
-
-    if (!hasRelations || !hasEmAssets) return [];
-
-    // Keep this query safe after API/table merges. The old dashboard query always
-    // selected inc.OpenIncidents and patch.* even when those optional joins were
-    // not added, causing MSSQL "multi-part identifier could not be bound" errors.
-    const incidentJoinSql = hasIncidents
-        ? `
-            LEFT JOIN (
-                SELECT
-                    ${incidentOwnerExpr} AS CustomerName,
-                    COUNT(CASE WHEN LOWER(ISNULL(Status, '')) NOT IN ('resolved', 'closed', 'solved') THEN 1 END) AS OpenIncidents
-                FROM ${incidentTable} WITH (NOLOCK)
-                GROUP BY ${incidentOwnerExpr}
-            ) inc
-                ON inc.CustomerName = rel.Object_Full_Name
-                OR inc.CustomerName = rel.Object_Rel_Name
-        `
-        : "";
-
-    const patchJoinSql = hasPatchStatus
-        ? `
-            LEFT JOIN (
-                SELECT
-                    Object_Root_Idn,
-                    COUNT(CASE WHEN ISNULL(IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
-                    COUNT(CASE WHEN ISNULL(IsApplicable, 0) = 1 AND (ISNULL(IsInstalled, 0) = 1 OR ISNULL(IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches
-                FROM TS_UPDATE_ONLINE_STATUS WITH (NOLOCK)
-                GROUP BY Object_Root_Idn
-            ) patch
-                ON patch.Object_Root_Idn = root.Object_Root_Idn
-        `
-        : "";
-
-    const applicablePatchesSelect = hasPatchStatus
-        ? "SUM(ISNULL(patch.ApplicablePatches, 0))"
-        : "CAST(0 AS INT)";
-
-    const installedPatchesSelect = hasPatchStatus
-        ? "SUM(ISNULL(patch.InstalledPatches, 0))"
-        : "CAST(0 AS INT)";
-
-    const openIncidentsSelect = hasIncidents
-        ? "MAX(ISNULL(inc.OpenIncidents, 0))"
-        : "CAST(0 AS INT)";
-
-    const result = await pool.request().query(`
-        SELECT TOP 8
-            ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned')) AS Department,
-            COUNT(DISTINCT root.Object_Root_Idn) AS Assets,
-            SUM(CASE WHEN root.ConnectionStatus = 1 THEN 1 ELSE 0 END) AS OnlineAssets,
-            ${applicablePatchesSelect} AS ApplicablePatches,
-            ${installedPatchesSelect} AS InstalledPatches,
-            ${openIncidentsSelect} AS OpenIncidents
-        FROM TS_OBJECT_ROOT root WITH (NOLOCK)
-        LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
-            ON root.Object_Rel_Idn = rel.Object_Rel_Idn
-        ${patchJoinSql}
-        ${incidentJoinSql}
-        GROUP BY ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned'))
-        ORDER BY COUNT(DISTINCT root.Object_Root_Idn) DESC;
-    `);
-
-    return (result.recordset || []).map(row => {
-        const patchCompliance = itopsPercent(row.InstalledPatches, row.ApplicablePatches, 0);
-        const onlineHealth = itopsPercent(row.OnlineAssets, row.Assets, 0);
-        const healthScore = itopsRound((patchCompliance * 0.55) + (onlineHealth * 0.45), 0);
-
-        return {
-            department: row.Department || "Unassigned",
-            assets: itopsToNumber(row.Assets),
-            patchCompliance,
-            openIncidents: itopsToNumber(row.OpenIncidents),
-            healthScore
-        };
-    });
-}
-
-// ============================================================
 // ITOPS DASHBOARD SOURCE-MAPPING OVERRIDES
 // These overrides keep dashboard domains separated by the correct API/source:
 // - Hardware: TS_OBJECT_ROOT + TSMDM_ASSET inventory only
@@ -27425,18 +27403,31 @@ async function getItOpsGeoSummary(pool) {
     }
 
     const hasAsset = await itopsTableExists(pool, "TSMDM_ASSET");
+    // const result = await pool.request().query(`
+    //     SELECT TOP 3000
+    //         CAST(g.DeviceID AS NVARCHAR(255)) AS deviceId,
+    //         g.Latitude AS latitude,
+    //         g.Longitude AS longitude,
+    //         TRY_CONVERT(datetime, g.[Time]) AS locationTime,
+    //         ISNULL(g.LocationName, '') AS locationName,
+    //         ${hasAsset ? "ISNULL(NULLIF(a.DeviceName, ''), g.DeviceID)" : "g.DeviceID"} AS deviceName,
+    //         ${hasAsset ? "ISNULL(NULLIF(a.PlatformType, ''), 'MDM')" : "'MDM'"} AS platform
+    //     FROM TSMDM_GEOLOCATION g WITH (NOLOCK)
+    //     ${hasAsset ? "LEFT JOIN TSMDM_ASSET a WITH (NOLOCK) ON g.DeviceID = a.DeviceID" : ""}
+    //     ORDER BY TRY_CONVERT(datetime, g.[Time]) DESC;
+    // `);
     const result = await pool.request().query(`
-        SELECT TOP 3000
-            CAST(g.DeviceID AS NVARCHAR(255)) AS deviceId,
-            g.Latitude AS latitude,
-            g.Longitude AS longitude,
-            TRY_CONVERT(datetime, g.[Time]) AS locationTime,
-            ISNULL(g.LocationName, '') AS locationName,
-            ${hasAsset ? "ISNULL(NULLIF(a.DeviceName, ''), g.DeviceID)" : "g.DeviceID"} AS deviceName,
-            ${hasAsset ? "ISNULL(NULLIF(a.PlatformType, ''), 'MDM')" : "'MDM'"} AS platform
-        FROM TSMDM_GEOLOCATION g WITH (NOLOCK)
-        ${hasAsset ? "LEFT JOIN TSMDM_ASSET a WITH (NOLOCK) ON g.DeviceID = a.DeviceID" : ""}
-        ORDER BY TRY_CONVERT(datetime, g.[Time]) DESC;
+            SELECT TOP 3000
+                CAST(g.DeviceID AS NVARCHAR(255)) AS deviceId,
+                g.Latitude AS latitude,
+                g.Longitude AS longitude,
+                TRY_CONVERT(datetime, g.[Time]) AS locationTime,
+                ISNULL(g.LocationName, '') AS locationName,
+                a.DeviceName AS deviceName,
+                ${hasAsset ? "ISNULL(NULLIF(a.PlatformType, ''), 'MDM')" : "'MDM'"} AS platform
+            FROM TSMDM_ASSET a WITH (NOLOCK)
+	            LEFT JOIN TSMDM_GEOLOCATION g ON a.DeviceID=g.DeviceID
+            ORDER BY TRY_CONVERT(datetime, g.[Time]) DESC;
     `);
 
     const latestByDevice = new Map();
@@ -27704,70 +27695,384 @@ async function getItOpsPatchSummary(pool) {
     const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
     const hasRoot = await itopsTableExists(pool, "TS_OBJECT_ROOT");
 
+    const emptyPatchSummary = {
+        patchCompliance: 0,
+        applicablePatches: 0,
+        installedPatches: 0,
+        missingPatches: 0,
+        criticalVulnerabilities: 0,
+        totalPatchDevices: 0,
+        updatedDevices: 0,
+        needUpdateDevices: 0,
+        patchDepartments: [],
+        patchByWindowsRelease: [],
+        patchByPatch: [],
+        patchByDevice: [],
+        patchStatusBreakdown: [],
+        patchSeverityBreakdown: [],
+        source: "TS_UPDATE_ONLINE_STATUS not found"
+    };
+
     if (!hasPatchStatus) {
-        return {
-            patchCompliance: 0,
-            missingPatches: 0,
-            criticalVulnerabilities: 0,
-            patchDepartments: [],
-            source: "TS_UPDATE_ONLINE_STATUS not found"
-        };
+        return emptyPatchSummary;
     }
 
     const hasSeverityColumn = hasPatchMaster && await itopsColumnExists(pool, "TS_UPDATE_ONLINE_MASTER", "MsrcSeverity");
     const hasTitleColumn = hasPatchMaster && await itopsColumnExists(pool, "TS_UPDATE_ONLINE_MASTER", "Title");
     const hasKbColumn = hasPatchMaster && await itopsColumnExists(pool, "TS_UPDATE_ONLINE_MASTER", "KB");
-    const masterJoin = hasPatchMaster
-        ? `LEFT JOIN TS_UPDATE_ONLINE_MASTER m WITH (NOLOCK)
-              ON m.UpdateID = s.UpdateID
-             AND m.RevisionNumber = s.RevisionNumber`
-        : "";
-    const severityExpr = hasSeverityColumn ? "LOWER(ISNULL(m.MsrcSeverity, ''))" : "''";
-    const titleExpr = hasTitleColumn ? "ISNULL(m.Title, '')" : "''";
-    const kbExpr = hasKbColumn ? "ISNULL(m.KB, '')" : "''";
+    const hasKbArticleColumn = hasPatchMaster && await itopsColumnExists(pool, "TS_UPDATE_ONLINE_MASTER", "KBArticleIDs");
 
-    const summaryResult = await pool.request().query(`
-        SELECT
-            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
-            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND (ISNULL(s.IsInstalled, 0) = 1 OR ISNULL(s.IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches,
-            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND ISNULL(s.IsInstalled, 0) = 0 AND ISNULL(s.IsDownloaded, 0) = 0 THEN 1 END) AS MissingPatches,
-            COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND ISNULL(s.IsInstalled, 0) = 0 AND ISNULL(s.IsDownloaded, 0) = 0 AND (${severityExpr} = 'critical' OR ${titleExpr} LIKE '%critical%' OR ${kbExpr} LIKE '%critical%') THEN 1 END) AS CriticalMissing
-        FROM TS_UPDATE_ONLINE_STATUS s WITH (NOLOCK)
-        ${masterJoin};
-    `);
-
-    let patchDepartments = [];
-    if (hasRelations && hasRoot) {
-        const departmentResult = await pool.request().query(`
-            SELECT TOP 7
-                ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned')) AS Department,
-                COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
-                COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND (ISNULL(s.IsInstalled, 0) = 1 OR ISNULL(s.IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches
-            FROM TS_UPDATE_ONLINE_STATUS s WITH (NOLOCK)
-            LEFT JOIN TS_OBJECT_ROOT r WITH (NOLOCK)
-                ON s.Object_Root_Idn = r.Object_Root_Idn
-            LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
-                ON r.Object_Rel_Idn = rel.Object_Rel_Idn
-            GROUP BY ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned'))
-            ORDER BY COUNT(CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 END) DESC;
-        `);
-
-        patchDepartments = (departmentResult.recordset || []).map(row => ({
-            name: row.Department || "Unassigned",
-            percent: itopsPercent(row.InstalledPatches, row.ApplicablePatches, 0)
-        }));
+    async function pickRootColumn(alias, candidates, fallbackExpr) {
+        if (!hasRoot) return fallbackExpr;
+        for (const columnName of candidates) {
+            if (await itopsColumnExists(pool, "TS_OBJECT_ROOT", columnName)) {
+                return `CAST(${alias}.[${columnName}] AS NVARCHAR(255))`;
+            }
+        }
+        return fallbackExpr;
     }
 
-    const summary = summaryResult.recordset?.[0] || {};
+    const osNameExpr = await pickRootColumn("r", [
+        "OS",
+        "OSName",
+        "OperatingSystem",
+        "Operating_System",
+        "PlatformType",
+        "Object_OS"
+    ], "CAST('Unknown OS' AS NVARCHAR(255))");
+
+    const osBuildExpr = await pickRootColumn("r", [
+        "OSBuild",
+        "OS_Build",
+        "Build",
+        "BuildNumber",
+        "OSVersion",
+        "Version"
+    ], "CAST('' AS NVARCHAR(255))");
+
+    const deviceNameExpr = hasRoot
+        ? "ISNULL(NULLIF(LTRIM(RTRIM(CAST(r.ComputerName AS NVARCHAR(255)))), ''), ISNULL(NULLIF(LTRIM(RTRIM(CAST(r.Object_DeviceID AS NVARCHAR(255)))), ''), CAST(s.Object_Root_Idn AS NVARCHAR(255))))"
+        : "CAST(s.Object_Root_Idn AS NVARCHAR(255))";
+
+    const deviceIdExpr = hasRoot
+        ? "ISNULL(NULLIF(LTRIM(RTRIM(CAST(r.Object_DeviceID AS NVARCHAR(255)))), ''), CAST(s.Object_Root_Idn AS NVARCHAR(255)))"
+        : "CAST(s.Object_Root_Idn AS NVARCHAR(255))";
+
+    const branchExpr = hasRelations && hasRoot
+        ? "ISNULL(NULLIF(LTRIM(RTRIM(rel.Object_Rel_Name)), ''), ISNULL(NULLIF(LTRIM(RTRIM(rel.Object_Full_Name)), ''), 'Unassigned'))"
+        : "'Unassigned'";
+
+    const rootJoin = hasRoot
+        ? "LEFT JOIN TS_OBJECT_ROOT r WITH (NOLOCK) ON s.Object_Root_Idn = r.Object_Root_Idn"
+        : "";
+
+    const relationJoin = hasRelations && hasRoot
+        ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON r.Object_Rel_Idn = rel.Object_Rel_Idn"
+        : "";
+
+    const masterJoin = hasPatchMaster
+        ? `
+            LEFT JOIN TS_UPDATE_ONLINE_MASTER m WITH (NOLOCK)
+                ON m.UpdateID = s.UpdateID
+               AND m.RevisionNumber = s.RevisionNumber
+        `
+        : "";
+
+    const severityExpr = hasSeverityColumn
+        ? "ISNULL(NULLIF(LTRIM(RTRIM(CAST(m.MsrcSeverity AS NVARCHAR(100)))), ''), 'Unspecified')"
+        : "'Unspecified'";
+
+    const titleExpr = hasTitleColumn
+        ? "ISNULL(NULLIF(LTRIM(RTRIM(CAST(m.Title AS NVARCHAR(500)))), ''), CAST(s.UpdateID AS NVARCHAR(255)))"
+        : "CAST(s.UpdateID AS NVARCHAR(255))";
+
+    const kbExpr = hasKbColumn
+        ? "ISNULL(NULLIF(LTRIM(RTRIM(CAST(m.KB AS NVARCHAR(255)))), ''), '')"
+        : hasKbArticleColumn
+            ? "ISNULL(NULLIF(LTRIM(RTRIM(CAST(m.KBArticleIDs AS NVARCHAR(255)))), ''), '')"
+            : "''";
+
+    const result = await pool.request().query(`
+        IF OBJECT_ID('tempdb..#ItOpsPatchRows') IS NOT NULL
+            DROP TABLE #ItOpsPatchRows;
+
+        SELECT
+            s.Object_Root_Idn,
+            ${deviceIdExpr} AS DeviceID,
+            ${deviceNameExpr} AS DeviceName,
+            ${branchExpr} AS BranchName,
+            ISNULL(NULLIF(LTRIM(RTRIM(${osNameExpr})), ''), 'Unknown OS') AS WindowsRelease,
+            ISNULL(NULLIF(LTRIM(RTRIM(${osBuildExpr})), ''), '') AS OSBuild,
+
+            CAST(s.UpdateID AS NVARCHAR(255)) AS UpdateID,
+            TRY_CONVERT(INT, s.RevisionNumber) AS RevisionNumber,
+            ${titleExpr} AS PatchTitle,
+            ${kbExpr} AS KB,
+            ${severityExpr} AS Severity,
+
+            CASE WHEN ISNULL(s.IsApplicable, 0) = 1 THEN 1 ELSE 0 END AS IsApplicable,
+            CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND (ISNULL(s.IsInstalled, 0) = 1 OR ISNULL(s.IsDownloaded, 0) = 1) THEN 1 ELSE 0 END AS IsSuccess,
+            CASE WHEN ISNULL(s.IsApplicable, 0) = 1 AND ISNULL(s.IsInstalled, 0) = 0 AND ISNULL(s.IsDownloaded, 0) = 0 THEN 1 ELSE 0 END AS IsMissing,
+            CASE
+                WHEN ISNULL(s.IsApplicable, 0) = 1
+                 AND ISNULL(s.IsInstalled, 0) = 0
+                 AND ISNULL(s.IsDownloaded, 0) = 0
+                 AND (
+                        LOWER(${severityExpr}) = 'critical'
+                     OR LOWER(${titleExpr}) LIKE '%critical%'
+                     OR LOWER(${kbExpr}) LIKE '%critical%'
+                 )
+                THEN 1 ELSE 0
+            END AS IsCriticalMissing
+        INTO #ItOpsPatchRows
+        FROM TS_UPDATE_ONLINE_STATUS s WITH (NOLOCK)
+        ${rootJoin}
+        ${relationJoin}
+        ${masterJoin};
+
+        ;WITH DeviceAgg AS (
+            SELECT
+                Object_Root_Idn,
+                MAX(DeviceID) AS DeviceID,
+                MAX(DeviceName) AS DeviceName,
+                MAX(BranchName) AS BranchName,
+                MAX(WindowsRelease) AS WindowsRelease,
+                MAX(OSBuild) AS OSBuild,
+                SUM(IsApplicable) AS ApplicablePatches,
+                SUM(IsSuccess) AS InstalledPatches,
+                SUM(IsMissing) AS MissingPatches,
+                SUM(IsCriticalMissing) AS CriticalMissing
+            FROM #ItOpsPatchRows
+            GROUP BY Object_Root_Idn
+        )
+        SELECT
+            SUM(IsApplicable) AS ApplicablePatches,
+            SUM(IsSuccess) AS InstalledPatches,
+            SUM(IsMissing) AS MissingPatches,
+            SUM(IsCriticalMissing) AS CriticalMissing,
+            COUNT(DISTINCT CASE WHEN IsApplicable = 1 THEN Object_Root_Idn END) AS TotalPatchDevices,
+            (
+                SELECT COUNT(1)
+                FROM DeviceAgg
+                WHERE ApplicablePatches > 0
+                  AND MissingPatches = 0
+            ) AS UpdatedDevices,
+            (
+                SELECT COUNT(1)
+                FROM DeviceAgg
+                WHERE ApplicablePatches > 0
+                  AND MissingPatches > 0
+            ) AS NeedUpdateDevices
+        FROM #ItOpsPatchRows;
+
+        SELECT
+            CASE
+                WHEN IsApplicable = 1 AND IsSuccess = 1 THEN 'Successfully Installed'
+                WHEN IsApplicable = 1 AND IsMissing = 1 THEN 'Need Update'
+                ELSE 'Not Applicable'
+            END AS Name,
+            COUNT(1) AS Value
+        FROM #ItOpsPatchRows
+        GROUP BY
+            CASE
+                WHEN IsApplicable = 1 AND IsSuccess = 1 THEN 'Successfully Installed'
+                WHEN IsApplicable = 1 AND IsMissing = 1 THEN 'Need Update'
+                ELSE 'Not Applicable'
+            END
+        ORDER BY Value DESC;
+
+        SELECT
+            ISNULL(NULLIF(Severity, ''), 'Unspecified') AS Name,
+            SUM(IsMissing) AS Value
+        FROM #ItOpsPatchRows
+        WHERE IsMissing = 1
+        GROUP BY ISNULL(NULLIF(Severity, ''), 'Unspecified')
+        ORDER BY SUM(IsMissing) DESC;
+
+        SELECT TOP 10
+            BranchName AS Name,
+            SUM(IsApplicable) AS ApplicablePatches,
+            SUM(IsSuccess) AS InstalledPatches,
+            SUM(IsMissing) AS MissingPatches,
+            SUM(IsCriticalMissing) AS CriticalMissing,
+            COUNT(DISTINCT Object_Root_Idn) AS Devices
+        FROM #ItOpsPatchRows
+        WHERE IsApplicable = 1
+        GROUP BY BranchName
+        ORDER BY
+            CASE WHEN SUM(IsApplicable) = 0 THEN 0 ELSE (SUM(IsSuccess) * 100.0 / SUM(IsApplicable)) END ASC,
+            SUM(IsMissing) DESC;
+
+        SELECT TOP 10
+            CASE
+                WHEN NULLIF(OSBuild, '') IS NULL THEN WindowsRelease
+                ELSE WindowsRelease + ' / ' + OSBuild
+            END AS Name,
+            WindowsRelease,
+            OSBuild,
+            SUM(IsApplicable) AS ApplicablePatches,
+            SUM(IsSuccess) AS InstalledPatches,
+            SUM(IsMissing) AS MissingPatches,
+            SUM(IsCriticalMissing) AS CriticalMissing,
+            COUNT(DISTINCT Object_Root_Idn) AS Devices
+        FROM #ItOpsPatchRows
+        WHERE IsApplicable = 1
+        GROUP BY WindowsRelease, OSBuild
+        ORDER BY
+            CASE WHEN SUM(IsApplicable) = 0 THEN 0 ELSE (SUM(IsSuccess) * 100.0 / SUM(IsApplicable)) END ASC,
+            SUM(IsMissing) DESC;
+
+        SELECT TOP 15
+            COALESCE(NULLIF(KB, ''), NULLIF(PatchTitle, ''), UpdateID) AS Name,
+            UpdateID,
+            RevisionNumber,
+            PatchTitle,
+            KB,
+            Severity,
+            SUM(IsApplicable) AS ApplicablePatches,
+            SUM(IsSuccess) AS InstalledPatches,
+            SUM(IsMissing) AS MissingPatches,
+            SUM(IsCriticalMissing) AS CriticalMissing,
+            COUNT(DISTINCT Object_Root_Idn) AS Devices
+        FROM #ItOpsPatchRows
+        WHERE IsApplicable = 1
+        GROUP BY UpdateID, RevisionNumber, PatchTitle, KB, Severity
+        HAVING SUM(IsApplicable) > 0
+        ORDER BY
+            CASE WHEN SUM(IsApplicable) = 0 THEN 0 ELSE (SUM(IsSuccess) * 100.0 / SUM(IsApplicable)) END ASC,
+            SUM(IsCriticalMissing) DESC,
+            SUM(IsMissing) DESC;
+
+        ;WITH DeviceAgg AS (
+            SELECT
+                Object_Root_Idn,
+                MAX(DeviceID) AS DeviceID,
+                MAX(DeviceName) AS DeviceName,
+                MAX(BranchName) AS BranchName,
+                MAX(WindowsRelease) AS WindowsRelease,
+                MAX(OSBuild) AS OSBuild,
+                SUM(IsApplicable) AS ApplicablePatches,
+                SUM(IsSuccess) AS InstalledPatches,
+                SUM(IsMissing) AS MissingPatches,
+                SUM(IsCriticalMissing) AS CriticalMissing
+            FROM #ItOpsPatchRows
+            GROUP BY Object_Root_Idn
+        )
+        SELECT TOP 20
+            DeviceName AS Name,
+            DeviceID,
+            DeviceName,
+            BranchName,
+            WindowsRelease,
+            OSBuild,
+            ApplicablePatches,
+            InstalledPatches,
+            MissingPatches,
+            CriticalMissing
+        FROM DeviceAgg
+        WHERE ApplicablePatches > 0
+        ORDER BY
+            CASE WHEN ApplicablePatches = 0 THEN 0 ELSE (InstalledPatches * 100.0 / ApplicablePatches) END ASC,
+            CriticalMissing DESC,
+            MissingPatches DESC,
+            DeviceName ASC;
+
+        DROP TABLE #ItOpsPatchRows;
+    `);
+
+    const summary = result.recordsets?.[0]?.[0] || {};
+    const statusRows = result.recordsets?.[1] || [];
+    const severityRows = result.recordsets?.[2] || [];
+    const branchRows = result.recordsets?.[3] || [];
+    const windowsRows = result.recordsets?.[4] || [];
+    const patchRows = result.recordsets?.[5] || [];
+    const deviceRows = result.recordsets?.[6] || [];
+
+    const applicablePatches = itopsToNumber(summary.ApplicablePatches);
+    const installedPatches = itopsToNumber(summary.InstalledPatches);
     const missingPatches = itopsToNumber(summary.MissingPatches);
     const criticalVulnerabilities = itopsToNumber(summary.CriticalMissing);
+    const totalPatchDevices = itopsToNumber(summary.TotalPatchDevices);
+    const updatedDevices = itopsToNumber(summary.UpdatedDevices);
+    const needUpdateDevices = itopsToNumber(summary.NeedUpdateDevices);
+    const patchCompliance = itopsPercent(installedPatches, applicablePatches, 0);
+
+    const mapPatchMetricRow = (row) => {
+        const rowApplicable = itopsToNumber(row.ApplicablePatches);
+        const rowInstalled = itopsToNumber(row.InstalledPatches);
+        const rowMissing = itopsToNumber(row.MissingPatches);
+        const rowCritical = itopsToNumber(row.CriticalMissing);
+        const percent = itopsPercent(rowInstalled, rowApplicable, 0);
+
+        return {
+            name: row.Name || row.DeviceName || row.PatchTitle || row.UpdateID || "Unknown",
+            value: rowMissing,
+            percent,
+            applicablePatches: rowApplicable,
+            installedPatches: rowInstalled,
+            missingPatches: rowMissing,
+            criticalMissing: rowCritical,
+            devices: itopsToNumber(row.Devices),
+            updateID: row.UpdateID || "",
+            revisionNumber: row.RevisionNumber || null,
+            title: row.PatchTitle || "",
+            kb: row.KB || "",
+            severity: row.Severity || "Unspecified",
+            deviceID: row.DeviceID || "",
+            deviceName: row.DeviceName || row.Name || "",
+            branch: row.BranchName || "",
+            windowsRelease: row.WindowsRelease || "",
+            osBuild: row.OSBuild || ""
+        };
+    };
+
+    const patchDepartments = branchRows.map((row) => {
+        const applicable = itopsToNumber(row.ApplicablePatches);
+        const installed = itopsToNumber(row.InstalledPatches);
+
+        return {
+            name: row.Name || "Unassigned",
+            percent: itopsPercent(installed, applicable, 0),
+            value: itopsToNumber(row.MissingPatches),
+            applicablePatches: applicable,
+            installedPatches: installed,
+            missingPatches: itopsToNumber(row.MissingPatches),
+            criticalMissing: itopsToNumber(row.CriticalMissing),
+            devices: itopsToNumber(row.Devices)
+        };
+    });
 
     return {
-        patchCompliance: itopsPercent(summary.InstalledPatches, summary.ApplicablePatches, 0),
+        patchCompliance,
+        applicablePatches,
+        installedPatches,
         missingPatches,
-        criticalVulnerabilities: hasPatchMaster ? criticalVulnerabilities : missingPatches,
+        criticalVulnerabilities,
+        totalPatchDevices,
+        updatedDevices,
+        needUpdateDevices,
+
         patchDepartments,
-        source: hasPatchMaster ? "TS_UPDATE_ONLINE_STATUS + TS_UPDATE_ONLINE_MASTER" : "TS_UPDATE_ONLINE_STATUS"
+
+        patchByWindowsRelease: windowsRows.map(mapPatchMetricRow),
+        patchByPatch: patchRows.map(mapPatchMetricRow),
+        patchByDevice: deviceRows.map(mapPatchMetricRow),
+
+        patchStatusBreakdown: statusRows.map((row) => ({
+            name: row.Name || "Unknown",
+            value: itopsToNumber(row.Value),
+            percent: itopsPercent(row.Value, Math.max(applicablePatches, 1), 0)
+        })),
+
+        patchSeverityBreakdown: severityRows.map((row) => ({
+            name: row.Name || "Unspecified",
+            value: itopsToNumber(row.Value),
+            percent: itopsPercent(row.Value, Math.max(missingPatches, 1), 0)
+        })),
+
+        source: hasPatchMaster
+            ? "TS_UPDATE_ONLINE_STATUS + TS_UPDATE_ONLINE_MASTER"
+            : "TS_UPDATE_ONLINE_STATUS"
     };
 }
 
@@ -28149,6 +28454,7 @@ app.get("/api/dashboard/it-operations", authenticateToken, async (req, res) => {
                 priorityBreakdown: incidentSummary.priorityBreakdown
             },
             security: {
+                ...patchSummary,
                 criticalVulnerabilities,
                 antiVirusStatus: "N/A",
                 failedBackups: 0,
@@ -49407,6 +49713,2008 @@ console.log('Software ROI API V3 registered');
 // ============================================================
 
 
+// ============================================================
+// SOFTWARE ROI V5 TREND ANALYTICS API - DIRECT SERVER.JS VERSION
+// Paste this block in server.js BEFORE app.listen(...)
+// Remove/replace the old stub: app.get('/api/software-roi-v5/analytics', ...)
+// Required variables already in server.js: app, sql, dbConfig, authenticateToken
+// ============================================================
+
+function roiV5Text(value) {
+  return String(value ?? '').trim();
+}
+
+function roiV5Date(value) {
+  const text = roiV5Text(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
+
+function roiV5Number(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function roiV5Bool(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const text = String(value).toLowerCase();
+  return text === 'true' || text === '1' || text === 'yes';
+}
+
+function roiV5Quote(name) {
+  return `[${String(name || '').replace(/]/g, ']]')}]`;
+}
+
+async function roiV5ColumnExists(pool, tableName, columnName) {
+  const result = await pool.request()
+    .input('TableName', sql.NVarChar(128), tableName)
+    .input('ColumnName', sql.NVarChar(128), columnName)
+    .query(`
+      SELECT 1 AS ExistsFlag
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = @TableName
+        AND COLUMN_NAME = @ColumnName;
+    `);
+  return Array.isArray(result.recordset) && result.recordset.length > 0;
+}
+
+async function roiV5FindColumn(pool, tableName, candidates) {
+  for (const columnName of candidates) {
+    if (await roiV5ColumnExists(pool, tableName, columnName)) return columnName;
+  }
+  return '';
+}
+
+function roiV5PickResultSet(result, markerName, fallbackIndex) {
+  const recordsets = Array.isArray(result?.recordsets) ? result.recordsets : [];
+  const found = recordsets.find((set) => Array.isArray(set) && set.some((row) => row && row.__ResultSet === markerName));
+  if (found) {
+    return found.map((row) => {
+      const copy = { ...row };
+      delete copy.__ResultSet;
+      return copy;
+    });
+  }
+  const fallback = recordsets[fallbackIndex];
+  return Array.isArray(fallback) ? fallback : [];
+}
+
+function roiV5GroupDetails(detailRows) {
+  const groups = new Map();
+  for (const row of detailRows || []) {
+    const policyKey = row.PolicyItemID ? `policy:${row.PolicyItemID}` : '';
+    const nameKey = `name:${String(row.SoftwareName || '').trim().toLowerCase()}|${String(row.CategoryName || '').trim().toLowerCase()}|${String(row.ComplianceStatus || '').trim().toLowerCase()}`;
+    for (const key of [policyKey, nameKey].filter(Boolean)) {
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
+  }
+  return groups;
+}
+
+function roiV5Auth(req, res, next) {
+  const queryToken = roiV5Text(req.query?.token);
+  if (!req.headers.authorization && queryToken) {
+    req.headers.authorization = `Bearer ${queryToken.replace(/^Bearer\s+/i, '')}`;
+  }
+  return authenticateToken(req, res, next);
+}
+
+// Optional route test. Safe to keep.
+app.get('/api/software-roi-v5/ping', (req, res) => {
+  return res.json({ success: true, message: 'Software ROI V5 API is registered' });
+});
+
+app.get('/api/software-roi-v5/analytics', roiV5Auth, async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+
+    const dateFrom = roiV5Date(req.query.dateFrom || req.query.from || req.query.startDate);
+    const dateTo = roiV5Date(req.query.dateTo || req.query.to || req.query.endDate);
+    const search = roiV5Text(req.query.search);
+    const includeDetails = String(req.query.includeDetails ?? 'false').toLowerCase() === 'true';
+    const detailLimit = Math.min(Math.max(0, roiV5Number(req.query.detailLimit, includeDetails ? 300 : 0)), 1000);
+    const debug = roiV5Bool(req.query.debug, false);
+    const granularityRaw = roiV5Text(req.query.granularity || req.query.trendBy || 'weekly').toLowerCase();
+    const granularity = ['daily', 'weekly', 'monthly'].includes(granularityRaw) ? granularityRaw : 'weekly';
+
+    let utilizedBenchmark = roiV5Number(req.query.benchmarkUtilizedHoursPerWeek ?? req.query.utilizedHoursPerWeek, 8);
+    let notUsedBenchmark = roiV5Number(req.query.benchmarkNotUsedHoursPerWeek ?? req.query.notUsedHoursPerWeek, 1);
+    if (utilizedBenchmark <= 0) utilizedBenchmark = 8;
+    if (notUsedBenchmark < 0) notUsedBenchmark = 1;
+    if (notUsedBenchmark >= utilizedBenchmark) notUsedBenchmark = Math.max(0, utilizedBenchmark - 0.5);
+
+    const tableCheck = await pool.request().query(`
+      SELECT
+        CASE WHEN OBJECT_ID('EMA_SoftwarePolicy', 'U') IS NULL THEN 0 ELSE 1 END AS HasPolicy,
+        CASE WHEN OBJECT_ID('EMA_SoftwarePolicyItem', 'U') IS NULL THEN 0 ELSE 1 END AS HasPolicyItem,
+        CASE WHEN OBJECT_ID('TSSI_SWUNI_ATTR', 'U') IS NULL THEN 0 ELSE 1 END AS HasInstalled,
+        CASE WHEN OBJECT_ID('TSSM_MONITOR_HISTORY', 'U') IS NULL THEN 0 ELSE 1 END AS HasUsage;
+    `);
+    const exists = tableCheck.recordset?.[0] || {};
+    if (!exists.HasPolicyItem) {
+      return res.json({
+        success: true,
+        data: {
+          summary: {},
+          rows: [],
+          charts: { usageTrend: [], licenseTrend: [], benchmarkTrend: [], wasteTrend: [] },
+          diagnostics: { message: 'EMA_SoftwarePolicyItem table not found.' }
+        }
+      });
+    }
+
+    const priceColumn = await roiV5FindColumn(pool, 'EMA_SoftwarePolicyItem', [
+      'UnitCost', 'UnitPrice', 'Price', 'LicensePrice', 'LicenseCost', 'Cost', 'Amount',
+      'TotalPrice', 'TotalCost', 'PurchasePrice', 'PurchaseCost', 'AnnualCost', 'SubscriptionCost'
+    ]);
+    const branchColumn = await roiV5FindColumn(pool, 'TS_OBJECT_ROOT', [
+      'Object_Client_Name', 'Branch', 'Department', 'LocationName', 'SiteName'
+    ]);
+
+    const priceExpr = priceColumn
+      ? `CAST(ISNULL(TRY_CONVERT(decimal(18,2), i.${roiV5Quote(priceColumn)}), 0) AS decimal(18,2))`
+      : `CAST(0 AS decimal(18,2))`;
+    const branchExpr = branchColumn
+      ? `CAST(obj.${roiV5Quote(branchColumn)} AS nvarchar(500))`
+      : `CAST(NULL AS nvarchar(500))`;
+    const branchGroupExpr = branchColumn ? branchExpr : 'obj.Object_Root_Idn';
+
+    const request = pool.request()
+      .input('DateFrom', sql.Date, dateFrom)
+      .input('DateTo', sql.Date, dateTo)
+      .input('Granularity', sql.NVarChar(20), granularity)
+      .input('Search', sql.NVarChar(255), search)
+      .input('BenchmarkUtilizedHoursPerWeek', sql.Decimal(18, 2), utilizedBenchmark)
+      .input('BenchmarkNotUsedHoursPerWeek', sql.Decimal(18, 2), notUsedBenchmark);
+
+    const result = await request.query(`
+      SET NOCOUNT ON;
+
+      DECLARE @StartDate date = COALESCE(@DateFrom, DATEADD(DAY, -30, CONVERT(date, GETDATE())));
+      DECLARE @EndDate date = COALESCE(@DateTo, CONVERT(date, GETDATE()));
+      IF @EndDate < @StartDate SET @EndDate = @StartDate;
+
+      DECLARE @DateRangeDays int = NULLIF(DATEDIFF(DAY, @StartDate, DATEADD(DAY, 1, @EndDate)), 0);
+      DECLARE @WeekFactor decimal(18,4) = CASE WHEN ISNULL(@DateRangeDays, 1) <= 7 THEN 1.0 ELSE CAST(@DateRangeDays AS decimal(18,4)) / 7.0 END;
+
+      IF OBJECT_ID('tempdb..#Periods') IS NOT NULL DROP TABLE #Periods;
+      IF OBJECT_ID('tempdb..#ActivePolicy') IS NOT NULL DROP TABLE #ActivePolicy;
+      IF OBJECT_ID('tempdb..#InstalledRaw') IS NOT NULL DROP TABLE #InstalledRaw;
+      IF OBJECT_ID('tempdb..#UsageEventRaw') IS NOT NULL DROP TABLE #UsageEventRaw;
+      IF OBJECT_ID('tempdb..#UsageRaw') IS NOT NULL DROP TABLE #UsageRaw;
+      IF OBJECT_ID('tempdb..#LegalDeviceRows') IS NOT NULL DROP TABLE #LegalDeviceRows;
+      IF OBJECT_ID('tempdb..#IllegalDeviceRows') IS NOT NULL DROP TABLE #IllegalDeviceRows;
+      IF OBJECT_ID('tempdb..#SoftwareSummary') IS NOT NULL DROP TABLE #SoftwareSummary;
+
+      CREATE TABLE #Periods (
+        SortOrder int NOT NULL,
+        PeriodStart date NOT NULL,
+        PeriodEnd date NOT NULL,
+        PeriodLabel nvarchar(50) NOT NULL,
+        PeriodDays int NOT NULL
+      );
+
+      IF @Granularity = 'daily'
+      BEGIN
+        ;WITH N AS (
+          SELECT 0 AS n
+          UNION ALL SELECT n + 1 FROM N WHERE n < DATEDIFF(DAY, @StartDate, @EndDate)
+        )
+        INSERT INTO #Periods (SortOrder, PeriodStart, PeriodEnd, PeriodLabel, PeriodDays)
+        SELECT
+          n + 1,
+          DATEADD(DAY, n, @StartDate),
+          DATEADD(DAY, n, @StartDate),
+          CONVERT(nvarchar(10), DATEADD(DAY, n, @StartDate), 120),
+          1
+        FROM N
+        OPTION (MAXRECURSION 0);
+      END
+      ELSE IF @Granularity = 'monthly'
+      BEGIN
+        ;WITH N AS (
+          SELECT 0 AS n
+          UNION ALL SELECT n + 1 FROM N WHERE n < DATEDIFF(MONTH, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1), DATEFROMPARTS(YEAR(@EndDate), MONTH(@EndDate), 1))
+        )
+        INSERT INTO #Periods (SortOrder, PeriodStart, PeriodEnd, PeriodLabel, PeriodDays)
+        SELECT
+          n + 1,
+          CASE WHEN DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1)) < @StartDate THEN @StartDate ELSE DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1)) END,
+          CASE WHEN EOMONTH(DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1))) > @EndDate THEN @EndDate ELSE EOMONTH(DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1))) END,
+          FORMAT(DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1)), 'MMM yyyy'),
+          DATEDIFF(DAY,
+            CASE WHEN DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1)) < @StartDate THEN @StartDate ELSE DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1)) END,
+            DATEADD(DAY, 1, CASE WHEN EOMONTH(DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1))) > @EndDate THEN @EndDate ELSE EOMONTH(DATEADD(MONTH, n, DATEFROMPARTS(YEAR(@StartDate), MONTH(@StartDate), 1))) END)
+          )
+        FROM N
+        OPTION (MAXRECURSION 0);
+      END
+      ELSE
+      BEGIN
+        ;WITH N AS (
+          SELECT 0 AS n
+          UNION ALL SELECT n + 1 FROM N WHERE n < CEILING((DATEDIFF(DAY, @StartDate, @EndDate) + 1) / 7.0) - 1
+        )
+        INSERT INTO #Periods (SortOrder, PeriodStart, PeriodEnd, PeriodLabel, PeriodDays)
+        SELECT
+          n + 1,
+          DATEADD(DAY, n * 7, @StartDate),
+          CASE WHEN DATEADD(DAY, n * 7 + 6, @StartDate) > @EndDate THEN @EndDate ELSE DATEADD(DAY, n * 7 + 6, @StartDate) END,
+          CONCAT('Week ', n + 1),
+          DATEDIFF(DAY, DATEADD(DAY, n * 7, @StartDate), DATEADD(DAY, 1, CASE WHEN DATEADD(DAY, n * 7 + 6, @StartDate) > @EndDate THEN @EndDate ELSE DATEADD(DAY, n * 7 + 6, @StartDate) END))
+        FROM N
+        OPTION (MAXRECURSION 0);
+      END
+
+      CREATE TABLE #ActivePolicy (
+        PolicyID int NULL,
+        PolicyItemID int NULL,
+        PolicyName nvarchar(200) NULL,
+        SWUNI_Idn int NULL,
+        SoftwareName nvarchar(500) NOT NULL,
+        SoftwareKey nvarchar(500) NOT NULL,
+        CategoryID int NULL,
+        CategoryName nvarchar(255) NULL,
+        ComplianceStatus nvarchar(50) NULL,
+        LicenseCount decimal(18,2) NOT NULL,
+        UnitPrice decimal(18,2) NOT NULL,
+        BenchmarkUtilizedHoursPerWeek decimal(18,2) NOT NULL,
+        BenchmarkNotUsedHoursPerWeek decimal(18,2) NOT NULL
+      );
+
+      INSERT INTO #ActivePolicy
+      SELECT
+        i.PolicyID,
+        i.PolicyItemID,
+        p.PolicyName,
+        i.SWUNI_Idn,
+        LTRIM(RTRIM(COALESCE(NULLIF(i.SoftwareName, ''), uni.SWUNI_Name, CONCAT('Software #', i.PolicyItemID)))) AS SoftwareName,
+        LOWER(LTRIM(RTRIM(COALESCE(NULLIF(i.SoftwareName, ''), uni.SWUNI_Name, CONCAT('Software #', i.PolicyItemID))))) AS SoftwareKey,
+        COALESCE(i.CategoryID, p.CategoryID, uni.SWUNI_Catg) AS CategoryID,
+        COALESCE(NULLIF(i.CategoryName, ''), NULLIF(p.CategoryName, ''), cat.CategoryName, 'Registered') AS CategoryName,
+        CASE WHEN LOWER(ISNULL(i.ComplianceStatus, '')) = 'illegal' THEN 'Illegal' ELSE 'Legal' END AS ComplianceStatus,
+        CAST(ISNULL(TRY_CONVERT(decimal(18,2), i.LicenseCount), 0) AS decimal(18,2)) AS LicenseCount,
+        ${priceExpr} AS UnitPrice,
+        CAST(CASE
+          WHEN ISNULL(TRY_CONVERT(decimal(18,2), i.UtilizedHours), 0) > 0 THEN TRY_CONVERT(decimal(18,2), i.UtilizedHours)
+          WHEN ISNULL(TRY_CONVERT(decimal(18,2), p.UtilizedHours), 0) > 0 THEN TRY_CONVERT(decimal(18,2), p.UtilizedHours)
+          ELSE @BenchmarkUtilizedHoursPerWeek
+        END AS decimal(18,2)) AS BenchmarkUtilizedHoursPerWeek,
+        CAST(CASE
+          WHEN TRY_CONVERT(decimal(18,2), i.UnderUtilizedHours) IS NOT NULL THEN TRY_CONVERT(decimal(18,2), i.UnderUtilizedHours)
+          WHEN TRY_CONVERT(decimal(18,2), p.UnderUtilizedHours) IS NOT NULL THEN TRY_CONVERT(decimal(18,2), p.UnderUtilizedHours)
+          ELSE @BenchmarkNotUsedHoursPerWeek
+        END AS decimal(18,2)) AS BenchmarkNotUsedHoursPerWeek
+      FROM EMA_SoftwarePolicyItem i WITH (NOLOCK)
+      LEFT JOIN EMA_SoftwarePolicy p WITH (NOLOCK)
+        ON p.PolicyID = i.PolicyID
+      LEFT JOIN TS_SWUNI_LIST uni WITH (NOLOCK)
+        ON uni.SWUNI_Idn = i.SWUNI_Idn
+      LEFT JOIN TS_SW_CATEGORY cat WITH (NOLOCK)
+        ON cat.CategoryID = COALESCE(i.CategoryID, p.CategoryID, uni.SWUNI_Catg)
+      WHERE ISNULL(p.IsActive, 1) = 1
+        AND NULLIF(LTRIM(RTRIM(COALESCE(NULLIF(i.SoftwareName, ''), uni.SWUNI_Name, ''))), '') IS NOT NULL;
+
+      CREATE TABLE #InstalledRaw (
+        Object_Root_Idn int NULL,
+        SWUNI_Idn int NULL,
+        Branch nvarchar(500) NULL,
+        ComputerName nvarchar(255) NULL,
+        SoftwareName nvarchar(500) NOT NULL,
+        SoftwareKey nvarchar(500) NOT NULL,
+        CategoryID int NULL,
+        CategoryName nvarchar(255) NULL,
+        InstalledPublisher nvarchar(255) NULL
+      );
+
+      INSERT INTO #InstalledRaw
+      SELECT
+        attr.Object_Root_Idn,
+        attr.SWUNI_Idn,
+        ${branchExpr} AS Branch,
+        obj.ComputerName,
+        LTRIM(RTRIM(COALESCE(NULLIF(uni.SWUNI_Name, ''), CONCAT('Software #', attr.SWUNI_Idn)))) AS SoftwareName,
+        LOWER(LTRIM(RTRIM(COALESCE(NULLIF(uni.SWUNI_Name, ''), CONCAT('Software #', attr.SWUNI_Idn))))) AS SoftwareKey,
+        uni.SWUNI_Catg AS CategoryID,
+        COALESCE(cat.CategoryName, 'Unregistered') AS CategoryName,
+        MAX(NULLIF(LTRIM(RTRIM(attr.Publisher)), '')) AS InstalledPublisher
+      FROM TSSI_SWUNI_ATTR attr WITH (NOLOCK)
+      LEFT JOIN TS_SWUNI_LIST uni WITH (NOLOCK)
+        ON uni.SWUNI_Idn = attr.SWUNI_Idn
+      LEFT JOIN TS_SW_CATEGORY cat WITH (NOLOCK)
+        ON cat.CategoryID = uni.SWUNI_Catg
+      LEFT JOIN TS_OBJECT_ROOT obj WITH (NOLOCK)
+        ON obj.Object_Root_Idn = attr.Object_Root_Idn
+      GROUP BY attr.Object_Root_Idn, attr.SWUNI_Idn, ${branchGroupExpr}, obj.ComputerName, uni.SWUNI_Name, uni.SWUNI_Catg, cat.CategoryName;
+
+      CREATE TABLE #UsageEventRaw (
+        PeriodSort int NOT NULL,
+        PeriodLabel nvarchar(50) NOT NULL,
+        PeriodDays int NOT NULL,
+        Object_Root_Idn int NULL,
+        Branch nvarchar(500) NULL,
+        ComputerName nvarchar(255) NULL,
+        SW_Idn int NULL,
+        SoftwareName nvarchar(500) NOT NULL,
+        SoftwareKey nvarchar(500) NOT NULL,
+        LastExecutedFile nvarchar(500) NULL,
+        LastExecutedPath nvarchar(1000) NULL,
+        FirstUsedAt datetime NULL,
+        LastUsedAt datetime NULL,
+        OpenCount int NOT NULL,
+        UsageHours decimal(18,2) NOT NULL
+      );
+
+      INSERT INTO #UsageEventRaw
+      SELECT
+        p.SortOrder,
+        p.PeriodLabel,
+        p.PeriodDays,
+        h.Object_Root_Idn,
+        ${branchExpr} AS Branch,
+        obj.ComputerName,
+        h.SW_Idn,
+        LTRIM(RTRIM(COALESCE(NULLIF(s.SW_ProductName, ''), NULLIF(s.SW_FileName, ''), NULLIF(s.SW_OrgFileName, ''), NULLIF(s.SW_InterName, ''), NULLIF(h.SW_FileName, ''), CONCAT('Software #', h.SW_Idn)))) AS SoftwareName,
+        LOWER(LTRIM(RTRIM(COALESCE(NULLIF(s.SW_ProductName, ''), NULLIF(s.SW_FileName, ''), NULLIF(s.SW_OrgFileName, ''), NULLIF(s.SW_InterName, ''), NULLIF(h.SW_FileName, ''), CONCAT('Software #', h.SW_Idn))))) AS SoftwareKey,
+        MAX(h.SW_FileName) AS LastExecutedFile,
+        MAX(h.SW_Path) AS LastExecutedPath,
+        MIN(h.App_StartTime) AS FirstUsedAt,
+        MAX(COALESCE(h.App_EndTime, h.App_StartTime)) AS LastUsedAt,
+        COUNT(h.ID) AS OpenCount,
+        CAST(ROUND(SUM(CASE WHEN h.App_StartTime IS NOT NULL AND h.App_EndTime IS NOT NULL AND h.App_EndTime > h.App_StartTime THEN DATEDIFF(SECOND, h.App_StartTime, h.App_EndTime) ELSE 0 END) / 3600.0, 2) AS decimal(18,2)) AS UsageHours
+      FROM TSSM_MONITOR_HISTORY h WITH (NOLOCK)
+      INNER JOIN #Periods p
+        ON h.App_StartTime >= p.PeriodStart
+       AND h.App_StartTime < DATEADD(DAY, 1, p.PeriodEnd)
+      LEFT JOIN TS_OBJECT_ROOT obj WITH (NOLOCK)
+        ON obj.Object_Root_Idn = h.Object_Root_Idn
+      LEFT JOIN TS_SW_INFO s WITH (NOLOCK)
+        ON s.SW_Idn = h.SW_Idn
+      WHERE h.App_StartTime >= @StartDate
+        AND h.App_StartTime < DATEADD(DAY, 1, @EndDate)
+      GROUP BY
+        p.SortOrder,
+        p.PeriodLabel,
+        p.PeriodDays,
+        h.Object_Root_Idn,
+        ${branchGroupExpr},
+        obj.ComputerName,
+        h.SW_Idn,
+        COALESCE(NULLIF(s.SW_ProductName, ''), NULLIF(s.SW_FileName, ''), NULLIF(s.SW_OrgFileName, ''), NULLIF(s.SW_InterName, ''), NULLIF(h.SW_FileName, ''), CONCAT('Software #', h.SW_Idn));
+
+      CREATE TABLE #UsageRaw (
+        Object_Root_Idn int NULL,
+        Branch nvarchar(500) NULL,
+        ComputerName nvarchar(255) NULL,
+        SW_Idn int NULL,
+        SoftwareName nvarchar(500) NOT NULL,
+        SoftwareKey nvarchar(500) NOT NULL,
+        LastExecutedFile nvarchar(500) NULL,
+        LastExecutedPath nvarchar(1000) NULL,
+        FirstUsedAt datetime NULL,
+        LastUsedAt datetime NULL,
+        OpenCount int NOT NULL,
+        UsageHours decimal(18,2) NOT NULL
+      );
+
+      INSERT INTO #UsageRaw
+      SELECT
+        Object_Root_Idn,
+        MAX(Branch),
+        MAX(ComputerName),
+        MAX(SW_Idn),
+        SoftwareName,
+        SoftwareKey,
+        MAX(LastExecutedFile),
+        MAX(LastExecutedPath),
+        MIN(FirstUsedAt),
+        MAX(LastUsedAt),
+        SUM(OpenCount),
+        CAST(ROUND(SUM(UsageHours), 2) AS decimal(18,2))
+      FROM #UsageEventRaw
+      GROUP BY Object_Root_Idn, SoftwareName, SoftwareKey;
+
+      CREATE TABLE #LegalDeviceRows (
+        RoiSource nvarchar(50) NOT NULL,
+        PolicyID int NULL,
+        PolicyItemID int NULL,
+        PolicyName nvarchar(200) NULL,
+        SWUNI_Idn int NULL,
+        SoftwareName nvarchar(500) NOT NULL,
+        CategoryID int NULL,
+        CategoryName nvarchar(255) NULL,
+        ComplianceStatus nvarchar(50) NULL,
+        IllegalReason nvarchar(250) NULL,
+        LicenseCount decimal(18,2) NOT NULL,
+        UnitPrice decimal(18,2) NOT NULL,
+        BenchmarkUtilizedHoursPerWeek decimal(18,2) NOT NULL,
+        BenchmarkNotUsedHoursPerWeek decimal(18,2) NOT NULL,
+        Branch nvarchar(500) NULL,
+        ComputerName nvarchar(255) NULL,
+        Object_Root_Idn int NULL,
+        InstalledPublisher nvarchar(255) NULL,
+        OpenCount int NOT NULL,
+        UsageHours decimal(18,2) NOT NULL,
+        FirstUsedAt datetime NULL,
+        LastUsedAt datetime NULL,
+        MatchedSW_Idn int NULL,
+        LastExecutedFile nvarchar(500) NULL,
+        LastExecutedPath nvarchar(1000) NULL,
+        UsageStatus nvarchar(50) NOT NULL
+      );
+
+      INSERT INTO #LegalDeviceRows
+      SELECT
+        CAST('registered' AS nvarchar(50)) AS RoiSource,
+        ap.PolicyID,
+        ap.PolicyItemID,
+        ap.PolicyName,
+        ap.SWUNI_Idn,
+        ap.SoftwareName,
+        ap.CategoryID,
+        ap.CategoryName,
+        ap.ComplianceStatus,
+        CAST(NULL AS nvarchar(250)) AS IllegalReason,
+        ap.LicenseCount,
+        ap.UnitPrice,
+        ap.BenchmarkUtilizedHoursPerWeek,
+        ap.BenchmarkNotUsedHoursPerWeek,
+        inst.Branch,
+        inst.ComputerName,
+        inst.Object_Root_Idn,
+        inst.InstalledPublisher,
+        CAST(ISNULL(u.OpenCount, 0) AS int) AS OpenCount,
+        CAST(ISNULL(u.UsageHours, 0) AS decimal(18,2)) AS UsageHours,
+        u.FirstUsedAt,
+        u.LastUsedAt,
+        u.SW_Idn,
+        u.LastExecutedFile,
+        u.LastExecutedPath,
+        CASE
+          WHEN CAST(ISNULL(u.UsageHours, 0) AS decimal(18,2)) / @WeekFactor >= ap.BenchmarkUtilizedHoursPerWeek THEN 'Utilized'
+          WHEN CAST(ISNULL(u.UsageHours, 0) AS decimal(18,2)) / @WeekFactor > ap.BenchmarkNotUsedHoursPerWeek THEN 'Underutilized'
+          ELSE 'Not Used'
+        END AS UsageStatus
+      FROM #ActivePolicy ap
+      LEFT JOIN #InstalledRaw inst
+        ON ((ap.SWUNI_Idn IS NOT NULL AND inst.SWUNI_Idn = ap.SWUNI_Idn) OR (ap.SoftwareKey <> '' AND ap.SoftwareKey = inst.SoftwareKey))
+      LEFT JOIN #UsageRaw u
+        ON ((inst.Object_Root_Idn IS NOT NULL AND ISNULL(u.Object_Root_Idn, -1) = ISNULL(inst.Object_Root_Idn, -1)) OR inst.Object_Root_Idn IS NULL)
+       AND (u.SoftwareKey = ap.SoftwareKey OR u.SoftwareKey LIKE '%' + ap.SoftwareKey + '%' OR ap.SoftwareKey LIKE '%' + u.SoftwareKey + '%');
+
+      CREATE TABLE #IllegalDeviceRows (
+        RoiSource nvarchar(50) NOT NULL,
+        PolicyID int NULL,
+        PolicyItemID int NULL,
+        PolicyName nvarchar(200) NULL,
+        SWUNI_Idn int NULL,
+        SoftwareName nvarchar(500) NOT NULL,
+        CategoryID int NULL,
+        CategoryName nvarchar(255) NULL,
+        ComplianceStatus nvarchar(50) NULL,
+        IllegalReason nvarchar(250) NULL,
+        LicenseCount decimal(18,2) NOT NULL,
+        UnitPrice decimal(18,2) NOT NULL,
+        BenchmarkUtilizedHoursPerWeek decimal(18,2) NOT NULL,
+        BenchmarkNotUsedHoursPerWeek decimal(18,2) NOT NULL,
+        Branch nvarchar(500) NULL,
+        ComputerName nvarchar(255) NULL,
+        Object_Root_Idn int NULL,
+        InstalledPublisher nvarchar(255) NULL,
+        OpenCount int NOT NULL,
+        UsageHours decimal(18,2) NOT NULL,
+        FirstUsedAt datetime NULL,
+        LastUsedAt datetime NULL,
+        MatchedSW_Idn int NULL,
+        LastExecutedFile nvarchar(500) NULL,
+        LastExecutedPath nvarchar(1000) NULL,
+        UsageStatus nvarchar(50) NOT NULL
+      );
+
+      INSERT INTO #IllegalDeviceRows
+      SELECT
+        CAST('illegal-unregistered' AS nvarchar(50)),
+        CAST(NULL AS int),
+        CAST(NULL AS int),
+        CAST('Unregistered Software' AS nvarchar(200)),
+        x.SWUNI_Idn,
+        x.SoftwareName,
+        x.CategoryID,
+        x.CategoryName,
+        CAST('Illegal' AS nvarchar(50)),
+        x.IllegalReason,
+        CAST(0 AS decimal(18,2)),
+        CAST(0 AS decimal(18,2)),
+        @BenchmarkUtilizedHoursPerWeek,
+        @BenchmarkNotUsedHoursPerWeek,
+        x.Branch,
+        x.ComputerName,
+        x.Object_Root_Idn,
+        CAST(NULL AS nvarchar(255)),
+        CAST(SUM(ISNULL(x.OpenCount, 0)) AS int),
+        CAST(ROUND(SUM(ISNULL(x.UsageHours, 0)), 2) AS decimal(18,2)),
+        MIN(x.FirstUsedAt),
+        MAX(x.LastUsedAt),
+        MAX(x.MatchedSW_Idn),
+        MAX(x.LastExecutedFile),
+        MAX(x.LastExecutedPath),
+        CAST('Illegal' AS nvarchar(50))
+      FROM (
+        SELECT
+          inst.SWUNI_Idn,
+          inst.SoftwareName,
+          inst.SoftwareKey,
+          inst.CategoryID,
+          inst.CategoryName,
+          CAST('Installed software is not registered in Software Policy' AS nvarchar(250)) AS IllegalReason,
+          inst.Branch,
+          inst.ComputerName,
+          inst.Object_Root_Idn,
+          CAST(ISNULL(u.OpenCount, 0) AS int) AS OpenCount,
+          CAST(ISNULL(u.UsageHours, 0) AS decimal(18,2)) AS UsageHours,
+          u.FirstUsedAt,
+          u.LastUsedAt,
+          u.SW_Idn AS MatchedSW_Idn,
+          u.LastExecutedFile,
+          u.LastExecutedPath
+        FROM #InstalledRaw inst
+        LEFT JOIN #UsageRaw u
+          ON ISNULL(u.Object_Root_Idn, -1) = ISNULL(inst.Object_Root_Idn, -1)
+         AND (u.SoftwareKey = inst.SoftwareKey OR u.SoftwareKey LIKE '%' + inst.SoftwareKey + '%' OR inst.SoftwareKey LIKE '%' + u.SoftwareKey + '%')
+        WHERE NOT EXISTS (
+          SELECT 1 FROM #ActivePolicy ap
+          WHERE (ap.SWUNI_Idn IS NOT NULL AND ap.SWUNI_Idn = inst.SWUNI_Idn)
+             OR (ap.SoftwareKey <> '' AND ap.SoftwareKey = inst.SoftwareKey)
+        )
+
+        UNION ALL
+
+        SELECT
+          CAST(NULL AS int),
+          u.SoftwareName,
+          u.SoftwareKey,
+          CAST(NULL AS int),
+          CAST('Unregistered' AS nvarchar(255)),
+          CAST('Used software is not registered in Software Policy' AS nvarchar(250)),
+          u.Branch,
+          u.ComputerName,
+          u.Object_Root_Idn,
+          u.OpenCount,
+          u.UsageHours,
+          u.FirstUsedAt,
+          u.LastUsedAt,
+          u.SW_Idn,
+          u.LastExecutedFile,
+          u.LastExecutedPath
+        FROM #UsageRaw u
+        WHERE NOT EXISTS (
+          SELECT 1 FROM #ActivePolicy ap
+          WHERE ap.SoftwareKey <> ''
+            AND (u.SoftwareKey = ap.SoftwareKey OR u.SoftwareKey LIKE '%' + ap.SoftwareKey + '%' OR ap.SoftwareKey LIKE '%' + u.SoftwareKey + '%')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM #InstalledRaw inst
+          WHERE ISNULL(inst.Object_Root_Idn, -1) = ISNULL(u.Object_Root_Idn, -1)
+            AND inst.SoftwareKey = u.SoftwareKey
+        )
+      ) x
+      GROUP BY x.SWUNI_Idn, x.SoftwareName, x.SoftwareKey, x.CategoryID, x.CategoryName, x.IllegalReason, x.Branch, x.ComputerName, x.Object_Root_Idn;
+
+      CREATE TABLE #SoftwareSummary (
+        RoiSource nvarchar(50) NOT NULL,
+        PolicyName nvarchar(200) NULL,
+        PolicyID int NULL,
+        PolicyItemID int NULL,
+        SWUNI_Idn int NULL,
+        SoftwareName nvarchar(500) NOT NULL,
+        CategoryID int NULL,
+        CategoryName nvarchar(255) NULL,
+        ComplianceStatus nvarchar(50) NULL,
+        IllegalReason nvarchar(250) NULL,
+        PurchasedLicense decimal(18,2) NOT NULL,
+        InstalledDevices int NOT NULL,
+        UsedDevices int NOT NULL,
+        UtilizedDevices int NOT NULL,
+        UnderutilizedDevices int NOT NULL,
+        NotUsedDevices int NOT NULL,
+        TotalUsageHours decimal(18,2) NOT NULL,
+        OpenCount int NOT NULL,
+        LastUsedAt datetime NULL,
+        UnitPrice decimal(18,2) NOT NULL,
+        BenchmarkUtilizedHoursPerWeek decimal(18,2) NOT NULL,
+        BenchmarkNotUsedHoursPerWeek decimal(18,2) NOT NULL
+      );
+
+      INSERT INTO #SoftwareSummary
+      SELECT
+        CAST('registered' AS nvarchar(50)),
+        MAX(PolicyName),
+        PolicyID,
+        PolicyItemID,
+        MAX(SWUNI_Idn),
+        SoftwareName,
+        MAX(CategoryID),
+        MAX(CategoryName),
+        MAX(ComplianceStatus),
+        CAST(NULL AS nvarchar(250)),
+        CAST(MAX(ISNULL(LicenseCount, 0)) AS decimal(18,2)),
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN Object_Root_Idn END),
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL AND (ISNULL(UsageHours, 0) > 0 OR ISNULL(OpenCount, 0) > 0) THEN Object_Root_Idn END),
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Utilized' AND Object_Root_Idn IS NOT NULL THEN Object_Root_Idn END),
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Underutilized' AND Object_Root_Idn IS NOT NULL THEN Object_Root_Idn END),
+        COUNT(DISTINCT CASE WHEN UsageStatus = 'Not Used' AND Object_Root_Idn IS NOT NULL THEN Object_Root_Idn END),
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS decimal(18,2)),
+        SUM(ISNULL(OpenCount, 0)),
+        MAX(LastUsedAt),
+        CAST(MAX(ISNULL(UnitPrice, 0)) AS decimal(18,2)),
+        CAST(MAX(ISNULL(BenchmarkUtilizedHoursPerWeek, @BenchmarkUtilizedHoursPerWeek)) AS decimal(18,2)),
+        CAST(MAX(ISNULL(BenchmarkNotUsedHoursPerWeek, @BenchmarkNotUsedHoursPerWeek)) AS decimal(18,2))
+      FROM #LegalDeviceRows
+      WHERE (@Search = '' OR SoftwareName LIKE '%' + @Search + '%' OR CategoryName LIKE '%' + @Search + '%')
+      GROUP BY PolicyID, PolicyItemID, SoftwareName;
+
+      INSERT INTO #SoftwareSummary
+      SELECT
+        CAST('illegal-unregistered' AS nvarchar(50)),
+        CAST('Unregistered Software' AS nvarchar(200)),
+        CAST(NULL AS int),
+        CAST(NULL AS int),
+        MAX(SWUNI_Idn),
+        SoftwareName,
+        MAX(CategoryID),
+        MAX(CategoryName),
+        CAST('Illegal' AS nvarchar(50)),
+        MAX(IllegalReason),
+        CAST(0 AS decimal(18,2)),
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN Object_Root_Idn END),
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL AND (ISNULL(UsageHours, 0) > 0 OR ISNULL(OpenCount, 0) > 0) THEN Object_Root_Idn END),
+        CAST(0 AS int),
+        CAST(0 AS int),
+        COUNT(DISTINCT CASE WHEN Object_Root_Idn IS NOT NULL THEN Object_Root_Idn END),
+        CAST(ROUND(SUM(ISNULL(UsageHours, 0)), 2) AS decimal(18,2)),
+        SUM(ISNULL(OpenCount, 0)),
+        MAX(LastUsedAt),
+        CAST(0 AS decimal(18,2)),
+        @BenchmarkUtilizedHoursPerWeek,
+        @BenchmarkNotUsedHoursPerWeek
+      FROM #IllegalDeviceRows
+      WHERE (@Search = '' OR SoftwareName LIKE '%' + @Search + '%' OR CategoryName LIKE '%' + @Search + '%' OR ComputerName LIKE '%' + @Search + '%' OR Branch LIKE '%' + @Search + '%')
+      GROUP BY SoftwareName;
+
+      SELECT
+        '__summary' AS __ResultSet,
+        COUNT(1) AS registeredSoftware,
+        SUM(CASE WHEN ComplianceStatus = 'Illegal' THEN 1 ELSE 0 END) AS illegalSoftware,
+        SUM(PurchasedLicense) AS registeredLicense,
+        SUM(InstalledDevices) AS installedDevices,
+        SUM(UsedDevices) AS usedDevices,
+        SUM(CASE WHEN PurchasedLicense > 0 AND InstalledDevices > PurchasedLicense THEN InstalledDevices - PurchasedLicense ELSE 0 END) AS exceedLicense,
+        SUM(CASE WHEN PurchasedLicense > InstalledDevices THEN PurchasedLicense - InstalledDevices ELSE 0 END) AS availableLicense,
+        SUM(UnderutilizedDevices) AS underutilizedSoftware,
+        SUM(NotUsedDevices) AS notUsedSoftware,
+        CAST(ROUND(SUM(TotalUsageHours), 2) AS decimal(18,2)) AS totalUsageHours,
+        CAST(ROUND(SUM(TotalUsageHours) / ISNULL(@DateRangeDays, 1), 2) AS decimal(18,2)) AS averageUsagePerDay,
+        CAST(ROUND(SUM(TotalUsageHours) / @WeekFactor, 2) AS decimal(18,2)) AS averageUsagePerWeek,
+        CAST(ROUND(CASE WHEN SUM(PurchasedLicense) > 0 THEN SUM(UsedDevices) * 100.0 / SUM(PurchasedLicense) ELSE 0 END, 2) AS decimal(18,2)) AS licenseUsageRate,
+        CAST(ROUND(CASE WHEN SUM(InstalledDevices) > 0 THEN SUM(UsedDevices) * 100.0 / SUM(InstalledDevices) ELSE 0 END, 2) AS decimal(18,2)) AS installUsageRate,
+        CAST(ROUND(SUM(CASE WHEN PurchasedLicense > UsedDevices THEN (PurchasedLicense - UsedDevices) * UnitPrice ELSE 0 END), 2) AS decimal(18,2)) AS potentialWasteCost,
+        (SELECT COUNT(1) FROM #ActivePolicy) AS activePolicyRows,
+        (SELECT COUNT(1) FROM #InstalledRaw) AS installedRawRows,
+        (SELECT COUNT(1) FROM #UsageRaw) AS usageRawRows
+      FROM #SoftwareSummary;
+
+      SELECT
+        '__rows' AS __ResultSet,
+        RoiSource,
+        PolicyName,
+        PolicyID,
+        PolicyItemID,
+        SWUNI_Idn,
+        SoftwareName,
+        CategoryID,
+        CategoryName,
+        ComplianceStatus,
+        IllegalReason,
+        PurchasedLicense,
+        InstalledDevices,
+        UsedDevices,
+        CASE WHEN PurchasedLicense - UsedDevices > 0 THEN PurchasedLicense - UsedDevices ELSE 0 END AS LicenseBalanceByUsage,
+        CASE WHEN InstalledDevices - PurchasedLicense > 0 THEN InstalledDevices - PurchasedLicense ELSE 0 END AS ExceedLicense,
+        UtilizedDevices,
+        UnderutilizedDevices,
+        NotUsedDevices,
+        CAST(ROUND(TotalUsageHours, 2) AS decimal(18,2)) AS TotalUsageHours,
+        CAST(ROUND(TotalUsageHours / @WeekFactor, 2) AS decimal(18,2)) AS WeeklyAverageHours,
+        CAST(ROUND(TotalUsageHours / ISNULL(@DateRangeDays, 1), 2) AS decimal(18,2)) AS AverageUsageHoursPerDay,
+        CAST(ROUND(CASE WHEN InstalledDevices > 0 THEN UsedDevices * 100.0 / InstalledDevices ELSE 0 END, 2) AS decimal(18,2)) AS UsageRatePercent,
+        CAST(ROUND(CASE WHEN PurchasedLicense > 0 THEN UsedDevices * 100.0 / PurchasedLicense ELSE 0 END, 2) AS decimal(18,2)) AS LicenseUsageRatePercent,
+        UnitPrice,
+        CAST(ROUND(PurchasedLicense * UnitPrice, 2) AS decimal(18,2)) AS TotalLicenseCost,
+        CAST(ROUND(CASE WHEN PurchasedLicense > UsedDevices THEN (PurchasedLicense - UsedDevices) * UnitPrice ELSE 0 END, 2) AS decimal(18,2)) AS PotentialWasteCost,
+        BenchmarkUtilizedHoursPerWeek,
+        BenchmarkNotUsedHoursPerWeek,
+        CASE
+          WHEN ComplianceStatus = 'Illegal' THEN 'Illegal'
+          WHEN TotalUsageHours / @WeekFactor >= BenchmarkUtilizedHoursPerWeek THEN 'Utilized'
+          WHEN TotalUsageHours / @WeekFactor > BenchmarkNotUsedHoursPerWeek THEN 'Underutilized'
+          ELSE 'Not Used'
+        END AS BenchmarkStatus,
+        CASE
+          WHEN ComplianceStatus = 'Illegal' THEN 'Illegal / Unregistered'
+          WHEN InstalledDevices > PurchasedLicense AND PurchasedLicense > 0 THEN 'Exceed License'
+          WHEN TotalUsageHours / @WeekFactor <= BenchmarkNotUsedHoursPerWeek THEN 'Review Renewal'
+          WHEN TotalUsageHours / @WeekFactor < BenchmarkUtilizedHoursPerWeek THEN 'Reduce / Reassign'
+          WHEN PurchasedLicense > 0 AND UsedDevices >= PurchasedLicense THEN 'Maintain Budget'
+          ELSE 'Keep Monitoring'
+        END AS BudgetSignal,
+        OpenCount,
+        LastUsedAt
+      FROM #SoftwareSummary
+      ORDER BY
+        CASE WHEN ComplianceStatus = 'Illegal' THEN 0 ELSE 1 END,
+        CASE WHEN InstalledDevices > PurchasedLicense THEN InstalledDevices - PurchasedLicense ELSE 0 END DESC,
+        PotentialWasteCost DESC,
+        SoftwareName ASC;
+
+      ;WITH PeriodUsage AS (
+        SELECT
+          p.SortOrder,
+          p.PeriodLabel,
+          p.PeriodDays,
+          SUM(ISNULL(e.UsageHours, 0)) AS TotalHours,
+          COUNT(DISTINCT CASE WHEN e.Object_Root_Idn IS NOT NULL AND (ISNULL(e.UsageHours, 0) > 0 OR ISNULL(e.OpenCount, 0) > 0) THEN e.Object_Root_Idn END) AS UsedDevices
+        FROM #Periods p
+        LEFT JOIN #UsageEventRaw e
+          ON e.PeriodSort = p.SortOrder
+        GROUP BY p.SortOrder, p.PeriodLabel, p.PeriodDays
+      )
+      SELECT
+        '__usageTrend' AS __ResultSet,
+        PeriodLabel AS period,
+        CAST(ROUND(TotalHours, 2) AS decimal(18,2)) AS totalHours,
+        CAST(ROUND(TotalHours / CASE WHEN PeriodDays <= 0 THEN 1 ELSE PeriodDays END, 2) AS decimal(18,2)) AS averageHours,
+        UsedDevices AS usedDevices
+      FROM PeriodUsage
+      ORDER BY SortOrder;
+
+      ;WITH InstalledTotal AS (
+        SELECT COUNT(DISTINCT Object_Root_Idn) AS InstalledDevices FROM #LegalDeviceRows WHERE Object_Root_Idn IS NOT NULL
+      ), LicenseTotal AS (
+        SELECT SUM(LicenseCount) AS RegisteredLicense FROM #ActivePolicy
+      ), PeriodUsed AS (
+        SELECT p.SortOrder, p.PeriodLabel, COUNT(DISTINCT e.Object_Root_Idn) AS UsedDevices
+        FROM #Periods p
+        LEFT JOIN #UsageEventRaw e ON e.PeriodSort = p.SortOrder
+        GROUP BY p.SortOrder, p.PeriodLabel
+      )
+      SELECT
+        '__licenseTrend' AS __ResultSet,
+        u.PeriodLabel AS period,
+        CAST(ISNULL(l.RegisteredLicense, 0) AS int) AS registered,
+        CAST(ISNULL(i.InstalledDevices, 0) AS int) AS installed,
+        CAST(ISNULL(u.UsedDevices, 0) AS int) AS used,
+        CASE WHEN ISNULL(i.InstalledDevices, 0) > ISNULL(l.RegisteredLicense, 0) THEN CAST(ISNULL(i.InstalledDevices, 0) - ISNULL(l.RegisteredLicense, 0) AS int) ELSE 0 END AS exceed
+      FROM PeriodUsed u
+      CROSS JOIN InstalledTotal i
+      CROSS JOIN LicenseTotal l
+      ORDER BY u.SortOrder;
+
+      ;WITH PolicyPeriod AS (
+        SELECT
+          p.SortOrder,
+          p.PeriodLabel,
+          ap.PolicyItemID,
+          ap.ComplianceStatus,
+          ap.LicenseCount,
+          ap.UnitPrice,
+          ap.BenchmarkUtilizedHoursPerWeek,
+          ap.BenchmarkNotUsedHoursPerWeek,
+          p.PeriodDays,
+          CAST(ROUND(SUM(CASE WHEN e.SoftwareKey = ap.SoftwareKey OR e.SoftwareKey LIKE '%' + ap.SoftwareKey + '%' OR ap.SoftwareKey LIKE '%' + e.SoftwareKey + '%' THEN ISNULL(e.UsageHours, 0) ELSE 0 END), 2) AS decimal(18,2)) AS UsageHours
+        FROM #Periods p
+        CROSS JOIN #ActivePolicy ap
+        LEFT JOIN #UsageEventRaw e
+          ON e.PeriodSort = p.SortOrder
+        GROUP BY p.SortOrder, p.PeriodLabel, ap.PolicyItemID, ap.ComplianceStatus, ap.LicenseCount, ap.UnitPrice, ap.BenchmarkUtilizedHoursPerWeek, ap.BenchmarkNotUsedHoursPerWeek, p.PeriodDays
+      ), Classified AS (
+        SELECT
+          SortOrder,
+          PeriodLabel,
+          CASE
+            WHEN ComplianceStatus = 'Illegal' THEN 'Illegal'
+            WHEN UsageHours / CASE WHEN PeriodDays <= 0 THEN 1 ELSE CAST(PeriodDays AS decimal(18,4)) / 7.0 END >= BenchmarkUtilizedHoursPerWeek THEN 'Utilized'
+            WHEN UsageHours / CASE WHEN PeriodDays <= 0 THEN 1 ELSE CAST(PeriodDays AS decimal(18,4)) / 7.0 END > BenchmarkNotUsedHoursPerWeek THEN 'Underutilized'
+            ELSE 'Not Used'
+          END AS BenchmarkStatus,
+          CASE WHEN UsageHours / CASE WHEN PeriodDays <= 0 THEN 1 ELSE CAST(PeriodDays AS decimal(18,4)) / 7.0 END <= BenchmarkNotUsedHoursPerWeek THEN LicenseCount * UnitPrice ELSE 0 END AS WasteCost
+        FROM PolicyPeriod
+      )
+      SELECT
+        '__benchmarkTrend' AS __ResultSet,
+        PeriodLabel AS period,
+        SUM(CASE WHEN BenchmarkStatus = 'Utilized' THEN 1 ELSE 0 END) AS utilized,
+        SUM(CASE WHEN BenchmarkStatus = 'Underutilized' THEN 1 ELSE 0 END) AS underutilized,
+        SUM(CASE WHEN BenchmarkStatus = 'Not Used' THEN 1 ELSE 0 END) AS notUsed,
+        SUM(CASE WHEN BenchmarkStatus = 'Illegal' THEN 1 ELSE 0 END) AS illegal,
+        CAST(0 AS int) AS exceed
+      FROM Classified
+      GROUP BY SortOrder, PeriodLabel
+      ORDER BY SortOrder;
+
+      ;WITH PolicyPeriod AS (
+        SELECT
+          p.SortOrder,
+          p.PeriodLabel,
+          ap.PolicyItemID,
+          ap.LicenseCount,
+          ap.UnitPrice,
+          ap.BenchmarkUtilizedHoursPerWeek,
+          ap.BenchmarkNotUsedHoursPerWeek,
+          p.PeriodDays,
+          CAST(ROUND(SUM(CASE WHEN e.SoftwareKey = ap.SoftwareKey OR e.SoftwareKey LIKE '%' + ap.SoftwareKey + '%' OR ap.SoftwareKey LIKE '%' + e.SoftwareKey + '%' THEN ISNULL(e.UsageHours, 0) ELSE 0 END), 2) AS decimal(18,2)) AS UsageHours
+        FROM #Periods p
+        CROSS JOIN #ActivePolicy ap
+        LEFT JOIN #UsageEventRaw e
+          ON e.PeriodSort = p.SortOrder
+        GROUP BY p.SortOrder, p.PeriodLabel, ap.PolicyItemID, ap.LicenseCount, ap.UnitPrice, ap.BenchmarkUtilizedHoursPerWeek, ap.BenchmarkNotUsedHoursPerWeek, p.PeriodDays
+      )
+      SELECT
+        '__wasteTrend' AS __ResultSet,
+        PeriodLabel AS period,
+        CAST(ROUND(SUM(CASE WHEN UsageHours / CASE WHEN PeriodDays <= 0 THEN 1 ELSE CAST(PeriodDays AS decimal(18,4)) / 7.0 END <= BenchmarkNotUsedHoursPerWeek THEN LicenseCount * UnitPrice ELSE 0 END), 2) AS decimal(18,2)) AS wasteCost,
+        CAST(ROUND(SUM(CASE WHEN UsageHours / CASE WHEN PeriodDays <= 0 THEN 1 ELSE CAST(PeriodDays AS decimal(18,4)) / 7.0 END > BenchmarkNotUsedHoursPerWeek AND UsageHours / CASE WHEN PeriodDays <= 0 THEN 1 ELSE CAST(PeriodDays AS decimal(18,4)) / 7.0 END < BenchmarkUtilizedHoursPerWeek THEN LicenseCount * UnitPrice ELSE 0 END), 2) AS decimal(18,2)) AS underusedCost,
+        CAST(0 AS decimal(18,2)) AS exceedExposure
+      FROM PolicyPeriod
+      GROUP BY SortOrder, PeriodLabel
+      ORDER BY SortOrder;
+
+      SELECT
+        '__details' AS __ResultSet,
+        RoiSource,
+        PolicyID,
+        PolicyItemID,
+        SWUNI_Idn,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus,
+        IllegalReason,
+        Branch,
+        ComputerName,
+        Object_Root_Idn,
+        UsageStatus,
+        UsageHours,
+        CAST(ROUND(ISNULL(UsageHours, 0) / @WeekFactor, 2) AS decimal(18,2)) AS WeeklyAverageHours,
+        OpenCount,
+        FirstUsedAt,
+        LastUsedAt,
+        LastExecutedFile,
+        LastExecutedPath,
+        MatchedSW_Idn
+      FROM #LegalDeviceRows
+      UNION ALL
+      SELECT
+        '__details' AS __ResultSet,
+        RoiSource,
+        PolicyID,
+        PolicyItemID,
+        SWUNI_Idn,
+        SoftwareName,
+        CategoryName,
+        ComplianceStatus,
+        IllegalReason,
+        Branch,
+        ComputerName,
+        Object_Root_Idn,
+        UsageStatus,
+        UsageHours,
+        CAST(ROUND(ISNULL(UsageHours, 0) / @WeekFactor, 2) AS decimal(18,2)) AS WeeklyAverageHours,
+        OpenCount,
+        FirstUsedAt,
+        LastUsedAt,
+        LastExecutedFile,
+        LastExecutedPath,
+        MatchedSW_Idn
+      FROM #IllegalDeviceRows
+      ORDER BY SoftwareName ASC, ComputerName ASC;
+
+      SELECT
+        '__diagnostics' AS __ResultSet,
+        '${priceColumn}' AS PriceColumn,
+        '${branchColumn}' AS BranchColumn,
+        @Granularity AS Granularity,
+        (SELECT COUNT(1) FROM #ActivePolicy) AS ActivePolicyRows,
+        (SELECT COUNT(1) FROM #InstalledRaw) AS InstalledRows,
+        (SELECT COUNT(1) FROM #UsageRaw) AS UsageRows,
+        (SELECT COUNT(1) FROM #Periods) AS PeriodRows;
+
+      IF OBJECT_ID('tempdb..#Periods') IS NOT NULL DROP TABLE #Periods;
+      IF OBJECT_ID('tempdb..#ActivePolicy') IS NOT NULL DROP TABLE #ActivePolicy;
+      IF OBJECT_ID('tempdb..#InstalledRaw') IS NOT NULL DROP TABLE #InstalledRaw;
+      IF OBJECT_ID('tempdb..#UsageEventRaw') IS NOT NULL DROP TABLE #UsageEventRaw;
+      IF OBJECT_ID('tempdb..#UsageRaw') IS NOT NULL DROP TABLE #UsageRaw;
+      IF OBJECT_ID('tempdb..#LegalDeviceRows') IS NOT NULL DROP TABLE #LegalDeviceRows;
+      IF OBJECT_ID('tempdb..#IllegalDeviceRows') IS NOT NULL DROP TABLE #IllegalDeviceRows;
+      IF OBJECT_ID('tempdb..#SoftwareSummary') IS NOT NULL DROP TABLE #SoftwareSummary;
+    `);
+
+    const summary = roiV5PickResultSet(result, '__summary', 0)[0] || {};
+    const rows = roiV5PickResultSet(result, '__rows', 1);
+    const usageTrend = roiV5PickResultSet(result, '__usageTrend', 2);
+    const licenseTrend = roiV5PickResultSet(result, '__licenseTrend', 3);
+    const benchmarkTrend = roiV5PickResultSet(result, '__benchmarkTrend', 4);
+    const wasteTrend = roiV5PickResultSet(result, '__wasteTrend', 5);
+    const detailRows = includeDetails ? roiV5PickResultSet(result, '__details', 6).slice(0, detailLimit) : [];
+    const diagnosticsRows = roiV5PickResultSet(result, '__diagnostics', 7);
+    const detailGroups = roiV5GroupDetails(detailRows);
+
+    const rowsWithDetails = rows.map((row) => {
+      const policyKey = row.PolicyItemID ? `policy:${row.PolicyItemID}` : '';
+      const nameKey = `name:${String(row.SoftwareName || '').trim().toLowerCase()}|${String(row.CategoryName || '').trim().toLowerCase()}|${String(row.ComplianceStatus || '').trim().toLowerCase()}`;
+      const groupRows = detailGroups.get(policyKey) || detailGroups.get(nameKey) || [];
+      return includeDetails ? { ...row, __roiSource: row.RoiSource, __detailRows: groupRows.slice(0, 50) } : { ...row, __roiSource: row.RoiSource };
+    });
+
+    return res.json({
+      success: true,
+      message: 'Software ROI V5 trend analytics loaded',
+      data: {
+        benchmark: {
+          utilizedHoursPerWeek: utilizedBenchmark,
+          notUsedHoursPerWeek: notUsedBenchmark,
+          source: 'EMA_SoftwarePolicyItem / EMA_SoftwarePolicy + UI fallback'
+        },
+        dateRange: { dateFrom, dateTo, granularity, includeDetails, detailLimit },
+        summary,
+        rows: rowsWithDetails,
+        registeredRows: rowsWithDetails.filter((row) => row.ComplianceStatus !== 'Illegal'),
+        illegalRows: rowsWithDetails.filter((row) => row.ComplianceStatus === 'Illegal'),
+        exceedRows: rowsWithDetails.filter((row) => Number(row.ExceedLicense || 0) > 0),
+        underutilizedRows: rowsWithDetails.filter((row) => row.BenchmarkStatus === 'Underutilized'),
+        notUsedRows: rowsWithDetails.filter((row) => row.BenchmarkStatus === 'Not Used'),
+        charts: {
+          usageTrend,
+          licenseTrend,
+          benchmarkTrend,
+          wasteTrend,
+          // Backward compatibility with old UI names
+          weeklyUsage: usageTrend,
+          licenseVsUsage: licenseTrend,
+          benchmarkDistribution: benchmarkTrend,
+        },
+        details: includeDetails ? detailRows : [],
+        diagnostics: {
+          priceColumn,
+          branchColumn,
+          rows: diagnosticsRows,
+          summaryCounts: {
+            activePolicyRows: summary.activePolicyRows || 0,
+            installedRawRows: summary.installedRawRows || 0,
+            usageRawRows: summary.usageRawRows || 0,
+          },
+        },
+      },
+    });
+  } catch (err) {
+    console.error('GET /api/software-roi-v5/analytics error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to load Software ROI V5 trend analytics',
+      error: err.message,
+      detail: err.originalError?.info?.message || err.precedingErrors?.map((item) => item.message).join(' | ') || err.message,
+    });
+  }
+});
+
+console.log('[OK] Software ROI V5 trend analytics API registered');
+
+
+
+
+// ============================================================
+// IT OPERATIONS DASHBOARD API
+// GET /api/dashboard/it-operations
+// Live API only. No dummy/fallback dashboard data.
+// ============================================================
+
+function itopsToNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function itopsRound(value, digits = 1) {
+    const factor = Math.pow(10, digits);
+    return Math.round(itopsToNumber(value) * factor) / factor;
+}
+
+function itopsPercent(part, total, fallback = 0) {
+    const denominator = itopsToNumber(total);
+    if (!denominator) return Math.max(0, Math.min(100, fallback));
+    const percent = itopsRound((itopsToNumber(part) / denominator) * 100, 1);
+    return Math.max(0, Math.min(100, percent));
+}
+
+function itopsFormatInt(value) {
+    return itopsToNumber(value).toLocaleString("en-US");
+}
+
+function itopsFormatPercent(value) {
+    return `${itopsRound(value, 1).toFixed(1)}%`;
+}
+
+function itopsFormatDuration(minutes) {
+    const totalMinutes = Math.max(0, Math.round(itopsToNumber(minutes)));
+    if (!totalMinutes) return "0m";
+
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    if (!hours) return `${mins}m`;
+    if (!mins) return `${hours}h`;
+    return `${hours}h ${mins}m`;
+}
+
+function itopsSeverity(value) {
+    const text = String(value || "").trim();
+    if (["Critical", "High", "Medium", "Low"].includes(text)) return text;
+    return "Medium";
+}
+
+function itopsStatusTone(status, priority) {
+    const normalizedStatus = String(status || "").toLowerCase();
+    const normalizedPriority = String(priority || "").toLowerCase();
+
+    if (normalizedStatus.includes("resolved") || normalizedStatus.includes("closed") || normalizedStatus.includes("transferred")) return "success";
+    if (normalizedStatus.includes("running") || normalizedStatus.includes("progress") || normalizedStatus.includes("investigat")) return "info";
+    if (normalizedStatus.includes("cancel") || normalizedStatus.includes("fail") || normalizedPriority === "critical") return "danger";
+    if (normalizedPriority === "high" || normalizedPriority === "medium" || normalizedStatus.includes("await")) return "warning";
+    return "neutral";
+}
+
+function itopsDateLabel(value) {
+    if (!value) return "-";
+    const dbLocalDisplay = formatDbLocalDisplayDateTime(value, { includeSeconds: false });
+    if (dbLocalDisplay) return dbLocalDisplay;
+    return String(value);
+}
+
+async function itopsTableExists(pool, tableName) {
+    if (typeof tableExists === "function") {
+        return tableExists(pool, tableName);
+    }
+
+    const result = await pool.request()
+        .input("tableName", sql.NVarChar, tableName)
+        .query(`
+            SELECT 1 AS existsFlag
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_NAME = @tableName
+        `);
+
+    return result.recordset.length > 0;
+}
+
+async function itopsColumnExists(pool, tableName, columnName) {
+    const result = await pool.request()
+        .input("tableName", sql.NVarChar, tableName)
+        .input("columnName", sql.NVarChar, columnName)
+        .query(`
+            SELECT 1 AS existsFlag
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = @tableName
+              AND COLUMN_NAME = @columnName
+        `);
+
+    return result.recordset.length > 0;
+}
+
+function itopsRiskPercent(value, total) {
+    return itopsPercent(value, total, 0);
+}
+
+
+function itopsRiskSeverityCount(count, criticalThreshold, highThreshold) {
+    const value = itopsToNumber(count);
+    if (value >= criticalThreshold) return "Critical";
+    if (value >= highThreshold) return "High";
+    if (value > 0) return "Medium";
+    return "Low";
+}
+
+
+async function getItOpsSoftwareSummary(pool) {
+    const hasMdmSoftware = await itopsTableExists(pool, "TSMDM_SW_LIST");
+    const hasMdmAsset = await itopsTableExists(pool, "TSMDM_ASSET");
+    const hasCategory = await itopsTableExists(pool, "TS_SW_CATEGORY");
+
+    const hasEmRoot = await itopsTableExists(pool, "TS_OBJECT_ROOT");
+    const hasSwuniAttr = await itopsTableExists(pool, "TSSI_SWUNI_ATTR");
+    const hasSwuniList = await itopsTableExists(pool, "TS_SWUNI_LIST");
+    const hasRelation = await itopsTableExists(pool, "TS_OBJECT_RELATION");
+
+    const emptySoftwareSummary = {
+        totalInstallations: 0,
+        uniqueSoftware: 0,
+        devicesWithSoftware: 0,
+        unclassifiedSoftware: 0,
+        latestScan: "-",
+        topCategories: [],
+        classificationBreakdown: [],
+        lifecycleWatch: [],
+        softwareRows: [],
+        businessSoftware: 0,
+        remoteControlSoftware: 0,
+        antivirusSoftware: 0,
+        browserSoftware: 0,
+        gamingSoftware: 0,
+        eolApplications: 0,
+        eosApplications: 0,
+        unsupportedApplications: 0
+    };
+
+    const sourceParts = [];
+
+    if (hasMdmSoftware) {
+        const mdmAssetJoin = hasMdmAsset
+            ? "LEFT JOIN TSMDM_ASSET asset WITH (NOLOCK) ON sw.DeviceID = asset.DeviceID"
+            : "";
+
+        const mdmCategoryJoin = hasCategory
+            ? "LEFT JOIN TS_SW_CATEGORY cat WITH (NOLOCK) ON sw.SW_CATEGORY = cat.CategoryID"
+            : "";
+
+        const mdmCategoryExpr = hasCategory
+            ? "ISNULL(NULLIF(LTRIM(RTRIM(cat.CategoryName)), ''), 'Unclassified')"
+            : "'Unclassified'";
+
+        const mdmDeviceNameExpr = hasMdmAsset
+            ? "ISNULL(NULLIF(LTRIM(RTRIM(asset.DeviceName)), ''), sw.DeviceID)"
+            : "sw.DeviceID";
+
+        const mdmPlatformExpr = hasMdmAsset
+            ? "ISNULL(NULLIF(LTRIM(RTRIM(asset.PlatformType)), ''), '')"
+            : "''";
+
+        sourceParts.push(`
+            SELECT
+                CASE
+                    WHEN TRY_CONVERT(uniqueidentifier, NULLIF(LTRIM(RTRIM(CAST(sw.Name AS NVARCHAR(255)))), '')) IS NOT NULL
+                         AND NULLIF(LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255)))), '') IS NOT NULL
+                        THEN LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255))))
+                    WHEN NULLIF(LTRIM(RTRIM(CAST(sw.Name AS NVARCHAR(255)))), '') IS NOT NULL
+                        THEN LTRIM(RTRIM(CAST(sw.Name AS NVARCHAR(255))))
+                    WHEN NULLIF(LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255)))), '') IS NOT NULL
+                        THEN LTRIM(RTRIM(CAST(sw.Id AS NVARCHAR(255))))
+                    ELSE '-'
+                END AS SoftwareName,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(sw.DeviceID AS NVARCHAR(255)))), ''), '-') AS DeviceID,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(${mdmDeviceNameExpr} AS NVARCHAR(255)))), ''), '-') AS DeviceName,
+                CAST('MDM' AS NVARCHAR(100)) AS Branch,
+                CAST('' AS NVARCHAR(100)) AS Version,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(sw.Description AS NVARCHAR(255)))), ''), '') AS Publisher,
+                ${mdmCategoryExpr} AS CategoryName,
+                ${mdmCategoryExpr} AS ProductGroup,
+                ${mdmPlatformExpr} AS Platform,
+                TRY_CONVERT(datetime, sw.SearchDate) AS SearchDate
+            FROM TSMDM_SW_LIST sw WITH (NOLOCK)
+            ${mdmAssetJoin}
+            ${mdmCategoryJoin}
+        `);
+    }
+
+    if (hasEmRoot && hasSwuniAttr && hasSwuniList) {
+        const emRelationJoin = hasRelation
+            ? "LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK) ON c.Object_Rel_Idn = rel.Object_Rel_Idn"
+            : "";
+
+        const emCategoryJoin = hasCategory
+            ? "LEFT JOIN TS_SW_CATEGORY cat WITH (NOLOCK) ON b.SWUNI_Catg = cat.CategoryID"
+            : "";
+
+        const emCategoryExpr = hasCategory
+            ? "ISNULL(NULLIF(LTRIM(RTRIM(cat.CategoryName)), ''), 'Unclassified')"
+            : "'Unclassified'";
+
+        const emBranchExpr = hasRelation
+            ? "ISNULL(NULLIF(LTRIM(RTRIM(rel.Object_Full_Name)), ''), ISNULL(NULLIF(LTRIM(RTRIM(rel.Object_Rel_Name)), ''), 'EM'))"
+            : "'EM'";
+
+        sourceParts.push(`
+            SELECT
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(b.SWUNI_Name AS NVARCHAR(255)))), ''), '-') AS SoftwareName,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(c.Object_DeviceID AS NVARCHAR(255)))), ''), CAST(c.Object_Root_Idn AS NVARCHAR(255))) AS DeviceID,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(c.ComputerName AS NVARCHAR(255)))), ''), ISNULL(NULLIF(LTRIM(RTRIM(CAST(c.Object_DeviceID AS NVARCHAR(255)))), ''), CAST(c.Object_Root_Idn AS NVARCHAR(255)))) AS DeviceName,
+                ${emBranchExpr} AS Branch,
+                CAST('' AS NVARCHAR(100)) AS Version,
+                CAST('' AS NVARCHAR(255)) AS Publisher,
+                ${emCategoryExpr} AS CategoryName,
+                ${emCategoryExpr} AS ProductGroup,
+                CAST('EM' AS NVARCHAR(100)) AS Platform,
+                TRY_CONVERT(datetime, sw.SearchDate) AS SearchDate
+            FROM TSSI_SWUNI_ATTR sw WITH (NOLOCK)
+            LEFT JOIN TS_OBJECT_ROOT c WITH (NOLOCK)
+                ON sw.Object_Root_Idn = c.Object_Root_Idn
+            LEFT JOIN TS_SWUNI_LIST b WITH (NOLOCK)
+                ON sw.SWUNI_Idn = b.SWUNI_Idn
+            ${emRelationJoin}
+            ${emCategoryJoin}
+            WHERE sw.Object_Root_Idn IN (SELECT DISTINCT Object_Root_Idn FROM TS_OBJECT_ROOT WITH (NOLOCK))
+        `);
+    }
+
+    if (!sourceParts.length) {
+        return emptySoftwareSummary;
+    }
+
+    const result = await pool.request().query(`
+        IF OBJECT_ID('tempdb..#ItOpsSoftwareRows') IS NOT NULL
+            DROP TABLE #ItOpsSoftwareRows;
+
+        ;WITH SoftwareBase AS (
+            ${sourceParts.join("\nUNION ALL\n")}
+        ),
+        CleanRows AS (
+            SELECT
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(SoftwareName AS NVARCHAR(255)))), ''), '-') AS SoftwareName,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(DeviceID AS NVARCHAR(255)))), ''), '-') AS DeviceID,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(DeviceName AS NVARCHAR(255)))), ''), '-') AS DeviceName,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(Branch AS NVARCHAR(255)))), ''), 'Unassigned') AS Branch,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(Version AS NVARCHAR(100)))), ''), '') AS Version,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(Publisher AS NVARCHAR(255)))), ''), '') AS Publisher,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(CategoryName AS NVARCHAR(255)))), ''), 'Unclassified') AS CategoryName,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(ProductGroup AS NVARCHAR(255)))), ''), 'Unclassified') AS ProductGroup,
+                ISNULL(NULLIF(LTRIM(RTRIM(CAST(Platform AS NVARCHAR(100)))), ''), '') AS Platform,
+                SearchDate
+            FROM SoftwareBase
+            WHERE NULLIF(LTRIM(RTRIM(CAST(SoftwareName AS NVARCHAR(255)))), '') IS NOT NULL
+              AND LTRIM(RTRIM(CAST(SoftwareName AS NVARCHAR(255)))) <> '-'
+        )
+        SELECT
+            SoftwareName,
+            DeviceID,
+            DeviceName,
+            Branch,
+            Version,
+            Publisher,
+            CategoryName,
+            ProductGroup,
+            Platform,
+            SearchDate,
+
+            CASE
+                WHEN LOWER(CategoryName) LIKE '%remote%'
+                  OR LOWER(SoftwareName) LIKE '%anydesk%'
+                  OR LOWER(SoftwareName) LIKE '%teamviewer%'
+                  OR LOWER(SoftwareName) LIKE '%ultraviewer%'
+                  OR LOWER(SoftwareName) LIKE '%vnc%'
+                  OR LOWER(SoftwareName) LIKE '%remote desktop%'
+                  OR LOWER(SoftwareName) LIKE '%rustdesk%'
+                    THEN 'Remote Control'
+
+                WHEN LOWER(CategoryName) LIKE '%antivirus%'
+                  OR LOWER(CategoryName) LIKE '%anti virus%'
+                  OR LOWER(SoftwareName) LIKE '%kaspersky%'
+                  OR LOWER(SoftwareName) LIKE '%eset%'
+                  OR LOWER(SoftwareName) LIKE '%symantec%'
+                  OR LOWER(SoftwareName) LIKE '%trend micro%'
+                  OR LOWER(SoftwareName) LIKE '%mcafee%'
+                  OR LOWER(SoftwareName) LIKE '%defender%'
+                  OR LOWER(SoftwareName) LIKE '%avast%'
+                  OR LOWER(SoftwareName) LIKE '%avg antivirus%'
+                    THEN 'Antivirus'
+
+                WHEN LOWER(CategoryName) LIKE '%browser%'
+                  OR LOWER(SoftwareName) LIKE '%google chrome%'
+                  OR LOWER(SoftwareName) LIKE '%chrome%'
+                  OR LOWER(SoftwareName) LIKE '%firefox%'
+                  OR LOWER(SoftwareName) LIKE '%microsoft edge%'
+                  OR LOWER(SoftwareName) LIKE '%opera%'
+                  OR LOWER(SoftwareName) LIKE '%brave%'
+                    THEN 'Web Browser'
+
+                WHEN LOWER(CategoryName) LIKE '%game%'
+                  OR LOWER(SoftwareName) LIKE '%steam%'
+                  OR LOWER(SoftwareName) LIKE '%epic games%'
+                  OR LOWER(SoftwareName) LIKE '%riot client%'
+                  OR LOWER(SoftwareName) LIKE '%garena%'
+                    THEN 'Gaming'
+
+                WHEN LOWER(CategoryName) IN ('unclassified', 'unknown', 'others', 'other', '')
+                  OR LOWER(CategoryName) LIKE '%unclassified%'
+                    THEN 'Unclassified'
+
+                WHEN LOWER(SoftwareName) LIKE '%microsoft%'
+                  OR LOWER(SoftwareName) LIKE '%office%'
+                  OR LOWER(SoftwareName) LIKE '%adobe%'
+                  OR LOWER(SoftwareName) LIKE '%autodesk%'
+                  OR LOWER(SoftwareName) LIKE '%sap%'
+                  OR LOWER(SoftwareName) LIKE '%mysql%'
+                  OR LOWER(SoftwareName) LIKE '%spss%'
+                  OR LOWER(SoftwareName) LIKE '%openoffice%'
+                  OR LOWER(SoftwareName) LIKE '%wps office%'
+                  OR LOWER(SoftwareName) LIKE '%coreldraw%'
+                  OR LOWER(SoftwareName) LIKE '%sketch%'
+                  OR LOWER(CategoryName) LIKE '%business%'
+                  OR LOWER(CategoryName) LIKE '%productivity%'
+                  OR LOWER(CategoryName) LIKE '%tools%'
+                    THEN 'Business'
+
+                ELSE 'Unclassified'
+            END AS Classification,
+
+            CASE
+                WHEN LOWER(CategoryName) LIKE '%unauthorized%'
+                  OR LOWER(CategoryName) LIKE '%unwanted%'
+                  OR LOWER(CategoryName) LIKE '%unsupported%'
+                  OR LOWER(CategoryName) LIKE '%blacklist%'
+                    THEN 'Unsupported Apps'
+
+                WHEN LOWER(SoftwareName) LIKE '%adobe flash%'
+                  OR LOWER(SoftwareName) LIKE '%flash player%'
+                  OR LOWER(SoftwareName) LIKE '%silverlight%'
+                  OR LOWER(SoftwareName) LIKE '%internet explorer%'
+                  OR LOWER(SoftwareName) LIKE '%office 2007%'
+                  OR LOWER(SoftwareName) LIKE '%office 2010%'
+                  OR LOWER(SoftwareName) LIKE '%office 2013%'
+                  OR LOWER(SoftwareName) LIKE '%office 2016%'
+                  OR LOWER(SoftwareName) LIKE '%office 2019%'
+                    THEN 'EOL / EOS'
+
+                WHEN LOWER(SoftwareName) LIKE '%microsoft 365%'
+                  OR LOWER(SoftwareName) LIKE '%office 365%'
+                  OR LOWER(SoftwareName) LIKE '%office 2021%'
+                  OR LOWER(SoftwareName) LIKE '%office 2024%'
+                  OR LOWER(SoftwareName) LIKE '%google chrome%'
+                  OR LOWER(SoftwareName) LIKE '%microsoft edge%'
+                  OR LOWER(SoftwareName) LIKE '%firefox%'
+                    THEN 'Supported'
+
+                WHEN LOWER(SoftwareName) LIKE '%microsoft office%'
+                  OR LOWER(SoftwareName) LIKE '%office%'
+                  OR LOWER(SoftwareName) LIKE '%adobe%'
+                  OR LOWER(SoftwareName) LIKE '%chrome%'
+                  OR LOWER(SoftwareName) LIKE '%firefox%'
+                    THEN 'Lifecycle Not Found'
+
+                ELSE 'Lifecycle Not Found'
+            END AS LifecycleStatus,
+
+            CASE
+                WHEN LOWER(CategoryName) LIKE '%unauthorized%'
+                  OR LOWER(CategoryName) LIKE '%unwanted%'
+                  OR LOWER(CategoryName) LIKE '%unsupported%'
+                  OR LOWER(CategoryName) LIKE '%blacklist%'
+                    THEN 'Unsupported application category'
+
+                WHEN LOWER(SoftwareName) LIKE '%adobe flash%'
+                  OR LOWER(SoftwareName) LIKE '%flash player%'
+                  OR LOWER(SoftwareName) LIKE '%silverlight%'
+                  OR LOWER(SoftwareName) LIKE '%internet explorer%'
+                  OR LOWER(SoftwareName) LIKE '%office 2007%'
+                  OR LOWER(SoftwareName) LIKE '%office 2010%'
+                  OR LOWER(SoftwareName) LIKE '%office 2013%'
+                  OR LOWER(SoftwareName) LIKE '%office 2016%'
+                  OR LOWER(SoftwareName) LIKE '%office 2019%'
+                    THEN 'Expired lifecycle signal'
+
+                WHEN LOWER(SoftwareName) LIKE '%microsoft 365%'
+                  OR LOWER(SoftwareName) LIKE '%office 365%'
+                  OR LOWER(SoftwareName) LIKE '%office 2021%'
+                  OR LOWER(SoftwareName) LIKE '%office 2024%'
+                  OR LOWER(SoftwareName) LIKE '%google chrome%'
+                  OR LOWER(SoftwareName) LIKE '%microsoft edge%'
+                  OR LOWER(SoftwareName) LIKE '%firefox%'
+                    THEN 'Supported application lifecycle'
+
+                ELSE 'Lifecycle mapping not available'
+            END AS SupportStatus,
+
+            CASE
+                WHEN LOWER(SoftwareName) LIKE '%adobe flash%'
+                  OR LOWER(SoftwareName) LIKE '%flash player%'
+                    THEN '2020-12-31'
+                WHEN LOWER(SoftwareName) LIKE '%silverlight%'
+                    THEN '2021-10-12'
+                WHEN LOWER(SoftwareName) LIKE '%internet explorer%'
+                    THEN '2022-06-15'
+                WHEN LOWER(SoftwareName) LIKE '%office 2007%'
+                    THEN '2017-10-10'
+                WHEN LOWER(SoftwareName) LIKE '%office 2010%'
+                    THEN '2020-10-13'
+                WHEN LOWER(SoftwareName) LIKE '%office 2013%'
+                    THEN '2023-04-11'
+                WHEN LOWER(SoftwareName) LIKE '%office 2016%'
+                    THEN '2025-10-14'
+                WHEN LOWER(SoftwareName) LIKE '%office 2019%'
+                    THEN '2025-10-14'
+                ELSE ''
+            END AS EolDate,
+
+            CASE
+                WHEN LOWER(SoftwareName) LIKE '%adobe flash%'
+                  OR LOWER(SoftwareName) LIKE '%flash player%'
+                    THEN '2020-12-31'
+                WHEN LOWER(SoftwareName) LIKE '%silverlight%'
+                    THEN '2021-10-12'
+                WHEN LOWER(SoftwareName) LIKE '%internet explorer%'
+                    THEN '2022-06-15'
+                WHEN LOWER(SoftwareName) LIKE '%office 2007%'
+                    THEN '2017-10-10'
+                WHEN LOWER(SoftwareName) LIKE '%office 2010%'
+                    THEN '2020-10-13'
+                WHEN LOWER(SoftwareName) LIKE '%office 2013%'
+                    THEN '2023-04-11'
+                WHEN LOWER(SoftwareName) LIKE '%office 2016%'
+                    THEN '2025-10-14'
+                WHEN LOWER(SoftwareName) LIKE '%office 2019%'
+                    THEN '2025-10-14'
+                ELSE ''
+            END AS EosDate,
+
+            CASE
+                WHEN LOWER(CategoryName) LIKE '%unauthorized%'
+                  OR LOWER(CategoryName) LIKE '%unwanted%'
+                  OR LOWER(CategoryName) LIKE '%unsupported%'
+                  OR LOWER(CategoryName) LIKE '%blacklist%'
+                    THEN 'High'
+
+                WHEN LOWER(SoftwareName) LIKE '%adobe flash%'
+                  OR LOWER(SoftwareName) LIKE '%flash player%'
+                  OR LOWER(SoftwareName) LIKE '%silverlight%'
+                  OR LOWER(SoftwareName) LIKE '%internet explorer%'
+                  OR LOWER(SoftwareName) LIKE '%office 2007%'
+                  OR LOWER(SoftwareName) LIKE '%office 2010%'
+                  OR LOWER(SoftwareName) LIKE '%office 2013%'
+                  OR LOWER(SoftwareName) LIKE '%office 2016%'
+                  OR LOWER(SoftwareName) LIKE '%office 2019%'
+                    THEN 'High'
+
+                WHEN LOWER(CategoryName) LIKE '%game%'
+                    THEN 'Medium'
+
+                ELSE 'Low'
+            END AS RiskLevel,
+
+            CASE
+                WHEN LOWER(CategoryName) LIKE '%unauthorized%'
+                  OR LOWER(CategoryName) LIKE '%unwanted%'
+                  OR LOWER(CategoryName) LIKE '%unsupported%'
+                  OR LOWER(CategoryName) LIKE '%blacklist%'
+                    THEN 'Review application approval and removal policy.'
+
+                WHEN LOWER(SoftwareName) LIKE '%adobe flash%'
+                  OR LOWER(SoftwareName) LIKE '%flash player%'
+                  OR LOWER(SoftwareName) LIKE '%silverlight%'
+                  OR LOWER(SoftwareName) LIKE '%internet explorer%'
+                  OR LOWER(SoftwareName) LIKE '%office 2007%'
+                  OR LOWER(SoftwareName) LIKE '%office 2010%'
+                  OR LOWER(SoftwareName) LIKE '%office 2013%'
+                  OR LOWER(SoftwareName) LIKE '%office 2016%'
+                  OR LOWER(SoftwareName) LIKE '%office 2019%'
+                    THEN 'Plan upgrade or removal for expired application lifecycle.'
+
+                WHEN LOWER(CategoryName) IN ('unclassified', 'unknown', 'others', 'other', '')
+                  OR LOWER(CategoryName) LIKE '%unclassified%'
+                    THEN 'Classify this software record.'
+
+                ELSE 'No immediate governance action.'
+            END AS Recommendation
+        INTO #ItOpsSoftwareRows
+        FROM CleanRows;
+
+        SELECT
+            COUNT(1) AS TotalInstallations,
+            COUNT(DISTINCT SoftwareName) AS UniqueSoftware,
+            COUNT(DISTINCT DeviceID) AS DevicesWithSoftware,
+            SUM(CASE WHEN Classification = 'Unclassified' THEN 1 ELSE 0 END) AS UnclassifiedSoftware,
+            SUM(CASE WHEN Classification = 'Business' THEN 1 ELSE 0 END) AS BusinessSoftware,
+            SUM(CASE WHEN Classification = 'Remote Control' THEN 1 ELSE 0 END) AS RemoteControlSoftware,
+            SUM(CASE WHEN Classification = 'Antivirus' THEN 1 ELSE 0 END) AS AntivirusSoftware,
+            SUM(CASE WHEN Classification = 'Web Browser' THEN 1 ELSE 0 END) AS BrowserSoftware,
+            SUM(CASE WHEN Classification = 'Gaming' THEN 1 ELSE 0 END) AS GamingSoftware,
+            SUM(CASE WHEN LifecycleStatus = 'EOL / EOS' THEN 1 ELSE 0 END) AS EolApplications,
+            CAST(0 AS INT) AS EosApplications,
+            SUM(CASE WHEN LifecycleStatus = 'Unsupported Apps' THEN 1 ELSE 0 END) AS UnsupportedApplications,
+            MAX(SearchDate) AS LatestScan
+        FROM #ItOpsSoftwareRows;
+
+        SELECT TOP 6
+            CategoryName AS Name,
+            COUNT(1) AS Value
+        FROM #ItOpsSoftwareRows
+        GROUP BY CategoryName
+        ORDER BY COUNT(1) DESC, CategoryName ASC;
+
+        SELECT
+            Classification AS Name,
+            COUNT(1) AS Value
+        FROM #ItOpsSoftwareRows
+        GROUP BY Classification
+        ORDER BY
+            CASE Classification
+                WHEN 'Business' THEN 1
+                WHEN 'Remote Control' THEN 2
+                WHEN 'Antivirus' THEN 3
+                WHEN 'Web Browser' THEN 4
+                WHEN 'Gaming' THEN 5
+                WHEN 'Unclassified' THEN 6
+                ELSE 99
+            END;
+
+        SELECT TOP 500
+            SoftwareName AS softwareName,
+            CategoryName AS category,
+            Classification AS classification,
+            ProductGroup AS productGroup,
+            DeviceID AS deviceId,
+            DeviceName AS deviceName,
+            Branch AS branch,
+            Version AS version,
+            Publisher AS publisher,
+            SearchDate AS lastScan,
+            LifecycleStatus AS lifecycleStatus,
+            SupportStatus AS supportStatus,
+            EolDate AS eolDate,
+            EosDate AS eosDate,
+            RiskLevel AS riskLevel,
+            Recommendation AS recommendation
+        FROM #ItOpsSoftwareRows
+        ORDER BY
+            CASE RiskLevel
+                WHEN 'High' THEN 1
+                WHEN 'Medium' THEN 2
+                WHEN 'Low' THEN 3
+                ELSE 4
+            END,
+            ISNULL(SearchDate, '1900-01-01') DESC,
+            SoftwareName ASC;
+
+        SELECT
+            major.Name AS name,
+            major.Vendor AS vendor,
+            LOWER(REPLACE(major.Name, ' ', '-')) AS productKey,
+            COUNT(1) AS installs,
+            COUNT(DISTINCT major.SoftwareName) AS uniqueTitles,
+            CASE
+                WHEN SUM(CASE WHEN major.LifecycleStatus = 'EOL / EOS' THEN 1 ELSE 0 END) > 0 THEN 'EOL / EOS'
+                WHEN SUM(CASE WHEN major.LifecycleStatus = 'Unsupported Apps' THEN 1 ELSE 0 END) > 0 THEN 'Unsupported Apps'
+                WHEN SUM(CASE WHEN major.LifecycleStatus = 'Supported' THEN 1 ELSE 0 END) > 0 THEN 'Supported'
+                ELSE 'Lifecycle Not Found'
+            END AS lifecycleStatus,
+            CASE
+                WHEN SUM(CASE WHEN major.LifecycleStatus = 'EOL / EOS' THEN 1 ELSE 0 END) > 0 THEN 'Expired or requires lifecycle review'
+                WHEN SUM(CASE WHEN major.LifecycleStatus = 'Unsupported Apps' THEN 1 ELSE 0 END) > 0 THEN 'Unsupported application detected'
+                WHEN SUM(CASE WHEN major.LifecycleStatus = 'Supported' THEN 1 ELSE 0 END) > 0 THEN 'Supported application lifecycle'
+                ELSE 'No lifecycle mapping returned'
+            END AS supportStatus,
+            MAX(NULLIF(major.EolDate, '')) AS eolDate,
+            MAX(NULLIF(major.EosDate, '')) AS eosDate,
+            CAST(NULL AS INT) AS daysToEol,
+            'Local software inventory classification' AS source
+        FROM (
+            SELECT
+                *,
+                CASE
+                    WHEN LOWER(SoftwareName) LIKE '%microsoft 365%'
+                      OR LOWER(SoftwareName) LIKE '%office 365%'
+                        THEN 'Microsoft 365'
+                    WHEN LOWER(SoftwareName) LIKE '%microsoft office%'
+                      OR LOWER(SoftwareName) LIKE '%office%'
+                        THEN 'Microsoft Office'
+                    WHEN LOWER(SoftwareName) LIKE '%adobe%'
+                        THEN 'Adobe'
+                    WHEN LOWER(SoftwareName) LIKE '%google chrome%'
+                      OR LOWER(SoftwareName) LIKE '%chrome%'
+                        THEN 'Google Chrome'
+                    WHEN LOWER(SoftwareName) LIKE '%firefox%'
+                        THEN 'Mozilla Firefox'
+                    ELSE ''
+                END AS Name,
+                CASE
+                    WHEN LOWER(SoftwareName) LIKE '%microsoft%'
+                      OR LOWER(SoftwareName) LIKE '%office%'
+                        THEN 'Microsoft'
+                    WHEN LOWER(SoftwareName) LIKE '%adobe%'
+                        THEN 'Adobe'
+                    WHEN LOWER(SoftwareName) LIKE '%chrome%'
+                        THEN 'Google'
+                    WHEN LOWER(SoftwareName) LIKE '%firefox%'
+                        THEN 'Mozilla'
+                    ELSE ''
+                END AS Vendor
+            FROM #ItOpsSoftwareRows
+        ) major
+        WHERE major.Name <> ''
+        GROUP BY major.Name, major.Vendor
+        ORDER BY
+            CASE major.Name
+                WHEN 'Microsoft Office' THEN 1
+                WHEN 'Microsoft 365' THEN 2
+                WHEN 'Adobe' THEN 3
+                WHEN 'Google Chrome' THEN 4
+                WHEN 'Mozilla Firefox' THEN 5
+                ELSE 99
+            END;
+
+        DROP TABLE #ItOpsSoftwareRows;
+    `);
+
+    const summary = result.recordsets?.[0]?.[0] || {};
+    const categoryRows = result.recordsets?.[1] || [];
+    const classificationRows = result.recordsets?.[2] || [];
+    const detailRows = result.recordsets?.[3] || [];
+    const lifecycleRows = result.recordsets?.[4] || [];
+
+    const totalInstallations = itopsToNumber(summary.TotalInstallations);
+
+    const classificationMap = new Map(
+        classificationRows.map((item) => [String(item.Name || "Unclassified"), itopsToNumber(item.Value)])
+    );
+
+    const classificationNames = [
+        "Business",
+        "Remote Control",
+        "Antivirus",
+        "Web Browser",
+        "Gaming",
+        "Unclassified"
+    ];
+
+    const classificationBreakdown = classificationNames.map((name) => {
+        const value = classificationMap.get(name) || 0;
+        return {
+            name,
+            value,
+            percent: itopsPercent(value, totalInstallations)
+        };
+    });
+
+    return {
+        totalInstallations,
+        uniqueSoftware: itopsToNumber(summary.UniqueSoftware),
+        devicesWithSoftware: itopsToNumber(summary.DevicesWithSoftware),
+        unclassifiedSoftware: itopsToNumber(summary.UnclassifiedSoftware),
+        latestScan: itopsDateLabel(summary.LatestScan),
+
+        topCategories: categoryRows.map((item) => ({
+            name: item.Name || "Unclassified",
+            value: itopsToNumber(item.Value),
+            percent: itopsPercent(item.Value, totalInstallations)
+        })),
+
+        classificationBreakdown,
+
+        lifecycleWatch: lifecycleRows.map((item) => ({
+            name: item.name || item.Name || "-",
+            vendor: item.vendor || item.Vendor || "",
+            productKey: item.productKey || item.ProductKey || item.name || item.Name || "",
+            installs: itopsToNumber(item.installs ?? item.Installs),
+            uniqueTitles: itopsToNumber(item.uniqueTitles ?? item.UniqueTitles),
+            lifecycleStatus: item.lifecycleStatus || item.LifecycleStatus || "Lifecycle Not Found",
+            supportStatus: item.supportStatus || item.SupportStatus || "",
+            latestCycle: item.latestCycle || item.LatestCycle || "",
+            eolDate: item.eolDate || item.EolDate || "",
+            eosDate: item.eosDate || item.EosDate || "",
+            daysToEol: item.daysToEol ?? item.DaysToEol ?? null,
+            source: item.source || item.Source || "Local software inventory classification"
+        })),
+
+        softwareRows: detailRows,
+
+        businessSoftware: itopsToNumber(summary.BusinessSoftware),
+        remoteControlSoftware: itopsToNumber(summary.RemoteControlSoftware),
+        antivirusSoftware: itopsToNumber(summary.AntivirusSoftware),
+        browserSoftware: itopsToNumber(summary.BrowserSoftware),
+        gamingSoftware: itopsToNumber(summary.GamingSoftware),
+
+        eolApplications: itopsToNumber(summary.EolApplications),
+        eosApplications: itopsToNumber(summary.EosApplications),
+        unsupportedApplications: itopsToNumber(summary.UnsupportedApplications)
+    };
+}
+
+async function getItOpsNetworkSummary(pool) {
+    let rows = [];
+
+    try {
+        if (typeof getNetworkInventoryRows === "function") {
+            rows = await getNetworkInventoryRows(pool, {});
+        }
+    } catch (err) {
+        console.warn("ITOps V2 network summary getNetworkInventoryRows failed:", err.message || err);
+    }
+
+    let lastScan = "-";
+
+    try {
+        if (typeof getNetworkLastSearchDate === "function") {
+            lastScan = getNetworkLastSearchDate ? await getNetworkLastSearchDate(pool) : "-";
+        }
+    } catch (err) {
+        console.warn("ITOps V2 network last scan failed:", err.message || err);
+    }
+
+    const knownIps = rows.length;
+    const registeredDevices = rows.filter(row => {
+        const text = JSON.stringify(row || {}).toLowerCase();
+        return text.includes("registered") || text.includes("installed") || text.includes("agent");
+    }).length;
+    const activeIps = rows.filter(row => {
+        const text = JSON.stringify(row || {}).toLowerCase();
+        return text.includes("active") || text.includes("online") || text.includes("up");
+    }).length;
+
+    const subnetSet = new Set();
+    const workgroupMap = new Map();
+
+    for (const row of rows) {
+        const ip = row.IP || row.Ip || row.ip || row.IPAddress || row.IP_Address || row.Subnet || row.subnet || "";
+        const subnet = String(ip).split(".").slice(0, 3).join(".");
+        if (subnet) subnetSet.add(subnet);
+
+        const workgroup = row.WorkGroup || row.Workgroup || row.WorkgroupName || row.GroupName || row.Object_Full_Name || "Unknown";
+        workgroupMap.set(workgroup, (workgroupMap.get(workgroup) || 0) + 1);
+    }
+
+    const workgroups = [...workgroupMap.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([name, value]) => ({
+            name,
+            value,
+            percent: itopsPercent(value, knownIps)
+        }));
+
+    return {
+        knownIps,
+        registeredDevices,
+        unregisteredIps: Math.max(knownIps - registeredDevices, 0),
+        activeIps,
+        subnetCount: subnetSet.size,
+        lastScan: itopsDateLabel(lastScan),
+        workgroups
+    };
+}
+
+async function getItOpsHardwareSummary(pool) {
+    const rows = await itopsGetHardwareInventoryRows(pool).catch((err) => {
+        console.warn("ITOps hardware inventory summary failed:", err.message || err);
+        return [];
+    });
+
+    const totalDevices = rows.length;
+    const staleCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const onlineDevices = rows.filter((row) => itopsIsOnlineStatus(row.status)).length;
+    const offlineDevices = Math.max(totalDevices - onlineDevices, 0);
+    const staleSync = rows.filter((row) => {
+        const lastSeen = itopsDateValue(row.lastSeen);
+        return !lastSeen || lastSeen < staleCutoff;
+    }).length;
+    const lockedDevices = rows.filter((row) => itopsLower(row.status).includes("lock")).length;
+    const mdmDevices = rows.filter((row) => itopsLower(row.source) === "mdm").length;
+    const emDevices = rows.filter((row) => itopsLower(row.source) === "em").length;
+
+    const bucket = (field, fallback) => {
+        const map = new Map();
+        for (const row of rows) {
+            const name = itopsText(row[field], fallback);
+            map.set(name, (map.get(name) || 0) + 1);
+        }
+        return [...map.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+            .map(([name, value]) => ({ name, value, percent: itopsPercent(value, totalDevices) }));
+    };
+
+    const endpointRows = rows.map((row) => {
+        const lastSeen = itopsDateValue(row.lastSeen);
+        const isOnline = itopsIsOnlineStatus(row.status);
+        const isStale = !lastSeen || lastSeen < staleCutoff;
+        const hasMissingIdentity = !itopsText(row.deviceName) || !itopsText(row.model) || row.model === "-" || !itopsText(row.ipAddress);
+        const riskScore = (isOnline ? 0 : 20) + (isStale ? 25 : 0) + (hasMissingIdentity ? 10 : 0);
+        const reasons = [
+            !isOnline ? "Offline endpoint" : "",
+            isStale ? "Stale connection" : "",
+            hasMissingIdentity ? "Missing identity" : ""
+        ].filter(Boolean).join("; ");
+
+        return {
+            deviceName: row.deviceName || "-",
+            deviceId: row.deviceId || row.assetId || "",
+            platform: row.platform || row.osName || "Unknown",
+            osName: row.osName || row.platform || "Unknown",
+            model: row.model || "-",
+            department: row.department || "Unmapped",
+            lastSeen: itopsDateLabel(row.lastSeen),
+            status: row.status || (isOnline ? "Online" : "Offline"),
+            isOnline,
+            isStale,
+            riskScore,
+            reasons: reasons || "Inventory evidence"
+        };
+    }).sort((a, b) => b.riskScore - a.riskScore || a.deviceName.localeCompare(b.deviceName)).slice(0, 500);
+
+    return {
+        totalDevices,
+        onlineDevices,
+        offlineDevices,
+        staleSync,
+        lockedDevices,
+        mdmDevices,
+        emDevices,
+        topModels: bucket("model", "Unknown Model"),
+        platformBreakdown: bucket("platform", "Unknown"),
+        endpointRows
+    };
+}
+
+
+async function getItOpsTaskSummary(pool) {
+    const hasJobs = await itopsTableExists(pool, "TS_JOB");
+
+    if (!hasJobs) {
+        return {
+            totalTasks: 0,
+            runningTasks: 0,
+            completedTasks: 0,
+            failedTasks: 0,
+            latestTaskTime: "-",
+            jobTypeBreakdown: [],
+            recentTasks: []
+        };
+    }
+
+    const result = await pool.request().query(`
+        SELECT
+            COUNT(1) AS TotalTasks,
+            COUNT(CASE WHEN Job_Status IN (2200, 2201) THEN 1 END) AS RunningTasks,
+            COUNT(CASE WHEN Job_Status = 2202 THEN 1 END) AS CompletedTasks,
+            COUNT(CASE WHEN Job_Status IN (2203, 2204) THEN 1 END) AS FailedTasks,
+            MAX(COALESCE(Job_StartTime, Job_ScheduleTime, Job_EndTime)) AS LatestTaskTime
+        FROM TS_JOB WITH (NOLOCK);
+    `);
+
+    const typeResult = await pool.request().query(`
+        SELECT TOP 6
+            Job_Type AS JobType,
+            COUNT(1) AS Value
+        FROM TS_JOB WITH (NOLOCK)
+        GROUP BY Job_Type
+        ORDER BY COUNT(1) DESC;
+    `);
+
+    const recentResult = await pool.request().query(`
+        SELECT TOP 5
+            Job_Idn,
+            Job_Type,
+            Job_Status,
+            ISNULL(NULLIF(Job_Description, ''), CONVERT(varchar(50), Job_Idn)) AS JobName,
+            COALESCE(Job_StartTime, Job_ScheduleTime, Job_EndTime) AS TaskTime
+        FROM TS_JOB WITH (NOLOCK)
+        ORDER BY COALESCE(Job_StartTime, Job_ScheduleTime, Job_EndTime) DESC;
+    `);
+
+    const jobTypeLabels = typeof TASK_JOB_TYPE_LABELS !== "undefined" ? TASK_JOB_TYPE_LABELS : {};
+    const statusLabels = typeof TASK_JOB_STATUS_LABELS !== "undefined" ? TASK_JOB_STATUS_LABELS : {};
+
+    const summary = result.recordset?.[0] || {};
+    const totalTasks = itopsToNumber(summary.TotalTasks);
+
+    return {
+        totalTasks,
+        runningTasks: itopsToNumber(summary.RunningTasks),
+        completedTasks: itopsToNumber(summary.CompletedTasks),
+        failedTasks: itopsToNumber(summary.FailedTasks),
+        latestTaskTime: itopsDateLabel(summary.LatestTaskTime),
+        jobTypeBreakdown: (typeResult.recordset || []).map(row => {
+            const value = itopsToNumber(row.Value);
+            const typeLabel = jobTypeLabels[row.JobType] || `Job Type ${row.JobType || "-"}`;
+            return {
+                name: typeLabel,
+                value,
+                percent: itopsPercent(value, totalTasks)
+            };
+        }),
+        recentTasks: (recentResult.recordset || []).map(row => {
+            const status = statusLabels[row.Job_Status] || `Status ${row.Job_Status || "-"}`;
+            return {
+                id: String(row.Job_Idn || row.JobName),
+                type: jobTypeLabels[row.Job_Type] || `Job Type ${row.Job_Type || "-"}`,
+                status,
+                target: row.JobName || "-",
+                time: itopsDateLabel(row.TaskTime),
+                tone: itopsStatusTone(status, "")
+            };
+        })
+    };
+}
+
+
+async function getItOpsDepartmentRows(pool) {
+    const hasRelations = await itopsTableExists(pool, "TS_OBJECT_RELATION");
+    const hasEmAssets = await itopsTableExists(pool, "TS_OBJECT_ROOT");
+    const hasEmaIncidents = await itopsTableExists(pool, "EMA_Incidents");
+    const hasHdIncidents = await itopsTableExists(pool, "HD_Incidents");
+    const incidentTable = hasEmaIncidents ? "EMA_Incidents" : hasHdIncidents ? "HD_Incidents" : "";
+    const hasIncidents = Boolean(incidentTable);
+    const incidentOwnerExpr = hasEmaIncidents ? "RequesterName" : "CustomerName";
+    const hasPatchStatus = await itopsTableExists(pool, "TS_UPDATE_ONLINE_STATUS");
+
+    if (!hasRelations || !hasEmAssets) return [];
+
+    // Keep this query safe after API/table merges. The old dashboard query always
+    // selected inc.OpenIncidents and patch.* even when those optional joins were
+    // not added, causing MSSQL "multi-part identifier could not be bound" errors.
+    const incidentJoinSql = hasIncidents
+        ? `
+            LEFT JOIN (
+                SELECT
+                    ${incidentOwnerExpr} AS CustomerName,
+                    COUNT(CASE WHEN LOWER(ISNULL(Status, '')) NOT IN ('resolved', 'closed', 'solved') THEN 1 END) AS OpenIncidents
+                FROM ${incidentTable} WITH (NOLOCK)
+                GROUP BY ${incidentOwnerExpr}
+            ) inc
+                ON inc.CustomerName = rel.Object_Full_Name
+                OR inc.CustomerName = rel.Object_Rel_Name
+        `
+        : "";
+
+    const patchJoinSql = hasPatchStatus
+        ? `
+            LEFT JOIN (
+                SELECT
+                    Object_Root_Idn,
+                    COUNT(CASE WHEN ISNULL(IsApplicable, 0) = 1 THEN 1 END) AS ApplicablePatches,
+                    COUNT(CASE WHEN ISNULL(IsApplicable, 0) = 1 AND (ISNULL(IsInstalled, 0) = 1 OR ISNULL(IsDownloaded, 0) = 1) THEN 1 END) AS InstalledPatches
+                FROM TS_UPDATE_ONLINE_STATUS WITH (NOLOCK)
+                GROUP BY Object_Root_Idn
+            ) patch
+                ON patch.Object_Root_Idn = root.Object_Root_Idn
+        `
+        : "";
+
+    const applicablePatchesSelect = hasPatchStatus
+        ? "SUM(ISNULL(patch.ApplicablePatches, 0))"
+        : "CAST(0 AS INT)";
+
+    const installedPatchesSelect = hasPatchStatus
+        ? "SUM(ISNULL(patch.InstalledPatches, 0))"
+        : "CAST(0 AS INT)";
+
+    const openIncidentsSelect = hasIncidents
+        ? "MAX(ISNULL(inc.OpenIncidents, 0))"
+        : "CAST(0 AS INT)";
+
+    const result = await pool.request().query(`
+        SELECT TOP 8
+            ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned')) AS Department,
+            COUNT(DISTINCT root.Object_Root_Idn) AS Assets,
+            SUM(CASE WHEN root.ConnectionStatus = 1 THEN 1 ELSE 0 END) AS OnlineAssets,
+            ${applicablePatchesSelect} AS ApplicablePatches,
+            ${installedPatchesSelect} AS InstalledPatches,
+            ${openIncidentsSelect} AS OpenIncidents
+        FROM TS_OBJECT_ROOT root WITH (NOLOCK)
+        LEFT JOIN TS_OBJECT_RELATION rel WITH (NOLOCK)
+            ON root.Object_Rel_Idn = rel.Object_Rel_Idn
+        ${patchJoinSql}
+        ${incidentJoinSql}
+        GROUP BY ISNULL(rel.Object_Rel_Name, ISNULL(rel.Object_Full_Name, 'Unassigned'))
+        ORDER BY COUNT(DISTINCT root.Object_Root_Idn) DESC;
+    `);
+
+    return (result.recordset || []).map(row => {
+        const patchCompliance = itopsPercent(row.InstalledPatches, row.ApplicablePatches, 0);
+        const onlineHealth = itopsPercent(row.OnlineAssets, row.Assets, 0);
+        const healthScore = itopsRound((patchCompliance * 0.55) + (onlineHealth * 0.45), 0);
+
+        return {
+            department: row.Department || "Unassigned",
+            assets: itopsToNumber(row.Assets),
+            patchCompliance,
+            openIncidents: itopsToNumber(row.OpenIncidents),
+            healthScore
+        };
+    });
+}
+
 
 // 1. Import router AI Assist
 const aiAssistRouter = require('./routes/aiAssist'); 
@@ -49431,4 +51739,27 @@ app.listen(PORT, () => {
     if (typeof startGeolocationSchedulers === "function") {
         startGeolocationSchedulers();
     }
+});
+
+app.get("/api/software-roi-v5/analytics", async (req, res) => {
+  return res.json({
+    success: true,
+    message: "Software ROI V5 analytics route is registered",
+    data: {
+      summary: {
+        registeredSoftware: 0,
+        illegalSoftware: 0,
+        totalLicense: 0,
+        installedDevices: 0,
+        usedDevices: 0,
+        exceedLicense: 0
+      },
+      rows: [],
+      charts: {
+        averageUsage: [],
+        licenseVsUsed: [],
+        benchmarkSplit: []
+      }
+    }
+  });
 });

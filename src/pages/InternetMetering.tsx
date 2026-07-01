@@ -157,7 +157,7 @@ body.internet-metering-page-active #root {
   height: 100% !important;
   max-height: 100% !important;
   overflow: hidden !important;
-  background: #f4f8fc !important;
+  background: var(--ema-page-bg) !important;
 }
 
 body.internet-metering-page-active .ema-main,
@@ -172,7 +172,7 @@ body.internet-metering-page-active .main-content,
 body.internet-metering-page-active main {
   min-height: 0 !important;
   overflow: hidden !important;
-  background: #f4f8fc !important;
+  background: var(--ema-page-bg) !important;
 }
 
 body.internet-metering-page-active .ema-page,
@@ -189,7 +189,7 @@ body.internet-metering-page-active .router-content {
   overflow: hidden !important;
   padding: 0 !important;
   margin: 0 !important;
-  background: #f4f8fc !important;
+  background: var(--ema-page-bg) !important;
 }
 
 body.internet-metering-page-active .settings-module-root.ema-module-root,
@@ -202,13 +202,12 @@ body.internet-metering-page-active .internet-metering-page {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   margin: 0 !important;
-  color: #0f172a !important;
+  color: var(--ema-slate-900) !important;
   background:
     radial-gradient(circle at 8% 0%, rgba(37, 99, 235, 0.055), transparent 24rem),
     radial-gradient(circle at 98% 18%, rgba(14, 165, 233, 0.06), transparent 26rem),
     linear-gradient(135deg, #eef4fb 0%, #f8fbff 46%, #e8eff7 100%) !important;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -301,7 +300,7 @@ body.internet-metering-page-active .settings-helper-card {
 .internet-metering-page .ema-sidebar-empty {
   border: 1px dashed rgba(148, 163, 184, 0.4);
   border-radius: 14px;
-  color: #64748b;
+  color: var(--ema-slate-500);
   font-size: 0.82rem;
   padding: 0.75rem;
 }
@@ -322,9 +321,9 @@ body.internet-metering-page-active .settings-helper-card {
 }
 
 .internet-metering-page .internet-metering-hero > .internet-metering-hero-copy {
-  flex: 0 1 360px !important;
-  min-width: 220px !important;
-  max-width: 460px !important;
+  flex: 0 1 280px !important;
+  min-width: 180px !important;
+  max-width: 380px !important;
 }
 
 .internet-metering-page .internet-metering-hero-score {
@@ -335,10 +334,10 @@ body.internet-metering-page-active .settings-helper-card {
   align-items: stretch !important;
   justify-content: end !important;
   gap: 0.75rem !important;
-  flex: 1 1 640px !important;
+  flex: 1 1 auto !important;
   width: auto !important;
-  min-width: 560px !important;
-  max-width: 760px !important;
+  min-width: 0 !important;
+  max-width: 680px !important;
   overflow: visible !important;
 }
 
@@ -399,22 +398,23 @@ body.internet-metering-page-active .settings-helper-card {
   font-size: 0.62rem !important;
   line-height: 1.05 !important;
   font-weight: 800 !important;
-  color: #64748b !important;
+  color: var(--ema-slate-500) !important;
 }
 
 @media (max-width: 1180px) {
   .internet-metering-page .internet-metering-hero > .internet-metering-hero-copy {
-    flex-basis: 300px !important;
+    flex: 0 1 220px !important;
+    min-width: 140px !important;
   }
 
   .internet-metering-page .internet-metering-hero-score {
-    min-width: 520px !important;
+    min-width: 0 !important;
     max-width: none !important;
-    gap: 0.55rem !important;
+    gap: 0.45rem !important;
   }
 
   .internet-metering-page .internet-metering-kpi-card {
-    padding: 0.62rem 0.68rem !important;
+    padding: 0.55rem 0.6rem !important;
   }
 }
 
@@ -1070,7 +1070,7 @@ useInternetMeteringTableRouteEffect(() => {
   const [toDate, setToDate] = useState(todayIso());
   const [restrictFilter, setRestrictFilter] = useState(-1);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(100);
+  const [limit, setLimit] = useState(15);
   const [loading, setLoading] = useState(false);
   const [treeLoading, setTreeLoading] = useState(false);
   const [urlLoading, setUrlLoading] = useState(false);
@@ -1790,7 +1790,7 @@ useInternetMeteringTableRouteEffect(() => {
                 <ImCustomSelect
                   value={String(limit)}
                   onChange={(value) => { setPage(1); setLimit(Number(value)); }}
-                  options={[{ value: '50', label: '50 rows' }, { value: '100', label: '100 rows' }, { value: '250', label: '250 rows' }, { value: '500', label: '500 rows' }]}
+                  options={[{ value: '15', label: '15 rows' }, { value: '50', label: '50 rows' }, { value: '100', label: '100 rows' }, { value: '250', label: '250 rows' }, { value: '500', label: '500 rows' }]}
                   ariaLabel="Rows per page"
                 />
               ) : (
@@ -1813,7 +1813,8 @@ useInternetMeteringTableRouteEffect(() => {
 
               {usagePanelUrl ? (
                 <>
-                  <div className="pricing-table-card table-responsive">
+                  <div className="pricing-table-card">
+                  <div className="table-responsive">
                     <table className="table table-hover align-middle mb-0">
                       <thead>
                         <tr>
@@ -1849,12 +1850,13 @@ useInternetMeteringTableRouteEffect(() => {
                       </tbody>
                     </table>
                   </div>
+                  </div>
                   <CompactPagination currentPage={page} totalPages={resultsTotalPages} onPageChange={setPage} label="Metering results pagination" />
                 </>
               ) : (
                 <>
-                  <div className="form-grid mb-3">
-                    <label className="form-field">
+                  <div className="d-flex align-items-flex-end gap-2 mb-3" style={{ alignItems: 'flex-end' }}>
+                    <label className="form-field mb-0" style={{ flex: '0 0 180px' }}>
                       <span>Rule Type:</span>
                       <ImCustomSelect
                         value={String(urlEntryType)}
@@ -1863,17 +1865,17 @@ useInternetMeteringTableRouteEffect(() => {
                         ariaLabel="URL rule type"
                       />
                     </label>
-                    <label className="form-field">
+                    <label className="form-field mb-0" style={{ flex: '1 1 auto' }}>
                       <span>URL / Domain:</span>
                       <input value={newUrl} onChange={(event) => setNewUrl(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') saveUrl(); }} placeholder="example.com" className="setting-input" />
                     </label>
-                    <label className="form-field justify-content-end">
-                      <span>&nbsp;</span>
-                      <button type="button" onClick={saveUrl} disabled={urlLoading || !newUrl.trim()} className="primary-btn"><Plus size={14} /> Add URL</button>
-                    </label>
+                    <button type="button" onClick={saveUrl} disabled={urlLoading || !newUrl.trim()} className="hardware-command-btn" style={{ flex: '0 0 auto', marginBottom: 0 }}>
+                      <Plus size={14} /> Add URL
+                    </button>
                   </div>
 
-                  <div className="pricing-table-card table-responsive">
+                  <div className="pricing-table-card">
+                  <div className="table-responsive">
                     <table className="table table-hover align-middle mb-0">
                       <thead>
                         <tr>
@@ -1922,6 +1924,7 @@ useInternetMeteringTableRouteEffect(() => {
                         )}
                       </tbody>
                     </table>
+                  </div>
                   </div>
                   <CompactPagination currentPage={urlPage} totalPages={urlTotalPages} onPageChange={setUrlPage} label="URL list pagination" />
                 </>

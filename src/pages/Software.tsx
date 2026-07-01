@@ -458,8 +458,8 @@ const columnAliases: Record<Exclude<TableKey, "registry">, string[][]> = {
     ["License Limit", "LicenseLimit", "License_Limit", "Limit", "License", "SWUNI_License"],
     ["Used", "UsedCount", "InUse", "Usage", "SWUNI_Used", "TotalUsed", "Total", "Count", "Cnt", "CCount"],
     ["Classification", "CategoryName", "Category", "SW_Category", "SW_CATEGORY"],
-    ["Custom Info", "CustomInfo", "Custom_Info", "Description", "Remark", "Remarks"],
-    ["Expiry Date", "ExpiryDate", "ExpiredDate", "ExpireDate", "LicenseExpiry", "LicenseExpiredDate"],
+    ["Custom Info", "CustomInfo", "Custom_Info", "SWUNI_Description", "Description", "Remark", "Remarks"],
+    ["Expiry Date", "expired", "ExpiryDate", "ExpiredDate", "ExpireDate", "LicenseExpiry", "LicenseExpiredDate"],
   ],
   licenseStatus: [
     ["Application Package", "ApplicationPackage", "SW_Pkg_Name", "SWPkgName", "PackageName", "Pkg_Name", "Name"],
@@ -2316,7 +2316,7 @@ const [softwareRecords, setSoftwareRecords] = useState<SoftwareRecord[]>([]);
                   </div>
                   {!isDataLoading && pageRegistryRecords.map((record, index) => (
                     <div className="user-row advanced clean-table-row software-standard-row software-device-table-row software-registry-row" role="row" key={record.id}>
-                      <div className="user-cell ema-table-no-cell">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</div>
+                      <div className="user-cell ema-table-no-cell"><span className="row-index-pill">{String((page - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></div>
                       <div className="user-cell software-location-cell"><div className="software-device-cell"><strong title={record.deviceName}>{record.deviceName}</strong><small>{record.ip || record.assetTag || "-"}</small></div></div>
                       <div className="user-cell software-device-main-cell"><div className="user-name software-user-name"><div><strong title={record.softwareName} className="software-name-wrap">{record.softwareName}</strong><small>{record.publisher || record.assetTag || "-"}</small></div></div></div>
                       <div className="user-cell"><div className="software-category-cell"><strong>{record.category}</strong><small>{record.publisher || "Software category"}</small></div></div>

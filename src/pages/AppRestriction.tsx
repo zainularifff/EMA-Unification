@@ -7,7 +7,10 @@ import {
   Ban,
   Building2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Folder,
   FolderOpen,
   Globe,
@@ -891,6 +894,7 @@ export default function AppRestriction() {
   const [selectedTarget, setSelectedTarget] = useState<RestrictionTarget | null>(null);
   const [policyDetail, setPolicyDetail] = useState<RestrictionPolicyDetail | null>(null);
   const [policyRows, setPolicyRows] = useState<RestrictionPolicyRow[]>([]);
+  const [policyStatusPage, setPolicyStatusPage] = useState(1);
   const [statusRows, setStatusRows] = useState<RestrictionStatusRow[]>([]);
   const [packages, setPackages] = useState<RestrictionPackage[]>([]);
   const [whitelistSoftware, setWhitelistSoftware] = useState<WhitelistSoftware[]>([]);
@@ -1871,6 +1875,41 @@ export default function AppRestriction() {
     <main className="settings-module-root hardware-module-root ema-settings-pro appwebrestriction-module container-fluid p-3 p-xl-4" data-section="appwebrestriction">
       <style>{`
 
+        /* App Restriction and Web Restriction: the policy form is long (Basic Setting,
+           Restriction Method, Weekly Policy, Package Selector all stack vertically),
+           so we let the RIGHT content panel scroll naturally instead of locking it.
+           The LEFT sidebar tree still scrolls within its own panel. */
+        body.ema-appwebrestriction-page-active .ema-main,
+        body.ema-appwebrestriction-page-active .ema-content,
+        body.ema-appwebrestriction-page-active .ema-content-area {
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+        body.ema-appwebrestriction-page-active .hardware-module-root {
+          width: 100% !important;
+          max-width: none !important;
+          min-height: 0 !important;
+          height: calc(100dvh - 76px) !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          box-sizing: border-box !important;
+        }
+        body.ema-appwebrestriction-page-active .hardware-module-root .settings-layout {
+          min-height: 0 !important;
+          align-items: start !important;
+        }
+        body.ema-appwebrestriction-page-active .hardware-module-root .settings-menu {
+          position: sticky !important;
+          top: 0 !important;
+          align-self: flex-start !important;
+          min-height: calc(100dvh - 76px) !important;
+          max-height: calc(100dvh - 76px) !important;
+          overflow-y: auto !important;
+        }
+        body.ema-appwebrestriction-page-active .hardware-module-root .settings-content {
+          min-height: 0 !important;
+          overflow: visible !important;
+        }
 
         /* Hardware sidebar fix: wider panel + keep Branch/Statistics switcher compact. */
         .hardware-module-root .settings-layout.hardware-settings-layout {
@@ -1916,7 +1955,7 @@ export default function AppRestriction() {
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search svg {
           flex: 0 0 auto !important;
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
         }
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input {
@@ -1932,7 +1971,7 @@ export default function AppRestriction() {
           outline: none !important;
           background: transparent !important;
           box-shadow: none !important;
-          color: #0f172a !important;
+          color: var(--ema-slate-900) !important;
         }
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-field.section-search input:focus,
@@ -1954,13 +1993,13 @@ export default function AppRestriction() {
           border: 0 !important;
           border-radius: 999px !important;
           background: transparent !important;
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
           box-shadow: none !important;
         }
 
         .hardware-module-root .settings-menu.hardware-left-panel .ema-sidebar-search-clear:hover {
           background: rgba(148, 163, 184, 0.16) !important;
-          color: #0f172a !important;
+          color: var(--ema-slate-900) !important;
         }
 
 
@@ -2070,7 +2109,7 @@ export default function AppRestriction() {
           white-space: nowrap !important;
           font-size: 0.72rem !important;
           font-weight: 800 !important;
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
         }
 
         .appwebrestriction-module .appweb-page-controls {
@@ -2100,7 +2139,7 @@ export default function AppRestriction() {
           min-width: 22px !important;
           margin: 0 !important;
           padding: 0 !important;
-          color: #64748b !important;
+          color: var(--ema-slate-500) !important;
         }
 
         .appwebrestriction-module .appweb-compact-pagination .uam-page-icon {
@@ -2153,8 +2192,8 @@ export default function AppRestriction() {
         /* App Restriction tab navigation: make the selected tab visibly blue. */
         .appwebrestriction-module .content-head .content-actions .appweb-tab-btn {
           border: 1px solid rgba(37, 99, 235, 0.22) !important;
-          background: #ffffff !important;
-          color: #0f172a !important;
+          background: var(--ema-card-bg) !important;
+          color: var(--ema-slate-900) !important;
           transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
         }
 
@@ -2598,17 +2637,20 @@ export default function AppRestriction() {
         </div>
 
         <div className="row g-2">
-          {options.map(([value, label, helper]) => (
-            <div key={value} className="col-12 col-xl-4">
-              <label className={clsx('inline-check mb-0 h-100', form.appRestrictType === value && 'border-primary bg-primary-subtle text-primary')}>
-                <input className="form-check-input" type="radio" name="appRestrictType" checked={form.appRestrictType === value} disabled={isInherited} onChange={() => updateForm('appRestrictType', value)} />
-                <span>
-                  <strong className="d-block">{label}</strong>
-                  <small className="d-block text-muted fw-bold">{helper}</small>
-                </span>
-              </label>
-            </div>
-          ))}
+          {options.map(([value, label, helper]) => {
+            const selected = form.appRestrictType === value;
+            return (
+              <div key={value} className="col-12 col-xl-4">
+                <label className={clsx('appweb-restrict-option', selected && 'is-selected')}>
+                  <input className="form-check-input" type="radio" name="appRestrictType" checked={selected} disabled={isInherited} onChange={() => updateForm('appRestrictType', value)} style={{ flexShrink: 0 }} />
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                    <strong style={{ display: 'block', fontSize: '0.82rem' }}>{label}</strong>
+                    <small style={{ display: 'block', fontSize: '0.72rem', color: selected ? 'var(--ema-blue-600)' : 'var(--ema-slate-500)', fontWeight: 600 }}>{helper}</small>
+                  </span>
+                </label>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-3">
@@ -2942,7 +2984,11 @@ export default function AppRestriction() {
   }
 
   function renderPolicyStatus() {
-    const rows = Array.isArray(policyRows) ? policyRows : [];
+    const allRows = Array.isArray(policyRows) ? policyRows : [];
+    const POLICY_PAGE_SIZE = 10;
+    const totalPolicyPages = Math.max(1, Math.ceil(allRows.length / POLICY_PAGE_SIZE));
+    const safePolicyPage = Math.min(Math.max(1, policyStatusPage), totalPolicyPages);
+    const rows = allRows.slice((safePolicyPage - 1) * POLICY_PAGE_SIZE, safePolicyPage * POLICY_PAGE_SIZE);
     type PolicyTableRow = RestrictionPolicyRow & Record<string, any>;
 
     const columns: AppTableColumn<PolicyTableRow>[] = [
@@ -2996,11 +3042,25 @@ export default function AppRestriction() {
                 <span>{moduleConfig.label} · {selectedTarget?.label || 'All Branches'}</span>
               </div>
               <span className="badge rounded-pill text-bg-light border">
-                {loading ? 'Loading...' : `${rows.length} record${rows.length === 1 ? '' : 's'}`}
+                {loading ? 'Loading...' : `${allRows.length} record${allRows.length === 1 ? '' : 's'}`}
               </span>
             </>
           )}
         />
+
+        {totalPolicyPages > 1 && (
+          <div className="uam-pagination global-style" style={{ padding: '10px 14px' }}>
+            <span className="uam-page-summary">Page {safePolicyPage} of {totalPolicyPages}</span>
+            <span className="uam-page-status">{(safePolicyPage - 1) * POLICY_PAGE_SIZE + 1}–{Math.min(safePolicyPage * POLICY_PAGE_SIZE, allRows.length)} of {allRows.length}</span>
+            <div className="uam-pagination-controls">
+              <button className="uam-page-icon" type="button" disabled={safePolicyPage <= 1} onClick={() => setPolicyStatusPage(1)} aria-label="First page"><ChevronsLeft size={14} /></button>
+              <button className="uam-page-icon" type="button" disabled={safePolicyPage <= 1} onClick={() => setPolicyStatusPage((p) => Math.max(1, p - 1))} aria-label="Previous page"><ChevronLeft size={14} /></button>
+              <b className="uam-page-current">{safePolicyPage}</b>
+              <button className="uam-page-icon" type="button" disabled={safePolicyPage >= totalPolicyPages} onClick={() => setPolicyStatusPage((p) => Math.min(totalPolicyPages, p + 1))} aria-label="Next page"><ChevronRight size={14} /></button>
+              <button className="uam-page-icon" type="button" disabled={safePolicyPage >= totalPolicyPages} onClick={() => setPolicyStatusPage(totalPolicyPages)} aria-label="Last page"><ChevronsRight size={14} /></button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -3977,9 +4037,9 @@ function DualListSection({
           <ListPanel title={leftTitle} items={leftItems} emptyText="No selected items." actionIcon={ArrowRight} disabled={disabled} onAction={onMoveRight} />
         </div>
         <div className="col-12 col-lg-2 d-flex align-items-center justify-content-center">
-          <div className="d-flex flex-lg-column gap-2 text-muted">
-            <ArrowLeft size={18} />
-            <ArrowRight size={18} />
+          <div className="d-flex flex-lg-column gap-2">
+            <div className="mini-btn icon-only" style={{ cursor: 'default', opacity: 0.5 }} aria-hidden="true"><ArrowLeft size={14} /></div>
+            <div className="mini-btn icon-only" style={{ cursor: 'default', opacity: 0.5 }} aria-hidden="true"><ArrowRight size={14} /></div>
           </div>
         </div>
         <div className="col-12 col-lg-5">
@@ -4009,27 +4069,25 @@ function ListPanel({ title, items, emptyText, actionIcon: ActionIcon, disabled, 
   }, [itemSignature, title]);
 
   return (
-    <div className="appweb-list-panel rounded-2xl border border-slate-200 overflow-hidden h-100">
-      <div className="user-row head" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
-        <div className="user-cell">{title}</div>
-        <div className="user-cell text-end">
-          <span className="row-index-pill">{items.length}</span>
-        </div>
+    <div className="appweb-list-panel" style={{ border: '1px solid var(--ema-border)', borderRadius: 12, overflow: 'hidden', background: 'var(--ema-card-bg)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', padding: '8px 12px', borderBottom: '1px solid var(--ema-border)', background: 'var(--ema-slate-100)', fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ema-slate-500)' }}>
+        <div>{title}</div>
+        <div style={{ textAlign: 'right' }}><span className="row-index-pill">{items.length}</span></div>
       </div>
-      <div className="appweb-list-scroll p-0">
+      <div style={{ flex: '1 1 auto', overflowY: 'auto' }}>
         {items.length === 0 ? (
-          <div className="p-4 text-center text-muted fw-bold small">{emptyText}</div>
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--ema-slate-400)', fontSize: '0.8rem' }}>{emptyText}</div>
         ) : pagination.pageItems.map((item) => (
-          <div key={item.id} className="user-row" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }}>
-            <div className="user-cell user-name">
-              <span className="user-mini-avatar"><Package size={13} /></span>
-              <span className="min-w-0">
-                <strong>{item.title}</strong>
-                <small>{item.meta || '-'}</small>
+          <div key={item.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', padding: '8px 12px', borderBottom: '1px solid var(--ema-border)', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ color: 'var(--ema-slate-400)', flexShrink: 0 }}><Package size={13} /></span>
+              <span style={{ minWidth: 0 }}>
+                <strong style={{ display: 'block', fontSize: '0.8rem', color: 'var(--ema-slate-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</strong>
+                <small style={{ display: 'block', fontSize: '0.7rem', color: 'var(--ema-slate-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.meta || '-'}</small>
               </span>
             </div>
-            <div className="user-cell text-end">
-              <button type="button" disabled={disabled} onClick={() => onAction(item.id)} className="icon-action-btn edit" aria-label={`Move ${item.title}`}>
+            <div>
+              <button type="button" disabled={disabled} onClick={() => onAction(item.id)} className="mini-btn icon-only" aria-label={`Move ${item.title}`}>
                 <ActionIcon size={13} />
               </button>
             </div>

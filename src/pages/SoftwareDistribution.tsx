@@ -1430,12 +1430,12 @@ export default function SoftwareDistribution() {
   };
 
   useEffect(() => {
-    document.documentElement.classList.add("ema-layout-lock");
-    document.body.classList.add("ema-layout-lock");
+    document.documentElement.classList.add("ema-layout-lock", "software-distribution-page-active");
+    document.body.classList.add("ema-layout-lock", "software-distribution-page-active");
 
     return () => {
-      document.documentElement.classList.remove("ema-layout-lock");
-      document.body.classList.remove("ema-layout-lock");
+      document.documentElement.classList.remove("ema-layout-lock", "software-distribution-page-active");
+      document.body.classList.remove("ema-layout-lock", "software-distribution-page-active");
     };
   }, []);
 
@@ -1762,6 +1762,334 @@ export default function SoftwareDistribution() {
 
   return (
     <div className="settings-module-root ema-settings-pro" data-section="software-distribution">
+      <style>{`
+        /* Scroll-lock: prevent the outer shell from scrolling while this page is mounted. */
+        body.software-distribution-page-active,
+        body.software-distribution-page-active #root {
+          min-height: 100% !important;
+          overflow: hidden !important;
+        }
+        body.software-distribution-page-active .ema-main,
+        body.software-distribution-page-active .ema-content,
+        body.software-distribution-page-active .ema-content-area {
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+        body.software-distribution-page-active .settings-module-root[data-section="software-distribution"] {
+          width: 100% !important;
+          max-width: none !important;
+          height: calc(100dvh - 76px) !important;
+          min-height: 0 !important;
+          max-height: calc(100dvh - 76px) !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+        }
+        body.software-distribution-page-active .settings-module-root[data-section="software-distribution"] .settings-layout {
+          min-height: 0 !important;
+          height: 100% !important;
+          align-items: stretch !important;
+        }
+        body.software-distribution-page-active .settings-module-root[data-section="software-distribution"] .settings-menu {
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+        body.software-distribution-page-active .settings-module-root[data-section="software-distribution"] .settings-content {
+          min-height: 0 !important;
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 14px !important;
+        }
+
+        /* Hero section: give it the same card appearance as other pages */
+        [data-section="software-distribution"] .settings-hero.ema-hero-kpi-right {
+          background: var(--ema-card-bg) !important;
+          border: 1px solid var(--ema-border) !important;
+          border-radius: var(--ema-radius-lg, 16px) !important;
+          box-shadow: var(--ema-shadow-card, 0 1px 3px rgba(15,23,42,0.06)) !important;
+        }
+
+        /* Package Registry main content card */
+        [data-section="software-distribution"] .content-shell.content-panel {
+          background: var(--ema-card-bg) !important;
+          border: 1px solid var(--ema-border) !important;
+          border-radius: var(--ema-radius-lg, 16px) !important;
+          box-shadow: var(--ema-shadow-card, 0 1px 3px rgba(15,23,42,0.06)) !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
+
+        /* content-head: flex row with title left, actions right */
+        [data-section="software-distribution"] .content-head {
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 12px !important;
+          padding: 14px 18px !important;
+          border-bottom: 1px solid var(--ema-border) !important;
+          flex: 0 0 auto !important;
+        }
+
+        [data-section="software-distribution"] .content-head h3 {
+          font-size: 0.92rem !important;
+          font-weight: 800 !important;
+          color: var(--ema-slate-900) !important;
+          margin: 0 0 2px !important;
+        }
+
+        [data-section="software-distribution"] .content-head p {
+          font-size: 0.74rem !important;
+          color: var(--ema-slate-500) !important;
+          margin: 0 !important;
+        }
+
+        /* Search + filter in ONE ROW — the global select.setting-select{width:100%}
+           makes the status select fill the entire row; override to auto in this context */
+        [data-section="software-distribution"] .content-toolbar {
+          padding: 10px 14px !important;
+          border-bottom: 1px solid var(--ema-border) !important;
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+          flex: 0 0 auto !important;
+        }
+
+        [data-section="software-distribution"] .content-toolbar .section-search,
+        [data-section="software-distribution"] .content-toolbar .user-search-inline {
+          flex: 1 1 auto !important;
+          margin-bottom: 0 !important;
+        }
+
+        [data-section="software-distribution"] .content-toolbar select.setting-select {
+          width: auto !important;
+          min-width: 140px !important;
+          flex: 0 0 auto !important;
+        }
+
+        /* content-body inside content-shell: scrollable table area */
+        [data-section="software-distribution"] .content-shell .content-body,
+        [data-section="software-distribution"] .content-shell > .pricing-table-card {
+          flex: 1 1 auto !important;
+          overflow: auto !important;
+          min-height: 0 !important;
+        }
+        /* SortButton: remove default browser button box styling, match table header look */
+        .resource-sort-button {
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 4px !important;
+          background: none !important;
+          border: none !important;
+          padding: 0 !important;
+          font-size: inherit !important;
+          font-weight: inherit !important;
+          color: inherit !important;
+          cursor: pointer !important;
+          white-space: nowrap !important;
+        }
+        .resource-sort-button:hover {
+          color: var(--ema-blue-600) !important;
+        }
+
+        /* Package name + description: stack on separate lines, not inline */
+        .sd-package-name-cell strong,
+        .sd-package-name-cell small {
+          display: block !important;
+        }
+        .sd-package-name-cell strong {
+          font-size: 0.82rem !important;
+          color: var(--ema-slate-900) !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+        .sd-package-name-cell small {
+          font-size: 0.72rem !important;
+          color: var(--ema-slate-500) !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        /* ── DEPLOY PACKAGE MODAL ── */
+        /* resource-form-card / resource-table-card: section panels inside the modal */
+        .resource-form-card,
+        .resource-table-card {
+          background: var(--ema-card-bg) !important;
+          border: 1px solid var(--ema-border) !important;
+          border-radius: 12px !important;
+        }
+
+        .resource-card-head {
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 10px !important;
+        }
+
+        .resource-card-head h4 {
+          font-size: 0.88rem !important;
+          font-weight: 800 !important;
+          color: var(--ema-slate-900) !important;
+          margin: 0 0 2px !important;
+        }
+
+        .resource-card-head p {
+          font-size: 0.74rem !important;
+          color: var(--ema-slate-500) !important;
+          margin: 0 !important;
+        }
+
+        /* scope checkbox list items */
+        .policy-list {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 6px !important;
+        }
+
+        /* Fix: scope label's inner flex-grow-1 div needs column layout so
+           strong + span (name + type) stack instead of rendering inline */
+        .policy-list .inline-check .flex-grow-1 {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 1px !important;
+          min-width: 0 !important;
+        }
+
+        .policy-list .inline-check .flex-grow-1 strong {
+          display: block !important;
+          font-size: 0.82rem !important;
+          color: var(--ema-slate-900) !important;
+        }
+
+        .policy-list .inline-check .flex-grow-1 span {
+          display: block !important;
+          font-size: 0.7rem !important;
+          color: var(--ema-slate-500) !important;
+        }
+
+        /* Endpoint targets table */
+        .resource-table-wrap {
+          overflow-x: auto !important;
+          border: 1px solid var(--ema-border) !important;
+          border-radius: 10px !important;
+          overflow-y: auto !important;
+          max-height: 320px !important;
+        }
+
+        .resource-table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          font-size: 0.8rem !important;
+        }
+
+        .resource-table thead tr {
+          background: var(--ema-slate-100) !important;
+          position: sticky !important;
+          top: 0 !important;
+          z-index: 2 !important;
+        }
+
+        .resource-table th {
+          padding: 8px 10px !important;
+          font-size: 0.68rem !important;
+          font-weight: 800 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.04em !important;
+          color: var(--ema-slate-500) !important;
+          border-bottom: 1px solid var(--ema-border) !important;
+          white-space: nowrap !important;
+          text-align: left !important;
+        }
+
+        .resource-table td {
+          padding: 8px 10px !important;
+          border-bottom: 1px solid var(--ema-border) !important;
+          color: var(--ema-slate-700) !important;
+          vertical-align: middle !important;
+        }
+
+        .resource-table tbody tr:last-child td {
+          border-bottom: none !important;
+        }
+
+        .resource-table tbody tr:hover td {
+          background: var(--ema-slate-100) !important;
+        }
+
+        .resource-table tbody tr.included td {
+          background: rgba(59, 130, 246, 0.05) !important;
+        }
+
+        /* Fix: device name + ID stacking inside td */
+        .resource-table td strong {
+          display: block !important;
+          font-size: 0.8rem !important;
+          color: var(--ema-slate-900) !important;
+          font-weight: 700 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+          max-width: 180px !important;
+        }
+
+        .resource-table td small {
+          display: block !important;
+          font-size: 0.7rem !important;
+          color: var(--ema-slate-500) !important;
+          white-space: nowrap !important;
+        }
+
+        /* pricing-grid for deployment review */
+        .pricing-grid {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 8px !important;
+        }
+
+        .pricing-grid.wide {
+          grid-template-columns: 1fr !important;
+        }
+
+        /* Override Bootstrap .table cell borders that make headers look like boxes */
+        [data-section="software-distribution"] .pricing-table-card .table {
+          border-collapse: collapse !important;
+          border-color: var(--ema-border) !important;
+          margin-bottom: 0 !important;
+        }
+        [data-section="software-distribution"] .pricing-table-card .table th {
+          border: none !important;
+          border-bottom: 1px solid var(--ema-border) !important;
+          padding: 9px 12px !important;
+          font-size: 0.66rem !important;
+          font-weight: 800 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.04em !important;
+          color: var(--ema-slate-500) !important;
+          background: var(--ema-slate-100) !important;
+          white-space: nowrap !important;
+        }
+        [data-section="software-distribution"] .pricing-table-card .table td {
+          border: none !important;
+          border-bottom: 1px solid var(--ema-border) !important;
+          padding: 10px 12px !important;
+          font-size: 0.8rem !important;
+          color: var(--ema-slate-700) !important;
+          vertical-align: middle !important;
+          background: transparent !important;
+        }
+        [data-section="software-distribution"] .pricing-table-card .table > :not(:first-child) {
+          border-top: none !important;
+        }
+        [data-section="software-distribution"] .pricing-table-card .table tbody tr:last-child td {
+          border-bottom: none !important;
+        }
+        [data-section="software-distribution"] .pricing-table-card .table tbody tr:hover td {
+          background: var(--ema-slate-100) !important;
+        }
+      `}</style>
       {toast && (
         <div className={cx("settings-toast", `settings-toast-${toast.type}`)}>
           <CheckCircle2 className="settings-toast-icon" size={18} />
@@ -1967,27 +2295,10 @@ export default function SoftwareDistribution() {
             })}
 
             {hasMoreTreeRows && (
-              <div className="settings-helper-card">
-                <div className="content-actions">
-                  <button
-                    type="button"
-                    className="soft-btn"
-                    onClick={() =>
-                      setTreeVisibleCount((current) =>
-                        Math.min(current + TREE_PAGE_SIZE, treePackages.length)
-                      )
-                    }
-                  >
-                    Load more packages
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {hasMoreTreeRows && (
               <button
                 type="button"
                 className="soft-btn"
+                style={{ width: '100%' }}
                 onClick={() =>
                   setTreeVisibleCount((current) =>
                     Math.min(current + TREE_PAGE_SIZE, treePackages.length)
@@ -2207,11 +2518,11 @@ export default function SoftwareDistribution() {
                         </td>
                         <td><span className="row-index-pill">{(page - 1) * PAGE_SIZE + index + 1}</span></td>
                         <td>
-                          <div className="user-name">
+                          <div className="user-name sd-package-name-cell">
                             <span className="user-mini-avatar"><Package size={15} /></span>
-                            <div>
+                            <div style={{ minWidth: 0 }}>
                               <strong>{item.name}</strong>
-                              <small>{item.description}</small>
+                              <small>{item.description || '-'}</small>
                             </div>
                           </div>
                         </td>

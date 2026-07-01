@@ -14,12 +14,12 @@ import {
   Folder,
   FolderOpen,
   Gauge,
+  Monitor,
   Package,
   Play,
   RefreshCw,
   Search,
   StopCircle,
-  UserRound,
   X,
 } from "lucide-react";
 import appMeteringService from "../services/appMeteringService";
@@ -1398,6 +1398,12 @@ useAppMeteringTableRouteEffect(() => {
           min-height: 0 !important;
         }
 
+        /* Branch/Packages switcher nav hidden per user request — Branch view is
+           the default and only visible mode; the toggle adds unnecessary chrome. */
+        .appmetering-module-root .ema-module-sidebar-switcher {
+          display: none !important;
+        }
+
         .appmetering-module-root .ema-sidebar-tree-node.is-appmetering-device .ema-sidebar-tree-icon,
         .appmetering-module-root .ema-sidebar-tree-node.is-appmetering-package .ema-sidebar-tree-icon {
           opacity: 0.95 !important;
@@ -1415,15 +1421,36 @@ useAppMeteringTableRouteEffect(() => {
         /* Server-safe App Metering table/pagination isolation.
            Hosted builds can load older global table/uam styles after this component.
            Keep Application Metering columns horizontal and scrollable. */
-        body.appmetering-page-active .appmetering-module-root {
-          min-width: 0 !important;
-          height: 100% !important;
+        body.appmetering-page-active,
+        body.appmetering-page-active #root {
+          min-height: 100% !important;
+          overflow: hidden !important;
+        }
+
+        body.appmetering-page-active .ema-main,
+        body.appmetering-page-active .ema-content,
+        body.appmetering-page-active .ema-content-area {
           min-height: 0 !important;
           overflow: hidden !important;
         }
 
+        body.appmetering-page-active .appmetering-module-root {
+          min-width: 0 !important;
+          height: calc(100dvh - 76px) !important;
+          min-height: 0 !important;
+          max-height: calc(100dvh - 76px) !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+        }
+
         body.appmetering-page-active .appmetering-module-root .appmetering-settings-layout {
           height: 100% !important;
+          min-height: 0 !important;
+          overflow: hidden !important;
+          align-items: stretch !important;
+        }
+
+        body.appmetering-page-active .appmetering-module-root .settings-menu.appmetering-left-panel {
           min-height: 0 !important;
           overflow: hidden !important;
         }
@@ -1518,8 +1545,8 @@ useAppMeteringTableRouteEffect(() => {
           position: sticky !important;
           top: 0 !important;
           z-index: 4 !important;
-          background: #ffffff !important;
-          color: #0f172a !important;
+          background: var(--ema-slate-100) !important;
+          color: var(--ema-slate-900) !important;
           font-size: 0.78rem !important;
           font-weight: 900 !important;
           text-transform: none !important;
@@ -1535,18 +1562,19 @@ useAppMeteringTableRouteEffect(() => {
           word-break: normal !important;
         }
 
+        /* 7-column device table: No | Device Name | Platform/Model | Status | Last Connected | Device ID | IP Address */
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card th:nth-child(1),
-        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(1) { width: 22% !important; }
+        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(1) { width: 5% !important; }
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card th:nth-child(2),
-        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(2) { width: 34% !important; }
+        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(2) { width: 25% !important; }
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card th:nth-child(3),
-        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(3) { width: 16% !important; }
+        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(3) { width: 20% !important; }
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card th:nth-child(4),
-        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(4) { width: 7% !important; }
+        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(4) { width: 9% !important; }
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card th:nth-child(5),
-        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(5) { width: 7% !important; }
+        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(5) { width: 17% !important; }
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card th:nth-child(6),
-        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(6) { width: 10% !important; }
+        body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(6) { width: 16% !important; }
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card th:nth-child(7),
         body.appmetering-page-active .appmetering-module-root .appmetering-table-card td:nth-child(7) { width: 8% !important; }
 
@@ -1684,62 +1712,62 @@ useAppMeteringTableRouteEffect(() => {
               <button className="score-box text-start" type="button" onClick={loadUsage}>
                 <span>Launch Events</span>
                 <strong>{summary.launchCount.toLocaleString()}</strong>
-                <small>Total CCount from API</small>
+                <small>Total launches counted</small>
               </button>
               <button className="score-box text-start" type="button" onClick={loadUsage}>
                 <span>Records</span>
                 <strong>{summary.recordCount.toLocaleString()}</strong>
-                <small>Rows returned by API</small>
+                <small>Metering records loaded</small>
               </button>
             </div>
           </div>
 
           <div className="content-shell ema-panel-surface">
-            <div className="content-head">
-              <div className="appm-target-table-wrap">
-                <span className="section-tag">{showDeviceRegistry ? "TARGET REGISTRY" : "USAGE REGISTRY"}</span>
-                <h3>{showDeviceRegistry ? "Target Device Registry" : "Application Usage Registry"}</h3>
-                <p>{showDeviceRegistry ? `${selectedNode.label} scope · ${filteredDeviceRows.length} device${filteredDeviceRows.length === 1 ? "" : "s"}` : `${selectedNode.label} · ${startDate} to ${endDate}`}</p>
-              </div>
-              <div className="content-actions">
-                <button className="soft-btn" type="button" onClick={loadUsage} title="Refresh usage">
-                  <RefreshCw size={14} /> Refresh
+            <div className="hardware-registry-toolbar">
+              <div className="hardware-scan-command-row">
+                <button
+                  className={isCurrentMeteringScopeActive ? "danger-btn" : "hardware-command-btn"}
+                  type="button"
+                  onClick={() => handleScopeMeteringToggle(currentMeteringScopeNode)}
+                  disabled={loading.action}
+                  title={currentMeteringButtonTitle}
+                >
+                  {isCurrentMeteringScopeActive ? <StopCircle size={14} /> : <Play size={14} />}
+                  <span>{currentMeteringButtonLabel}</span>
                 </button>
-                <button className="soft-btn" type="button" onClick={() => showDeviceRegistry ? showToast("info", "Device list", "Device registry uses the same /api/assets/:relationID data as Hardware Inventory.") : exportCsv(filteredRows)} title={showDeviceRegistry ? "Device source info" : "Export CSV"}>
-                  <Download size={14} /> {showDeviceRegistry ? "Source" : "Export"}
+                <button className="soft-btn" type="button" onClick={() => runMeteringAction("collect", activePackageId, selectedNode)} disabled={loading.action}>
+                  <RefreshCw size={14} /> Collect
                 </button>
+                <label className="section-search flex-grow-1 mb-0" htmlFor="appmRegistrySearch" style={{ minWidth: 200, maxWidth: 340 }}>
+                  <Search size={15} />
+                  <input id="appmRegistrySearch" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={showDeviceRegistry ? "Search devices, IPs, users..." : "Search application, device or user..."} />
+                  {searchTerm ? <button className="ema-sidebar-search-clear" type="button" onClick={() => setSearchTerm("")}><X size={14} /></button> : null}
+                </label>
+                <button className="soft-btn" type="button" onClick={() => { setSelectedPackageId(0); setSearchTerm(""); setOneYearMode(false); setNextPageMode(false); }}>
+                  <Filter size={14} /> Clear
+                </button>
+                <div style={{ flex: "1 1 0" }} />
+                <button className="icon-action-btn software-icon-btn" type="button" onClick={loadUsage} title="Refresh" aria-label="Refresh">
+                  <RefreshCw size={15} />
+                </button>
+                {!showDeviceRegistry && (
+                  <button className="hardware-command-btn" type="button" onClick={() => exportCsv(filteredRows)} title="Export CSV">
+                    <Download size={14} /> Export
+                  </button>
+                )}
               </div>
             </div>
 
+            <div className="hardware-registry-subhead">
+              <span>
+                {showDeviceRegistry
+                  ? `${selectedNode.label} scope · ${filteredDeviceRows.length} device${filteredDeviceRows.length === 1 ? "" : "s"}`
+                  : `${selectedNode.label} · ${startDate} to ${endDate}`}
+              </span>
+            </div>
+
             <div className="content-body">
-              <div className="user-action-bar advanced clean mb-3">
-                <label className="section-search" htmlFor="appmRegistrySearch">
-                  <Search size={15} />
-                  <input id="appmRegistrySearch" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder={showDeviceRegistry ? "Search devices, IPs, users..." : "Search application, device or user..."} />
-                  {searchTerm ? <button className="mini-btn icon-only" type="button" onClick={() => setSearchTerm("")}><X size={14} /></button> : null}
-                </label>
-
-                <div className="content-actions">
-                  <button className="soft-btn" type="button" onClick={() => { setSelectedPackageId(0); setSearchTerm(""); setOneYearMode(false); setNextPageMode(false); }}>
-                    <Filter size={14} /> Clear
-                  </button>
-                  <button
-                    className={isCurrentMeteringScopeActive ? "danger-btn" : "primary-btn"}
-                    type="button"
-                    onClick={() => handleScopeMeteringToggle(currentMeteringScopeNode)}
-                    disabled={loading.action}
-                    title={currentMeteringButtonTitle}
-                  >
-                    {isCurrentMeteringScopeActive ? <StopCircle size={14} /> : <Play size={14} />}
-                    <span>{currentMeteringButtonLabel}</span>
-                  </button>
-                  <button className="soft-btn" type="button" onClick={() => runMeteringAction("collect", activePackageId, selectedNode)} disabled={loading.action}>
-                    <RefreshCw size={14} /> Collect
-                  </button>
-                </div>
-              </div>
-
-              <div className="row g-2 mb-3" aria-label="Application metering filters">
+              <div className="row g-2 mb-3" aria-label="Application metering filters" style={{ padding: "12px 14px 0" }}>
                 <label className="form-field col-12 col-md-6 col-xl">
                   <span>Start Date</span>
                   <input className="setting-input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
@@ -1748,9 +1776,9 @@ useAppMeteringTableRouteEffect(() => {
                   <span>End Date</span>
                   <input className="setting-input" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                 </label>
-                <label className="form-field col-12 col-xl-3">
-                  <span>Package</span>
-                  <select className="setting-select" value={selectedPackageId} onChange={(event) => setSelectedPackageId(Number(event.target.value))}>
+                <label className="form-field col-12 col-xl-3" title={showDeviceRegistry ? "Package filter applies to usage view — select a device to filter by package" : undefined}>
+                  <span>Package {showDeviceRegistry && <span style={{ fontSize: "0.65rem", color: "var(--ema-slate-400)", fontWeight: 400 }}>(usage only)</span>}</span>
+                  <select className="setting-select" value={selectedPackageId} onChange={(event) => setSelectedPackageId(Number(event.target.value))} disabled={showDeviceRegistry}>
                     <option value={0}>All packages</option>
                     {packages.map((pkg) => <option key={pkg.SW_Pkg_Idn} value={pkg.SW_Pkg_Idn}>{pkg.name}</option>)}
                   </select>
@@ -1775,8 +1803,7 @@ useAppMeteringTableRouteEffect(() => {
 
               <div className="table-responsive pricing-table-card appmetering-table-card">
                 {showDeviceRegistry ? (
-                  <div className="appm-target-table-wrap">
-<table data-appm-target-device-table="true" className="table table-hover align-middle mb-0 appm-target-device-table">
+                  <table className="table table-hover align-middle mb-0 appm-target-device-table">
                     <thead>
                       <tr>
                         <th>No</th>
@@ -1784,35 +1811,38 @@ useAppMeteringTableRouteEffect(() => {
                         <th>Platform / Model</th>
                         <th>Status</th>
                         <th>Last Connected</th>
-                        <th>Group Path</th>
                         <th>Device ID</th>
                         <th>IP Address</th>
                       </tr>
                     </thead>
                     <tbody>
                       {loading.assets ? (
-                        <tr><td colSpan={8}><div className="settings-helper-card"><strong>Loading devices</strong><span>Loading devices from {selectedNode.relationID}...</span></div></td></tr>
+                        <tr><td colSpan={7}><div className="settings-helper-card"><strong>Loading devices</strong><span>Loading devices from {selectedNode.relationID}...</span></div></td></tr>
                       ) : pagedDeviceRows.length === 0 ? (
-                        <tr><td colSpan={8}><div className="settings-helper-card"><strong>No devices found</strong><span>{selectedNode.id === "organization" ? "Company scope selected. Choose a department to browse devices, or run Metering Company directly." : "No devices found in this folder scope."}</span></div></td></tr>
+                        <tr><td colSpan={7}><div className="settings-helper-card"><strong>No devices found</strong><span>{selectedNode.id === "organization" ? "Company scope selected. Choose a department to browse devices, or run Metering Company directly." : "No devices found in this folder scope."}</span></div></td></tr>
                       ) : pagedDeviceRows.map((device, index) => {
                         const raw = device.raw || {};
                         const isSelected = selectedNode.id === device.id;
+                        const statusClass = (() => {
+                          const s = getTreeStatusClass(device.status);
+                          if (s === "online") return "user-pill success";
+                          if (s === "offline") return "user-pill hardware-status-pill is-offline appm-status-offline";
+                          return "user-pill";
+                        })();
                         return (
                           <tr key={device.id} className={cx(isSelected && "table-active")} onClick={() => handleNodeSelect(device)}>
                             <td><span className="row-index-pill">{String((safePage - 1) * PAGE_SIZE + index + 1).padStart(2, "0")}</span></td>
-                            <td><div className="user-name"><span className="user-mini-avatar"><UserRound size={14} /></span><span><strong>{device.label}</strong><small>{device.subLabel || getTreeNodeValue(device, ["Object_Full_Name"], "-")}</small></span></div></td>
+                            <td><div className="hardware-user-name"><Monitor size={14} className="hardware-user-name-icon" /><strong>{device.label}</strong></div></td>
                             <td><strong>{getTreeNodeValue(device, ["PlatformType"], "-")}</strong><small className="d-block text-muted">{getTreeNodeValue(device, ["Model"], "-")}</small></td>
-                            <td><span className={getTreeStatusPillClass(device.status)}>{device.status || "-"}</span></td>
+                            <td><span className={statusClass}>{device.status || "-"}</span></td>
                             <td>{formatApiDate(String(raw.ConnectionTime || ""))}</td>
-                            <td className="text-truncate">{getTreeNodeValue(device, ["Object_Full_Name", "Department", "Site", "GroupName"], "-")}</td>
-                            <td><span className="font-monospace">{getTreeNodeValue(device, ["Object_DeviceID", "DeviceID", "MDM_DeviceID"], "-")}</span></td>
+                            <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span className="font-monospace" title={getTreeNodeValue(device, ["Object_DeviceID", "DeviceID", "MDM_DeviceID"], "-")}>{getTreeNodeValue(device, ["Object_DeviceID", "DeviceID", "MDM_DeviceID"], "-")}</span></td>
                             <td>{getTreeNodeValue(device, ["IP", "IPAddress", "DeviceIPAddress", "DeviceLocalIPAddress"], "-")}</td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
-</div>
                 ) : (
                   <table className="table table-hover align-middle mb-0 appm-usage-table">
                     <thead>

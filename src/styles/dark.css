@@ -78,12 +78,14 @@ html.ema-dark .hardware-module-root .hardware-command-btn-muted b {
   color: #7fa8ff;
 }
 
-/* Same blue-tinted command-btn look reused by Software (and future pages) via
-   .soft-btn aliases — these don't have a competing inline override like Hardware
-   does, but the base light-mode rule uses hardcoded hex, so still needs a dark pass. */
+/* Same blue-tinted command-btn look reused by Software/Network (and future pages) via
+   .soft-btn aliases or the bare .hardware-command-btn class — these don't have a
+   competing inline override like Hardware's own page does, but the base light-mode
+   rule uses hardcoded hex, so still needs a dark pass. */
 html.ema-dark .software-insights-toggle.soft-btn,
 html.ema-dark .software-scan-btn.soft-btn,
-html.ema-dark .icon-action-btn.software-icon-btn {
+html.ema-dark .icon-action-btn.software-icon-btn,
+html.ema-dark .network-inventory-module .hardware-command-btn {
   background: var(--ema-card-bg);
   border-color: var(--ema-border);
   color: #7fa8ff;
@@ -92,9 +94,20 @@ html.ema-dark .icon-action-btn.software-icon-btn {
 
 html.ema-dark .software-insights-toggle.soft-btn:hover:not(:disabled),
 html.ema-dark .software-scan-btn.soft-btn:hover:not(:disabled),
-html.ema-dark .icon-action-btn.software-icon-btn:hover:not(:disabled) {
+html.ema-dark .icon-action-btn.software-icon-btn:hover:not(:disabled),
+html.ema-dark .network-inventory-module .hardware-command-btn:hover:not(:disabled) {
   background: var(--ema-slate-100);
   border-color: var(--ema-border);
+}
+
+html.ema-dark .network-inventory-module .hardware-command-btn svg {
+  color: #7fa8ff;
+}
+
+html.ema-dark .network-inventory-module .hardware-command-btn:disabled {
+  background: var(--ema-slate-100);
+  border-color: var(--ema-border);
+  color: var(--ema-slate-500);
 }
 
 html.ema-dark .hardware-kpi-card.is-online .hardware-kpi-icon {
@@ -139,4 +152,163 @@ html.ema-dark .ui-pager-summary,
 html.ema-dark .uam-page-summary,
 html.ema-dark .uam-page-status {
   color: var(--ema-slate-500);
+}
+
+/* Most new global classes (pricing-table-card, user-modal-head/.modal-close,
+   settings-helper-card, user-pill, score-box, setting-btn, content-head,
+   primary-btn, danger-btn, etc.) use CSS custom properties throughout and so
+   adapt to dark mode automatically. Only edge cases needing extra override: */
+
+/* Bootstrap 5's .table class sets background-color: var(--bs-table-bg) on every
+   cell using its OWN CSS variable (not --ema-card-bg), which in Bootstrap's default
+   light theme resolves to transparent. But Bootstrap's :root sets other variables
+   that can bleed through and paint cells white. We need explicit !important to
+   guarantee dark backgrounds regardless of Bootstrap's cascade. */
+html.ema-dark .pricing-table-card {
+  background: var(--ema-card-bg) !important;
+  border-color: var(--ema-border) !important;
+}
+
+html.ema-dark .pricing-table-card table {
+  --bs-table-bg: transparent !important;
+  --bs-table-striped-bg: transparent !important;
+  --bs-table-hover-bg: rgba(59, 130, 246, 0.08) !important;
+  --bs-table-color: var(--ema-slate-900) !important;
+  --bs-table-border-color: var(--ema-border) !important;
+  color: var(--ema-slate-900) !important;
+}
+
+html.ema-dark .pricing-table-card tbody tr,
+html.ema-dark .pricing-table-card tbody td {
+  background-color: transparent !important;
+  color: var(--ema-slate-700) !important;
+  border-color: var(--ema-border) !important;
+}
+
+html.ema-dark .pricing-table-card thead {
+  background: var(--ema-slate-200) !important;
+}
+
+html.ema-dark .pricing-table-card thead th {
+  background: var(--ema-slate-200) !important;
+  color: var(--ema-slate-500) !important;
+  border-color: var(--ema-border) !important;
+}
+
+html.ema-dark .pricing-table-card tbody tr:hover td {
+  background-color: rgba(59, 130, 246, 0.06) !important;
+}
+
+/* score-box hover in dark mode — base var hover already works, but the
+   box-shadow colour is coded in rgba(15,23,42,…) which is a light-theme
+   shadow and invisible on a dark bg.  Swap to a dark-aware glow instead. */
+html.ema-dark .score-box:hover {
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.18);
+}
+
+/* setting-btn active state uses --ema-blue-50 which is very dark in dark mode;
+   override the text to stay legible. */
+html.ema-dark .setting-btn.active > span:last-child strong {
+  color: #7fa8ff;
+}
+
+html.ema-dark .setting-btn.active .setting-icon {
+  background: var(--ema-blue-600);
+  border-color: var(--ema-blue-700);
+  color: #fff;
+}
+
+/* settings-inline-alert in dark mode: red-on-dark needs a brighter red */
+html.ema-dark .settings-inline-alert {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #f87171;
+  color: #f87171;
+}
+
+/* Native <select> with .setting-select — the system styling adapts automatically
+   on mac/linux, but on Windows the select stays white even in dark mode unless
+   we force background/color explicitly. */
+html.ema-dark select.setting-select {
+  background: var(--ema-card-bg);
+  color: var(--ema-slate-900);
+  border-color: var(--ema-border);
+}
+
+html.ema-dark select.setting-select option {
+  background: var(--ema-card-bg);
+  color: var(--ema-slate-900);
+}
+
+/* Row-index-pill dark mode: --ema-slate-100 is very close to --ema-card-bg in
+   dark mode, making the pill invisible against the table row background. */
+html.ema-dark .row-index-pill {
+  background: var(--ema-slate-200);
+  border-color: var(--ema-border);
+  color: var(--ema-slate-500);
+}
+
+/* .user-name flex cell inside Bootstrap tables — also needs dark text/icon colour */
+html.ema-dark .pricing-table-card .user-name strong {
+  color: var(--ema-slate-900);
+}
+
+html.ema-dark .pricing-table-card .user-name small,
+html.ema-dark .pricing-table-card .user-name .text-muted {
+  color: var(--ema-slate-500) !important;
+}
+
+html.ema-dark .pricing-table-card .user-mini-avatar {
+  color: var(--ema-slate-500);
+}
+
+/* Date inputs and setting-input fields in dark mode */
+html.ema-dark .setting-input {
+  background: var(--ema-card-bg);
+  color: var(--ema-slate-900);
+  border-color: var(--ema-border);
+}
+
+html.ema-dark .setting-textarea {
+  background: var(--ema-card-bg);
+  color: var(--ema-slate-900);
+  border-color: var(--ema-border);
+}
+
+/* score-box in dark mode — card bg already adapts via CSS var, but the hover
+   shadow should be blue-tinted not the light-mode rgba shadow. */
+html.ema-dark .score-box {
+  background: var(--ema-card-bg);
+}
+
+/* content-head dark mode — h3 and p already use CSS vars, but .section-tag
+   badge uses --ema-blue-50 and --ema-blue-600 which both have dark values. */
+
+/* hardware-registry-subhead dark mode (already uses --ema-slate-500 and
+   --ema-border which are both redefined in dark, so no extra override needed). */
+
+/* Modal section title dark mode */
+html.ema-dark .modal-section-title {
+  color: var(--ema-slate-500);
+  border-color: var(--ema-border);
+}
+
+/* Primary/danger btn dark mode — gradients are fine but box-shadow if any
+   needs a softer dark look. */
+html.ema-dark .primary-btn {
+  box-shadow: 0 4px 12px rgba(47, 111, 237, 0.25);
+}
+
+/* form-field label in dark mode */
+html.ema-dark .form-field > span {
+  color: var(--ema-slate-500);
+}
+
+/* App Metering table-active highlight on selected device row */
+html.ema-dark .pricing-table-card .table-active td {
+  background-color: rgba(59, 130, 246, 0.14) !important;
+}
+
+/* font-monospace cells inside pricing-table-card in dark mode */
+html.ema-dark .pricing-table-card .font-monospace {
+  color: var(--ema-slate-600);
 }

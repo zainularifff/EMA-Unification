@@ -1,4 +1,4 @@
-/* SOFTWARE_ROI_COMBINED_SOFTWARE_SUMMARY_REAL_FIX */
+/* SOFTWARE_ROI_BENCHMARK_DATA_LOGIC_REAL_FIX */
 import React, { useEffect, useMemo, useState } from "react";
 import * as Icons from "lucide-react";
 
@@ -344,12 +344,13 @@ const SOFTWARE_ROI_BUDGET_COLUMNS: SoftwareRoiColumn[] = [
   { key: "InstalledDevices", label: "Installed", width: "95px" },
   { key: "UsedDevices", label: "Used", width: "85px" },
   { key: "LicenseBalanceByUsage", label: "Balance", width: "92px" },
-  { key: "UtilizedDevices", label: "Utilized", width: "92px" },
-  { key: "UnderutilizedDevices", label: "Underutilized", width: "125px" },
-  { key: "NotUsedDevices", label: "Not Used", width: "95px" },
+  { key: "WeeklyAverageHours", label: "Avg / Week", width: "118px" },
+  { key: "BenchmarkStatus", label: "Benchmark", width: "126px" },
   { key: "AverageUsageHoursPerDay", label: "Avg / Day", width: "112px" },
-  { key: "UsageRatePercent", label: "Usage Rate", width: "105px" },
+  { key: "UsageRatePercent", label: "Install Usage", width: "112px" },
+  { key: "LicenseUsageRatePercent", label: "License Usage", width: "116px" },
   { key: "TotalUsageHours", label: "Total Hours", width: "105px" },
+  { key: "PotentialWasteCost", label: "Waste Cost", width: "110px" },
   { key: "BudgetSignal", label: "Signal", width: "150px" },
   { key: "__viewMore", label: "Details", width: "112px" },
 ];
@@ -584,6 +585,135 @@ function buildSoftwareRoiIllegalSummaryRows(rows: Array<Record<string, unknown>>
   });
 }
 
+function getSoftwareRoiMergeKey(row: Record<string, unknown>) {
+  const policyItemId = String(row.PolicyItemID || "").trim();
+  if (policyItemId) return `policy:${policyItemId}`;
+  const softwareName = String(row.SoftwareName || row.LastExecutedFile || "").trim().toLowerCase();
+  const categoryName = String(row.CategoryName || "").trim().toLowerCase();
+  return `name:${softwareName}|${categoryName}`;
+}
+
+function buildSoftwareRoiUsageIndex(rows: Array<Record<string, unknown>>) {
+  const groups = new Map<string, any>();
+
+  rows.forEach((row) => {
+    const key = getSoftwareRoiMergeKey(row);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        InstalledDevices: 0,
+        UsedDevices: 0,
+        UtilizedDevices: 0,
+        UnderutilizedDevices: 0,
+        NotUsedDevices: 0,
+        TotalUsageHours: 0,
+        OpenCount: 0,
+        LastUsedAt: null,
+        __devices: new Set<string>(),
+        __usedDevices: new Set<string>(),
+        __detailRows: [],
+      });
+    }
+
+    const item = groups.get(key);
+    const deviceKey = String(row.Object_Root_Idn || row.ComputerName || row.DeviceName || "").trim();
+    const usageHours = softwareRoiNumber(row.UsageHours || row.TotalUsageHours);
+    const openCount = softwareRoiNumber(row.OpenCount || row.ActivityCount);
+    const status = String(row.UsageStatus || "").toLowerCase();
+
+    if (deviceKey) item.__devices.add(deviceKey);
+    if (deviceKey && (usageHours > 0 || openCount > 0)) item.__usedDevices.add(deviceKey);
+    if (status === "utilized") item.UtilizedDevices += 1;
+    if (status === "underutilized" || status === "under-utilized") item.UnderutilizedDevices += 1;
+    if (status === "not used" || status === "not-used" || (!status && usageHours <= 0)) item.NotUsedDevices += 1;
+
+    item.TotalUsageHours += usageHours;
+    item.OpenCount += openCount;
+    item.__detailRows.push(row);
+
+    const currentLastUsed = row.LastUsedAt ? new Date(String(row.LastUsedAt)).getTime() : 0;
+    const existingLastUsed = item.LastUsedAt ? new Date(String(item.LastUsedAt)).getTime() : 0;
+    if (currentLastUsed > existingLastUsed) item.LastUsedAt = row.LastUsedAt;
+  });
+
+  groups.forEach((item) => {
+    item.InstalledDevices = Math.max(item.InstalledDevices, item.__devices.size);
+    item.UsedDevices = Math.max(item.UsedDevices, item.__usedDevices.size, item.TotalUsageHours > 0 ? 1 : 0);
+  });
+
+  return groups;
+}
+
+function mergeSoftwareRoiUsageRows(baseRows: Array<Record<string, unknown>>, usageRows: Array<Record<string, unknown>>, dateRangeDays: number) {
+  if (!usageRows.length) return baseRows;
+  const usageIndex = buildSoftwareRoiUsageIndex(usageRows);
+
+  return baseRows.map((row) => {
+    const key = getSoftwareRoiMergeKey(row);
+    const fallbackKey = `name:${String(row.SoftwareName || "").trim().toLowerCase()}|${String(row.CategoryName || "").trim().toLowerCase()}`;
+    const usage = usageIndex.get(key) || usageIndex.get(fallbackKey);
+    if (!usage) return row;
+
+    const totalUsageHours = Math.max(softwareRoiNumber(row.TotalUsageHours || row.UsageHours), softwareRoiNumber(usage.TotalUsageHours));
+    const installedDevices = Math.max(softwareRoiNumber(row.InstalledDevices), softwareRoiNumber(usage.InstalledDevices));
+    const usedDevices = Math.max(softwareRoiNumber(row.UsedDevices), softwareRoiNumber(usage.UsedDevices));
+    const purchasedLicense = softwareRoiNumber(row.PurchasedLicense || row.LicenseCount);
+
+    return {
+      ...row,
+      InstalledDevices: installedDevices,
+      UsedDevices: usedDevices,
+      UtilizedDevices: Math.max(softwareRoiNumber(row.UtilizedDevices), softwareRoiNumber(usage.UtilizedDevices)),
+      UnderutilizedDevices: Math.max(softwareRoiNumber(row.UnderutilizedDevices), softwareRoiNumber(usage.UnderutilizedDevices)),
+      NotUsedDevices: Math.max(softwareRoiNumber(row.NotUsedDevices), Math.max(0, installedDevices - usedDevices), softwareRoiNumber(usage.NotUsedDevices)),
+      LicenseBalanceByUsage: purchasedLicense > 0 ? Math.max(0, purchasedLicense - usedDevices) : softwareRoiNumber(row.LicenseBalanceByUsage),
+      TotalUsageHours: totalUsageHours,
+      AverageUsageHoursPerDay: totalUsageHours / Math.max(1, dateRangeDays),
+      UsageRatePercent: installedDevices > 0 ? (usedDevices / installedDevices) * 100 : 0,
+      LastUsedAt: usage.LastUsedAt || row.LastUsedAt,
+      OpenCount: Math.max(softwareRoiNumber(row.OpenCount), softwareRoiNumber(usage.OpenCount)),
+      __detailRows: usage.__detailRows || row.__detailRows,
+    };
+  });
+}
+
+function applySoftwareRoiBenchmark(rows: Array<Record<string, unknown>>, dateRangeDays: number, utilizedHoursPerWeek: number, notUsedHoursPerWeek: number): Array<Record<string, unknown>> {
+  const weekFactor = Math.max(1 / 7, dateRangeDays / 7);
+  return rows.map((row) => {
+    const isIllegal = String(row.ComplianceStatus || "").toLowerCase() === "illegal" || String(row.__roiSource || "").toLowerCase().includes("illegal");
+    const totalUsageHours = softwareRoiNumber(row.TotalUsageHours || row.UsageHours);
+    const weeklyAverage = totalUsageHours / weekFactor;
+    const installedDevices = softwareRoiNumber(row.InstalledDevices);
+    const usedDevices = softwareRoiNumber(row.UsedDevices);
+    const purchasedLicense = softwareRoiNumber(row.PurchasedLicense || row.LicenseCount);
+    let benchmarkStatus = "Not Used";
+    if (isIllegal) benchmarkStatus = "Illegal";
+    else if (weeklyAverage >= utilizedHoursPerWeek) benchmarkStatus = "Utilized";
+    else if (weeklyAverage > notUsedHoursPerWeek) benchmarkStatus = "Underutilized";
+
+    const licenseUsageRate = purchasedLicense > 0 ? (usedDevices / purchasedLicense) * 100 : 0;
+    const installUsageRate = installedDevices > 0 ? (usedDevices / installedDevices) * 100 : 0;
+    const budgetSignal = isIllegal
+      ? (row.BudgetSignal || "Illegal / Unregistered")
+      : benchmarkStatus === "Not Used"
+        ? "Review Renewal"
+        : benchmarkStatus === "Underutilized"
+          ? "Reduce / Reassign"
+          : (row.BudgetSignal || "Maintain Budget");
+
+    return {
+      ...row,
+      TotalUsageHours: totalUsageHours,
+      WeeklyAverageHours: weeklyAverage,
+      AverageUsageHoursPerDay: totalUsageHours / Math.max(1, dateRangeDays),
+      BenchmarkStatus: benchmarkStatus,
+      BenchmarkRule: `Utilized >= ${utilizedHoursPerWeek} h/week; Not Used <= ${notUsedHoursPerWeek} h/week`,
+      UsageRatePercent: installUsageRate,
+      LicenseUsageRatePercent: licenseUsageRate,
+      BudgetSignal: budgetSignal,
+    } as Record<string, unknown>;
+  });
+}
+
 function softwareRoiPick(row: Record<string, unknown> | null | undefined, ...keys: string[]) {
   if (!row) return undefined;
   for (const key of keys) {
@@ -604,14 +734,196 @@ function formatSoftwareRoiCell(key: string, value: unknown) {
   if (/date|usedat|start|end/i.test(key)) return formatSoftwareRoiDate(value);
 
   const n = Number(value);
+  if (/weeklyaverage|avg.*week/i.test(key) && Number.isFinite(n)) return `${n.toFixed(2)} h/week`;
+  if (/weeklyaverage|avg.*week|week/i.test(key) && Number.isFinite(n)) return `${n.toFixed(2)} h/week`;
   if (/averageusage|avg.*day/i.test(key) && Number.isFinite(n)) return `${n.toFixed(2)} h/day`;
-  if (/percent|rate/i.test(key) && Number.isFinite(n)) return `${n.toFixed(1)}%`;
+  if (/percent|rate|licenseusage/i.test(key) && Number.isFinite(n)) return `${n.toFixed(1)}%`;
   if (/unitprice|cost|waste/i.test(key) && Number.isFinite(n)) return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   if (/hours|license|devices|count|balance|remaining|total|installed|used|gap/i.test(key)) {
     if (Number.isFinite(n)) return key.toLowerCase().includes("hours") ? n.toFixed(2) : n.toLocaleString();
   }
   return String(value);
+}
+
+
+type SoftwareRoiTrendMetric = {
+  key: string;
+  label: string;
+  prefix?: string;
+  suffix?: string;
+  className?: string;
+};
+
+function getSoftwareRoiTrendPeriod(row: Record<string, unknown>) {
+  return String(row.period ?? row.Period ?? row.PeriodLabel ?? row.label ?? row.Label ?? row.month ?? row.Month ?? "-");
+}
+
+function getSoftwareRoiTrendNumber(row: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") return softwareRoiNumber(row[key]);
+  }
+  return 0;
+}
+
+function normalizeSoftwareRoiChartRows(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.filter((row) => row && typeof row === "object") as Array<Record<string, unknown>> : [];
+}
+
+type SoftwareRoiQuickRange = "today" | "7d" | "30d" | "mtd" | "custom";
+
+function formatSoftwareRoiInputDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getSoftwareRoiDefaultDateRange() {
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(today.getDate() - 29);
+  return {
+    dateFrom: formatSoftwareRoiInputDate(from),
+    dateTo: formatSoftwareRoiInputDate(today),
+  };
+}
+
+function getSoftwareRoiGranularityLabel(value: string) {
+  if (value === "daily") return "Daily";
+  if (value === "monthly") return "Monthly";
+  return "Weekly";
+}
+
+function getSoftwareRoiRangeLabel(dateFrom: string, dateTo: string, granularity: string) {
+  const days = getSoftwareRoiDateRangeDays(dateFrom, dateTo);
+  return `${dateFrom || "-"} to ${dateTo || "-"} · ${days} day${days === 1 ? "" : "s"} · ${getSoftwareRoiGranularityLabel(granularity)}`;
+}
+
+function formatSoftwareRoiTrendNumber(value: number, metric: SoftwareRoiTrendMetric) {
+  const prefix = metric.prefix || "";
+  const suffix = metric.suffix || "";
+  const rounded = Math.abs(value) >= 1000 ? Math.round(value).toLocaleString() : Number(value.toFixed(2)).toLocaleString();
+  return `${prefix}${rounded}${suffix}`;
+}
+
+function SoftwareRoiTrendLineChart({
+  rows,
+  metrics,
+  emptyText = "No trend data found for selected range.",
+}: {
+  rows: Array<Record<string, unknown>>;
+  metrics: SoftwareRoiTrendMetric[];
+  emptyText?: string;
+}) {
+  const chartRows = rows.slice(0, 40);
+  if (!chartRows.length || !metrics.length) {
+    return <div className="md-roi-empty-chart">{emptyText}</div>;
+  }
+
+  const width = 760;
+  const height = 218;
+  const padLeft = 42;
+  const padRight = 20;
+  const padTop = 18;
+  const padBottom = 38;
+  const plotWidth = width - padLeft - padRight;
+  const plotHeight = height - padTop - padBottom;
+  const values = chartRows.flatMap((row) => metrics.map((metric) => softwareRoiNumber(row[metric.key])));
+  const maxValue = Math.max(1, ...values);
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
+    value: maxValue * ratio,
+    y: padTop + plotHeight - plotHeight * ratio,
+  }));
+
+  const pointFor = (row: Record<string, unknown>, rowIndex: number, metric: SoftwareRoiTrendMetric) => {
+    const x = padLeft + (rowIndex / Math.max(1, chartRows.length - 1)) * plotWidth;
+    const value = softwareRoiNumber(row[metric.key]);
+    const y = padTop + plotHeight - (value / maxValue) * plotHeight;
+    return { x, y, value };
+  };
+
+  return (
+    <div className="md-roi-trend-chart">
+      <svg className="md-roi-trend-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Software ROI trend chart">
+        {yTicks.map((tick, index) => (
+          <g key={`grid-${index}`}>
+            <line className="md-roi-trend-grid" x1={padLeft} x2={width - padRight} y1={tick.y} y2={tick.y} />
+            <text className="md-roi-trend-label" x={padLeft - 8} y={tick.y + 3} textAnchor="end">
+              {tick.value >= 1000 ? Math.round(tick.value).toLocaleString() : Number(tick.value.toFixed(1)).toLocaleString()}
+            </text>
+          </g>
+        ))}
+        <line className="md-roi-trend-axis" x1={padLeft} x2={width - padRight} y1={height - padBottom} y2={height - padBottom} />
+        {metrics.map((metric) => {
+          const points = chartRows.map((row, rowIndex) => pointFor(row, rowIndex, metric));
+          const path = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
+          return (
+            <g key={metric.key} className={`md-roi-trend-series ${metric.className || metric.key}`}>
+              <path className="md-roi-trend-line" d={path} />
+              {points.map((point, index) => (
+                <circle key={`${metric.key}-${index}`} className="md-roi-trend-dot" cx={point.x} cy={point.y} r="3.8">
+                  <title>{getSoftwareRoiTrendPeriod(chartRows[index])}: {formatSoftwareRoiTrendNumber(point.value, metric)}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+        {chartRows.length > 0 && (
+          <>
+            <text className="md-roi-trend-xlabel" x={padLeft} y={height - 12}>{getSoftwareRoiTrendPeriod(chartRows[0])}</text>
+            <text className="md-roi-trend-xlabel" x={width - padRight} y={height - 12} textAnchor="end">{getSoftwareRoiTrendPeriod(chartRows[chartRows.length - 1])}</text>
+          </>
+        )}
+      </svg>
+      <div className="md-roi-trend-legend">
+        {metrics.map((metric) => (
+          <span key={metric.key} className={metric.className || metric.key}><i />{metric.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SoftwareRoiBenchmarkTrendChart({ rows }: { rows: Array<Record<string, unknown>> }) {
+  const chartRows = rows.slice(0, 18);
+  const metrics = [
+    { key: "utilized", label: "Utilized" },
+    { key: "underutilized", label: "Underutilized" },
+    { key: "notUsed", label: "Not Used" },
+    { key: "illegal", label: "Illegal" },
+    { key: "exceed", label: "Exceed" },
+  ];
+
+  if (!chartRows.length) {
+    return <div className="md-roi-empty-chart">No benchmark trend found for selected range.</div>;
+  }
+
+  const maxTotal = Math.max(1, ...chartRows.map((row) => metrics.reduce((sum, metric) => sum + softwareRoiNumber(row[metric.key]), 0)));
+
+  return (
+    <div className="md-roi-stacked-trend">
+      {chartRows.map((row, index) => {
+        const total = metrics.reduce((sum, metric) => sum + softwareRoiNumber(row[metric.key]), 0);
+        return (
+          <div className="md-roi-stack-period" key={`${getSoftwareRoiTrendPeriod(row)}-${index}`}>
+            <span title={getSoftwareRoiTrendPeriod(row)}>{getSoftwareRoiTrendPeriod(row)}</span>
+            <div className="md-roi-stack-period-track" title={`${getSoftwareRoiTrendPeriod(row)}: ${total.toLocaleString()} software`}>
+              {metrics.map((metric) => {
+                const value = softwareRoiNumber(row[metric.key]);
+                if (value <= 0) return null;
+                return <i key={metric.key} className={metric.key} style={{ width: `${Math.max(3, (value / maxTotal) * 100)}%` }} />;
+              })}
+            </div>
+            <strong>{total.toLocaleString()}</strong>
+          </div>
+        );
+      })}
+      <div className="md-roi-trend-legend md-roi-stack-legend">
+        {metrics.map((metric) => <span key={metric.key} className={metric.key}><i />{metric.label}</span>)}
+      </div>
+    </div>
+  );
 }
 
 function softwareRoiClassName(value: unknown) {
@@ -637,10 +949,10 @@ const SOFTWARE_ROI_APIS: SoftwareRoiApiRow[] = [
   {
     report: "Software ROI Dashboard",
     method: "GET",
-    endpoint: "/api/management-dashboard/software-roi-v3",
+    endpoint: "/api/software-roi-v5/analytics",
     query: "dateFrom=2022-07-01&dateTo=2022-07-31",
-    purpose: "Dashboard summary for utilized, underutilized, not used and unregistered and illegal software count.",
-    output: "summary, utilizationBreakdown, topUnderutilized, illegalActivity",
+    purpose: "Software ROI benchmark analytics for licensing, utilization, weekly average usage, benchmark split and illegal software.",
+    output: "summary, rows, charts.usageTrend, charts.licenseTrend, charts.benchmarkTrend, charts.wasteTrend",
   },
   {
     report: "Utilization Data",
@@ -2028,6 +2340,19 @@ body.md-dashboard-page-active .content-area {
     radial-gradient(circle at 96% 0%, rgba(37,99,235,.035), transparent 14rem),
     linear-gradient(180deg, rgba(255,255,255,.995), rgba(248,251,255,.975)) !important;
 }
+.md-roi-page-size-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid rgba(203, 213, 225, 0.82);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: #334155;
+  background: rgba(248, 250, 252, 0.92);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .md-signal-row,
 .md-signal-row:nth-child(1),
 .md-signal-row:nth-child(2),
@@ -4092,28 +4417,95 @@ body.md-dashboard-page-active .content-area {
   font-weight: 950;
   letter-spacing: -.05em;
 }
-.md-software-roi-filters {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.md-software-roi-filter-panel {
+  display: grid;
+  gap: 10px;
   margin-bottom: 12px;
-  padding: 10px;
-  border: 1px solid rgba(226, 232, 240, .92);
-  border-radius: 16px;
-  background: rgba(248, 251, 255, .72);
+  padding: 12px;
+  border: 1px solid rgba(203, 213, 225, .88);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, .055), transparent 14rem),
+    linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,251,255,.92));
+  box-shadow: 0 10px 22px rgba(15, 23, 42, .045);
 }
-.md-software-roi-filters label {
+.md-software-roi-filter-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.md-software-roi-filter-header strong {
+  display: block;
+  margin-top: 2px;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.1;
+  font-weight: 950;
+  letter-spacing: -.03em;
+}
+.md-software-roi-filter-header small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 10.5px;
+  line-height: 1.35;
+  font-weight: 750;
+}
+.md-software-roi-range-pill {
+  min-height: 30px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  font-size: 10.5px;
+  font-weight: 950;
+}
+.md-software-roi-quick-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.md-roi-range-btn {
+  min-height: 34px;
+  border: 1px solid rgba(203, 213, 225, .92);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: #334155;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, .04);
+}
+.md-roi-range-btn.is-active {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 12px 22px rgba(37, 99, 235, .22);
+}
+.md-software-roi-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr)) auto;
+  align-items: end;
+  gap: 9px;
+}
+.md-software-roi-filters label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
   color: #475569;
   font-size: 10.5px;
   font-weight: 850;
 }
 .md-software-roi-filters input,
 .md-software-roi-filters select {
-  height: 34px;
+  width: 100%;
+  height: 36px;
   border: 1px solid rgba(203, 213, 225, .92);
   border-radius: 11px;
   padding: 0 10px;
@@ -4121,6 +4513,19 @@ body.md-dashboard-page-active .content-area {
   color: #0f172a;
   font-size: 11px;
   font-weight: 800;
+}
+.md-roi-apply-btn {
+  height: 36px !important;
+  min-width: 92px;
+}
+@media (max-width: 1280px) {
+  .md-software-roi-filters { grid-template-columns: repeat(3, minmax(150px, 1fr)); }
+  .md-roi-apply-btn { width: 100%; }
+}
+@media (max-width: 760px) {
+  .md-software-roi-filter-header { flex-direction: column; }
+  .md-software-roi-range-pill { white-space: normal; }
+  .md-software-roi-filters { grid-template-columns: 1fr; }
 }
 .md-roi-report-tabs {
   display: flex;
@@ -4140,8 +4545,40 @@ body.md-dashboard-page-active .content-area {
 .md-roi-report-tab.is-active {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(135deg, #ec4899, #8b5cf6);
-  box-shadow: 0 10px 20px rgba(139, 92, 246, .18);
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 12px 22px rgba(37, 99, 235, .22);
+}
+.md-roi-table-switch {
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.md-roi-table-switch .md-roi-report-tab {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 0 16px;
+  color: #020617;
+  background: #ffffff;
+}
+.md-roi-table-switch .md-roi-report-tab small {
+  min-width: 24px;
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 7px;
+  color: #475569;
+  background: #f1f5f9;
+  font-size: 10px;
+  font-weight: 950;
+}
+.md-roi-table-switch .md-roi-report-tab.is-active small {
+  color: #1d4ed8;
+  background: rgba(255, 255, 255, .94);
 }
 .md-software-roi-table {
   min-width: 1680px !important;
@@ -4312,6 +4749,293 @@ body.md-dashboard-page-active .content-area {
   .md-software-roi-kpi-grid { grid-template-columns: 1fr; }
 }
 
+/* Software ROI benchmark analytics */
+.md-roi-analytics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, .75fr);
+  gap: 12px;
+  margin: 12px 0;
+}
+.md-roi-analytics-card {
+  min-width: 0;
+  border: 1px solid rgba(203,213,225,.82);
+  border-radius: 16px;
+  padding: 14px;
+  background: linear-gradient(135deg, #ffffff, #f8fbff);
+  box-shadow: 0 8px 18px rgba(15,23,42,.045);
+}
+.md-roi-analytics-wide { min-width: 0; }
+.md-roi-block-chart,
+.md-roi-license-chart,
+.md-roi-distribution,
+.md-roi-readout-list { display: grid; gap: 9px; }
+.md-roi-bar-row,
+.md-roi-license-row,
+.md-roi-dist-item {
+  display: grid;
+  grid-template-columns: minmax(130px, .42fr) minmax(0, 1fr) minmax(70px, auto);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 850;
+}
+.md-roi-bar-row > span,
+.md-roi-license-row > span,
+.md-roi-dist-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-roi-bar-track,
+.md-roi-stack-track {
+  position: relative;
+  height: 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5edf7;
+}
+.md-roi-bar-track i,
+.md-roi-stack-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #38bdf8, #2563eb);
+}
+.md-roi-bar-track i.underutilized { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+.md-roi-bar-track i.not-used { background: linear-gradient(90deg, #94a3b8, #64748b); }
+.md-roi-bar-track i.illegal { background: linear-gradient(90deg, #fb7185, #ef4444); }
+.md-roi-stack-track i.license { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #cbd5e1, #94a3b8); opacity: .85; }
+.md-roi-stack-track i.used { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #34d399, #059669); }
+.md-roi-readout-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.md-roi-readout-list article {
+  border: 1px solid rgba(226,232,240,.92);
+  border-radius: 14px;
+  padding: 11px;
+  background: rgba(255,255,255,.72);
+}
+.md-roi-readout-list span { display: block; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .055em; }
+.md-roi-readout-list strong { display: block; margin-top: 6px; color: #0f172a; font-size: 20px; line-height: 1; font-weight: 950; }
+.md-roi-empty-chart {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  border: 1px dashed rgba(148,163,184,.55);
+  border-radius: 14px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 850;
+}
+@media (max-width: 1180px) {
+  .md-roi-analytics-grid { grid-template-columns: 1fr; }
+}
+
+
+
+/* Software ROI trend analytics */
+.md-roi-trend-chart {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  min-height: 236px;
+  border: 1px dashed rgba(148, 163, 184, .48);
+  border-radius: 16px;
+  padding: 10px 12px 8px;
+  background: linear-gradient(180deg, rgba(248, 251, 255, .94), rgba(255, 255, 255, .96));
+}
+.md-roi-trend-svg {
+  width: 100%;
+  height: 218px;
+  display: block;
+  overflow: visible;
+}
+.md-roi-trend-grid {
+  stroke: rgba(148, 163, 184, .25);
+  stroke-width: 1;
+  stroke-dasharray: 4 7;
+}
+.md-roi-trend-axis {
+  stroke: rgba(100, 116, 139, .32);
+  stroke-width: 1;
+}
+.md-roi-trend-label,
+.md-roi-trend-xlabel {
+  fill: #64748b;
+  font-size: 10px;
+  font-weight: 850;
+}
+.md-roi-trend-line {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 8px 10px rgba(37, 99, 235, .14));
+}
+.md-roi-trend-dot {
+  fill: #2563eb;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.md-roi-trend-series.installed .md-roi-trend-line,
+.md-roi-trend-series.installed .md-roi-trend-dot { stroke: #0ea5e9; fill: #0ea5e9; }
+.md-roi-trend-series.used .md-roi-trend-line,
+.md-roi-trend-series.used .md-roi-trend-dot { stroke: #059669; fill: #059669; }
+.md-roi-trend-series.registered .md-roi-trend-line,
+.md-roi-trend-series.registered .md-roi-trend-dot { stroke: #64748b; fill: #64748b; }
+.md-roi-trend-series.exceed .md-roi-trend-line,
+.md-roi-trend-series.exceed .md-roi-trend-dot { stroke: #ef4444; fill: #ef4444; }
+.md-roi-trend-series.waste .md-roi-trend-line,
+.md-roi-trend-series.waste .md-roi-trend-dot { stroke: #f59e0b; fill: #f59e0b; }
+.md-roi-trend-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 900;
+}
+.md-roi-trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.md-roi-trend-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #2563eb;
+}
+.md-roi-trend-legend .installed i { background: #0ea5e9; }
+.md-roi-trend-legend .used i { background: #059669; }
+.md-roi-trend-legend .registered i { background: #64748b; }
+.md-roi-trend-legend .exceed i { background: #ef4444; }
+.md-roi-trend-legend .waste i { background: #f59e0b; }
+.md-roi-stacked-trend {
+  display: grid;
+  gap: 9px;
+}
+.md-roi-stack-period {
+  display: grid;
+  grid-template-columns: minmax(74px, .32fr) minmax(0, 1fr) minmax(42px, auto);
+  align-items: center;
+  gap: 9px;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 850;
+}
+.md-roi-stack-period > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.md-roi-stack-period-track {
+  display: flex;
+  height: 13px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5edf7;
+}
+.md-roi-stack-period-track i {
+  display: block;
+  height: 100%;
+}
+.md-roi-stack-period-track i.utilized { background: #2563eb; }
+.md-roi-stack-period-track i.underutilized { background: #f59e0b; }
+.md-roi-stack-period-track i.notUsed { background: #64748b; }
+.md-roi-stack-period-track i.illegal { background: #ef4444; }
+.md-roi-stack-period-track i.exceed { background: #a855f7; }
+.md-roi-stack-legend .utilized i { background: #2563eb; }
+.md-roi-stack-legend .underutilized i { background: #f59e0b; }
+.md-roi-stack-legend .notUsed i { background: #64748b; }
+.md-roi-stack-legend .illegal i { background: #ef4444; }
+.md-roi-stack-legend .exceed i { background: #a855f7; }
+.md-roi-mini-trend {
+  grid-column: 1 / -1;
+}
+.md-roi-mini-trend .md-roi-trend-chart {
+  min-height: 190px;
+}
+.md-roi-mini-trend .md-roi-trend-svg {
+  height: 158px;
+}
+
+/* =========================================================
+   Software ROI table horizontal scroll repair
+   The same element uses md-table-wrap + md-evidence-wrap. Earlier global
+   evidence-wrap rules forced overflow:hidden, so wide ROI columns were clipped.
+========================================================= */
+.md-data-table-shell .md-table-wrap.md-evidence-wrap,
+.md-roi-detail-body .md-table-wrap.md-evidence-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  display: block !important;
+  position: relative !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  max-height: 680px !important;
+  scrollbar-gutter: stable both-edges !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+.md-data-table-shell .md-table-wrap.md-evidence-wrap::-webkit-scrollbar,
+.md-roi-detail-body .md-table-wrap.md-evidence-wrap::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+}
+.md-data-table-shell .md-table-wrap.md-evidence-wrap::-webkit-scrollbar-track,
+.md-roi-detail-body .md-table-wrap.md-evidence-wrap::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, .72) !important;
+  border-radius: 999px !important;
+}
+.md-data-table-shell .md-table-wrap.md-evidence-wrap::-webkit-scrollbar-thumb,
+.md-roi-detail-body .md-table-wrap.md-evidence-wrap::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, .62) !important;
+  border-radius: 999px !important;
+  border: 2px solid rgba(226, 232, 240, .72) !important;
+}
+.md-data-table-shell .md-table-wrap.md-evidence-wrap::-webkit-scrollbar-thumb:hover,
+.md-roi-detail-body .md-table-wrap.md-evidence-wrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, .82) !important;
+}
+.md-data-table-shell .md-software-roi-table {
+  width: max-content !important;
+  min-width: 1960px !important;
+  table-layout: auto !important;
+}
+.md-roi-detail-body .md-roi-detail-table {
+  width: max-content !important;
+  min-width: 1360px !important;
+  table-layout: auto !important;
+}
+.md-data-table-shell .md-software-roi-table thead th,
+.md-roi-detail-body .md-roi-detail-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 4 !important;
+  background: linear-gradient(180deg, #f8fafc, #eef4fb) !important;
+}
+.md-data-table-shell .md-software-roi-table th,
+.md-data-table-shell .md-software-roi-table td,
+.md-roi-detail-body .md-roi-detail-table th,
+.md-roi-detail-body .md-roi-detail-table td {
+  vertical-align: middle !important;
+}
+.md-data-table-shell .md-software-roi-table th:first-child,
+.md-data-table-shell .md-software-roi-table td:first-child {
+  min-width: 360px !important;
+  max-width: 420px !important;
+}
+.md-data-table-shell .md-software-roi-table .md-roi-chip {
+  white-space: normal !important;
+}
+
+
+
 `;
 
 function Icon({ name, className = "" }: { name: keyof typeof IconSet; className?: string }) {
@@ -4342,7 +5066,8 @@ function clampPercent(value: unknown) {
   return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 0));
 }
 
-const TABLE_PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
+const TABLE_PAGE_SIZE_OPTIONS = [20, 50, 100];
+const SOFTWARE_ROI_TABLE_PAGE_SIZE = 20;
 
 function normalizeTableSearchText(...values: unknown[]) {
   return values
@@ -4951,10 +5676,15 @@ export default function ManagementDashboard() {
   const [tableSearch, setTableSearch] = useState("");
   const [tableFilter, setTableFilter] = useState("all");
   const [tablePage, setTablePage] = useState(1);
-  const [tablePageSize, setTablePageSize] = useState(10);
+  const [tablePageSize, setTablePageSize] = useState(20);
+  const [softwareRoiTableMode, setSoftwareRoiTableMode] = useState<"registered" | "illegal">("registered");
   const [softwareRoiReport, setSoftwareRoiReport] = useState<SoftwareRoiReportType>("purchase-used");
-  const [softwareRoiDateFrom, setSoftwareRoiDateFrom] = useState("2022-07-01");
-  const [softwareRoiDateTo, setSoftwareRoiDateTo] = useState("2022-07-31");
+  const [softwareRoiDateFrom, setSoftwareRoiDateFrom] = useState(() => getSoftwareRoiDefaultDateRange().dateFrom);
+  const [softwareRoiDateTo, setSoftwareRoiDateTo] = useState(() => getSoftwareRoiDefaultDateRange().dateTo);
+  const [softwareRoiTrendGranularity, setSoftwareRoiTrendGranularity] = useState<"daily" | "weekly" | "monthly">("weekly");
+  const [softwareRoiQuickRange, setSoftwareRoiQuickRange] = useState<SoftwareRoiQuickRange>("30d");
+  const [softwareRoiBenchmarkUtilizedHours, setSoftwareRoiBenchmarkUtilizedHours] = useState(8);
+  const [softwareRoiBenchmarkNotUsedHours, setSoftwareRoiBenchmarkNotUsedHours] = useState(1);
   const [softwareRoi, setSoftwareRoi] = useState<SoftwareRoiDataState>(SOFTWARE_ROI_EMPTY_STATE);
   const [softwareRoiDetail, setSoftwareRoiDetail] = useState<{
     open: boolean;
@@ -4964,12 +5694,62 @@ export default function ManagementDashboard() {
     rows: Array<Record<string, unknown>>;
     sourceRow: Record<string, unknown> | null;
   }>({ open: false, loading: false, error: "", softwareName: "", rows: [], sourceRow: null });
+  const [softwareRoiIllegalPage, setSoftwareRoiIllegalPage] = useState(1);
+  const [softwareRoiDetailPage, setSoftwareRoiDetailPage] = useState(1);
 
   const resetDrillTableState = () => {
     setTableSearch("");
     setTableFilter("all");
     setTablePage(1);
   };
+
+  function selectSoftwareRoiQuickRange(range: SoftwareRoiQuickRange) {
+    const today = new Date();
+    const from = new Date(today);
+
+    if (range === "today") {
+      from.setDate(today.getDate());
+      setSoftwareRoiTrendGranularity("daily");
+    } else if (range === "7d") {
+      from.setDate(today.getDate() - 6);
+      setSoftwareRoiTrendGranularity("daily");
+    } else if (range === "30d") {
+      from.setDate(today.getDate() - 29);
+      setSoftwareRoiTrendGranularity("weekly");
+    } else if (range === "mtd") {
+      from.setDate(1);
+      setSoftwareRoiTrendGranularity("daily");
+    }
+
+    setSoftwareRoiQuickRange(range);
+    setSoftwareRoiDateFrom(formatSoftwareRoiInputDate(from));
+    setSoftwareRoiDateTo(formatSoftwareRoiInputDate(today));
+    setTablePage(1);
+    setSoftwareRoiIllegalPage(1);
+    setSoftwareRoiDetailPage(1);
+    closeSoftwareRoiDeviceDetail();
+  }
+
+  function applySoftwareRoiFilters() {
+    const from = new Date(`${softwareRoiDateFrom}T00:00:00`);
+    const to = new Date(`${softwareRoiDateTo}T00:00:00`);
+
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      setSoftwareRoi((prev) => ({ ...prev, error: "Please select a valid Software ROI date range." }));
+      return;
+    }
+
+    if (from.getTime() > to.getTime()) {
+      setSoftwareRoi((prev) => ({ ...prev, error: "Date From cannot be later than Date To." }));
+      return;
+    }
+
+    setTablePage(1);
+    setSoftwareRoiIllegalPage(1);
+    setSoftwareRoiDetailPage(1);
+    closeSoftwareRoiDeviceDetail();
+    void loadSoftwareRoiData("purchase-used");
+  }
 
   useEffect(() => {
     setTableSearch("");
@@ -5086,93 +5866,37 @@ export default function ManagementDashboard() {
       const commonParams = {
         dateFrom: softwareRoiDateFrom,
         dateTo: softwareRoiDateTo,
+        granularity: softwareRoiTrendGranularity,
+        benchmarkUtilizedHoursPerWeek: softwareRoiBenchmarkUtilizedHours,
+        benchmarkNotUsedHoursPerWeek: softwareRoiBenchmarkNotUsedHours,
+        includeDetails: false,
       };
 
-      let dashboardPayload: any = null;
-      try {
-        dashboardPayload = await fetchSoftwareRoiJson("/api/management-dashboard/software-roi-v3", commonParams);
-      } catch (dashboardErr) {
-        console.warn("Software ROI summary failed, table will still load.", dashboardErr);
-      }
-
-      const [registeredResult, unregisteredResult, illegalActivityResult] = await Promise.allSettled([
-        fetchSoftwareRoiJson("/api/software-roi-v2/reports/purchase-used", { ...commonParams, page: 1, limit: 500 }),
-        fetchSoftwareRoiJson("/api/software-roi-v3/reports/illegal-unregistered", { ...commonParams, page: 1, limit: 500 }),
-        fetchSoftwareRoiJson("/api/software-roi-v2/reports/illegal-activity", { ...commonParams, page: 1, limit: 500 }),
-      ]);
-
-      if (registeredResult.status === "rejected") {
-        throw registeredResult.reason;
-      }
-
-      const registeredRows = Array.isArray(registeredResult.value?.data)
-        ? registeredResult.value.data.map((row: Record<string, unknown>) => {
-            const isIllegalPolicy = String(row.ComplianceStatus || "").toLowerCase() === "illegal";
-            return {
-              ...row,
-              __roiSource: isIllegalPolicy ? "registered-illegal-policy" : "registered",
-              ComplianceStatus: row.ComplianceStatus || "Legal",
-              IllegalReason: isIllegalPolicy ? (row.IllegalReason || "Marked illegal in Software Policy") : row.IllegalReason,
-              BudgetSignal: isIllegalPolicy ? "Illegal / Policy Blocked" : row.BudgetSignal,
-            };
-          })
-        : [];
-
-      const unregisteredRows = unregisteredResult.status === "fulfilled" && Array.isArray(unregisteredResult.value?.data)
-        ? buildSoftwareRoiIllegalSummaryRows(unregisteredResult.value.data as Array<Record<string, unknown>>, getSoftwareRoiDateRangeDays(softwareRoiDateFrom, softwareRoiDateTo)).map((row: Record<string, unknown>) => ({
-            ...row,
-            __roiSource: "illegal-unregistered",
-            ComplianceStatus: "Illegal",
-            PurchasedLicense: 0,
-            LicenseBalanceByUsage: 0,
-            UtilizedDevices: 0,
-            UnderutilizedDevices: 0,
-            NotUsedDevices: 0,
-            BudgetSignal: "Illegal / Unregistered",
-            IllegalReason: row.IllegalReason || "Not registered in Software Policy",
-          }))
-        : [];
-
-      const illegalActivityRows = illegalActivityResult.status === "fulfilled" && Array.isArray(illegalActivityResult.value?.data)
-        ? buildSoftwareRoiIllegalSummaryRows(illegalActivityResult.value.data as Array<Record<string, unknown>>, getSoftwareRoiDateRangeDays(softwareRoiDateFrom, softwareRoiDateTo)).map((row: Record<string, unknown>) => ({
-            ...row,
-            __roiSource: "illegal-activity",
-            ComplianceStatus: "Illegal",
-            PurchasedLicense: 0,
-            LicenseBalanceByUsage: 0,
-            UtilizedDevices: 0,
-            UnderutilizedDevices: 0,
-            NotUsedDevices: 0,
-            BudgetSignal: "Illegal / Activity",
-            IllegalReason: row.IllegalReason || "Illegal software activity recorded",
-          }))
-        : [];
-
-      const roiWarnings: string[] = [];
-      if (unregisteredResult.status === "rejected") {
-        roiWarnings.push("Unregistered software API failed");
-        console.warn("Unregistered software API failed. Registered software will still display.", unregisteredResult.reason);
-      }
-      if (illegalActivityResult.status === "rejected") {
-        roiWarnings.push("Illegal activity API failed");
-        console.warn("Illegal activity software API failed. Registered software will still display.", illegalActivityResult.reason);
-      }
-
-      const dashboardData = (dashboardPayload?.data || dashboardPayload || {}) as Record<string, unknown>;
+      const analyticsPayload = await fetchSoftwareRoiJson("/api/software-roi-v5/analytics", commonParams);
+      const analyticsData = (analyticsPayload?.data || {}) as Record<string, unknown>;
+      const rows = Array.isArray((analyticsData as any).rows) ? ((analyticsData as any).rows as Array<Record<string, unknown>>) : [];
+      const summary = ((analyticsData as any).summary || {}) as Record<string, unknown>;
 
       setSoftwareRoi({
         loading: false,
         error: "",
-        dashboard: { ...dashboardData, __illegalWarning: roiWarnings.join(" | ") } as Record<string, unknown>,
-        rows: [...registeredRows, ...unregisteredRows, ...illegalActivityRows],
-        total: registeredRows.length + unregisteredRows.length + illegalActivityRows.length,
+        dashboard: {
+          summary,
+          benchmark: (analyticsData as any).benchmark || {},
+          charts: (analyticsData as any).charts || {},
+          dateRange: (analyticsData as any).dateRange || {},
+        } as Record<string, unknown>,
+        rows,
+        total: rows.length,
       });
 
       setSoftwareRoiReport("purchase-used");
+      setSoftwareRoiIllegalPage(1);
+      setSoftwareRoiDetailPage(1);
     } catch (err) {
       setSoftwareRoi({
         loading: false,
-        error: err instanceof Error ? err.message : "Failed to load Software ROI data.",
+        error: err instanceof Error ? err.message : "Failed to load Software ROI benchmark analytics.",
         dashboard: null,
         rows: [],
         total: 0,
@@ -5185,6 +5909,7 @@ export default function ManagementDashboard() {
     const policyItemId = String(row.PolicyItemID || "").trim();
     const inlineDetailRows = Array.isArray((row as any).__detailRows) ? ((row as any).__detailRows as Array<Record<string, unknown>>) : [];
 
+    setSoftwareRoiDetailPage(1);
     setSoftwareRoiDetail({
       open: true,
       loading: inlineDetailRows.length === 0,
@@ -5236,6 +5961,7 @@ export default function ManagementDashboard() {
   }
 
   function closeSoftwareRoiDeviceDetail() {
+    setSoftwareRoiDetailPage(1);
     setSoftwareRoiDetail({ open: false, loading: false, error: "", softwareName: "", rows: [], sourceRow: null });
   }
 
@@ -5909,8 +6635,7 @@ export default function ManagementDashboard() {
   }
 
   function renderSoftwareRoiDataView() {
-    const reportMeta = SOFTWARE_ROI_DATA_REPORTS[0];
-    const columns = SOFTWARE_ROI_BUDGET_COLUMNS;
+    const columns = softwareRoiTableMode === "illegal" ? SOFTWARE_ROI_ILLEGAL_SUMMARY_COLUMNS : SOFTWARE_ROI_BUDGET_COLUMNS;
     const summary = ((softwareRoi.dashboard as any)?.summary || {}) as Record<string, unknown>;
     const rows = Array.isArray(softwareRoi.rows) ? softwareRoi.rows : [];
     const dateRangeDays = getSoftwareRoiDateRangeDays(softwareRoiDateFrom, softwareRoiDateTo);
@@ -5918,7 +6643,7 @@ export default function ManagementDashboard() {
     const registeredRows = rows.filter((row) => String(row.__roiSource || "") !== "illegal-unregistered");
     const illegalRows = rows.filter((row) => String(row.__roiSource || "") === "illegal-unregistered");
 
-    const normalizedRows = [
+    const baseSoftwareRows = [
       ...registeredRows.map((row) => {
         const totalUsage = softwareRoiNumber(row.TotalUsageHours || row.UsageHours);
         const averageUsage = softwareRoiPick(row, "AverageUsageHoursPerDay", "AverageUsagePerDay") ?? (totalUsage / dateRangeDays);
@@ -5946,6 +6671,13 @@ export default function ManagementDashboard() {
       })),
     ];
 
+    const normalizedRows = applySoftwareRoiBenchmark(
+      baseSoftwareRows,
+      dateRangeDays,
+      softwareRoiBenchmarkUtilizedHours,
+      softwareRoiBenchmarkNotUsedHours
+    );
+
     const search = tableSearch.trim().toLowerCase();
     const allIllegalSoftwareRows = normalizedRows.filter((row) => {
       const compliance = String(row.ComplianceStatus || "").toLowerCase();
@@ -5953,8 +6685,17 @@ export default function ManagementDashboard() {
       const signal = String(row.BudgetSignal || "").toLowerCase();
       return compliance === "illegal" || source.includes("illegal") || signal.includes("illegal");
     });
+    const registeredSoftwareRows = normalizedRows.filter((row) => {
+      const compliance = String(row.ComplianceStatus || "").toLowerCase();
+      const source = String(row.__roiSource || "").toLowerCase();
+      const signal = String(row.BudgetSignal || "").toLowerCase();
+      return !(compliance === "illegal" || source.includes("illegal") || signal.includes("illegal"));
+    });
+    const activeSoftwareRows = softwareRoiTableMode === "illegal" ? allIllegalSoftwareRows : registeredSoftwareRows;
+    const detailPageInfo = getPageInfo(softwareRoiDetail.rows.length, softwareRoiDetailPage, SOFTWARE_ROI_TABLE_PAGE_SIZE);
+    const visibleSoftwareRoiDetailRows = softwareRoiDetail.rows.slice(detailPageInfo.start, detailPageInfo.end);
 
-    const filteredRows = normalizedRows.filter((row) => {
+    const filteredRows = activeSoftwareRows.filter((row) => {
       const matchesSearch = !search || normalizeTableSearchText(
         row.SoftwareName,
         row.CategoryName,
@@ -5963,11 +6704,13 @@ export default function ManagementDashboard() {
         row.IllegalReason
       ).includes(search);
       if (!matchesSearch) return false;
+      if (softwareRoiTableMode === "illegal") return true;
       if (tableFilter === "all") return true;
       return softwareRoiClassName(row.BudgetSignal || row.ComplianceStatus) === tableFilter;
     });
 
-    const pageInfo = getPageInfo(filteredRows.length, tablePage, tablePageSize);
+    const activeTablePage = softwareRoiTableMode === "illegal" ? softwareRoiIllegalPage : tablePage;
+    const pageInfo = getPageInfo(filteredRows.length, activeTablePage, SOFTWARE_ROI_TABLE_PAGE_SIZE);
     const visibleRows = filteredRows.slice(pageInfo.start, pageInfo.end);
 
     const registeredSoftwareCount = registeredRows.filter((row) => String(row.ComplianceStatus || "").toLowerCase() !== "illegal").length || softwareRoiNumber(softwareRoiPick(summary, "TotalPolicySoftware"));
@@ -5981,8 +6724,50 @@ export default function ManagementDashboard() {
     const notUsedTotal = normalizedRows.reduce((sum, row) => sum + softwareRoiNumber(row.NotUsedDevices), 0) || softwareRoiNumber(softwareRoiPick(summary, "NotUsedCount"));
     const totalUsageHours = normalizedRows.reduce((sum, row) => sum + softwareRoiNumber(row.TotalUsageHours || row.UsageHours), 0) || softwareRoiNumber(softwareRoiPick(summary, "TotalUsageHours"));
     const averageDailyHours = totalUsageHours / dateRangeDays;
+    const selectedWeeks = Math.max(1 / 7, dateRangeDays / 7);
+    const averageWeeklyHours = totalUsageHours / selectedWeeks;
+    const benchmarkCounts = {
+      utilized: normalizedRows.filter((row) => String(row.BenchmarkStatus || "").toLowerCase() === "utilized").length,
+      underutilized: normalizedRows.filter((row) => String(row.BenchmarkStatus || "").toLowerCase() === "underutilized").length,
+      notUsed: normalizedRows.filter((row) => String(row.BenchmarkStatus || "").toLowerCase() === "not used").length,
+      illegal: normalizedRows.filter((row) => String(row.BenchmarkStatus || "").toLowerCase() === "illegal").length,
+    };
+    const licenseUsageRate = registeredLicenseTotal > 0 ? (usedTotal / registeredLicenseTotal) * 100 : 0;
+    const installUsageRate = installedTotal > 0 ? (usedTotal / installedTotal) * 100 : 0;
+    const topWeeklyUsageRows = [...normalizedRows]
+      .filter((row) => String(row.ComplianceStatus || "").toLowerCase() !== "illegal")
+      .sort((a, b) => softwareRoiNumber(b.WeeklyAverageHours) - softwareRoiNumber(a.WeeklyAverageHours))
+      .slice(0, 8);
+    const topLicenseRows = [...normalizedRows]
+      .filter((row) => softwareRoiNumber(row.PurchasedLicense || row.LicenseCount) > 0)
+      .sort((a, b) => softwareRoiNumber(b.PurchasedLicense || b.LicenseCount) - softwareRoiNumber(a.PurchasedLicense || a.LicenseCount))
+      .slice(0, 8);
+    const weeklyChartMax = Math.max(1, ...topWeeklyUsageRows.map((row) => softwareRoiNumber(row.WeeklyAverageHours)), softwareRoiBenchmarkUtilizedHours);
+    const licenseChartMax = Math.max(
+      1,
+      ...topLicenseRows.map((row) =>
+        Math.max(
+          softwareRoiNumber(row.PurchasedLicense || row.LicenseCount),
+          softwareRoiNumber(row.UsedDevices)
+        )
+      )
+    );
 
-    const filterSignals = Array.from(new Set(normalizedRows.map((row) => String(row.BudgetSignal || row.ComplianceStatus || "")).filter(Boolean)));
+    const charts = ((softwareRoi.dashboard as any)?.charts || {}) as Record<string, unknown>;
+    const usageTrendRows = normalizeSoftwareRoiChartRows(charts.usageTrend).length
+      ? normalizeSoftwareRoiChartRows(charts.usageTrend)
+      : [{ period: "Selected range", totalHours: totalUsageHours, averageHours: averageWeeklyHours, usedDevices: usedTotal }];
+    const licenseTrendRows = normalizeSoftwareRoiChartRows(charts.licenseTrend).length
+      ? normalizeSoftwareRoiChartRows(charts.licenseTrend)
+      : [{ period: "Selected range", registered: registeredLicenseTotal, installed: installedTotal, used: usedTotal, exceed: Math.max(0, installedTotal - registeredLicenseTotal) }];
+    const benchmarkTrendRows = normalizeSoftwareRoiChartRows(charts.benchmarkTrend).length
+      ? normalizeSoftwareRoiChartRows(charts.benchmarkTrend)
+      : [{ period: "Selected range", utilized: benchmarkCounts.utilized, underutilized: benchmarkCounts.underutilized, notUsed: benchmarkCounts.notUsed, illegal: benchmarkCounts.illegal, exceed: Math.max(0, installedTotal - registeredLicenseTotal) }];
+    const wasteTrendRows = normalizeSoftwareRoiChartRows(charts.wasteTrend).length
+      ? normalizeSoftwareRoiChartRows(charts.wasteTrend)
+      : [{ period: "Selected range", wasteCost: softwareRoiNumber(softwareRoiPick(summary, "potentialWasteCost", "PotentialWasteCost", "totalLicenseCost", "TotalLicenseCost")) }];
+
+    const filterSignals = Array.from(new Set(registeredSoftwareRows.map((row) => String(row.BudgetSignal || row.BenchmarkStatus || row.ComplianceStatus || "")).filter(Boolean)));
 
     const kpis = [
       { label: "Registered Software", value: registeredSoftwareCount },
@@ -5990,6 +6775,8 @@ export default function ManagementDashboard() {
       { label: "Registered License", value: registeredLicenseTotal },
       { label: "Installed", value: installedTotal },
       { label: "Used", value: usedTotal },
+      { label: "License Usage Rate", value: licenseUsageRate },
+      { label: "Avg / Week", value: averageWeeklyHours },
       { label: "Under / Not Used", value: `${underutilizedTotal.toLocaleString()} / ${notUsedTotal.toLocaleString()}` },
     ];
 
@@ -5999,28 +6786,72 @@ export default function ManagementDashboard() {
           <div>
             <span className="md-view-eyebrow">Software ROI</span>
             <h2>Software Usage & License Summary</h2>
-            <p>Registered and illegal software are shown together by software. Open View Details for legal software usage and execution details.</p>
+            <p>Software licensing, utilization and ROI analytics from benchmark API. Open View Details for endpoint usage evidence.</p>
           </div>
           <div className="md-view-actions">
             <button type="button" className="md-action-btn primary" onClick={closeDrilldown}><Icon name="back" /> Back to Overview</button>
-            <button type="button" className="md-action-btn" onClick={() => void loadSoftwareRoiData("purchase-used")}><Icon name="refresh" /> Refresh Data</button>
+            <button type="button" className="md-action-btn" onClick={applySoftwareRoiFilters}><Icon name="refresh" /> Refresh Data</button>
           </div>
         </div>
 
         <div className="md-view-body">
-          <div className="md-software-roi-filters">
-            <label>
-              Date From
-              <input type="date" value={softwareRoiDateFrom} onChange={(event) => setSoftwareRoiDateFrom(event.target.value)} />
-            </label>
-            <label>
-              Date To
-              <input type="date" value={softwareRoiDateTo} onChange={(event) => setSoftwareRoiDateTo(event.target.value)} />
-            </label>
-            <button type="button" className="md-action-btn primary" onClick={() => { setTablePage(1); closeSoftwareRoiDeviceDetail(); void loadSoftwareRoiData("purchase-used"); }}>
-              Load Data
-            </button>
-            <span className="md-section-subtitle">Current range: {softwareRoiDateFrom} to {softwareRoiDateTo} ({dateRangeDays} days)</span>
+          <div className="md-software-roi-filter-panel">
+            <div className="md-software-roi-filter-header">
+              <div>
+                <span className="md-view-eyebrow">Trend Filter</span>
+                <strong>Choose date range and trend view</strong>
+                <small>Default view uses the latest 30 days up to today. Change the range, then click Apply.</small>
+              </div>
+              <span className="md-software-roi-range-pill">{getSoftwareRoiRangeLabel(softwareRoiDateFrom, softwareRoiDateTo, softwareRoiTrendGranularity)}</span>
+            </div>
+
+            <div className="md-software-roi-quick-ranges" aria-label="Software ROI quick date range">
+              {[
+                { key: "today", label: "Today" },
+                { key: "7d", label: "Last 7 Days" },
+                { key: "30d", label: "Last 30 Days" },
+                { key: "mtd", label: "Month To Date" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={"md-roi-range-btn " + (softwareRoiQuickRange === item.key ? "is-active" : "")}
+                  onClick={() => selectSoftwareRoiQuickRange(item.key as SoftwareRoiQuickRange)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="md-software-roi-filters">
+              <label>
+                Date From
+                <input type="date" value={softwareRoiDateFrom} onChange={(event) => { setSoftwareRoiQuickRange("custom"); setSoftwareRoiDateFrom(event.target.value); }} />
+              </label>
+              <label>
+                Date To
+                <input type="date" value={softwareRoiDateTo} onChange={(event) => { setSoftwareRoiQuickRange("custom"); setSoftwareRoiDateTo(event.target.value); }} />
+              </label>
+              <label>
+                View By
+                <select value={softwareRoiTrendGranularity} onChange={(event) => { setSoftwareRoiQuickRange("custom"); setSoftwareRoiTrendGranularity(event.target.value as "daily" | "weekly" | "monthly"); }}>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </label>
+              <label>
+                Utilized Benchmark / Week
+                <input type="number" min="0" step="0.5" value={softwareRoiBenchmarkUtilizedHours} onChange={(event) => setSoftwareRoiBenchmarkUtilizedHours(Math.max(0, Number(event.target.value) || 0))} />
+              </label>
+              <label>
+                Not Used Benchmark / Week
+                <input type="number" min="0" step="0.5" value={softwareRoiBenchmarkNotUsedHours} onChange={(event) => setSoftwareRoiBenchmarkNotUsedHours(Math.max(0, Number(event.target.value) || 0))} />
+              </label>
+              <button type="button" className="md-action-btn primary md-roi-apply-btn" onClick={applySoftwareRoiFilters}>
+                Apply
+              </button>
+            </div>
           </div>
 
           <div className="md-software-roi-kpi-grid">
@@ -6032,15 +6863,103 @@ export default function ManagementDashboard() {
             ))}
           </div>
 
-          <div className="md-roi-report-tabs">
-            <button type="button" className="md-roi-report-tab is-active">
-              Software Summary
+          <section className="md-roi-analytics-grid">
+            <article className="md-roi-analytics-card md-roi-analytics-wide">
+              <div className="md-card-head">
+                <div>
+                  <span className="md-view-eyebrow">Trend</span>
+                  <h2>Software Usage Trend</h2>
+                  <p>{getSoftwareRoiGranularityLabel(softwareRoiTrendGranularity)} total usage, average hours and used-device movement for the selected range.</p>
+                </div>
+                <span className="md-roi-chip utilized">Utilized &gt;= {softwareRoiBenchmarkUtilizedHours}h/week</span>
+              </div>
+              <SoftwareRoiTrendLineChart
+                rows={usageTrendRows}
+                metrics={[
+                  { key: "totalHours", label: "Total hours", suffix: "h", className: "used" },
+                  { key: "averageHours", label: "Average hours", suffix: "h", className: "installed" },
+                  { key: "usedDevices", label: "Used devices", className: "registered" },
+                ]}
+              />
+            </article>
+
+            <article className="md-roi-analytics-card">
+              <div className="md-card-head">
+                <div>
+                  <span className="md-view-eyebrow">Trend</span>
+                  <h2>Benchmark Status Trend</h2>
+                  <p>Utilized, underutilized, not used, illegal and exceed-license movement.</p>
+                </div>
+              </div>
+              <SoftwareRoiBenchmarkTrendChart rows={benchmarkTrendRows} />
+            </article>
+
+            <article className="md-roi-analytics-card md-roi-analytics-wide">
+              <div className="md-card-head">
+                <div>
+                  <span className="md-view-eyebrow">Trend</span>
+                  <h2>License Coverage Trend</h2>
+                  <p>{getSoftwareRoiGranularityLabel(softwareRoiTrendGranularity)} registered, installed, used and exceed-license movement for the selected range.</p>
+                </div>
+                <span className="md-roi-chip keep-monitoring">{licenseUsageRate.toFixed(1)}% license usage</span>
+              </div>
+              <SoftwareRoiTrendLineChart
+                rows={licenseTrendRows}
+                metrics={[
+                  { key: "registered", label: "Registered", className: "registered" },
+                  { key: "installed", label: "Installed", className: "installed" },
+                  { key: "used", label: "Used", className: "used" },
+                  { key: "exceed", label: "Exceed", className: "exceed" },
+                ]}
+              />
+            </article>
+
+            <article className="md-roi-analytics-card">
+              <div className="md-card-head">
+                <div>
+                  <span className="md-view-eyebrow">ROI Readout</span>
+                  <h2>Software Licensing, Utilization & ROI</h2>
+                  <p>Executive readout based on live inventory and usage.</p>
+                </div>
+              </div>
+              <div className="md-roi-readout-list">
+                <article><span>Install Usage Rate</span><strong>{installUsageRate.toFixed(1)}%</strong></article>
+                <article><span>License Usage Rate</span><strong>{licenseUsageRate.toFixed(1)}%</strong></article>
+                <article><span>Average Usage / Day</span><strong>{averageDailyHours.toFixed(2)}h</strong></article>
+                <article><span>Average Usage / Week</span><strong>{averageWeeklyHours.toFixed(2)}h</strong></article>
+                <div className="md-roi-mini-trend">
+                  <SoftwareRoiTrendLineChart
+                    rows={wasteTrendRows}
+                    metrics={[{ key: "wasteCost", label: "Potential waste", prefix: "RM ", className: "waste" }]}
+                    emptyText="No waste-cost trend found for selected range."
+                  />
+                </div>
+              </div>
+            </article>
+          </section>
+
+          <div className="md-roi-report-tabs md-roi-table-switch">
+            <button
+              type="button"
+              className={"md-roi-report-tab " + (softwareRoiTableMode === "registered" ? "is-active" : "")}
+              onClick={() => { setSoftwareRoiTableMode("registered"); setTablePage(1); setTableFilter("all"); }}
+            >
+              Registered Software
+              <small>{registeredSoftwareRows.length.toLocaleString()}</small>
+            </button>
+            <button
+              type="button"
+              className={"md-roi-report-tab " + (softwareRoiTableMode === "illegal" ? "is-active" : "")}
+              onClick={() => { setSoftwareRoiTableMode("illegal"); setSoftwareRoiIllegalPage(1); setTableFilter("all"); }}
+            >
+              Illegal / Unregistered Software
+              <small>{allIllegalSoftwareRows.length.toLocaleString()}</small>
             </button>
           </div>
 
           <div className="md-data-table-shell">
             <p className="md-roi-budget-note">
-              <strong>Registered and illegal software</strong> are displayed together by software first. Legal software usage detail only appears after clicking View Details.
+              <strong>{softwareRoiTableMode === "registered" ? "Registered Software" : "Illegal / Unregistered Software"}</strong> table is displayed based on the selected button. Each table shows 20 rows per page.
             </p>
             <div className="md-data-toolbar">
               <label className="md-data-search">
@@ -6048,22 +6967,20 @@ export default function ManagementDashboard() {
                 <input
                   type="search"
                   value={tableSearch}
-                  onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); }}
+                  onChange={(event) => { setTableSearch(event.target.value); setTablePage(1); setSoftwareRoiIllegalPage(1); }}
                   placeholder="Search software, category, status..."
                 />
               </label>
-              {filterSignals.length > 0 && (
-                <select value={tableFilter} onChange={(event) => { setTableFilter(event.target.value); setTablePage(1); }} aria-label="Software filter">
-                  <option value="all">All records</option>
+              {softwareRoiTableMode === "registered" && filterSignals.length > 0 && (
+                <select value={tableFilter} onChange={(event) => { setTableFilter(event.target.value); setTablePage(1); setSoftwareRoiIllegalPage(1); }} aria-label="Software filter">
+                  <option value="all">All registered records</option>
                   {filterSignals.map((signal) => (
                     <option key={signal} value={softwareRoiClassName(signal)}>{signal}</option>
                   ))}
                 </select>
               )}
-              <select value={tablePageSize} onChange={(event) => { setTablePageSize(Number(event.target.value)); setTablePage(1); }} aria-label="Rows per page">
-                {TABLE_PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} rows</option>)}
-              </select>
-              <span>{filteredRows.length.toLocaleString()} / {normalizedRows.length.toLocaleString()} row(s)</span>
+              <span className="md-roi-page-size-badge">20 rows / page</span>
+              <span>{filteredRows.length.toLocaleString()} / {activeSoftwareRows.length.toLocaleString()} row(s)</span>
             </div>
 
             {softwareRoi.loading ? (
@@ -6072,7 +6989,16 @@ export default function ManagementDashboard() {
               <div className="md-state-panel md-state-error">{softwareRoi.error}</div>
             ) : (
               <>
-                <p className="md-section-subtitle" style={{ marginBottom: 10 }}>{reportMeta.description}</p>
+                <p className="md-section-subtitle" style={{ marginBottom: 10 }}>
+                  {softwareRoiTableMode === "registered"
+                    ? "Registered software from Software Policy with licensing, install, usage and ROI status."
+                    : "Software detected as illegal, unregistered, policy-blocked, or not found in Software Policy."}
+                </p>
+                {softwareRoiTableMode === "illegal" && illegalWarning ? (
+                  <div className="md-state-panel md-state-error" style={{ minHeight: 52, marginBottom: 10 }}>
+                    {illegalWarning}. Registered software is still available from the Registered Software tab.
+                  </div>
+                ) : null}
                 <div className="md-table-wrap md-evidence-wrap">
                   <table className="md-table md-software-roi-table">
                     <colgroup>
@@ -6087,9 +7013,9 @@ export default function ManagementDashboard() {
                     </thead>
                     <tbody>
                       {visibleRows.length === 0 ? (
-                        <tr><td colSpan={columns.length}>No Software ROI data found for this filter/date range.</td></tr>
+                        <tr><td colSpan={columns.length}>{softwareRoiTableMode === "registered" ? "No registered software found for this filter/date range." : "No illegal or unregistered software found for this date range."}</td></tr>
                       ) : visibleRows.map((row, index) => (
-                        <tr key={String(row.PolicyItemID || row.SoftwareName || index) + "-software-summary"}>
+                        <tr key={String(row.PolicyItemID || row.SoftwareName || index) + (softwareRoiTableMode === "illegal" ? "-illegal-table" : "-registered-table")}>
                           {columns.map((column) => {
                             if (column.key === "__viewMore") {
                               const isIllegalRow = String(row.ComplianceStatus || "").toLowerCase() === "illegal" || String(row.__roiSource || "") === "illegal-unregistered";
@@ -6106,7 +7032,7 @@ export default function ManagementDashboard() {
 
                             const value = row[column.key];
                             const formatted = formatSoftwareRoiCell(column.key, value);
-                            const isStatus = column.key === "UsageStatus" || column.key === "ComplianceStatus" || column.key === "BudgetSignal" || column.key === "IllegalReason";
+                            const isStatus = column.key === "UsageStatus" || column.key === "ComplianceStatus" || column.key === "BudgetSignal" || column.key === "BenchmarkStatus" || column.key === "IllegalReason";
                             const title = column.key === "SoftwareName" ? String(value || "") : undefined;
                             return (
                               <td key={column.key} title={title}>
@@ -6122,73 +7048,13 @@ export default function ManagementDashboard() {
                 <div className="md-data-pagination">
                   <span>Showing {filteredRows.length ? (pageInfo.start + 1).toLocaleString() : 0} - {pageInfo.end.toLocaleString()} of {filteredRows.length.toLocaleString()}</span>
                   <div>
-                    <button type="button" onClick={() => setTablePage(1)} disabled={pageInfo.safePage <= 1}>First</button>
-                    <button type="button" onClick={() => setTablePage((page) => Math.max(1, page - 1))} disabled={pageInfo.safePage <= 1}>Prev</button>
+                    <button type="button" onClick={() => softwareRoiTableMode === "registered" ? setTablePage(1) : setSoftwareRoiIllegalPage(1)} disabled={pageInfo.safePage <= 1}>First</button>
+                    <button type="button" onClick={() => softwareRoiTableMode === "registered" ? setTablePage((page) => Math.max(1, page - 1)) : setSoftwareRoiIllegalPage((page) => Math.max(1, page - 1))} disabled={pageInfo.safePage <= 1}>Prev</button>
                     <strong>Page {pageInfo.safePage} / {pageInfo.totalPages}</strong>
-                    <button type="button" onClick={() => setTablePage((page) => Math.min(pageInfo.totalPages, page + 1))} disabled={pageInfo.safePage >= pageInfo.totalPages}>Next</button>
-                    <button type="button" onClick={() => setTablePage(pageInfo.totalPages)} disabled={pageInfo.safePage >= pageInfo.totalPages}>Last</button>
+                    <button type="button" onClick={() => softwareRoiTableMode === "registered" ? setTablePage((page) => Math.min(pageInfo.totalPages, page + 1)) : setSoftwareRoiIllegalPage((page) => Math.min(pageInfo.totalPages, page + 1))} disabled={pageInfo.safePage >= pageInfo.totalPages}>Next</button>
+                    <button type="button" onClick={() => softwareRoiTableMode === "registered" ? setTablePage(pageInfo.totalPages) : setSoftwareRoiIllegalPage(pageInfo.totalPages)} disabled={pageInfo.safePage >= pageInfo.totalPages}>Last</button>
                   </div>
                 </div>
-
-                <section className="md-roi-illegal-list">
-                  <div className="md-card-head">
-                    <div>
-                      <span className="md-view-eyebrow">Illegal Software</span>
-                      <h2>Illegal / Unregistered Software List</h2>
-                      <p>All software marked illegal, policy-blocked, or not registered in Software Policy is listed here.</p>
-                    </div>
-                    <span className="md-roi-chip illegal">{allIllegalSoftwareRows.length.toLocaleString()} software</span>
-                  </div>
-
-                  {illegalWarning ? (
-                    <div className="md-state-panel md-state-error" style={{ minHeight: 52, marginBottom: 10 }}>
-                      {illegalWarning}. Registered software is still displayed. Check backend route for the illegal software API.
-                    </div>
-                  ) : null}
-
-                  <div className="md-table-wrap md-evidence-wrap">
-                    <table className="md-table md-software-roi-table md-roi-illegal-table">
-                      <colgroup>
-                        <col style={{ width: "360px" }} />
-                        <col style={{ width: "170px" }} />
-                        <col style={{ width: "150px" }} />
-                        <col style={{ width: "260px" }} />
-                        <col style={{ width: "105px" }} />
-                        <col style={{ width: "105px" }} />
-                        <col style={{ width: "115px" }} />
-                        <col style={{ width: "160px" }} />
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          <th>Software Name</th>
-                          <th>Category</th>
-                          <th>Status</th>
-                          <th>Reason</th>
-                          <th>Installed</th>
-                          <th>Used</th>
-                          <th>Total Hours</th>
-                          <th>Last Used</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {allIllegalSoftwareRows.length === 0 ? (
-                          <tr><td colSpan={8}>No illegal or unregistered software found for this date range.</td></tr>
-                        ) : allIllegalSoftwareRows.map((row, index) => (
-                          <tr key={String(row.SoftwareName || index) + "-illegal-list"}>
-                            <td title={String(row.SoftwareName || "")}>{formatSoftwareRoiCell("SoftwareName", row.SoftwareName)}</td>
-                            <td>{formatSoftwareRoiCell("CategoryName", row.CategoryName)}</td>
-                            <td><span className="md-roi-chip illegal">Illegal</span></td>
-                            <td><span className="md-roi-chip illegal">{formatSoftwareRoiCell("IllegalReason", row.IllegalReason || row.BudgetSignal || "Illegal software")}</span></td>
-                            <td>{formatSoftwareRoiCell("InstalledDevices", row.InstalledDevices)}</td>
-                            <td>{formatSoftwareRoiCell("UsedDevices", row.UsedDevices)}</td>
-                            <td>{formatSoftwareRoiCell("TotalUsageHours", row.TotalUsageHours || row.UsageHours)}</td>
-                            <td>{formatSoftwareRoiCell("LastUsedAt", row.LastUsedAt)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
               </>
             )}
           </div>
@@ -6245,9 +7111,9 @@ export default function ManagementDashboard() {
                           </tr>
                         </thead>
                         <tbody>
-                          {softwareRoiDetail.rows.length === 0 ? (
+                          {visibleSoftwareRoiDetailRows.length === 0 ? (
                             <tr><td colSpan={8}>No device usage detail found for this software and date range.</td></tr>
-                          ) : softwareRoiDetail.rows.map((item, index) => {
+                          ) : visibleSoftwareRoiDetailRows.map((item, index) => {
                             const usageHours = softwareRoiNumber(item.UsageHours || item.TotalUsageHours);
                             const status = item.UsageStatus || item.ComplianceStatus || "Installed";
                             return (
@@ -6265,6 +7131,16 @@ export default function ManagementDashboard() {
                           })}
                         </tbody>
                       </table>
+                      <div className="md-data-pagination">
+                        <span>Showing {softwareRoiDetail.rows.length ? (detailPageInfo.start + 1).toLocaleString() : 0} - {detailPageInfo.end.toLocaleString()} of {softwareRoiDetail.rows.length.toLocaleString()}</span>
+                        <div>
+                          <button type="button" onClick={() => setSoftwareRoiDetailPage(1)} disabled={detailPageInfo.safePage <= 1}>First</button>
+                          <button type="button" onClick={() => setSoftwareRoiDetailPage((page) => Math.max(1, page - 1))} disabled={detailPageInfo.safePage <= 1}>Prev</button>
+                          <strong>Page {detailPageInfo.safePage} / {detailPageInfo.totalPages}</strong>
+                          <button type="button" onClick={() => setSoftwareRoiDetailPage((page) => Math.min(detailPageInfo.totalPages, page + 1))} disabled={detailPageInfo.safePage >= detailPageInfo.totalPages}>Next</button>
+                          <button type="button" onClick={() => setSoftwareRoiDetailPage(detailPageInfo.totalPages)} disabled={detailPageInfo.safePage >= detailPageInfo.totalPages}>Last</button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

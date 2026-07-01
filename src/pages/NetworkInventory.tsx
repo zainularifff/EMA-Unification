@@ -572,9 +572,48 @@ function collectIpTargets(node?: NetworkHierarchyNode | null): string[] {
   return Array.from(new Set(ips));
 }
 
+const NETWORK_FIELD_LABELS: Record<string, string> = {
+  object_root_idn: "Client ID",
+  object_deviceid: "Device ID",
+  object_client_name: "Computer Name",
+  object_full_name: "Department / Branch",
+  object_rel_idn: "Branch ID",
+  object_inventory_idn: "Inventory ID",
+  object_agent: "Agent Type",
+  mdm_deviceid: "MDM Device ID",
+  mdm_asset_idn: "MDM Asset ID",
+  ip: "IP Address",
+  ipaddress: "IP Address",
+  email: "Email",
+  telnumber: "Phone Number",
+  reserved0: "Custom Field 1",
+  reserved1: "Custom Field 2",
+  reserved2: "Custom Field 3",
+  tcaversion: "Agent Version",
+  connectiontime: "Last Connected",
+  connectionstatus: "Connection Status",
+  workgroup: "Workgroup",
+  computername: "Computer Name",
+  macaddress: "MAC Address",
+  snmp: "SNMP Status",
+  power: "Power",
+  department: "Department",
+  searchdate: "Last Search Date",
+  createtime: "Created Time",
+  createdtime: "Created Time",
+  responsetime: "Response Time",
+  recentSearchTime: "Recent Search Time",
+};
+
+function friendlyFieldLabel(key: string) {
+  return NETWORK_FIELD_LABELS[key.toLowerCase()] || key.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
 function rowsFromObject(row: Record<string, unknown> | undefined) {
   if (!row) return [];
-  return Object.entries(row).map(([key, value]) => [key, getString(value, "-")] as [string, string]);
+  return Object.entries(row)
+    .filter(([key]) => key.trim() !== "")
+    .map(([key, value]) => [friendlyFieldLabel(key), getString(value, "-")] as [string, string]);
 }
 
 function getNodeDetailFallback(node: NetworkHierarchyNode | null, label: string) {
@@ -682,12 +721,12 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.add("ema-settings-page-active");
-    document.body.classList.add("ema-settings-page-active");
+    document.documentElement.classList.add("ema-settings-page-active", "network-inventory-page-active");
+    document.body.classList.add("ema-settings-page-active", "network-inventory-page-active");
 
     return () => {
-      document.documentElement.classList.remove("ema-settings-page-active");
-      document.body.classList.remove("ema-settings-page-active");
+      document.documentElement.classList.remove("ema-settings-page-active", "network-inventory-page-active");
+      document.body.classList.remove("ema-settings-page-active", "network-inventory-page-active");
     };
   }, []);
 
@@ -844,18 +883,43 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
 
     const canCallSubnetApi = selectedNode?.label && isIpSegment(selectedNode.label) && selectedNode.label.toLowerCase() !== "organization";
 
+    const localFallbackRows = normalizeStatusRows(selectedNode?.deviceDetails?.[type] || []);
+
     try {
       if (canCallSubnetApi) {
         const response = await apiRequest<DeviceDetail[]>(
           `/api/network/subnet/${encodeURIComponent(selectedNode.label)}/details${toQuery({ type, page: nextPage, limit: statusDetailPageSize })}`
         );
+        const apiTotal = Number(response.totalRecords || 0);
+
+        // The backend's systemType code for this status can disagree with the
+        // hierarchy's own classification, leaving the count > 0 but this query
+        // empty. When that happens, fall back to the hierarchy's cached rows
+        // (the same data the count itself was built from) instead of showing
+        // an empty modal under a non-zero count.
+        if (apiTotal === 0 && localFallbackRows.length > 0) {
+          setStatusDetail({
+            type,
+            title,
+            rows: localFallbackRows,
+            allRows: localFallbackRows,
+            page: nextPage,
+            totalPages: Math.max(1, Math.ceil(localFallbackRows.length / statusDetailPageSize)),
+            totalRecords: localFallbackRows.length,
+            source: "hierarchy detail cache",
+            loading: false,
+            serverPaginated: false,
+          });
+          return;
+        }
+
         setStatusDetail({
           type,
           title,
           rows: normalizeStatusRows(response.data),
           page: Number(response.page || nextPage),
           totalPages: Number(response.totalPages || 1),
-          totalRecords: Number(response.totalRecords || 0),
+          totalRecords: apiTotal,
           source: "Subnet detail",
           loading: false,
           serverPaginated: true,
@@ -863,7 +927,7 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
         return;
       }
 
-      const localRows = normalizeStatusRows(selectedNode?.deviceDetails?.[type] || []);
+      const localRows = localFallbackRows;
       setStatusDetail({
         type,
         title,
@@ -1277,7 +1341,6 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
           overflow: hidden !important;
         }
 
-        .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .content-head,
         .network-inventory-module .network-status-detail-modal .network-status-detail-grid > .user-access-commandbar {
           flex: 0 0 auto !important;
         }
@@ -1417,9 +1480,9 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
           align-items: center !important;
           justify-content: space-between !important;
           gap: 0.75rem !important;
-          border: 1px solid rgba(148, 163, 184, 0.35) !important;
+          border: 1px solid var(--ema-border) !important;
           border-radius: 16px !important;
-          background: #ffffff !important;
+          background: var(--ema-card-bg) !important;
           box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
           position: relative !important;
           z-index: 10 !important;
@@ -1444,6 +1507,55 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
           justify-content: center !important;
         }
         /* NETWORK_STATUS_DETAIL_TABLE_FORCE_FIX_END */
+
+        /* Lock page height to viewport so the IP/subnet tree scrolls inside its own
+           panel instead of growing the whole page (mirrors Software's pattern). The
+           .ema-main override is the part that actually matters: per the flexbox spec,
+           a flex item's automatic minimum size only drops to 0 (letting it shrink to
+           fit the viewport instead of growing to fit content) when its own overflow
+           is non-visible. Without this, height/max-height further down the chain are
+           ignored and the whole page grows to fit the tree instead of scrolling it. */
+        body.network-inventory-page-active,
+        body.network-inventory-page-active #root {
+          min-height: 100% !important;
+          overflow: hidden !important;
+          background: var(--ema-page-bg) !important;
+        }
+
+        body.network-inventory-page-active .ema-main,
+        body.network-inventory-page-active .ema-content,
+        body.network-inventory-page-active .ema-content-area {
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+
+        body.network-inventory-page-active .network-inventory-module {
+          width: 100% !important;
+          max-width: none !important;
+          height: calc(100dvh - 76px) !important;
+          min-height: 0 !important;
+          max-height: calc(100dvh - 76px) !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+        }
+
+        body.network-inventory-page-active .network-inventory-module .settings-layout.network-settings-layout {
+          min-height: 0 !important;
+          height: 100% !important;
+          align-items: stretch !important;
+        }
+
+        body.network-inventory-page-active .network-inventory-module .settings-menu.network-left-panel {
+          min-height: 0 !important;
+          overflow: hidden !important;
+        }
+
+        body.network-inventory-page-active .network-inventory-module .settings-content {
+          min-height: 0 !important;
+          overflow: hidden !important;
+          display: flex !important;
+          flex-direction: column !important;
+        }
 
         @media (max-width: 1100px) {
           .network-inventory-module .settings-layout.network-settings-layout {
@@ -1554,91 +1666,88 @@ const [activeTab, setActiveTab] = useState<DeviceStatusTab>("device");
               <p>Monitor IP scope status, discover endpoint agents, and maintain network device records.</p>
             </div>
 
-            <div className="settings-score users-hero-score">
-              <KpiCard label="Total IPs" value={totalNetworkRecords.toLocaleString()} note="Network records" icon={<Database />} />
-              <KpiCard label="Subnets" value={subnetCount.toLocaleString()} note="Network paths" icon={<Network />} />
-              <KpiCard label="Registered" value={rootCounts.registered.toLocaleString()} note="Active agents" icon={<CheckCircle2 />} />
-              <KpiCard label="Other Devices" value={rootCounts.otherDevice.toLocaleString()} note="SNMP / routers" icon={<Router />} />
+            <div className="network-hero-kpi-grid">
+              <KpiCard label="Total IPs" value={totalNetworkRecords.toLocaleString()} note="Network records" icon={<Database size={18} />} color="is-blue" />
+              <KpiCard label="Subnets" value={subnetCount.toLocaleString()} note="Network paths" icon={<Network size={18} />} color="is-green" />
+              <KpiCard label="Registered" value={rootCounts.registered.toLocaleString()} note="Active agents" icon={<CheckCircle2 size={18} />} color="is-orange" />
+              <KpiCard label="Other Devices" value={rootCounts.otherDevice.toLocaleString()} note="SNMP / routers" icon={<Router size={18} />} color="is-purple" />
             </div>
           </section>
 
           <main className="content-shell ema-panel-surface content-panel clean">
-            <header className="content-head">
-              <div>
-                <span className="section-tag">{activeTab === "device" ? "Device Status" : "Network Device Status"}</span>
-                <h3>{activeTab === "device" ? `Device Status${getNetworkBranchLabel(selectedNode) ? `: ${getNetworkBranchLabel(selectedNode)}` : ""}` : "Network Device Registry"}</h3>
-                <p>{activeTab === "device" ? "Registered, not registered, not installed, and other network object counts." : `Showing ${manualFilteredRows.length.toLocaleString()} managed network devices.`}</p>
-              </div>
+            <div className="hardware-registry-toolbar">
+              <div className="hardware-scan-command-row">
+                {activeTab === "device" ? (
+                  <button
+                    type="button"
+                    className="hardware-command-btn"
+                    onClick={() => openScanDialog(selectedNode?.id === hierarchy?.id ? "all" : isIpAddress(selectedNode?.label) ? "ip" : "subnet", selectedNode)}
+                    disabled={!selectedNode || busy}
+                  >
+                    <Zap size={15} />
+                    Scan Network
+                  </button>
+                ) : (
+                  <button type="button" className="hardware-command-btn" onClick={openAddDevice} disabled={busy}>
+                    <Plus size={16} />
+                    Add New
+                  </button>
+                )}
 
-              <div className="content-actions justify-content-center flex-nowrap">
-                <button type="button" className={cx("soft-btn", activeTab === "device" && "primary-btn")} onClick={() => setActiveTab("device")}>Device Status</button>
-                {/* Network Device Status tab hidden by request.
-                <button type="button" className={cx("soft-btn", activeTab === "network" && "primary-btn")} onClick={() => setActiveTab("network")}>Network Device Status</button>
-                */}
-              </div>
-            </header>
+                {activeTab === "network" && (
+                  <>
+                    <label className="section-search flex-grow-1 mb-0" style={{ minWidth: 240 }}>
+                      <Search size={15} />
+                      <input
+                        placeholder="Search device, brand, location..."
+                        value={manualSearch}
+                        onChange={(event) => setManualSearch(event.target.value)}
+                      />
+                    </label>
 
-            <div
-              className="d-flex align-items-center gap-2 flex-nowrap px-3 py-2"
-              style={{ width: "100%", minWidth: 0, overflowX: "auto" }}
-            >
-              {activeTab === "network" ? (
-                <>
-                  <label className="section-search flex-grow-1 mb-0" style={{ minWidth: 360 }}>
-                    <Search size={15} />
-                    <input
-                      placeholder="Search device, brand, location..."
-                      value={manualSearch}
-                      onChange={(event) => setManualSearch(event.target.value)}
+                    <NetworkCustomSelect
+                      value={manualStatusFilter}
+                      options={[
+                        { value: "All", label: "All status" },
+                        { value: "Active", label: "Active" },
+                        { value: "Inactive", label: "Inactive" },
+                        { value: "Maintenance", label: "Maintenance" },
+                      ]}
+                      ariaLabel="Filter network device status"
+                      onChange={(nextValue) => setManualStatusFilter(nextValue as "All" | ManualDeviceStatus)}
+                      className="mb-0"
+                      style={{ width: 220, flex: "0 0 220px" }}
                     />
-                  </label>
+                  </>
+                )}
 
-                  <NetworkCustomSelect
-                    value={manualStatusFilter}
-                    options={[
-                      { value: "All", label: "All status" },
-                      { value: "Active", label: "Active" },
-                      { value: "Inactive", label: "Inactive" },
-                      { value: "Maintenance", label: "Maintenance" },
-                    ]}
-                    ariaLabel="Filter network device status"
-                    onChange={(nextValue) => setManualStatusFilter(nextValue as "All" | ManualDeviceStatus)}
-                    className="mb-0"
-                    style={{ width: 220, flex: "0 0 220px" }}
-                  />
-                </>
-              ) : (
-                <div className="d-flex align-items-center flex-grow-1" style={{ minWidth: 260 }}>
-                  <strong className="user-pill info">Reference: {lastSearchDate}</strong>
-                </div>
-              )}
+                <div style={{ flex: "1 1 0" }} />
 
-              <button
-                type="button"
-                className="soft-btn flex-shrink-0"
-                onClick={() => activeTab === "device" ? void loadInventory(true) : void loadManualDevices()}
-                disabled={refreshing || manualLoading || busy}
-              >
-                {(refreshing || manualLoading) ? <Loader2 size={15} className="me-1" /> : <RefreshCw size={15} />}
-                Refresh
-              </button>
-
-              {activeTab === "device" ? (
                 <button
                   type="button"
-                  className="primary-btn flex-shrink-0"
-                  onClick={() => openScanDialog(selectedNode?.id === hierarchy?.id ? "all" : isIpAddress(selectedNode?.label) ? "ip" : "subnet", selectedNode)}
-                  disabled={!selectedNode || busy}
+                  className="icon-action-btn software-icon-btn"
+                  title="Refresh"
+                  aria-label="Refresh"
+                  onClick={() => activeTab === "device" ? void loadInventory(true) : void loadManualDevices()}
+                  disabled={refreshing || manualLoading || busy}
                 >
-                  <Zap size={15} />
-                  Scan Network
+                  {(refreshing || manualLoading) ? <Loader2 size={15} /> : <RefreshCw size={15} />}
                 </button>
-              ) : (
-                <button type="button" className="primary-btn flex-shrink-0" onClick={openAddDevice} disabled={busy}>
-                  <Plus size={16} />
-                  Add New
-                </button>
-              )}
+
+                {activeTab === "network" && (
+                  <button type="button" className="soft-btn" onClick={() => setActiveTab("device")}>
+                    Device Status
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="hardware-registry-subhead">
+              <span>
+                {activeTab === "device"
+                  ? `${getNetworkBranchLabel(selectedNode) || "All Network"} scope • Reference: ${lastSearchDate || "-"}`
+                  : `Showing ${manualFilteredRows.length.toLocaleString()} managed network devices`}
+              </span>
             </div>
 
             <div className="content-body">
@@ -1760,13 +1869,15 @@ function DeleteDeviceConfirmModal({
   );
 }
 
-function KpiCard({ label, value, note, icon }: { label: string; value: ReactNode; note: ReactNode; icon: ReactNode }) {
+function KpiCard({ label, value, note, icon, color }: { label: string; value: ReactNode; note: ReactNode; icon: ReactNode; color: string }) {
   return (
-    <div className="score-box ema-kpi-card text-start" title={`${label}: ${value}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-      <i className="d-none">{icon}</i>
+    <div className={`ema-kpi-card with-icon network-kpi-card ${color}`} title={`${label}: ${value}`}>
+      <div className="ema-kpi-content network-kpi-content">
+        <div className="ema-kpi-icon network-kpi-icon">{icon}</div>
+        <span className="ema-kpi-label network-kpi-label">{label}</span>
+        <strong className="ema-kpi-value network-kpi-value">{value}</strong>
+        <small className="ema-kpi-note network-kpi-note">{note}</small>
+      </div>
     </div>
   );
 }
@@ -2090,14 +2201,6 @@ function StatusDetailTable({
 
   return (
     <div className="d-grid gap-3 network-status-detail-grid">
-      <div className="content-head">
-        <div>
-          <h3>{detail.title}</h3>
-          <span>{detail.totalRecords} record(s) • source: {detail.source}</span>
-        </div>
-        {detail.loading && <Loader2 size={17} className="spinner-border spinner-border-sm" />}
-      </div>
-
       <div className="user-access-commandbar">
         <label className="section-search user-search-inline">
           <Search size={16} />
@@ -2113,14 +2216,14 @@ function StatusDetailTable({
           )}
         </label>
 
-        <select className="setting-select" value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)}>
+        <select className="setting-select" value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)} aria-label="Filter by agent">
           <option value="All">All agents</option>
           {agentOptions.map((option) => (
             <option value={option} key={option}>Agent {option}</option>
           ))}
         </select>
 
-        <select className="setting-select" value={workgroupFilter} onChange={(event) => setWorkgroupFilter(event.target.value)}>
+        <select className="setting-select" value={workgroupFilter} onChange={(event) => setWorkgroupFilter(event.target.value)} aria-label="Filter by workgroup">
           <option value="All">All workgroups</option>
           {workgroupOptions.map((option) => (
             <option value={option} key={option}>{option}</option>
@@ -2136,6 +2239,8 @@ function StatusDetailTable({
         <span className="user-pill info">
           {visibleTotalRows} shown
         </span>
+
+        {detail.loading && <Loader2 size={15} className="spin" />}
       </div>
 
       <div className="pricing-table-card table-responsive network-status-detail-table-card">
@@ -2155,7 +2260,7 @@ function StatusDetailTable({
           <tbody>
             {visibleRows.map((row, index) => (
               <tr key={`${row.ipAddress || row.computerName || "row"}-${activePage}-${index}`}>
-                <td>{String((activePage - 1) * statusDetailPageSize + index + 1).padStart(2, "0")}</td>
+                <td><span className="row-index-pill">{String((activePage - 1) * statusDetailPageSize + index + 1).padStart(2, "0")}</span></td>
                 <td>
                   <div className="user-name">
                     <span className="user-mini-avatar"><Monitor size={13} /></span>
@@ -2209,15 +2314,12 @@ function NetworkPathDetail({ detail, onScan }: { detail: IpDetailState; onScan: 
 
   return (
     <div className="d-grid gap-3">
-      <div className="content-head">
-        <div>
-          <h2>DEVICE STATUS : {detail.ip}</h2>
-          <span>{detail.loading ? "Loading fresh IP detail..." : `Source: ${detail.source}`}</span>
-        </div>
-        {/* <button type="button" className="primary-btn" onClick={onScan}>
-          <Play size={15} />
-          Scan IP
-        </button> */}
+      <div className="hardware-registry-subhead">
+        <span>
+          <strong>Device Status: {detail.ip}</strong>
+          {" • "}
+          {detail.loading ? "Loading fresh IP detail..." : `Source: ${detail.source}`}
+        </span>
       </div>
 
       <div className="pricing-table-card table-responsive">
@@ -2277,7 +2379,7 @@ function DeviceRegistryTable({
         <tbody>
           {rows.map((device, index) => (
             <tr key={device.id} className={selectedId === device.id ? "selected" : ""}>
-              <td>{String((page - 1) * pageSize + index + 1).padStart(2, "0")}</td>
+              <td><span className="row-index-pill">{String((page - 1) * pageSize + index + 1).padStart(2, "0")}</span></td>
               <td>
                 <div className="user-name">
                   <span className="user-mini-avatar"><Router size={13} /></span>
@@ -2562,22 +2664,24 @@ function RecordDetailModal({ detail, onClose }: { detail: NonNullable<RecordDeta
             <X size={18} />
           </button>
         </div>
-        <div className="user-modal-body content-body">
-          <table className="table table-hover align-middle mb-0">
-            <tbody>
-              {detail.rows.map(([key, value]) => (
-                <tr key={key}>
-                  <th>{key}</th>
-                  <td>{value}</td>
-                </tr>
-              ))}
-              {!detail.rows.length && (
-                <tr>
-                  <td colSpan={2}>No backend detail returned.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        <div className="user-modal-body">
+          <div className="pricing-table-card table-responsive">
+            <table className="table table-hover align-middle mb-0">
+              <tbody>
+                {detail.rows.map(([label, value]) => (
+                  <tr key={label}>
+                    <td style={{ width: "40%", fontWeight: 600, color: "var(--ema-slate-600)" }}>{label}</td>
+                    <td>{value}</td>
+                  </tr>
+                ))}
+                {!detail.rows.length && (
+                  <tr>
+                    <td colSpan={2} style={{ textAlign: "center", padding: "32px", color: "var(--ema-slate-400)" }}>No detail returned.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
     </div>

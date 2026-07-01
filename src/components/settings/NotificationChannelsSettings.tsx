@@ -363,9 +363,7 @@ export default function NotificationChannelsSettings() {
 
       <div className="notification-body">
         {message && <div className={`notification-alert ${message.tone}`}>{message.text}</div>}
-        {loading ? (
-          <div className="notification-panel notification-status-card"><Loader2 className="spin" /> Loading notification settings...</div>
-        ) : activeTab === "email" ? (
+        {activeTab === "email" ? (
           <div className="notification-grid">
             <section className="notification-panel">
               <div className="notification-panel-head">
